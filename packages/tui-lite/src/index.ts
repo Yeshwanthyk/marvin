@@ -13,3 +13,6 @@ export * from './widgets/truncated-text';
 export * from './widgets/markdown-lite';
 export * from './widgets/input';
 export * from './widgets/status-bar';
+export * from './widgets/header-bar';
+export * from './widgets/footer-bar';
+export * from './widgets/chat-transcript';

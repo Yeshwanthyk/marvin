@@ -5,8 +5,15 @@ import { truncateAnsiToWidth, visibleWidth } from './core/width';
 import type { Terminal } from './terminal/terminal';
 
 export interface TuiLayout {
+  header?: Widget;
   main: Widget;
+  /**
+   * @deprecated Use `footer` instead.
+   */
   status?: Widget;
+  footer?: Widget;
+  headerHeight?: number;
+  footerHeight?: number;
 }
 
 export interface TuiFrame {
@@ -47,20 +54,32 @@ export class Tui {
 
   render(): void {
     const size = this.terminal.size();
-    const hasStatus = Boolean(this.layout.status);
-    const mainHeight = Math.max(0, size.rows - (hasStatus ? 1 : 0));
+    const header = this.layout.header;
+    const footer = this.layout.footer ?? this.layout.status;
+
+    const headerHeight = header ? Math.max(0, this.layout.headerHeight ?? 1) : 0;
+    const footerHeight = footer ? Math.max(0, this.layout.footerHeight ?? 1) : 0;
+    const mainHeight = Math.max(0, size.rows - headerHeight - footerHeight);
 
     const mainCtx: RenderContext = { width: size.columns, height: mainHeight };
-    const statusCtx: RenderContext = { width: size.columns, height: 1 };
+    const headerCtx: RenderContext = { width: size.columns, height: headerHeight };
+    const footerCtx: RenderContext = { width: size.columns, height: footerHeight };
 
     const mainResult = this.layout.main.render(mainCtx);
     const mainFrame = this.renderFrame(mainResult, mainCtx);
 
-    const statusFrame = hasStatus
-      ? this.renderFrame(this.layout.status!.render(statusCtx), statusCtx)
+    const headerFrame = header
+      ? this.renderFrame(header.render(headerCtx), headerCtx)
+      : { lines: [] as string[] };
+    const footerFrame = footer
+      ? this.renderFrame(footer.render(footerCtx), footerCtx)
       : { lines: [] as string[] };
 
-    const nextLines = [...mainFrame.lines, ...(hasStatus ? [statusFrame.lines[0] ?? ''] : [])];
+    const nextLines = [
+      ...headerFrame.lines,
+      ...mainFrame.lines,
+      ...footerFrame.lines,
+    ];
     const patch = diffAnsiScreens(this.prev, nextLines, { fullRedraw: !this.prev });
     this.terminal.write(patch);
     this.prev = nextLines;

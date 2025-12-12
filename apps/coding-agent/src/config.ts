@@ -51,6 +51,8 @@ export interface LoadedAppConfig {
   thinking: ThinkingLevel;
   apiKeys: ApiKeyManager;
   sourcePath?: string;
+  configDir: string;
+  configPath: string;
 }
 
 const isQueueStrategy = (value: unknown): value is QueueStrategy =>
@@ -160,5 +162,41 @@ export const loadAppConfig = async (options?: {
     thinking,
     apiKeys,
     sourcePath: await fileExists(configPath) ? configPath : undefined,
+    configDir,
+    configPath,
   };
+};
+
+const readConfigFile = async (p: string): Promise<Record<string, unknown>> => {
+  const raw = (await readJsonIfExists(p)) ?? {};
+  if (typeof raw === 'object' && raw !== null) return raw as Record<string, unknown>;
+  return {};
+};
+
+const writeConfigFile = async (p: string, value: Record<string, unknown>): Promise<void> => {
+  await fs.mkdir(path.dirname(p), { recursive: true });
+  await fs.writeFile(p, JSON.stringify(value, null, 2) + '\n', 'utf8');
+};
+
+export const updateAppConfig = async (
+  options: { configDir?: string; configPath?: string },
+  patch: { provider?: string; model?: string; thinking?: ThinkingLevel }
+): Promise<void> => {
+  const configDir = options.configDir ?? resolveConfigDir();
+  const configPath = options.configPath ?? path.join(configDir, 'config.json');
+  const existing = await readConfigFile(configPath);
+
+  const next: Record<string, unknown> = { ...existing };
+  if (patch.provider) next.provider = patch.provider;
+  if (patch.model) next.model = patch.model;
+  if (patch.thinking) next.thinking = patch.thinking;
+
+  if (typeof next.config === 'object' && next.config !== null) {
+    const cfg = { ...(next.config as Record<string, unknown>) };
+    if (patch.provider) cfg.provider = patch.provider;
+    if (patch.model) cfg.model = patch.model;
+    next.config = cfg;
+  }
+
+  await writeConfigFile(configPath, next);
 };
