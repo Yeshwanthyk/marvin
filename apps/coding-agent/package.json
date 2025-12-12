@@ -1,0 +1,16 @@
+{
+  "name": "@mu-agents/coding-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "coding-agent": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mu-agents/providers": "file:../../packages/providers",
+    "@mu-agents/runtime": "file:../../packages/runtime",
+    "@mu-agents/tools": "file:../../packages/tools",
+    "@mu-agents/tui-lite": "file:../../packages/tui-lite",
+    "@mu-agents/types": "file:../../packages/types"
+  }
+}

@@ -3,10 +3,12 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "check": "tsc --noEmit -p packages/types/tsconfig.json && tsc --noEmit -p packages/tools/tsconfig.json && tsc --noEmit -p packages/providers/tsconfig.json && tsc --noEmit -p packages/runtime/tsconfig.json && tsc --noEmit -p packages/tui-lite/tsconfig.json"
+    "check": "tsc --noEmit -p packages/types/tsconfig.json && tsc --noEmit -p packages/tools/tsconfig.json && tsc --noEmit -p packages/providers/tsconfig.json && tsc --noEmit -p packages/runtime/tsconfig.json && tsc --noEmit -p packages/tui-lite/tsconfig.json && tsc --noEmit -p apps/coding-agent/tsconfig.json",
+    "coding-agent": "bun apps/coding-agent/src/index.ts"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "dependencies": {
     "@sinclair/typebox": "^0.32.33"
