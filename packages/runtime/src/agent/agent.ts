@@ -80,7 +80,7 @@ export class Agent {
     this.transport = options.transport;
     this.tools = options.tools;
     this.thinking = options.thinking ?? 'off';
-    this.queueStrategy = options.queueStrategy ?? 'serial';
+    this.queueStrategy = options.queueStrategy ?? 'append';
     this.maxToolRounds = options.maxToolRounds ?? 5;
     this.conversation = options.initialConversation ? [...options.initialConversation] : [];
   }
@@ -151,6 +151,20 @@ export class Agent {
       this.events.emit({ type: 'turn-end' });
       return true;
     } catch (error) {
+      if (this.abortController?.signal.aborted) {
+        const reason = this.abortController.signal.reason;
+        const shouldStop =
+          reason === 'stopped' ||
+          reason === 'closed';
+
+        if (!shouldStop) {
+          this.state = 'idle';
+          this.events.emit({ type: 'state', state: this.state });
+          this.events.emit({ type: 'turn-end' });
+          return this.queue.length > 0;
+        }
+        return false;
+      }
       const err = error instanceof Error ? error : new Error(String(error));
       this.state = 'error';
       this.events.emit({ type: 'state', state: this.state });
@@ -162,11 +176,54 @@ export class Agent {
   }
 
   private enqueue(item: AgentQueueItem): void {
-    if (this.queueStrategy === 'latest') {
-      this.queue = [item];
-    } else {
-      this.queue.push(item);
+    switch (this.queueStrategy) {
+      case 'latest': {
+        this.queue = [item];
+        return;
+      }
+      case 'interrupt': {
+        this.queue = [item];
+        if (this.state === 'running') {
+          this.abortController?.abort('interrupted');
+        }
+        return;
+      }
+      case 'merge': {
+        const last = this.queue[this.queue.length - 1];
+        if (!last || !this.tryMergeQueueItems(last, item)) {
+          this.queue.push(item);
+        }
+        return;
+      }
+      case 'append':
+      case 'serial':
+      default: {
+        this.queue.push(item);
+        return;
+      }
     }
+  }
+
+  private tryMergeQueueItems(target: AgentQueueItem, incoming: AgentQueueItem): boolean {
+    if (target.message.role !== 'user' || incoming.message.role !== 'user') return false;
+    const targetText = this.getUserMessageText(target.message);
+    const incomingText = this.getUserMessageText(incoming.message);
+    if (targetText == null || incomingText == null) return false;
+
+    const mergedText = [targetText, incomingText].filter(Boolean).join('\n\n');
+    const mergedAttachments = [...(target.attachments ?? []), ...(incoming.attachments ?? [])];
+    target.attachments = mergedAttachments.length ? mergedAttachments : undefined;
+    target.message = createUserMessage(mergedText, mergedAttachments);
+    return true;
+  }
+
+  private getUserMessageText(message: AgentUserMessage): string | null {
+    const texts = message.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .filter((t) => t.trim().length > 0);
+    if (!texts.length) return null;
+    return texts.join('\n\n');
   }
 
   private async runProviderRounds(): Promise<void> {
@@ -193,6 +250,11 @@ export class Agent {
 
       await stream.finished();
       unsubscribe();
+
+      if (this.abortController?.signal.aborted) {
+        const reason = this.abortController.signal.reason;
+        throw new DOMException(String(reason ?? 'Aborted'), 'AbortError');
+      }
 
       const response = stream.getResponse();
       const assistantText = stream.getAggregatedText();

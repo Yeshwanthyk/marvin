@@ -22,7 +22,7 @@ class ScriptedTransport implements AgentTransport {
   constructor(
     private readonly scripts: Array<(conversationText: string[]) => ProviderStream>
   ) {}
-  async invoke(_: any, conversation: any): Promise<any> {
+  async invoke(_: any, conversation: any, __?: any): Promise<any> {
     const texts = conversation
       .filter((m: any) => m.role === 'user' || m.role === 'assistant')
       .flatMap((m: any) => m.content)
@@ -34,7 +34,7 @@ class ScriptedTransport implements AgentTransport {
 }
 
 describe('AgentLoop', () => {
-  it('processes queued messages serially', async () => {
+  it('append queue strategy processes queued messages sequentially', async () => {
     const transport = new ScriptedTransport([
       () => makeStream((s) => s.emit({ type: 'text-delta', text: 'hi' })),
       () => makeStream((s) => s.emit({ type: 'text-delta', text: 'there' })),
@@ -43,6 +43,7 @@ describe('AgentLoop', () => {
     const agent = new Agent({
       config: { provider: 'fake', model: 'fake' },
       transport,
+      queueStrategy: 'append',
     });
     agent.enqueueUserText('one');
     agent.enqueueUserText('two');
@@ -80,6 +81,95 @@ describe('AgentLoop', () => {
     const users = agent.getConversation().filter((m) => m.role === 'user');
     expect(users.length).toBe(1);
     expect(users[0].content[0].text).toBe('second');
+  });
+
+  it('interrupt queue strategy aborts the active turn and runs the latest message next', async () => {
+    class AbortAwareTransport implements AgentTransport {
+      private callIndex = 0;
+      async invoke(_: any, __: any, options?: any): Promise<any> {
+        const index = this.callIndex++;
+        const stream = new ProviderStream({ replayEvents: true });
+
+        const signal: AbortSignal | undefined = options?.signal;
+        if (signal) {
+          if (signal.aborted) {
+            stream.close();
+            return { response: fakeResponse, stream };
+          }
+          const onAbort = () => stream.close();
+          signal.addEventListener('abort', onAbort, { once: true });
+        }
+
+        if (index === 0) {
+          stream.emit({ type: 'text-delta', text: 'long' });
+          return { response: fakeResponse, stream };
+        }
+
+        stream.emit({ type: 'text-delta', text: 'done' });
+        stream.close();
+        return { response: fakeResponse, stream };
+      }
+    }
+
+    const agent = new Agent({
+      config: { provider: 'fake', model: 'fake' },
+      transport: new AbortAwareTransport(),
+      queueStrategy: 'interrupt',
+    });
+
+    agent.enqueueUserText('first');
+    const loop = new AgentLoop(agent);
+
+    const firstTurnStarted = new Promise<void>((resolve) => {
+      const unsub = loop.subscribe((e) => {
+        if (e.type === 'turn-start') {
+          unsub();
+          resolve();
+        }
+      });
+    });
+
+    const runPromise = loop.start();
+    await firstTurnStarted;
+
+    agent.enqueueUserText('second');
+    await runPromise;
+
+    const convo = agent.getConversation();
+    const users = convo.filter((m) => m.role === 'user');
+    const assistants = convo.filter((m) => m.role === 'assistant');
+    expect(users.length).toBe(2);
+    expect(users[0].content[0].text).toBe('first');
+    expect(users[1].content[0].text).toBe('second');
+    expect(assistants.length).toBe(1);
+    expect(assistants[0].content[0].text).toBe('done');
+  });
+
+  it('merge queue strategy combines queued user messages into a single turn', async () => {
+    const transport = new ScriptedTransport([
+      () => makeStream((s) => s.emit({ type: 'text-delta', text: 'ok' })),
+    ]);
+
+    const agent = new Agent({
+      config: { provider: 'fake', model: 'fake' },
+      transport,
+      queueStrategy: 'merge',
+    });
+
+    agent.enqueueUserText('one');
+    agent.enqueueUserText('two');
+    agent.enqueueUserText('three');
+
+    const loop = new AgentLoop(agent);
+    await loop.start();
+
+    const convo = agent.getConversation();
+    const users = convo.filter((m) => m.role === 'user');
+    const assistants = convo.filter((m) => m.role === 'assistant');
+    expect(users.length).toBe(1);
+    expect(users[0].content[0].text).toBe('one\n\ntwo\n\nthree');
+    expect(assistants.length).toBe(1);
+    expect(assistants[0].content[0].text).toBe('ok');
   });
 
   it('executes tools and performs follow-up round', async () => {

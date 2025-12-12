@@ -11,7 +11,7 @@ import type { ToolRegistry } from '@mu-agents/tools';
 
 export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';
 
-export type QueueStrategy = 'serial' | 'latest';
+export type QueueStrategy = 'append' | 'interrupt' | 'merge' | 'latest' | 'serial';
 
 export type AgentState = 'idle' | 'running' | 'stopping' | 'error' | 'closed';
 
