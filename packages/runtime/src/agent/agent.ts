@@ -241,9 +241,27 @@ export class Agent {
         this.events.emit({ type: 'provider', event });
         if (event.type === 'tool-call-delta') {
           const callId = event.callId ?? `${event.toolName ?? 'tool'}:${toolCalls.size}`;
+          const previous = toolCalls.get(callId);
+          const previousArgs = previous?.argumentsText ?? '';
+
+          let nextArgs: string | undefined = previous?.argumentsText;
+          if (event.argumentsText != null) {
+            const chunk = event.argumentsText;
+            const chunkIsStandaloneJson = (() => {
+              try {
+                JSON.parse(chunk);
+                return true;
+              } catch {
+                return false;
+              }
+            })();
+
+            nextArgs = chunkIsStandaloneJson ? chunk : `${previousArgs}${chunk}`;
+          }
+
           toolCalls.set(callId, {
-            toolName: event.toolName ?? 'tool-call',
-            argumentsText: event.argumentsText,
+            toolName: event.toolName ?? previous?.toolName ?? 'tool-call',
+            argumentsText: nextArgs,
           });
         }
       });

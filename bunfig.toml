@@ -1,0 +1,5 @@
+[test]
+# Shared test harness for every workspace package.
+# Paths are resolved relative to this bunfig.toml.
+preload = ["./test/setup.ts"]
+

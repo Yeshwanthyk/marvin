@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "check": "tsc --noEmit -p packages/types/tsconfig.json && tsc --noEmit -p packages/tools/tsconfig.json && tsc --noEmit -p packages/providers/tsconfig.json && tsc --noEmit -p packages/runtime/tsconfig.json && tsc --noEmit -p packages/tui-lite/tsconfig.json && tsc --noEmit -p apps/coding-agent/tsconfig.json",
+    "typecheck": "tsc --noEmit -p packages/types/tsconfig.json && tsc --noEmit -p packages/tools/tsconfig.json && tsc --noEmit -p packages/providers/tsconfig.json && tsc --noEmit -p packages/runtime/tsconfig.json && tsc --noEmit -p packages/tui-lite/tsconfig.json && tsc --noEmit -p apps/coding-agent/tsconfig.json",
+    "test": "bun scripts/test-all.ts",
+    "check": "bun run typecheck && bun run test",
     "coding-agent": "bun apps/coding-agent/src/index.ts"
   },
   "workspaces": [

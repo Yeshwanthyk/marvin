@@ -7,7 +7,7 @@
   "types": "src/index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "bun test"
+    "test": "bun test tests"
   },
   "dependencies": {
     "@mu-agents/types": "file:../types"

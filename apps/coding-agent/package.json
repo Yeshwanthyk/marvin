@@ -6,6 +6,9 @@
   "bin": {
     "coding-agent": "./src/index.ts"
   },
+  "scripts": {
+    "test": "bun test tests"
+  },
   "dependencies": {
     "@mu-agents/providers": "file:../../packages/providers",
     "@mu-agents/runtime": "file:../../packages/runtime",
