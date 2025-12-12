@@ -63,10 +63,10 @@ export class CodexOAuthClient {
       return cached;
     }
     this.logger?.('codex.oauth.start');
-    const { pkce, state, url } = await createAuthorizationFlow();
+    const { pkce, state, url } = await (createAuthorizationFlow as () => Promise<any>)();
     const server = await startLocalOAuthServer({ state });
     openBrowserUrl(url);
-    const result = await server.waitForCode();
+    const result = await (server.waitForCode as () => Promise<any>)();
     server.close();
     if (!result?.code) {
       throw new Error('Codex OAuth canceled or timed out');
