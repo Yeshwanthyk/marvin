@@ -1,4 +1,4 @@
-import { createApiKeyManager, createEnvApiKeyStore, createMemoryApiKeyStore } from '@mu-agents/providers';
+import { createApiKeyManager, createEnvApiKeyStore, createMemoryApiKeyStore, type ApiKeyStore } from '@mu-agents/providers';
 import type { ApiKeyManager } from '@mu-agents/providers';
 import type { QueueStrategy, ThinkingLevel } from '@mu-agents/runtime';
 import { Type } from '@sinclair/typebox';
@@ -128,7 +128,17 @@ export const loadAppConfig = async (options?: {
   const memoryKeys = parsed.apiKeys ?? {};
   const apiKeys = createApiKeyManager({
     stores: [
-      createEnvApiKeyStore(),
+      createEnvApiKeyStore({
+        map: {
+          anthropic: 'ANTHROPIC_API_KEY',
+          openai: 'OPENAI_API_KEY',
+        },
+      }),
+      createEnvApiKeyStore({
+        map: {
+          anthropic: 'ANTHROPIC_OAUTH_TOKEN',
+        },
+      }),
       createMemoryApiKeyStore(memoryKeys),
     ],
   });
