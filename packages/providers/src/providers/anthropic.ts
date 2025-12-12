@@ -43,26 +43,55 @@ export const createAnthropicAdapter: ProviderFactory = ({ fetchImplementation, g
       const stream =
         externalStream ?? new ProviderStream({ logger, id: `${providerName}:${config.model}` });
 
+      const isOAuthToken = apiKey.includes('sk-ant-oat');
+
+      // Build system prompt - OAuth tokens require Claude Code identity
+      let systemPrompt: unknown;
+      if (isOAuthToken) {
+        systemPrompt = [
+          {
+            type: 'text',
+            text: "You are Claude Code, Anthropic's official CLI for Claude.",
+            cache_control: { type: 'ephemeral' },
+          },
+          ...(config.system?.length
+            ? [{ type: 'text', text: config.system.join('\n'), cache_control: { type: 'ephemeral' } }]
+            : []),
+        ];
+      } else {
+        systemPrompt = config.system?.join('\n') ?? undefined;
+      }
+
       const requestBody = {
         model: config.model,
-        system: config.system?.join('\n') ?? undefined,
+        system: systemPrompt,
         messages: conversationToAnthropicMessages(conversation),
-        max_tokens: config.sampling?.maxOutputTokens,
+        max_tokens: config.sampling?.maxOutputTokens ?? 8192,
         temperature: config.sampling?.temperature,
         top_p: config.sampling?.topP,
         stream: true,
       } satisfies Record<string, unknown>;
 
+      const headers: Record<string, string> = {
+        'content-type': 'application/json',
+        accept: 'text/event-stream',
+        'anthropic-version': '2023-06-01',
+      };
+
+      if (isOAuthToken) {
+        // OAuth tokens require special beta header and Authorization
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        headers['anthropic-beta'] = 'oauth-2025-04-20';
+      } else {
+        // API keys use x-api-key header
+        headers['x-api-key'] = apiKey;
+      }
+
       let response: Response | undefined;
       try {
         response = await fetchImpl('https://api.anthropic.com/v1/messages', {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            accept: 'text/event-stream',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-          },
+          headers,
           body: JSON.stringify(requestBody),
           signal,
         });
