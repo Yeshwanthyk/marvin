@@ -79,8 +79,20 @@ const parseCommand = (line: string): { cmd: string; arg?: string } | undefined =
   return { cmd: trimmed.slice(1, space), arg: trimmed.slice(space + 1).trim() };
 };
 
-export const runTui = async (args?: { configDir?: string; configPath?: string }) => {
-  const loaded = await loadAppConfig({ configDir: args?.configDir, configPath: args?.configPath });
+export const runTui = async (args?: {
+  configDir?: string;
+  configPath?: string;
+  provider?: string;
+  model?: string;
+  thinking?: 'off' | 'low' | 'medium' | 'high';
+}) => {
+  const loaded = await loadAppConfig({
+    configDir: args?.configDir,
+    configPath: args?.configPath,
+    provider: args?.provider,
+    model: args?.model,
+    thinking: args?.thinking,
+  });
   const terminal = new ProcessTerminal();
   const keyReader = new KeyReader(terminal);
   const input = new Input({ prompt: '> ', placeholder: 'Type a message, /model <name>, /clear' });

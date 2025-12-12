@@ -89,6 +89,9 @@ const resolveConfigDir = (): string => {
 export const loadAppConfig = async (options?: {
   configDir?: string;
   configPath?: string;
+  provider?: string;
+  model?: string;
+  thinking?: ThinkingLevel;
 }): Promise<LoadedAppConfig> => {
   const configDir = options?.configDir ?? resolveConfigDir();
   const configPath = options?.configPath ?? path.join(configDir, 'config.json');
@@ -104,12 +107,20 @@ export const loadAppConfig = async (options?: {
 
   const parsed = validate(MuAgentAppConfigSchema, mergedRaw, `Invalid config in ${configPath} / ${secretsPath}`);
 
-  const provider = parsed.config?.provider ?? parsed.provider ?? process.env.MU_PROVIDER;
-  const model = parsed.config?.model ?? parsed.model ?? process.env.MU_MODEL;
+  const provider =
+    options?.provider ??
+    parsed.config?.provider ??
+    parsed.provider ??
+    process.env.MU_PROVIDER;
+  const model =
+    options?.model ??
+    parsed.config?.model ??
+    parsed.model ??
+    process.env.MU_MODEL;
 
   if (!provider || !model) {
     throw new Error(
-      `Missing provider/model. Set them in ${configPath} (config.provider/config.model) or via MU_PROVIDER/MU_MODEL.`
+      `Missing provider/model. Set them in ${configPath} (config.provider/config.model) or via MU_PROVIDER/MU_MODEL or pass --provider/--model.`
     );
   }
 
@@ -122,7 +133,7 @@ export const loadAppConfig = async (options?: {
   const queueStrategyRaw = parsed.queueStrategy ?? process.env.MU_QUEUE_STRATEGY;
   const queueStrategy: QueueStrategy = isQueueStrategy(queueStrategyRaw) ? queueStrategyRaw : 'serial';
 
-  const thinkingRaw = parsed.thinking ?? process.env.MU_THINKING;
+  const thinkingRaw = options?.thinking ?? parsed.thinking ?? process.env.MU_THINKING;
   const thinking: ThinkingLevel = isThinkingLevel(thinkingRaw) ? thinkingRaw : 'off';
 
   const memoryKeys = parsed.apiKeys ?? {};

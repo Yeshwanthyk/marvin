@@ -20,8 +20,21 @@ const getMessageText = (message: AgentMessage): string => {
   return parts.join('');
 };
 
-export const runHeadless = async (args: { prompt?: string; configDir?: string; configPath?: string }) => {
-  const loaded = await loadAppConfig({ configDir: args.configDir, configPath: args.configPath });
+export const runHeadless = async (args: {
+  prompt?: string;
+  configDir?: string;
+  configPath?: string;
+  provider?: string;
+  model?: string;
+  thinking?: 'off' | 'low' | 'medium' | 'high';
+}) => {
+  const loaded = await loadAppConfig({
+    configDir: args.configDir,
+    configPath: args.configPath,
+    provider: args.provider,
+    model: args.model,
+    thinking: args.thinking,
+  });
   const tools = createDefaultToolRegistry({ defaultContext: { cwd: process.cwd() } });
   const agentConfig = {
     ...loaded.agentConfig,
@@ -86,4 +99,3 @@ export const runHeadless = async (args: { prompt?: string; configDir?: string; c
     session.close();
   }
 };
-
