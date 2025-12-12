@@ -148,7 +148,7 @@ export class Agent {
       await this.runProviderRounds();
       this.state = 'idle';
       this.events.emit({ type: 'state', state: this.state });
-      this.events.emit({ type: 'turn-end' });
+      // turn-end is emitted by runProviderRounds
       return true;
     } catch (error) {
       if (this.abortController?.signal.aborted) {
@@ -160,7 +160,7 @@ export class Agent {
         if (!shouldStop) {
           this.state = 'idle';
           this.events.emit({ type: 'state', state: this.state });
-          this.events.emit({ type: 'turn-end' });
+          this.events.emit({ type: 'turn-end' }); // emit on abort recovery
           return this.queue.length > 0;
         }
         return false;

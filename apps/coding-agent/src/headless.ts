@@ -74,26 +74,36 @@ export const runHeadless = async (args: {
   });
 
   try {
-    session.send(prompt);
-    for await (const event of session) {
-      if (event.type === 'turn-end') {
-        const conversation = session.getConversation();
-        const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
-        const assistantText = streamed || (lastAssistant ? getMessageText(lastAssistant) : '');
-        process.stdout.write(
-          JSON.stringify({
-            ok: !lastError,
-            provider: agentConfig.provider,
-            model: agentConfig.model,
-            prompt,
-            assistant: assistantText,
-            usage: lastUsage,
-            error: lastError,
-          }) + '\n'
-        );
-        return;
+    // Set up turn-end listener BEFORE sending to avoid race
+    let resolveTurnEnd: () => void;
+    const turnEndPromise = new Promise<void>((resolve) => {
+      resolveTurnEnd = resolve;
+    });
+    
+    const turnUnsub = session.subscribe((event: AgentEvent) => {
+      if (event.type === 'turn-end' || event.type === 'error') {
+        turnUnsub();
+        resolveTurnEnd();
       }
-    }
+    });
+
+    session.send(prompt);
+    await turnEndPromise;
+
+    const conversation = session.getConversation();
+    const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
+    const assistantText = streamed || (lastAssistant ? getMessageText(lastAssistant) : '');
+    process.stdout.write(
+      JSON.stringify({
+        ok: !lastError,
+        provider: agentConfig.provider,
+        model: agentConfig.model,
+        prompt,
+        assistant: assistantText,
+        usage: lastUsage,
+        error: lastError,
+      }) + '\n'
+    );
   } finally {
     unsub();
     session.close();
