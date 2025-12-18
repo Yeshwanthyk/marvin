@@ -703,7 +703,7 @@ export const runTui = async (args?: {
   };
 
   // Simple header - just app name
-  const header = new Text(chalk.hex(colors.dimmed)('mu'), 1, 0);
+  const header = new Text(chalk.hex(colors.dimmed)('marvin'), 1, 0);
   tui.addChild(header);
 
   // Footer with stats

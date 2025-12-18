@@ -1,4 +1,4 @@
-# Plan: `pi` QOL parity for `mu`
+# Plan: `pi` QOL parity for `marvin`
 
 ## Remaining Features
 
@@ -80,7 +80,7 @@ Retry 429/5xx with exponential backoff, UI status, `Esc` to cancel.
 ## Completed ✓
 
 - **Token % indicator** — Footer shows `xx.x%/contextWindow`, color-coded
-- **Global AGENTS.md** — Loads `~/.mu/AGENTS.md`, `~/.codex/agents.md`, `~/.claude/CLAUDE.md` + project-level
+- **Global AGENTS.md** — Loads `~/.config/marvin/agents.md`, `~/.codex/agents.md`, `~/.claude/CLAUDE.md` + project-level
 - **Tool collapse (partial)** — Shows tail + "earlier lines", but no toggle yet
 - **Fuzzy file picker** — `@` triggers autocomplete with ripgrep + fuzzysort, respects gitignore
 - **Sessions (`-c`, `-r`)** — JSONL persistence in `~/.config/marvin/sessions/`, `-c` loads latest, `-r` shows list + loads latest

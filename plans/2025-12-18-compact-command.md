@@ -218,7 +218,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
 
 **Automated**:
 ```bash
-cd /Users/yesh/Documents/personal/mu
+cd /Users/yesh/Documents/personal/marvin
 bun run build          # No build errors
 bun run typecheck      # Zero type errors (if available)
 ```

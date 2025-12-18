@@ -10,7 +10,7 @@ describe("SessionManager", () => {
   let manager: SessionManager;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "mu-session-test-"));
+    tempDir = mkdtempSync(join(tmpdir(), "marvin-session-test-"));
     manager = new SessionManager(tempDir);
   });
 

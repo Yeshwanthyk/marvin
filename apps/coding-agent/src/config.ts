@@ -152,7 +152,7 @@ export const loadAppConfig = async (options?: {
   const thinkingRaw = options?.thinking ?? rawObj.thinking ?? process.env.MU_THINKING;
   const thinking: ThinkingLevel = isThinkingLevel(thinkingRaw) ? thinkingRaw : 'off';
 
-  // Load AGENTS.md from global (~/.mu/AGENTS.md, ~/.codex/agents.md, ~/.claude/CLAUDE.md)
+  // Load AGENTS.md from global (~/.config/marvin/agents.md, ~/.codex/agents.md, ~/.claude/CLAUDE.md)
   // and project level (./AGENTS.md, ./CLAUDE.md)
   const agentsConfig = await loadAgentsConfig();
 
