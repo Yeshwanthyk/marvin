@@ -1,18 +1,18 @@
-# @mu-agents/agent-core
+# @marvin-agents/agent-core
 
 Stateful agent abstraction with transport layer for LLM interactions. Provides a reactive `Agent` class that manages conversation state, emits granular events, and supports pluggable transports for different deployment scenarios.
 
 ## Installation
 
 ```bash
-npm install @mu-agents/agent-core
+npm install @marvin-agents/agent-core
 ```
 
 ## Quick Start
 
 ```typescript
-import { Agent, ProviderTransport } from '@mu-agents/agent-core';
-import { getModel } from '@mu-agents/ai';
+import { Agent, ProviderTransport } from '@marvin-agents/agent-core';
+import { getModel } from '@marvin-agents/ai';
 
 // Create agent with direct provider transport
 const agent = new Agent({
@@ -96,7 +96,7 @@ Events provide fine-grained lifecycle information:
 
 Transports abstract LLM communication:
 
-- **`ProviderTransport`**: Direct API calls using `@mu-agents/ai`
+- **`ProviderTransport`**: Direct API calls using `@marvin-agents/ai`
 - **`AppTransport`**: Proxy through a backend server (for browser apps)
 
 ```typescript
@@ -152,7 +152,7 @@ await agent.prompt('What is in this image?', [{
 Extend `AppMessage` for app-specific messages via declaration merging:
 
 ```typescript
-declare module '@mu-agents/agent-core' {
+declare module '@marvin-agents/agent-core' {
   interface CustomMessages {
     artifact: { role: 'artifact'; code: string; language: string };
   }

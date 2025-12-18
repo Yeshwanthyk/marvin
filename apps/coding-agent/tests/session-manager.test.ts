@@ -3,7 +3,7 @@ import { SessionManager } from "../src/session-manager";
 import { mkdtempSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import type { AppMessage } from "@mu-agents/agent-core";
+import type { AppMessage } from "@marvin-agents/agent-core";
 
 describe("SessionManager", () => {
   let tempDir: string;

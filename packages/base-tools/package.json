@@ -1,5 +1,5 @@
 {
-  "name": "@mu-agents/base-tools",
+  "name": "@marvin-agents/base-tools",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "test": "node -e \"process.exit(0)\""
   },
   "dependencies": {
-    "@mu-agents/ai": "file:../ai",
+    "@marvin-agents/ai": "file:../ai",
     "@sinclair/typebox": "^0.34.41",
     "diff": "^8.0.2",
     "file-type": "^21.1.1"

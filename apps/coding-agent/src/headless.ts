@@ -1,7 +1,7 @@
-import { Agent, ProviderTransport } from '@mu-agents/agent-core';
-import { getApiKey, type Message, type TextContent } from '@mu-agents/ai';
-import { codingTools } from '@mu-agents/base-tools';
-import type { ThinkingLevel } from '@mu-agents/agent-core';
+import { Agent, ProviderTransport } from '@marvin-agents/agent-core';
+import { getApiKey, type Message, type TextContent } from '@marvin-agents/ai';
+import { codingTools } from '@marvin-agents/base-tools';
+import type { ThinkingLevel } from '@marvin-agents/agent-core';
 import { loadAppConfig } from './config.js';
 
 const readStdin = async (): Promise<string> => {

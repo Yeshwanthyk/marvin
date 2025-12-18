@@ -1,5 +1,5 @@
-import { getModels, getProviders, type Api, type KnownProvider, type Model } from '@mu-agents/ai';
-import type { ThinkingLevel } from '@mu-agents/agent-core';
+import { getModels, getProviders, type Api, type KnownProvider, type Model } from '@marvin-agents/ai';
+import type { ThinkingLevel } from '@marvin-agents/agent-core';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -91,7 +91,7 @@ const readJsonIfExists = async (p: string): Promise<unknown | undefined> => {
   return JSON.parse(raw) as unknown;
 };
 
-const resolveConfigDir = (): string => path.join(os.homedir(), '.config', 'mu-agent');
+const resolveConfigDir = (): string => path.join(os.homedir(), '.config', 'marvin-agent');
 
 const resolveProvider = (raw: unknown): KnownProvider | undefined => {
   if (typeof raw !== 'string' || !raw.trim()) return undefined;

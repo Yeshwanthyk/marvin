@@ -1,4 +1,4 @@
-import { getModel } from "@mu-agents/ai";
+import { getModel } from "@marvin-agents/ai";
 import { describe, expect, it } from "vitest";
 import { Agent, ProviderTransport } from "../src/index.js";
 

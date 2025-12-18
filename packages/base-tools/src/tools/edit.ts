@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mu-agents/ai";
+import type { AgentTool } from "@marvin-agents/ai";
 import { Type } from "@sinclair/typebox";
 import * as Diff from "diff";
 import { constants } from "fs";

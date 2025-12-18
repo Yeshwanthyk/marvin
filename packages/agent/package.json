@@ -1,5 +1,5 @@
 {
-	"name": "@mu-agents/agent-core",
+	"name": "@marvin-agents/agent-core",
 	"version": "0.23.3",
 	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
 	"type": "module",
@@ -18,8 +18,8 @@
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {
-		"@mu-agents/ai": "file:../ai",
-		"@mu-agents/tui": "file:../tui"
+		"@marvin-agents/ai": "file:../ai",
+		"@marvin-agents/tui": "file:../tui"
 	},
 	"keywords": [
 		"ai",

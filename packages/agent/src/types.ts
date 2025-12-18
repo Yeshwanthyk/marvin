@@ -6,7 +6,7 @@ import type {
 	Model,
 	ToolResultMessage,
 	UserMessage,
-} from "@mu-agents/ai";
+} from "@marvin-agents/ai";
 
 /**
  * Attachment type definition.
@@ -40,7 +40,7 @@ export type UserMessageWithAttachments = UserMessage & { attachments?: Attachmen
  *
  * @example
  * ```typescript
- * declare module "@mu-agents/agent-core" {
+ * declare module "@marvin-agents/agent-core" {
  *   interface CustomMessages {
  *     artifact: ArtifactMessage;
  *     notification: NotificationMessage;

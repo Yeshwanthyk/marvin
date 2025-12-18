@@ -1,5 +1,5 @@
-import { Agent, ProviderTransport, type AgentEvent } from '@mu-agents/agent-core';
-import { getApiKey, getModels, getProviders, completeSimple, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@mu-agents/ai';
+import { Agent, ProviderTransport, type AgentEvent } from '@marvin-agents/agent-core';
+import { getApiKey, getModels, getProviders, completeSimple, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@marvin-agents/ai';
 import {
   CombinedAutocompleteProvider,
   Editor,
@@ -12,10 +12,10 @@ import {
   TUI,
   type Component,
   visibleWidth,
-} from '@mu-agents/tui';
+} from '@marvin-agents/tui';
 import chalk from 'chalk';
-import { codingTools, type StructuredDiff, type DiffLine } from '@mu-agents/base-tools';
-import type { ThinkingLevel } from '@mu-agents/agent-core';
+import { codingTools, type StructuredDiff, type DiffLine } from '@marvin-agents/base-tools';
+import type { ThinkingLevel } from '@marvin-agents/agent-core';
 import { loadAppConfig, updateAppConfig } from './config.js';
 import { SessionManager, type LoadedSession, type SessionInfo } from './session-manager.js';
 import { existsSync, readFileSync, watch, type FSWatcher } from 'fs';
@@ -935,7 +935,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
     addMessage(new Text(chalk.hex(colors.dimmed)('─'.repeat(40))));
 
     // Create summary message for new context
-    const summaryMessage: import('@mu-agents/agent-core').AppMessage = {
+    const summaryMessage: import('@marvin-agents/agent-core').AppMessage = {
       role: 'user',
       content: [{ type: 'text', text: SUMMARY_PREFIX + summary + SUMMARY_SUFFIX }],
       timestamp: Date.now(),
@@ -1051,7 +1051,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
 
     if (event.type === 'message_end') {
       // Save message to session
-      sessionManager.appendMessage(event.message as import('@mu-agents/agent-core').AppMessage);
+      sessionManager.appendMessage(event.message as import('@marvin-agents/agent-core').AppMessage);
       
       if (event.message.role === 'assistant' && currentAssistant) {
         currentAssistant.setText(renderMessage(event.message as Message));
@@ -1324,7 +1324,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
       queuedMessages.push(line);
       footer.setQueueCount(queuedMessages.length);
       // Queue message for agent to pick up on next turn
-      const queuedUserMessage: import('@mu-agents/agent-core').AppMessage = {
+      const queuedUserMessage: import('@marvin-agents/agent-core').AppMessage = {
         role: 'user',
         content: [{ type: 'text', text: line }],
         timestamp: Date.now(),
@@ -1341,7 +1341,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
     ensureSession();
     
     // Save user message to session
-    const userMessage: import('@mu-agents/agent-core').AppMessage = {
+    const userMessage: import('@marvin-agents/agent-core').AppMessage = {
       role: 'user',
       content: [{ type: 'text', text: line }],
       timestamp: Date.now(),

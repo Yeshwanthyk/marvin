@@ -1,5 +1,5 @@
-import type { AssistantMessage, Model, ToolResultMessage, UserMessage } from "@mu-agents/ai";
-import { calculateTool, getModel } from "@mu-agents/ai";
+import type { AssistantMessage, Model, ToolResultMessage, UserMessage } from "@marvin-agents/ai";
+import { calculateTool, getModel } from "@marvin-agents/ai";
 import { describe, expect, it } from "vitest";
 import { Agent, ProviderTransport } from "../src/index.js";
 

@@ -10,10 +10,10 @@ import type {
 	SimpleStreamOptions,
 	ToolCall,
 	UserMessage,
-} from "@mu-agents/ai";
-import { agentLoop, agentLoopContinue } from "@mu-agents/ai";
-import { AssistantMessageEventStream } from "@mu-agents/ai/dist/utils/event-stream.js";
-import { parseStreamingJson } from "@mu-agents/ai/dist/utils/json-parse.js";
+} from "@marvin-agents/ai";
+import { agentLoop, agentLoopContinue } from "@marvin-agents/ai";
+import { AssistantMessageEventStream } from "@marvin-agents/ai/dist/utils/event-stream.js";
+import { parseStreamingJson } from "@marvin-agents/ai/dist/utils/json-parse.js";
 import type { ProxyAssistantMessageEvent } from "./proxy-types.js";
 import type { AgentRunConfig, AgentTransport } from "./types.js";
 

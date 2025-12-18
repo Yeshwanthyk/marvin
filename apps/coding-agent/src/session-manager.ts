@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import type { AppMessage, ThinkingLevel } from '@mu-agents/agent-core';
+import type { AppMessage, ThinkingLevel } from '@marvin-agents/agent-core';
 
 // Ensure strictly increasing timestamps within a process, even if multiple sessions start in the same millisecond.
 let lastSessionTimestamp = 0;
@@ -49,7 +49,7 @@ export class SessionManager {
   private currentSessionPath: string | null = null;
   private currentSessionId: string | null = null;
 
-  constructor(configDir: string = join(process.env.HOME || '', '.config', 'mu-agent')) {
+  constructor(configDir: string = join(process.env.HOME || '', '.config', 'marvin-agent')) {
     this.configDir = configDir;
     this.cwd = process.cwd();
     this.sessionDir = join(configDir, 'sessions', safeCwd(this.cwd));

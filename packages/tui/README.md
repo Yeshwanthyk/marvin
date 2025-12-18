@@ -1,4 +1,4 @@
-# @mu-agents/tui
+# @marvin-agents/tui
 
 Minimal terminal UI framework with differential rendering and synchronized output for flicker-free interactive CLI applications.
 
@@ -15,7 +15,7 @@ Minimal terminal UI framework with differential rendering and synchronized outpu
 ## Quick Start
 
 ```typescript
-import { TUI, Text, Editor, ProcessTerminal } from "@mu-agents/tui";
+import { TUI, Text, Editor, ProcessTerminal } from "@marvin-agents/tui";
 
 // Create terminal
 const terminal = new ProcessTerminal();
@@ -210,7 +210,7 @@ const spacer = new Spacer(2); // 2 empty lines (default: 1)
 Renders images inline for terminals that support the Kitty graphics protocol (Kitty, Ghostty, WezTerm) or iTerm2 inline images. Falls back to a text placeholder on unsupported terminals.
 
 ```typescript
-import { Image } from "@mu-agents/tui";
+import { Image } from "@marvin-agents/tui";
 
 const image = new Image(
 	base64Data,        // base64-encoded image data
@@ -230,7 +230,7 @@ Supported formats: PNG, JPEG, GIF, WebP. Dimensions are parsed from the image he
 Supports both slash commands and file paths.
 
 ```typescript
-import { CombinedAutocompleteProvider } from "@mu-agents/tui";
+import { CombinedAutocompleteProvider } from "@marvin-agents/tui";
 
 const provider = new CombinedAutocompleteProvider(
 	[

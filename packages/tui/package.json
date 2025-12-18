@@ -1,5 +1,5 @@
 {
-	"name": "@mu-agents/tui",
+	"name": "@marvin-agents/tui",
 	"version": "0.23.3",
 	"description": "Terminal User Interface library with differential rendering for efficient text-based applications",
 	"type": "module",

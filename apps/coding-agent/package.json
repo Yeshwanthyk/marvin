@@ -1,5 +1,5 @@
 {
-  "name": "@mu-agents/coding-agent",
+  "name": "@marvin-agents/coding-agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,10 +10,10 @@
     "test": "bun test tests"
   },
   "dependencies": {
-    "@mu-agents/ai": "file:../../packages/ai",
-    "@mu-agents/agent-core": "file:../../packages/agent",
-    "@mu-agents/tui": "file:../../packages/tui",
-    "@mu-agents/base-tools": "file:../../packages/base-tools",
+    "@marvin-agents/ai": "file:../../packages/ai",
+    "@marvin-agents/agent-core": "file:../../packages/agent",
+    "@marvin-agents/tui": "file:../../packages/tui",
+    "@marvin-agents/base-tools": "file:../../packages/base-tools",
     "chalk": "^5.6.2"
   }
 }

@@ -1,19 +1,19 @@
-# mu-agent
+# marvin-agent
 
 Modular AI agent framework built on composable packages.
 
 ## Architecture
 
 ```
-mu-agent/
+marvin-agent/
 ├── apps/
-│   └── coding-agent/           @mu-agents/coding-agent
+│   └── coding-agent/           @marvin-agents/coding-agent
 │
 ├── packages/
-│   ├── ai/                     @mu-agents/ai
-│   ├── agent/                  @mu-agents/agent-core
-│   ├── tui/                    @mu-agents/tui
-│   └── base-tools/             @mu-agents/base-tools
+│   ├── ai/                     @marvin-agents/ai
+│   ├── agent/                  @marvin-agents/agent-core
+│   ├── tui/                    @marvin-agents/tui
+│   └── base-tools/             @marvin-agents/base-tools
 │
 ├── docs/
 │   └── testing.md
@@ -46,10 +46,10 @@ mu-agent/
 
 | Package | NPM | Description |
 |---------|-----|-------------|
-| **ai** | `@mu-agents/ai` | Unified LLM API supporting OpenAI, Anthropic, Google, Mistral, Groq, xAI, OpenRouter, and OpenAI-compatible endpoints. Auto model discovery, token/cost tracking, streaming. |
-| **agent-core** | `@mu-agents/agent-core` | Stateful agent with transport abstraction. Manages conversation state, emits granular events (message updates, tool execution), supports pluggable transports. |
-| **tui** | `@mu-agents/tui` | Terminal UI framework with differential rendering for flicker-free updates. Components: Text, Editor, Markdown, SelectList, Image, etc. |
-| **base-tools** | `@mu-agents/base-tools` | Standard tool implementations: `read` (files/images), `bash` (command execution), `edit` (surgical text replacement), `write` (file creation). |
+| **ai** | `@marvin-agents/ai` | Unified LLM API supporting OpenAI, Anthropic, Google, Mistral, Groq, xAI, OpenRouter, and OpenAI-compatible endpoints. Auto model discovery, token/cost tracking, streaming. |
+| **agent-core** | `@marvin-agents/agent-core` | Stateful agent with transport abstraction. Manages conversation state, emits granular events (message updates, tool execution), supports pluggable transports. |
+| **tui** | `@marvin-agents/tui` | Terminal UI framework with differential rendering for flicker-free updates. Components: Text, Editor, Markdown, SelectList, Image, etc. |
+| **base-tools** | `@marvin-agents/base-tools` | Standard tool implementations: `read` (files/images), `bash` (command execution), `edit` (surgical text replacement), `write` (file creation). |
 
 ## Apps
 
