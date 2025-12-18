@@ -34,6 +34,8 @@ export interface TuiConfig {
 
 function App(props: { agent: Agent }) {
   const agent = useAgent()
+  
+  const messages = () => agent.state.messages
   const commands = useCommand()
   const dimensions = useTerminalDimensions()
 
@@ -81,35 +83,25 @@ function App(props: { agent: Agent }) {
         <text fg={colors.textDim}>mu</text>
       </box>
 
-      {/* Messages area - scrollable */}
-      <scrollbox flexGrow={1} overflow="scroll" stickyScroll>
-        <For each={agent.state.messages}>
-          {(msg) => <ChatMessage message={msg} />}
-        </For>
-
-        <For each={agent.state.toolBlocks}>
-          {(block) => (
-            <ToolBlock
-              block={block}
-              expanded={toolOutputExpanded()}
-              width={dimensions().width - 4}
-            />
-          )}
-        </For>
-
-        {/* Streaming assistant content or loading indicator */}
-        <Show 
-          when={agent.state.currentAssistantContent}
-          fallback={
-            <Show when={agent.state.responding}>
-              <Loader />
-            </Show>
-          }
-        >
-          <box paddingLeft={1} paddingRight={1} paddingTop={1}>
-            <text><Markdown content={agent.state.currentAssistantContent!} streaming /></text>
-          </box>
+      {/* Messages area */}
+      <scrollbox flexGrow={1} overflow="scroll" stickyScroll={true} stickyStart="bottom">
+        <Show when={messages().length > 0}>
+          <For each={messages()}>
+            {(msg) => <ChatMessage message={msg} />}
+          </For>
         </Show>
+
+        {/* Streaming/loader inline */}
+        <box 
+          paddingLeft={1} paddingRight={1} paddingTop={1}
+          height={agent.state.responding ? undefined : 0}
+        >
+          {agent.state.currentAssistantContent ? (
+            <text><Markdown content={agent.state.currentAssistantContent} streaming /></text>
+          ) : agent.state.responding ? (
+            <Loader />
+          ) : null}
+        </box>
       </scrollbox>
 
       {/* Input */}
@@ -122,14 +114,16 @@ function App(props: { agent: Agent }) {
 }
 
 /**
- * Create default slash commands for the TUI
+ * Default slash commands - these are created inside App so they have access to context
  */
-function createDefaultCommands(agent: Agent): SlashCommand[] {
+function useDefaultCommands(): SlashCommand[] {
+  const agent = useAgent()
+  
   return [
     {
       name: "clear",
       description: "Clear chat and reset agent",
-      onSelect: () => agent.reset(),
+      onSelect: () => agent.clear(),
     },
     {
       name: "abort",
@@ -152,20 +146,30 @@ function createDefaultCommands(agent: Agent): SlashCommand[] {
 }
 
 /**
+ * Inner app wrapper that registers default commands after providers are ready
+ */
+function AppWithCommands(props: { agent: Agent; commands?: SlashCommand[] }) {
+  const commands = useCommand()
+  const defaultCommands = useDefaultCommands()
+  
+  // Register default commands and any additional commands from config
+  commands.register([...defaultCommands, ...(props.commands ?? [])])
+  
+  return <App agent={props.agent} />
+}
+
+/**
  * Main entry point for the TUI
  */
 export async function runTui(config: TuiConfig): Promise<void> {
-  const defaultCommands = createDefaultCommands(config.agent)
-  const initialCommands = [...defaultCommands, ...(config.commands ?? [])]
-
   return new Promise((resolve) => {
     render(
       () => (
         <ThemeProvider>
           <AgentProvider agent={config.agent}>
             <PromptProvider>
-              <CommandProvider initialCommands={initialCommands}>
-                <App agent={config.agent} />
+              <CommandProvider>
+                <AppWithCommands agent={config.agent} commands={config.commands} />
               </CommandProvider>
             </PromptProvider>
           </AgentProvider>

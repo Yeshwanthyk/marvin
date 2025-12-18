@@ -180,6 +180,8 @@ export function AgentProvider(props: ParentProps<{ agent: Agent }>) {
           if (!content && assistantMsg.errorMessage) {
             content = `Error: ${assistantMsg.errorMessage}`
           }
+          // Clear streaming content FIRST to avoid duplicate display
+          setState("currentAssistantContent", "")
           setState(
             produce((s) => {
               s.messages.push({
@@ -189,7 +191,6 @@ export function AgentProvider(props: ParentProps<{ agent: Agent }>) {
                 timestamp: Date.now(),
                 usage: assistantMsg.usage,
               })
-              s.currentAssistantContent = ""
               // Update usage totals
               s.totalUsage.input += assistantMsg.usage.input
               s.totalUsage.output += assistantMsg.usage.output
@@ -245,6 +246,7 @@ export function AgentProvider(props: ParentProps<{ agent: Agent }>) {
 
       case "agent_end":
         setState("responding", false)
+        setState("currentAssistantContent", "")
         break
     }
   })
@@ -290,15 +292,15 @@ export function AgentProvider(props: ParentProps<{ agent: Agent }>) {
 
   const clear = () => {
     props.agent.reset()
-    setState({
-      responding: false,
-      messages: [],
-      toolBlocks: [],
-      queuedMessages: [],
-      currentAssistantContent: "",
-      totalUsage: { input: 0, output: 0, cacheRead: 0, cost: 0, lastContext: 0 },
-      retryStatus: null,
-    })
+    setState(produce((s) => {
+      s.responding = false
+      s.messages.length = 0  // Mutate array in place
+      s.toolBlocks.length = 0
+      s.queuedMessages.length = 0
+      s.currentAssistantContent = ""
+      s.totalUsage = { input: 0, output: 0, cacheRead: 0, cost: 0, lastContext: 0 }
+      s.retryStatus = null
+    }))
   }
 
   const setModel = (model: Model<Api>) => {
