@@ -1,0 +1,29 @@
+{
+  "name": "@mu-agents/tui-solid",
+  "version": "0.0.1",
+  "description": "Terminal UI using opentui + SolidJS",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsgo -p tsconfig.build.json",
+    "dev": "bun run src/dev.tsx",
+    "check": "biome check --write . && tsgo --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.1.61",
+    "@opentui/solid": "^0.1.61",
+    "solid-js": "^1.9.6",
+    "string-width": "^7.2.0",
+    "@mu-agents/agent-core": "workspace:*",
+    "@mu-agents/ai": "workspace:*"
+  },
+  "devDependencies": {
+    "bun-types": "^1.2.21",
+    "typescript": "^5.8.3"
+  },
+  "author": "",
+  "license": "MIT"
+}

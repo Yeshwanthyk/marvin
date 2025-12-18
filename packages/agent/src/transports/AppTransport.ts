@@ -50,7 +50,7 @@ function streamSimpleProxy(
 			timestamp: Date.now(),
 		};
 
-		let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+		let reader: import("node:stream/web").ReadableStreamDefaultReader<any> | undefined;
 
 		// Set up abort handler to cancel the reader
 		const abortHandler = () => {
@@ -97,12 +97,19 @@ function streamSimpleProxy(
 			}
 
 			// Parse SSE stream
-			reader = response.body!.getReader();
+			if (!response.body) {
+				throw new Error("Proxy error: response body is empty");
+			}
+			reader = response.body.getReader();
 			const decoder = new TextDecoder();
 			let buffer = "";
 
 			while (true) {
-				const { done, value } = await reader.read();
+				const r = reader;
+				if (!r) {
+					throw new Error("Proxy error: stream reader is not available");
+				}
+				const { done, value } = await r.read();
 				if (done) break;
 
 				// Check if aborted after reading

@@ -1,5 +1,7 @@
+# Needed for `@opentui/solid` TSX transform when running workspace code from the repo root.
+preload = ["./scripts/opentui-preload.ts"]
+
 [test]
 # Shared test harness for every workspace package.
 # Paths are resolved relative to this bunfig.toml.
-preload = ["./test/setup.ts"]
-
+preload = ["./scripts/opentui-preload.ts", "./test/setup.ts"]

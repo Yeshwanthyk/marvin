@@ -3,6 +3,9 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import type { AppMessage, ThinkingLevel } from '@mu-agents/agent-core';
 
+// Ensure strictly increasing timestamps within a process, even if multiple sessions start in the same millisecond.
+let lastSessionTimestamp = 0;
+
 export interface SessionMetadata {
   type: 'session';
   id: string;
@@ -65,7 +68,9 @@ export class SessionManager {
     this.ensureDir();
     
     const id = randomUUID();
-    const timestamp = Date.now();
+    const now = Date.now();
+    const timestamp = now <= lastSessionTimestamp ? lastSessionTimestamp + 1 : now;
+    lastSessionTimestamp = timestamp;
     const filename = `${timestamp}_${id}.jsonl`;
     this.currentSessionPath = join(this.sessionDir, filename);
     this.currentSessionId = id;
