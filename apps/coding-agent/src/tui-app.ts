@@ -533,12 +533,13 @@ const renderToolBody = (toolName: string, args: any, result: unknown, isPartial:
       if (!content) return isPartial ? dim('writing...') : '';
       const lines = content.split('\n');
       const maxLines = 15;
+      const prefix = isPartial ? dim('Creating file:\n\n') : '';
       if (lines.length > maxLines) {
         const shown = lines.slice(0, maxLines);
         const remaining = lines.length - maxLines;
-        return shown.map((l: string) => output(l)).join('\n') + dim(`\n... (${remaining} more lines)`);
+        return prefix + shown.map((l: string) => output(l)).join('\n') + dim(`\n... (${remaining} more lines)`);
       }
-      return lines.map((l: string) => output(l)).join('\n');
+      return prefix + lines.map((l: string) => output(l)).join('\n');
     }
     case 'edit': {
       const diff = getStructuredDiff(result);
@@ -1460,4 +1461,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
   }
 
   tui.start();
+  
+  // Clean up terminal state on Ctrl+C
+  process.on('SIGINT', () => exit());
 };
