@@ -2,19 +2,19 @@ import type { TUI } from "../tui.js";
 import { Text } from "./text.js";
 
 /**
- * Loader component that updates every 80ms with spinning animation
+ * Loader with bouncing dot
  */
 export class Loader extends Text {
-	private frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+	private frames = ["    ", ".   ", "..  ", "... ", "....", " ...", "  ..", "   ."];
 	private currentFrame = 0;
 	private intervalId: NodeJS.Timeout | null = null;
 	private ui: TUI | null = null;
 
 	constructor(
 		ui: TUI,
-		private spinnerColorFn: (str: string) => string,
-		private messageColorFn: (str: string) => string,
-		private message: string = "Loading...",
+		private accentColorFn: (str: string) => string,
+		private dimColorFn: (str: string) => string,
+		private message: string = "",
 	) {
 		super("", 1, 0);
 		this.ui = ui;
@@ -30,7 +30,7 @@ export class Loader extends Text {
 		this.intervalId = setInterval(() => {
 			this.currentFrame = (this.currentFrame + 1) % this.frames.length;
 			this.updateDisplay();
-		}, 80);
+		}, 120);
 	}
 
 	stop() {
@@ -46,8 +46,9 @@ export class Loader extends Text {
 	}
 
 	private updateDisplay() {
-		const frame = this.frames[this.currentFrame];
-		this.setText(`${this.spinnerColorFn(frame)} ${this.messageColorFn(this.message)}`);
+		const dots = this.accentColorFn(this.frames[this.currentFrame]);
+		const msg = this.message ? this.dimColorFn(this.message) + " " : "";
+		this.setText(`${msg}${dots}`);
 		if (this.ui) {
 			this.ui.requestRender();
 		}
