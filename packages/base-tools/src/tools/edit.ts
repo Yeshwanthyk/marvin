@@ -6,90 +6,127 @@ import { access, readFile, writeFile } from "fs/promises";
 import { resolve as resolvePath } from "path";
 import { expandPath } from "./path-utils.js";
 
-/**
- * Generate a unified diff string with line numbers and context
- */
-function generateDiffString(oldContent: string, newContent: string, contextLines = 4): string {
-	const parts = Diff.diffLines(oldContent, newContent);
-	const output: string[] = [];
+export interface DiffLine {
+	type: "context" | "added" | "removed" | "ellipsis";
+	lineNum?: number;
+	content: string;
+	// For added/removed lines, word-level changes (array of [isHighlight, text] tuples)
+	segments?: Array<[boolean, string]>;
+}
 
-	const oldLines = oldContent.split("\n");
-	const newLines = newContent.split("\n");
-	const maxLineNum = Math.max(oldLines.length, newLines.length);
-	const lineNumWidth = String(maxLineNum).length;
+export interface StructuredDiff {
+	lines: DiffLine[];
+	stats: { added: number; removed: number };
+}
+
+/**
+ * Generate a structured diff with word-level highlighting
+ */
+function generateStructuredDiff(oldContent: string, newContent: string, contextLines = 3): StructuredDiff {
+	const lineParts = Diff.diffLines(oldContent, newContent);
+	const output: DiffLine[] = [];
+	let stats = { added: 0, removed: 0 };
 
 	let oldLineNum = 1;
 	let newLineNum = 1;
 	let lastWasChange = false;
 
-	for (let i = 0; i < parts.length; i++) {
-		const part = parts[i];
+	for (let i = 0; i < lineParts.length; i++) {
+		const part = lineParts[i];
 		const raw = part.value.split("\n");
-		if (raw[raw.length - 1] === "") {
-			raw.pop();
-		}
+		if (raw[raw.length - 1] === "") raw.pop();
 
 		if (part.added || part.removed) {
-			// Show the change
-			for (const line of raw) {
-				if (part.added) {
-					const lineNum = String(newLineNum).padStart(lineNumWidth, " ");
-					output.push(`+${lineNum} ${line}`);
-					newLineNum++;
-				} else {
-					// removed
-					const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-					output.push(`-${lineNum} ${line}`);
-					oldLineNum++;
-				}
+			// Collect consecutive removed and added for word-level diff
+			const removed: string[] = [];
+			const added: string[] = [];
+			let j = i;
+
+			while (j < lineParts.length && (lineParts[j].added || lineParts[j].removed)) {
+				const p = lineParts[j];
+				const lines = p.value.split("\n");
+				if (lines[lines.length - 1] === "") lines.pop();
+				if (p.removed) removed.push(...lines);
+				else added.push(...lines);
+				j++;
 			}
+
+			// Try to pair removed/added lines for word-level diff
+			const maxPairs = Math.min(removed.length, added.length);
+			for (let k = 0; k < removed.length; k++) {
+				const line = removed[k];
+				let segments: Array<[boolean, string]> | undefined;
+
+				if (k < maxPairs) {
+					// Compute word-level diff against paired added line
+					const wordDiff = Diff.diffWords(line, added[k]);
+					segments = [];
+					for (const wd of wordDiff) {
+						if (wd.removed) segments.push([true, wd.value]);
+						else if (!wd.added) segments.push([false, wd.value]);
+					}
+				}
+
+				output.push({ type: "removed", lineNum: oldLineNum++, content: line, segments });
+				stats.removed++;
+			}
+
+			for (let k = 0; k < added.length; k++) {
+				const line = added[k];
+				let segments: Array<[boolean, string]> | undefined;
+
+				if (k < maxPairs) {
+					const wordDiff = Diff.diffWords(removed[k], line);
+					segments = [];
+					for (const wd of wordDiff) {
+						if (wd.added) segments.push([true, wd.value]);
+						else if (!wd.removed) segments.push([false, wd.value]);
+					}
+				}
+
+				output.push({ type: "added", lineNum: newLineNum++, content: line, segments });
+				stats.added++;
+			}
+
+			// Skip parts we've processed
+			i = j - 1;
 			lastWasChange = true;
 		} else {
-			// Context lines - only show a few before/after changes
-			const nextPartIsChange = i < parts.length - 1 && (parts[i + 1].added || parts[i + 1].removed);
+			// Context lines
+			const nextIsChange = i < lineParts.length - 1 && (lineParts[i + 1].added || lineParts[i + 1].removed);
 
-			if (lastWasChange || nextPartIsChange) {
-				// Show context
+			if (lastWasChange || nextIsChange) {
 				let linesToShow = raw;
 				let skipStart = 0;
 				let skipEnd = 0;
 
 				if (!lastWasChange) {
-					// Show only last N lines as leading context
 					skipStart = Math.max(0, raw.length - contextLines);
 					linesToShow = raw.slice(skipStart);
 				}
 
-				if (!nextPartIsChange && linesToShow.length > contextLines) {
-					// Show only first N lines as trailing context
+				if (!nextIsChange && linesToShow.length > contextLines) {
 					skipEnd = linesToShow.length - contextLines;
 					linesToShow = linesToShow.slice(0, contextLines);
 				}
 
-				// Add ellipsis if we skipped lines at start
 				if (skipStart > 0) {
-					output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
-					// Update line numbers for the skipped leading context
+					output.push({ type: "ellipsis", content: "..." });
 					oldLineNum += skipStart;
 					newLineNum += skipStart;
 				}
 
 				for (const line of linesToShow) {
-					const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-					output.push(` ${lineNum} ${line}`);
-					oldLineNum++;
+					output.push({ type: "context", lineNum: oldLineNum++, content: line });
 					newLineNum++;
 				}
 
-				// Add ellipsis if we skipped lines at end
 				if (skipEnd > 0) {
-					output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
-					// Update line numbers for the skipped trailing context
+					output.push({ type: "ellipsis", content: "..." });
 					oldLineNum += skipEnd;
 					newLineNum += skipEnd;
 				}
 			} else {
-				// Skip these context lines entirely
 				oldLineNum += raw.length;
 				newLineNum += raw.length;
 			}
@@ -98,7 +135,7 @@ function generateDiffString(oldContent: string, newContent: string, contextLines
 		}
 	}
 
-	return output.join("\n");
+	return { lines: output, stats };
 }
 
 const editSchema = Type.Object({
@@ -122,7 +159,7 @@ export const editTool: AgentTool<typeof editSchema> = {
 
 		return new Promise<{
 			content: Array<{ type: "text"; text: string }>;
-			details: { diff: string } | undefined;
+			details: { structuredDiff: StructuredDiff } | undefined;
 		}>((resolve, reject) => {
 			// Check if already aborted
 			if (signal?.aborted) {
@@ -232,6 +269,7 @@ export const editTool: AgentTool<typeof editSchema> = {
 						signal.removeEventListener("abort", onAbort);
 					}
 
+					const diff = generateStructuredDiff(content, newContent);
 					resolve({
 						content: [
 							{
@@ -239,7 +277,7 @@ export const editTool: AgentTool<typeof editSchema> = {
 								text: `Successfully replaced text in ${path}. Changed ${oldText.length} characters to ${newText.length} characters.`,
 							},
 						],
-						details: { diff: generateDiffString(content, newContent) },
+						details: { structuredDiff: diff },
 					});
 				} catch (error: any) {
 					// Clean up abort handler
