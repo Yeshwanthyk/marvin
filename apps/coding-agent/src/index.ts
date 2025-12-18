@@ -1,7 +1,7 @@
 import pkg from '../package.json';
 import { parseArgs } from './args.js';
 import { runHeadless } from './headless.js';
-import { runTui } from './tui-app-opentui.js';
+import { runTui } from './tui-app.js';
 
 const printHelp = () => {
   process.stdout.write(
