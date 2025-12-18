@@ -101,6 +101,8 @@ class Footer implements Component {
   private cachedBranch: string | null | undefined = undefined;
   private gitWatcher: FSWatcher | null = null;
   private onBranchChange: (() => void) | null = null;
+  private queueCount = 0;
+  private retryStatus: string | null = null;
 
   constructor(modelId: string, thinking: ThinkingLevel, contextWindow: number = 0) {
     this.modelId = modelId;
@@ -113,6 +115,8 @@ class Footer implements Component {
     this.contextWindow = contextWindow;
   }
   setThinking(thinking: ThinkingLevel) { this.thinking = thinking; }
+  setQueueCount(count: number) { this.queueCount = count; }
+  setRetryStatus(status: string | null) { this.retryStatus = status; }
 
   addUsage(msg: AssistantMessage) {
     this.totalInput += msg.usage.input;
@@ -163,6 +167,12 @@ class Footer implements Component {
   render(width: number): string[] {
     const fmt = (n: number) => n < 1000 ? String(n) : n < 10000 ? (n/1000).toFixed(1)+'k' : Math.round(n/1000)+'k';
     const dim = chalk.hex(colors.dimmed);
+    const accent = chalk.hex(colors.accent);
+
+    // Retry status takes precedence (full width)
+    if (this.retryStatus) {
+      return [accent(this.retryStatus)];
+    }
 
     // Get project name (last part of cwd)
     const cwd = process.cwd();
@@ -177,21 +187,24 @@ class Footer implements Component {
       const pct = (this.lastContextTokens / this.contextWindow) * 100;
       const pctStr = pct < 10 ? pct.toFixed(1) : Math.round(pct).toString();
       ctx = `${pctStr}%/${fmt(this.contextWindow)}`;
-      if (pct > 90) ctx = chalk.hex(colors.accent)(ctx);
+      if (pct > 90) ctx = accent(ctx);
       else if (pct > 70) ctx = chalk.hex('#ffcc00')(ctx);
     }
+
+    // Queue indicator
+    const queue = this.queueCount > 0 ? chalk.hex('#88c0d0')(`[${this.queueCount} queued] `) : '';
 
     // Model + thinking
     const model = this.modelId + (this.thinking !== 'off' ? ` · ${this.thinking}` : '');
 
-    // Single line: project branch | context | model
+    // Single line: project branch | queue | context | model
     const left = project + (branch ? ` ${dim('(')}${branch}${dim(')')}` : '');
-    const right = (ctx ? ctx + '  ' : '') + model;
+    const right = queue + (ctx ? ctx + '  ' : '') + model;
     const leftWidth = visibleWidth(left);
     const rightWidth = visibleWidth(right);
     const padding = Math.max(2, width - leftWidth - rightWidth);
     
-    return [dim(left + ' '.repeat(padding) + right)];
+    return [dim(left + ' '.repeat(padding)) + right];
   }
 }
 
@@ -360,6 +373,21 @@ const renderToolBody = (toolName: string, args: any, result: unknown, isPartial:
 
 // Full tool render
 const renderTool = (toolName: string, args: any, result: unknown, isError: boolean, isPartial: boolean): string => {
+  // Read: single line, no body
+  if (toolName === 'read') {
+    const dim = chalk.hex(colors.dimmed);
+    const text = chalk.hex(colors.text);
+    const toolColor = chalk.hex(toolColors.read);
+    const path = shortenPath(args?.path || args?.file_path || '');
+    const content = getToolText(result);
+    
+    if (isPartial || !content) {
+      return toolColor.bold('read') + ' ' + text(path);
+    }
+    const lineCount = content.split('\n').length;
+    return toolColor.bold('read') + ' ' + text(path) + dim(` (${lineCount} lines)`);
+  }
+  
   const header = renderToolHeader(toolName, args, isError);
   const body = renderToolBody(toolName, args, result, isPartial);
   
@@ -369,11 +397,44 @@ const renderTool = (toolName: string, args: any, result: unknown, isError: boole
   return header;
 };
 
+// Tool render with expand/collapse toggle for stored output
+const renderToolWithExpand = (toolName: string, args: any, fullOutput: string, expanded: boolean): string => {
+  // Read: always single line, no expand
+  if (toolName === 'read') {
+    const dim = chalk.hex(colors.dimmed);
+    const text = chalk.hex(colors.text);
+    const toolColor = chalk.hex(toolColors.read);
+    const path = shortenPath(args?.path || args?.file_path || '');
+    const lineCount = fullOutput ? fullOutput.split('\n').length : 0;
+    return toolColor.bold('read') + ' ' + text(path) + (lineCount ? dim(` (${lineCount} lines)`) : '');
+  }
+  
+  const header = renderToolHeader(toolName, args);
+  const dim = chalk.hex(colors.dimmed);
+  const output = chalk.hex('#c5c5c0');
+  
+  if (!fullOutput) return header;
+  
+  const lines = fullOutput.trim().split('\n');
+  const maxLines = toolName === 'bash' ? 25 : 15;
+  
+  if (expanded || lines.length <= maxLines) {
+    // Show full output
+    return `${header}\n\n${lines.map(l => output(l)).join('\n')}`;
+  } else {
+    // Show collapsed with hint
+    const skipped = lines.length - maxLines;
+    const shown = lines.slice(-maxLines);
+    return `${header}\n\n${dim(`... (${skipped} earlier lines, Ctrl+O to expand)\n`)}${shown.map(l => output(l)).join('\n')}`;
+  }
+};
+
 class FocusProxy implements Component {
   constructor(
     private readonly editor: Editor,
     private readonly onCtrlC: () => void,
     private readonly onEscape: () => boolean,
+    private readonly onCtrlO: () => void,
   ) {}
 
   render(width: number): string[] {
@@ -385,8 +446,17 @@ class FocusProxy implements Component {
   }
 
   handleInput(data: string): void {
-    if (data.charCodeAt(0) === 3) {
+    const code = data.charCodeAt(0);
+    
+    // Ctrl+C
+    if (code === 3) {
       this.onCtrlC();
+      return;
+    }
+
+    // Ctrl+O (toggle tool output)
+    if (code === 15) {
+      this.onCtrlO();
       return;
     }
 
@@ -534,9 +604,21 @@ export const runTui = async (args?: {
 
   let isResponding = false;
   let currentAssistant: Markdown | undefined;
-  const toolBlocks = new Map<string, { component: Text; data: { name: string; args: any } }>();
+  const toolBlocks = new Map<string, { component: Text; data: { name: string; args: any; fullOutput?: string } }>();
   let loader: Loader | undefined;
   let lastCtrlC = 0;
+  
+  // Message queueing
+  const queuedMessages: string[] = [];
+  
+  // Tool output toggle
+  let toolOutputExpanded = false;
+  
+  // Auto retry state
+  const retryConfig = { enabled: true, maxRetries: 3, baseDelayMs: 2000 };
+  const retryablePattern = /overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error/i;
+  let retryAttempt = 0;
+  let retryAbortController: AbortController | null = null;
 
   const removeLoader = () => {
     if (!loader) return;
@@ -556,12 +638,18 @@ export const runTui = async (args?: {
     currentAssistant = undefined;
     toolBlocks.clear();
     footer.reset();
+    footer.setQueueCount(0);
+    footer.setRetryStatus(null);
+    queuedMessages.length = 0;
+    retryAttempt = 0;
     agent.reset();
     tui.requestRender();
   };
 
   const abort = () => {
     agent.abort();
+    agent.clearMessageQueue();
+    // Queued messages restored to editor in onEscape handler
     tui.requestRender();
   };
 
@@ -569,6 +657,16 @@ export const runTui = async (args?: {
     tui.stop();
     process.stdout.write('\n');
     process.exit(0);
+  };
+
+  // Re-render tool blocks based on expanded state
+  const rerenderToolBlocks = () => {
+    for (const [, entry] of toolBlocks) {
+      if (entry.data.fullOutput !== undefined) {
+        const content = renderToolWithExpand(entry.data.name, entry.data.args, entry.data.fullOutput, toolOutputExpanded);
+        entry.component.setText(content);
+      }
+    }
   };
 
   const focusProxy = new FocusProxy(
@@ -585,12 +683,32 @@ export const runTui = async (args?: {
       tui.requestRender();
     },
     () => {
-      // Escape aborts when agent is streaming; otherwise let editor handle it.
+      // Escape during retry: cancel retry
+      if (retryAbortController) {
+        retryAbortController.abort();
+        retryAbortController = null;
+        retryAttempt = 0;
+        footer.setRetryStatus(null);
+        tui.requestRender();
+        return true;
+      }
+      // Escape during response: abort + restore queued messages
       if (isResponding) {
         abort();
+        if (queuedMessages.length > 0) {
+          editor.setText(queuedMessages.join('\n'));
+          queuedMessages.length = 0;
+          footer.setQueueCount(0);
+        }
         return true;
       }
       return false;
+    },
+    () => {
+      // Ctrl+O: toggle tool output expanded
+      toolOutputExpanded = !toolOutputExpanded;
+      rerenderToolBlocks();
+      tui.requestRender();
     },
   );
 
@@ -603,6 +721,21 @@ export const runTui = async (args?: {
 
   agent.subscribe((event: AgentEvent) => {
     if (event.type === 'message_start') {
+      if (event.message.role === 'user') {
+        // Queued user message being processed - render it and update queue count
+        if (queuedMessages.length > 0) {
+          queuedMessages.shift();
+          footer.setQueueCount(queuedMessages.length);
+          const text = typeof event.message.content === 'string' 
+            ? event.message.content 
+            : textFromBlocks(event.message.content as Array<{ type: string }>);
+          addMessage(new Markdown(chalk.hex(colors.dimmed)('› ') + text, 1, 1, markdownTheme));
+          // Add a new loader for the queued message
+          loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Thinking...');
+          addMessage(loader);
+          tui.requestRender();
+        }
+      }
       if (event.message.role === 'assistant') {
         removeLoader();
         currentAssistant = new Markdown('', 1, 1, markdownTheme);
@@ -655,7 +788,12 @@ export const runTui = async (args?: {
     if (event.type === 'tool_execution_end') {
       const entry = toolBlocks.get(event.toolCallId);
       if (!entry) return;
-      const content = renderTool(entry.data.name, entry.data.args, event.result, event.isError, false);
+      // Store full output for toggle
+      const fullOutput = getToolText(event.result);
+      entry.data.fullOutput = fullOutput;
+      const content = toolOutputExpanded 
+        ? renderToolWithExpand(entry.data.name, entry.data.args, fullOutput, true)
+        : renderTool(entry.data.name, entry.data.args, event.result, event.isError, false);
       // Change background based on success/error
       const bgColor = event.isError ? colors.toolError : colors.toolSuccess;
       entry.component.setCustomBgFn((text: string) => chalk.bgHex(bgColor)(text));
@@ -672,8 +810,56 @@ export const runTui = async (args?: {
 
     if (event.type === 'agent_end') {
       removeLoader();
+      
+      // Check for retryable error
+      const lastMsg = agent.state.messages[agent.state.messages.length - 1];
+      const errorMsg = lastMsg?.role === 'assistant' && (lastMsg as AssistantMessage).errorMessage;
+      const isRetryable = errorMsg && retryablePattern.test(errorMsg);
+      
+      if (isRetryable && retryConfig.enabled && retryAttempt < retryConfig.maxRetries) {
+        retryAttempt++;
+        const delay = retryConfig.baseDelayMs * Math.pow(2, retryAttempt - 1);
+        footer.setRetryStatus(`Retrying (${retryAttempt}/${retryConfig.maxRetries}) in ${Math.round(delay/1000)}s... (esc to cancel)`);
+        tui.requestRender();
+        
+        retryAbortController = new AbortController();
+        const signal = retryAbortController.signal;
+        
+        // Abortable sleep then retry
+        const sleep = (ms: number) => new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(resolve, ms);
+          signal.addEventListener('abort', () => {
+            clearTimeout(timeout);
+            reject(new Error('cancelled'));
+          });
+        });
+        
+        sleep(delay).then(() => {
+          if (signal.aborted) return;
+          footer.setRetryStatus(null);
+          retryAbortController = null;
+          // Remove the error message and retry
+          agent.replaceMessages(agent.state.messages.slice(0, -1));
+          loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Retrying...');
+          addMessage(loader);
+          tui.requestRender();
+          void agent.continue().catch((err) => {
+            removeLoader();
+            addMessage(new Text(chalk.hex(colors.accent)(String(err instanceof Error ? err.message : err))));
+            isResponding = false;
+            tui.requestRender();
+          });
+        }).catch(() => {
+          // Cancelled by user
+          isResponding = false;
+          tui.requestRender();
+        });
+        return; // Keep isResponding true during retry wait
+      }
+      
+      // No retry needed, reset retry state and end
+      retryAttempt = 0;
       isResponding = false;
-      editor.disableSubmit = false;
       tui.requestRender();
     }
   });
@@ -804,8 +990,21 @@ export const runTui = async (args?: {
       return;
     }
 
-    // Normal prompt
-    if (isResponding) return;
+    // Normal prompt - queue if already responding
+    if (isResponding) {
+      queuedMessages.push(line);
+      footer.setQueueCount(queuedMessages.length);
+      // Queue message for agent to pick up on next turn
+      const queuedUserMessage: import('@mu-agents/agent-core').AppMessage = {
+        role: 'user',
+        content: [{ type: 'text', text: line }],
+        timestamp: Date.now(),
+      };
+      void agent.queueMessage(queuedUserMessage);
+      editor.setText('');
+      tui.requestRender();
+      return;
+    }
 
     editor.setText('');
 
@@ -826,7 +1025,6 @@ export const runTui = async (args?: {
     addMessage(loader);
 
     isResponding = true;
-    editor.disableSubmit = true;
     tui.requestRender();
 
     void agent.prompt(line).catch((err) => {
