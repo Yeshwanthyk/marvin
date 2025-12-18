@@ -318,15 +318,10 @@ const renderToolBody = (toolName: string, args: any, result: unknown, isPartial:
       return lines.map(l => output(l)).join('\n');
     }
     case 'read': {
+      // Just show line count, no content (too noisy)
       if (!text) return isPartial ? dim('reading...') : '';
-      const lines = text.split('\n');
-      const maxLines = 20;
-      if (lines.length > maxLines) {
-        const shown = lines.slice(0, maxLines);
-        const remaining = lines.length - maxLines;
-        return shown.map(l => output(l)).join('\n') + dim(`\n... (${remaining} more lines)`);
-      }
-      return lines.map(l => output(l)).join('\n');
+      const lineCount = text.split('\n').length;
+      return dim(`${lineCount} lines`);
     }
     case 'write': {
       const content = args?.content || '';

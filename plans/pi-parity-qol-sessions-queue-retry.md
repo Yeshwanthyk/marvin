@@ -49,7 +49,12 @@ Currently: always collapsed with fixed maxLines. Need: toggle to expand/collapse
 
 ---
 
-### 4. Auto Retry/Backoff
+### 4. Streaming/Running Indicator
+Show visual feedback when tool is executing or response is streaming. Currently no indicator between submit and first token.
+
+---
+
+### 5. Auto Retry/Backoff
 Retry 429/5xx with exponential backoff, UI status, `Esc` to cancel.
 
 **Config:** `{ enabled: true, maxRetries: 3, baseDelayMs: 2000 }`
@@ -84,7 +89,8 @@ Retry 429/5xx with exponential backoff, UI status, `Esc` to cancel.
 
 ## Implementation Order
 
-1. Sessions (`-c`, `-r`)
+1. ~~Sessions (`-c`, `-r`)~~ ✓
 2. Message queueing
 3. Ctrl+O toggle
-4. Auto retry/backoff
+4. Streaming/running indicator
+5. Auto retry/backoff
