@@ -320,7 +320,7 @@ function streamSimpleProxy(
 export interface AppTransportOptions {
 	/**
 	 * Proxy server URL. The server manages user accounts and proxies requests to LLM providers.
-	 * Example: "https://genai.mariozechner.at"
+	 * Example: "https://api.example.com"
 	 */
 	proxyUrl: string;
 

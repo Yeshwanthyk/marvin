@@ -1,18 +1,18 @@
-# @mariozechner/pi-agent-core
+# @mu-agents/agent-core
 
 Stateful agent abstraction with transport layer for LLM interactions. Provides a reactive `Agent` class that manages conversation state, emits granular events, and supports pluggable transports for different deployment scenarios.
 
 ## Installation
 
 ```bash
-npm install @mariozechner/pi-agent-core
+npm install @mu-agents/agent-core
 ```
 
 ## Quick Start
 
 ```typescript
-import { Agent, ProviderTransport } from '@mariozechner/pi-agent-core';
-import { getModel } from '@mariozechner/pi-ai';
+import { Agent, ProviderTransport } from '@mu-agents/agent-core';
+import { getModel } from '@mu-agents/ai';
 
 // Create agent with direct provider transport
 const agent = new Agent({
@@ -96,7 +96,7 @@ Events provide fine-grained lifecycle information:
 
 Transports abstract LLM communication:
 
-- **`ProviderTransport`**: Direct API calls using `@mariozechner/pi-ai`
+- **`ProviderTransport`**: Direct API calls using `@mu-agents/ai`
 - **`AppTransport`**: Proxy through a backend server (for browser apps)
 
 ```typescript
@@ -152,7 +152,7 @@ await agent.prompt('What is in this image?', [{
 Extend `AppMessage` for app-specific messages via declaration merging:
 
 ```typescript
-declare module '@mariozechner/pi-agent-core' {
+declare module '@mu-agents/agent-core' {
   interface CustomMessages {
     artifact: { role: 'artifact'; code: string; language: string };
   }

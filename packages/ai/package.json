@@ -40,11 +40,11 @@
 		"unified",
 		"api"
 	],
-	"author": "Mario Zechner",
+	"author": "Yesh Yendamuri",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/badlogic/pi-mono.git",
+		"url": "git+https://github.com/Yeshwanthyk/marvin.git",
 		"directory": "packages/ai"
 	},
 	"engines": {
