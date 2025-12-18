@@ -13,7 +13,7 @@ const printHelp = () => {
       '  --provider <name>            Provider (e.g. openai, anthropic)',
       '  --model <id>                 Model id (provider-specific)',
       '  --thinking <level>           off|minimal|low|medium|high|xhigh',
-      '  --config-dir <dir>           Config directory (default: ~/.config/marvin-agent)',
+      '  --config-dir <dir>           Config directory (default: ~/.config/marvin)',
       '  --config <path>              Config file path (default: <config-dir>/config.json)',
       '  -c, --continue               Resume most recent session for current directory',
       '  -r, --resume                 Pick from recent sessions to resume',

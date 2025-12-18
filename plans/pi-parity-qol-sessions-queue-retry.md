@@ -9,7 +9,7 @@ Persist/resume conversations via JSONL files.
 - `--continue` / `-c` — load most recent session for cwd
 - `--resume` / `-r` — picker UI to select session
 
-**Storage:** `~/.config/marvin-agent/sessions/--<safe-cwd>--/<timestamp>_<uuid>.jsonl`
+**Storage:** `~/.config/marvin/sessions/--<safe-cwd>--/<timestamp>_<uuid>.jsonl`
 
 **Format:**
 ```jsonl
@@ -83,7 +83,7 @@ Retry 429/5xx with exponential backoff, UI status, `Esc` to cancel.
 - **Global AGENTS.md** — Loads `~/.mu/AGENTS.md`, `~/.codex/agents.md`, `~/.claude/CLAUDE.md` + project-level
 - **Tool collapse (partial)** — Shows tail + "earlier lines", but no toggle yet
 - **Fuzzy file picker** — `@` triggers autocomplete with ripgrep + fuzzysort, respects gitignore
-- **Sessions (`-c`, `-r`)** — JSONL persistence in `~/.config/marvin-agent/sessions/`, `-c` loads latest, `-r` shows list + loads latest
+- **Sessions (`-c`, `-r`)** — JSONL persistence in `~/.config/marvin/sessions/`, `-c` loads latest, `-r` shows list + loads latest
 - **Message queueing** — Submit while streaming queues message, shows `[N queued]` in footer, Esc restores to editor
 - **Ctrl+O toggle** — Toggles tool output between collapsed (last N lines) and full expanded view
 - **Auto retry/backoff** — Retries 429/5xx errors with exponential backoff, shows status in footer, Esc cancels

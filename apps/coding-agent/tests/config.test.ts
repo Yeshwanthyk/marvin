@@ -6,14 +6,14 @@ import { loadAppConfig } from '../src/config';
 
 describe('coding-agent config overrides', () => {
   it('allows running without config file when provider+model are provided', async () => {
-    const configDir = path.join(os.tmpdir(), `marvin-agent-no-config-${Date.now()}`);
+    const configDir = path.join(os.tmpdir(), `marvin-no-config-${Date.now()}`);
     const loaded = await loadAppConfig({ configDir, provider: 'openai', model: 'gpt-4.1' });
     expect(loaded.provider).toBe('openai');
     expect(loaded.modelId).toBe('gpt-4.1');
   });
 
   it('CLI overrides config file values', async () => {
-    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'marvin-agent-config-'));
+    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'marvin-config-'));
     await fs.writeFile(
       path.join(configDir, 'config.json'),
       JSON.stringify(

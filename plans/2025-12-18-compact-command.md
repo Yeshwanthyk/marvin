@@ -71,13 +71,13 @@ Add `/compact` to autocomplete and handle the command in the submit handler.
 
 **Add imports** (after line 2):
 ```typescript
-import { getApiKey, getModels, getProviders, completeSimple, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@marvin-agents/ai';
+import { getApiKey, getModels, getProviders, completeSimple, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@marvins/ai';
 ```
 
 **Remove/modify** existing import:
 ```typescript
 // Change this line:
-import { getApiKey, getModels, getProviders, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@marvin-agents/ai';
+import { getApiKey, getModels, getProviders, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@marvins/ai';
 ```
 
 #### 3. Add compact command handler ✅
@@ -189,7 +189,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
     addMessage(new Text(chalk.hex(colors.dimmed)('─'.repeat(40))));
 
     // Create summary message for new context
-    const summaryMessage: import('@marvin-agents/agent-core').AppMessage = {
+    const summaryMessage: import('@marvins/agent-core').AppMessage = {
       role: 'user',
       content: [{ type: 'text', text: SUMMARY_PREFIX + summary + SUMMARY_SUFFIX }],
       timestamp: Date.now(),

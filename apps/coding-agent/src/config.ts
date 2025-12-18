@@ -7,7 +7,7 @@ import * as path from 'node:path';
 // --- AGENTS.md loading ---
 
 const GLOBAL_AGENTS_PATHS = [
-  () => path.join(os.homedir(), '.mu', 'AGENTS.md'),
+  () => path.join(os.homedir(), '.config', 'marvin', 'agents.md'),
   () => path.join(os.homedir(), '.codex', 'agents.md'),
   () => path.join(os.homedir(), '.claude', 'CLAUDE.md'),
 ];
@@ -91,7 +91,7 @@ const readJsonIfExists = async (p: string): Promise<unknown | undefined> => {
   return JSON.parse(raw) as unknown;
 };
 
-const resolveConfigDir = (): string => path.join(os.homedir(), '.config', 'marvin-agent');
+const resolveConfigDir = (): string => path.join(os.homedir(), '.config', 'marvin');
 
 const resolveProvider = (raw: unknown): KnownProvider | undefined => {
   if (typeof raw !== 'string' || !raw.trim()) return undefined;

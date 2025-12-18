@@ -49,7 +49,7 @@ export class SessionManager {
   private currentSessionPath: string | null = null;
   private currentSessionId: string | null = null;
 
-  constructor(configDir: string = join(process.env.HOME || '', '.config', 'marvin-agent')) {
+  constructor(configDir: string = join(process.env.HOME || '', '.config', 'marvin')) {
     this.configDir = configDir;
     this.cwd = process.cwd();
     this.sessionDir = join(configDir, 'sessions', safeCwd(this.cwd));
