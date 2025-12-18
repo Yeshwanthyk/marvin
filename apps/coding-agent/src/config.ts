@@ -1,8 +1,61 @@
-import { getModels, getProviders, type Api, type KnownProvider, type Model } from '@mariozechner/pi-ai';
-import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import { getModels, getProviders, type Api, type KnownProvider, type Model } from '@mu-agents/ai';
+import type { ThinkingLevel } from '@mu-agents/agent-core';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
+// --- AGENTS.md loading ---
+
+const GLOBAL_AGENTS_PATHS = [
+  () => path.join(os.homedir(), '.mu', 'AGENTS.md'),
+  () => path.join(os.homedir(), '.codex', 'agents.md'),
+  () => path.join(os.homedir(), '.claude', 'CLAUDE.md'),
+];
+
+const PROJECT_AGENTS_PATHS = [
+  () => path.join(process.cwd(), 'AGENTS.md'),
+  () => path.join(process.cwd(), 'CLAUDE.md'),
+];
+
+const readFileIfExists = async (p: string): Promise<string | undefined> => {
+  try {
+    return await fs.readFile(p, 'utf8');
+  } catch {
+    return undefined;
+  }
+};
+
+const loadFirstExisting = async (pathFns: Array<() => string>): Promise<{ path: string; content: string } | undefined> => {
+  for (const pathFn of pathFns) {
+    const p = pathFn();
+    const content = await readFileIfExists(p);
+    if (content !== undefined) {
+      return { path: p, content };
+    }
+  }
+  return undefined;
+};
+
+export interface AgentsConfig {
+  global?: { path: string; content: string };
+  project?: { path: string; content: string };
+  combined: string;
+}
+
+export const loadAgentsConfig = async (): Promise<AgentsConfig> => {
+  const global = await loadFirstExisting(GLOBAL_AGENTS_PATHS);
+  const project = await loadFirstExisting(PROJECT_AGENTS_PATHS);
+
+  const parts: string[] = [];
+  if (global) parts.push(global.content);
+  if (project) parts.push(project.content);
+
+  return {
+    global,
+    project,
+    combined: parts.join('\n\n---\n\n'),
+  };
+};
 
 export interface LoadedAppConfig {
   provider: KnownProvider;
@@ -10,6 +63,7 @@ export interface LoadedAppConfig {
   model: Model<Api>;
   thinking: ThinkingLevel;
   systemPrompt: string;
+  agentsConfig: AgentsConfig;
   configDir: string;
   configPath: string;
 }
@@ -98,9 +152,21 @@ export const loadAppConfig = async (options?: {
   const thinkingRaw = options?.thinking ?? rawObj.thinking ?? process.env.MU_THINKING;
   const thinking: ThinkingLevel = isThinkingLevel(thinkingRaw) ? thinkingRaw : 'off';
 
-  const systemPromptRaw = rawObj.systemPrompt ?? process.env.MU_SYSTEM_PROMPT;
-  const systemPrompt = typeof systemPromptRaw === 'string' && systemPromptRaw.trim().length > 0 ? systemPromptRaw :
-    'You are a helpful coding agent. Use tools (read, bash, edit, write) when needed.';
+  // Load AGENTS.md from global (~/.mu/AGENTS.md, ~/.codex/agents.md, ~/.claude/CLAUDE.md)
+  // and project level (./AGENTS.md, ./CLAUDE.md)
+  const agentsConfig = await loadAgentsConfig();
+
+  // Build system prompt: base + agents instructions
+  const basePrompt =
+    typeof rawObj.systemPrompt === 'string' && rawObj.systemPrompt.trim().length > 0
+      ? rawObj.systemPrompt
+      : typeof process.env.MU_SYSTEM_PROMPT === 'string' && process.env.MU_SYSTEM_PROMPT.trim().length > 0
+        ? process.env.MU_SYSTEM_PROMPT
+        : 'You are a helpful coding agent. Use tools (read, bash, edit, write) when needed.';
+
+  const systemPrompt = agentsConfig.combined
+    ? `${basePrompt}\n\n${agentsConfig.combined}`
+    : basePrompt;
 
   return {
     provider,
@@ -108,6 +174,7 @@ export const loadAppConfig = async (options?: {
     model,
     thinking,
     systemPrompt,
+    agentsConfig,
     configDir,
     configPath,
   };
