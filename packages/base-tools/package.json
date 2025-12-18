@@ -1,0 +1,17 @@
+{
+  "name": "@mu-agents/base-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "file:../ai",
+    "@sinclair/typebox": "^0.34.41",
+    "diff": "^8.0.2",
+    "file-type": "^21.1.1"
+  }
+}
