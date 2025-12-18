@@ -1,5 +1,5 @@
 import { Agent, ProviderTransport, type AgentEvent } from '@mu-agents/agent-core';
-import { getApiKey, getModels, getProviders, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@mu-agents/ai';
+import { getApiKey, getModels, getProviders, completeSimple, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@mu-agents/ai';
 import {
   CombinedAutocompleteProvider,
   Editor,
@@ -21,33 +21,32 @@ import { SessionManager, type LoadedSession, type SessionInfo } from './session-
 import { existsSync, readFileSync, watch, type FSWatcher } from 'fs';
 import { dirname, join } from 'path';
 
-// Editorial theme palette
+// Clean, readable palette
 const colors = {
-  text: '#e8e4dc',      // warm cream
-  dimmed: '#6b6b70',    // muted gray
-  accent: '#ff6b5b',    // warm coral
-  code: '#5cecc6',      // teal
-  border: '#3a3a40',    // subtle border
-  // Tool backgrounds - more visible
-  toolPending: '#2d2d3a',   // purple-gray (running)
-  toolSuccess: '#1a2a1a',   // green tint (success)
-  toolError: '#2a1a1a',     // red tint (error)
-  // Tool accents
-  toolBorder: '#4a4a5a',    // visible border
+  text: '#d4d4d4',      // clean light gray (easier to read)
+  dimmed: '#707070',    // muted gray
+  accent: '#e06c75',    // soft red
+  code: '#98c379',      // soft green
+  border: '#3e3e3e',    // subtle border
+  // Tool backgrounds
+  toolPending: '#2c2c2c',
+  toolSuccess: '#1e2a1e',
+  toolError: '#2a1e1e',
+  toolBorder: '#4a4a4a',
 };
 
 const markdownTheme: MarkdownTheme = {
-  heading: (text) => chalk.hex('#ffffff').bold(text),
-  link: (text) => chalk.hex('#88c0d0').underline(text),  // soft blue
+  heading: (text) => chalk.hex('#e5e5e5').bold(text),
+  link: (text) => chalk.hex('#61afef')(text),            // soft blue
   linkUrl: (text) => chalk.hex(colors.dimmed)(text),
-  code: (text) => chalk.hex('#d08770')(text),            // soft orange
-  codeBlock: (text) => chalk.hex(colors.text)(text),
-  codeBlockBorder: (text) => chalk.hex(colors.dimmed)(text),
-  quote: (text) => chalk.hex(colors.text).italic(text),
-  quoteBorder: (text) => chalk.hex(colors.dimmed)(text),
-  hr: (text) => chalk.hex(colors.dimmed)(text),
-  listBullet: (text) => chalk.hex(colors.dimmed)(text),  // subtle bullets
-  bold: (text) => chalk.bold(text),
+  code: (text) => chalk.hex('#e5c07b')(text),            // warm yellow
+  codeBlock: (text) => chalk.hex('#abb2bf')(text),       // muted for code
+  codeBlockBorder: (text) => chalk.hex(colors.border)(text),
+  quote: (text) => chalk.hex('#abb2bf').italic(text),
+  quoteBorder: (text) => chalk.hex(colors.border)(text),
+  hr: (text) => chalk.hex(colors.border)(text),
+  listBullet: (text) => chalk.hex(colors.dimmed)(text),
+  bold: (text) => chalk.hex('#e5e5e5').bold(text),
   italic: (text) => chalk.italic(text),
   strikethrough: (text) => chalk.strikethrough(text),
   underline: (text) => chalk.underline(text),
@@ -232,8 +231,9 @@ const renderMessage = (message: Message, includeThinking = true): string => {
       } else if (block.type === 'thinking' && includeThinking) {
         const thinking = (block as ThinkingContent).thinking;
         if (thinking?.trim()) {
-          // Render thinking in muted italic with prefix
-          parts.push(dim.italic('~ ' + thinking.trim()));
+          // Render thinking with label
+          const label = chalk.hex('#e5c07b')('Thinking: ');
+          parts.push(label + dim.italic(thinking.trim()));
         }
       }
     }
@@ -442,10 +442,10 @@ const renderUnifiedDiff = (diff: StructuredDiff): string => {
 
 // Tool-specific colors
 const toolColors: Record<string, string> = {
-  bash: '#a3be8c',   // green
-  read: '#88c0d0',   // blue  
-  write: '#d08770',  // orange
-  edit: '#b48ead',   // purple
+  bash: '#98c379',   // green
+  read: '#61afef',   // blue  
+  write: '#e5c07b',  // yellow
+  edit: '#c678dd',   // purple
 };
 
 // Render tool header based on tool type
@@ -713,6 +713,7 @@ export const runTui = async (args?: {
   const autocomplete = new CombinedAutocompleteProvider(
     [
       { name: 'clear', description: 'Clear chat + reset agent' },
+      { name: 'compact', description: 'Compact context into summary + start fresh' },
       { name: 'abort', description: 'Abort in-flight request' },
       { name: 'exit', description: 'Exit' },
       {
@@ -861,6 +862,101 @@ export const runTui = async (args?: {
         entry.component.setText(content);
       }
     }
+  };
+
+  const SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
+
+<summary>
+`;
+  const SUMMARY_SUFFIX = `
+</summary>`;
+
+  const SUMMARIZATION_PROMPT = `You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.
+
+Include:
+- Current progress and key decisions made
+- Important context, constraints, or user preferences
+- Absolute file paths of any relevant files that were read or modified
+- What remains to be done (clear next steps)
+- Any critical data, examples, or references needed to continue
+
+Be concise, structured, and focused on helping the next LLM seamlessly continue the work.`;
+
+  const handleCompact = async (customInstructions?: string) => {
+    const model = agent.state.model;
+    if (!model) {
+      throw new Error('No model configured');
+    }
+
+    // Build messages for summarization (filter to LLM-compatible roles)
+    const messages = agent.state.messages.filter(
+      (m) => m.role === 'user' || m.role === 'assistant' || m.role === 'toolResult'
+    ) as Message[];
+
+    const prompt = customInstructions
+      ? `${SUMMARIZATION_PROMPT}\n\nAdditional focus: ${customInstructions}`
+      : SUMMARIZATION_PROMPT;
+
+    const summarizationMessages: Message[] = [
+      ...messages,
+      {
+        role: 'user',
+        content: [{ type: 'text', text: prompt }],
+        timestamp: Date.now(),
+      },
+    ];
+
+    // Generate summary
+    const apiKey = getApiKeyForProvider(currentProvider);
+    const response = await completeSimple(model, { messages: summarizationMessages }, { maxTokens: 8192, apiKey });
+
+    // Check for error response
+    if (response.errorMessage) {
+      throw new Error(response.errorMessage);
+    }
+
+    const summary = response.content
+      .filter((c): c is TextContent => c.type === 'text')
+      .map((c) => c.text)
+      .join('\n');
+
+    if (!summary.trim()) {
+      // Debug: show what we got
+      const contentTypes = response.content.map(c => c.type).join(', ');
+      throw new Error(`No text in response (got: ${contentTypes || 'empty'})`);
+    }
+
+    removeLoader();
+
+    // Show summary in chat
+    addMessage(new Text(chalk.hex(colors.dimmed)('─'.repeat(40))));
+    addMessage(new Text(chalk.hex(colors.dimmed)('Context compacted. Summary:')));
+    addMessage(new Markdown(summary, 1, 1, markdownTheme));
+    addMessage(new Text(chalk.hex(colors.dimmed)('─'.repeat(40))));
+
+    // Create summary message for new context
+    const summaryMessage: import('@mu-agents/agent-core').AppMessage = {
+      role: 'user',
+      content: [{ type: 'text', text: SUMMARY_PREFIX + summary + SUMMARY_SUFFIX }],
+      timestamp: Date.now(),
+    };
+
+    // Reset agent and start fresh with summary
+    agent.reset();
+    agent.replaceMessages([summaryMessage]);
+
+    // Reset footer stats
+    footer.reset();
+    footer.setQueueCount(0);
+    queuedMessages.length = 0;
+
+    // Start new session
+    sessionStarted = false;
+    ensureSession();
+    sessionManager.appendMessage(summaryMessage);
+
+    addMessage(new Text(chalk.hex(colors.dimmed)('New session started with compacted context')));
+    tui.requestRender();
   };
 
   const focusProxy = new FocusProxy(
@@ -1187,6 +1283,39 @@ export const runTui = async (args?: {
       addMessage(new Text(chalk.hex(colors.dimmed)(`Switched model to ${provider} ${model.id}`)));
       editor.setText('');
       tui.requestRender();
+      return;
+    }
+
+    if (line === '/compact' || line.startsWith('/compact ')) {
+      if (isResponding) {
+        addMessage(new Text(chalk.hex(colors.dimmed)('Cannot compact while responding. Use /abort first.')));
+        editor.setText('');
+        tui.requestRender();
+        return;
+      }
+
+      const messages = agent.state.messages;
+      if (messages.length < 2) {
+        addMessage(new Text(chalk.hex(colors.dimmed)('Nothing to compact (need at least one exchange)')));
+        editor.setText('');
+        tui.requestRender();
+        return;
+      }
+
+      const customInstructions = line.startsWith('/compact ') ? line.slice(9).trim() : undefined;
+      
+      editor.setText('');
+      
+      // Show compacting status
+      loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Compacting context...');
+      addMessage(loader);
+      tui.requestRender();
+
+      void handleCompact(customInstructions).catch((err) => {
+        removeLoader();
+        addMessage(new Text(chalk.hex(colors.accent)(`Compact failed: ${err instanceof Error ? err.message : String(err)}`)));
+        tui.requestRender();
+      });
       return;
     }
 
