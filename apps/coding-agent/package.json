@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "coding-agent": "./src/index.ts"
+    "marvin": "./src/index.ts"
   },
   "scripts": {
     "test": "bun test tests"

@@ -7,7 +7,7 @@ const printHelp = () => {
   process.stdout.write(
     [
       'Usage:',
-      '  coding-agent [options] [prompt...]',
+      '  marvin [options] [prompt...]',
       '',
       'Options:',
       '  --provider <name>            Provider (e.g. openai, anthropic)',
