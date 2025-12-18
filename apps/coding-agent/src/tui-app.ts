@@ -1,5 +1,5 @@
 import { Agent, ProviderTransport, type AgentEvent } from '@mariozechner/pi-agent-core';
-import { getApiKey, getModels, getProviders, type Message, type TextContent, type ToolResultMessage } from '@mariozechner/pi-ai';
+import { getApiKey, getModels, getProviders, type AssistantMessage, type Message, type TextContent, type ToolResultMessage } from '@mariozechner/pi-ai';
 import {
   CombinedAutocompleteProvider,
   Editor,
@@ -11,23 +11,41 @@ import {
   Text,
   TUI,
   type Component,
+  visibleWidth,
 } from '@mariozechner/pi-tui';
 import chalk from 'chalk';
 import { codingTools } from '@mu-agents/base-tools';
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 import { loadAppConfig, updateAppConfig } from './config.js';
+import { existsSync, readFileSync, watch, type FSWatcher } from 'fs';
+import { dirname, join } from 'path';
+
+// Editorial theme palette
+const colors = {
+  text: '#e8e4dc',      // warm cream
+  dimmed: '#6b6b70',    // muted gray
+  accent: '#ff6b5b',    // warm coral
+  code: '#5cecc6',      // teal
+  border: '#3a3a40',    // subtle border
+  // Tool backgrounds - more visible
+  toolPending: '#2d2d3a',   // purple-gray (running)
+  toolSuccess: '#1a2a1a',   // green tint (success)
+  toolError: '#2a1a1a',     // red tint (error)
+  // Tool accents
+  toolBorder: '#4a4a5a',    // visible border
+};
 
 const markdownTheme: MarkdownTheme = {
-  heading: (text) => chalk.bold.cyan(text),
-  link: (text) => chalk.blue(text),
-  linkUrl: (text) => chalk.dim(text),
-  code: (text) => chalk.yellow(text),
-  codeBlock: (text) => chalk.green(text),
-  codeBlockBorder: (text) => chalk.dim(text),
-  quote: (text) => chalk.italic(text),
-  quoteBorder: (text) => chalk.dim(text),
-  hr: (text) => chalk.dim(text),
-  listBullet: (text) => chalk.cyan(text),
+  heading: (text) => chalk.hex('#ffffff').bold(text),
+  link: (text) => chalk.hex('#88c0d0').underline(text),  // soft blue
+  linkUrl: (text) => chalk.hex(colors.dimmed)(text),
+  code: (text) => chalk.hex('#d08770')(text),            // soft orange
+  codeBlock: (text) => chalk.hex(colors.text)(text),
+  codeBlockBorder: (text) => chalk.hex(colors.dimmed)(text),
+  quote: (text) => chalk.hex(colors.text).italic(text),
+  quoteBorder: (text) => chalk.hex(colors.dimmed)(text),
+  hr: (text) => chalk.hex(colors.dimmed)(text),
+  listBullet: (text) => chalk.hex(colors.dimmed)(text),  // subtle bullets
   bold: (text) => chalk.bold(text),
   italic: (text) => chalk.italic(text),
   strikethrough: (text) => chalk.strikethrough(text),
@@ -35,15 +53,146 @@ const markdownTheme: MarkdownTheme = {
 };
 
 const editorTheme: EditorTheme = {
-  borderColor: (text) => chalk.dim(text),
+  borderColor: (text) => chalk.hex(colors.border)(text),
   selectList: {
-    selectedPrefix: (text) => chalk.blue(text),
-    selectedText: (text) => chalk.bold(text),
-    description: (text) => chalk.dim(text),
-    scrollInfo: (text) => chalk.dim(text),
-    noMatch: (text) => chalk.dim(text),
+    selectedPrefix: (text) => chalk.hex(colors.accent)(text),
+    selectedText: (text) => chalk.hex(colors.text).bold(text),
+    description: (text) => chalk.hex(colors.dimmed)(text),
+    scrollInfo: (text) => chalk.hex(colors.dimmed)(text),
+    noMatch: (text) => chalk.hex(colors.dimmed)(text),
   },
 };
+
+// Git branch detection
+function findGitHeadPath(): string | null {
+  let dir = process.cwd();
+  while (true) {
+    const gitHeadPath = join(dir, '.git', 'HEAD');
+    if (existsSync(gitHeadPath)) return gitHeadPath;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+function getCurrentBranch(): string | null {
+  try {
+    const gitHeadPath = findGitHeadPath();
+    if (!gitHeadPath) return null;
+    const content = readFileSync(gitHeadPath, 'utf8').trim();
+    if (content.startsWith('ref: refs/heads/')) return content.slice(16);
+    return 'detached';
+  } catch {
+    return null;
+  }
+}
+
+// Footer component
+class Footer implements Component {
+  private totalInput = 0;
+  private totalOutput = 0;
+  private totalCacheRead = 0;
+  private totalCost = 0;
+  private lastContextTokens = 0;  // tokens from last message for context %
+  private contextWindow = 0;      // model's context window size
+  private modelId: string;
+  private thinking: ThinkingLevel;
+  private cachedBranch: string | null | undefined = undefined;
+  private gitWatcher: FSWatcher | null = null;
+  private onBranchChange: (() => void) | null = null;
+
+  constructor(modelId: string, thinking: ThinkingLevel, contextWindow: number = 0) {
+    this.modelId = modelId;
+    this.thinking = thinking;
+    this.contextWindow = contextWindow;
+  }
+
+  setModel(modelId: string, contextWindow: number = 0) { 
+    this.modelId = modelId; 
+    this.contextWindow = contextWindow;
+  }
+  setThinking(thinking: ThinkingLevel) { this.thinking = thinking; }
+
+  addUsage(msg: AssistantMessage) {
+    this.totalInput += msg.usage.input;
+    this.totalOutput += msg.usage.output;
+    this.totalCacheRead += msg.usage.cacheRead;
+    this.totalCost += msg.usage.cost.total;
+    // Track last message context for percentage calculation
+    this.lastContextTokens = msg.usage.input + msg.usage.output + msg.usage.cacheRead + (msg.usage.cacheWrite || 0);
+  }
+
+  reset() {
+    this.totalInput = 0;
+    this.totalOutput = 0;
+    this.totalCacheRead = 0;
+    this.totalCost = 0;
+    this.lastContextTokens = 0;
+  }
+
+  watchBranch(onChange: () => void) {
+    this.onBranchChange = onChange;
+    const gitHeadPath = findGitHeadPath();
+    if (!gitHeadPath) return;
+    try {
+      this.gitWatcher = watch(gitHeadPath, () => {
+        this.cachedBranch = undefined;
+        if (this.onBranchChange) this.onBranchChange();
+      });
+    } catch {}
+  }
+
+  dispose() {
+    if (this.gitWatcher) {
+      this.gitWatcher.close();
+      this.gitWatcher = null;
+    }
+  }
+
+  invalidate() {
+    this.cachedBranch = undefined;
+  }
+
+  private getBranch(): string | null {
+    if (this.cachedBranch !== undefined) return this.cachedBranch;
+    this.cachedBranch = getCurrentBranch();
+    return this.cachedBranch;
+  }
+
+  render(width: number): string[] {
+    const fmt = (n: number) => n < 1000 ? String(n) : n < 10000 ? (n/1000).toFixed(1)+'k' : Math.round(n/1000)+'k';
+    const dim = chalk.hex(colors.dimmed);
+
+    // Get project name (last part of cwd)
+    const cwd = process.cwd();
+    const project = cwd.split('/').pop() || cwd;
+    
+    // Branch
+    const branch = this.getBranch();
+    
+    // Context percentage
+    let ctx = '';
+    if (this.contextWindow > 0 && this.lastContextTokens > 0) {
+      const pct = (this.lastContextTokens / this.contextWindow) * 100;
+      const pctStr = pct < 10 ? pct.toFixed(1) : Math.round(pct).toString();
+      ctx = `${pctStr}%/${fmt(this.contextWindow)}`;
+      if (pct > 90) ctx = chalk.hex(colors.accent)(ctx);
+      else if (pct > 70) ctx = chalk.hex('#ffcc00')(ctx);
+    }
+
+    // Model + thinking
+    const model = this.modelId + (this.thinking !== 'off' ? ` · ${this.thinking}` : '');
+
+    // Single line: project branch | context | model
+    const left = project + (branch ? ` ${dim('(')}${branch}${dim(')')}` : '');
+    const right = (ctx ? ctx + '  ' : '') + model;
+    const leftWidth = visibleWidth(left);
+    const rightWidth = visibleWidth(right);
+    const padding = Math.max(2, width - leftWidth - rightWidth);
+    
+    return [dim(left + ' '.repeat(padding) + right)];
+  }
+}
 
 const textFromBlocks = (blocks: Array<{ type: string }>): string => {
   const parts: string[] = [];
@@ -70,18 +219,158 @@ const renderMessage = (message: Message): string => {
   return textFromBlocks(message.content);
 };
 
-const renderToolResult = (result: unknown): string => {
+// Shorten path with ~ for home directory
+const shortenPath = (p: string): string => {
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  if (home && p.startsWith(home)) return '~' + p.slice(home.length);
+  return p;
+};
+
+// Get text content from tool result
+const getToolText = (result: unknown): string => {
   if (!result || typeof result !== 'object') return String(result);
-  const maybe = result as { content?: unknown; details?: unknown };
+  const maybe = result as { content?: unknown };
   const content = Array.isArray(maybe.content) ? maybe.content : [];
-  const text = textFromBlocks(content as Array<{ type: string }>);
-  if (maybe.details && typeof maybe.details === 'object') {
-    const diff = (maybe.details as { diff?: unknown }).diff;
-    if (typeof diff === 'string' && diff.trim()) {
-      return `${text}\n\n---\n\n${diff}`.trim();
+  return textFromBlocks(content as Array<{ type: string }>);
+};
+
+// Get diff from tool result details
+const getToolDiff = (result: unknown): string | null => {
+  if (!result || typeof result !== 'object') return null;
+  const maybe = result as { details?: { diff?: string } };
+  return maybe.details?.diff || null;
+};
+
+// Color diff lines
+const colorDiff = (diff: string): string => {
+  return diff.split('\n').map(line => {
+    if (line.startsWith('+')) return chalk.hex('#5cecc6')(line);  // added - teal
+    if (line.startsWith('-')) return chalk.hex('#ff6b5b')(line);  // removed - coral
+    return chalk.hex(colors.dimmed)(line);                        // context - dimmed
+  }).join('\n');
+};
+
+// Tool-specific colors
+const toolColors: Record<string, string> = {
+  bash: '#a3be8c',   // green
+  read: '#88c0d0',   // blue  
+  write: '#d08770',  // orange
+  edit: '#b48ead',   // purple
+};
+
+// Render tool header based on tool type
+const renderToolHeader = (toolName: string, args: any, isError: boolean = false): string => {
+  const dim = chalk.hex(colors.dimmed);
+  const text = chalk.hex(colors.text);
+  const toolColor = chalk.hex(toolColors[toolName] || colors.code);
+  
+  switch (toolName) {
+    case 'bash': {
+      const cmd = args?.command || '...';
+      return toolColor.bold('$ ') + text(cmd);
+    }
+    case 'read': {
+      const path = shortenPath(args?.path || args?.file_path || '');
+      const offset = args?.offset;
+      const limit = args?.limit;
+      let range = '';
+      if (offset || limit) {
+        const start = offset || 1;
+        const end = limit ? start + limit - 1 : '';
+        range = dim(`:${start}${end ? `-${end}` : ''}`);
+      }
+      return toolColor.bold('read ') + text(path || '...') + range;
+    }
+    case 'write': {
+      const path = shortenPath(args?.path || args?.file_path || '');
+      const content = args?.content || '';
+      const lines = content.split('\n').length;
+      const lineInfo = lines > 1 ? dim(` (${lines} lines)`) : '';
+      return toolColor.bold('write ') + text(path || '...') + lineInfo;
+    }
+    case 'edit': {
+      const path = shortenPath(args?.path || args?.file_path || '');
+      return toolColor.bold('edit ') + text(path || '...');
+    }
+    default:
+      return toolColor.bold(toolName);
+  }
+};
+
+// Render tool body based on tool type and result
+const renderToolBody = (toolName: string, args: any, result: unknown, isPartial: boolean): string => {
+  const text = getToolText(result);
+  const dim = chalk.hex(colors.dimmed);
+  const output = chalk.hex('#c5c5c0'); // slightly brighter for output on dark bg
+  
+  switch (toolName) {
+    case 'bash': {
+      if (!text) return isPartial ? dim('running...') : '';
+      // Show last N lines for bash output
+      const lines = text.trim().split('\n');
+      const maxLines = 25;
+      if (lines.length > maxLines) {
+        const skipped = lines.length - maxLines;
+        const shown = lines.slice(-maxLines);
+        return dim(`... (${skipped} earlier lines)\n`) + shown.map(l => output(l)).join('\n');
+      }
+      return lines.map(l => output(l)).join('\n');
+    }
+    case 'read': {
+      if (!text) return isPartial ? dim('reading...') : '';
+      const lines = text.split('\n');
+      const maxLines = 20;
+      if (lines.length > maxLines) {
+        const shown = lines.slice(0, maxLines);
+        const remaining = lines.length - maxLines;
+        return shown.map(l => output(l)).join('\n') + dim(`\n... (${remaining} more lines)`);
+      }
+      return lines.map(l => output(l)).join('\n');
+    }
+    case 'write': {
+      const content = args?.content || '';
+      if (!content) return isPartial ? dim('writing...') : '';
+      const lines = content.split('\n');
+      const maxLines = 15;
+      if (lines.length > maxLines) {
+        const shown = lines.slice(0, maxLines);
+        const remaining = lines.length - maxLines;
+        return shown.map((l: string) => output(l)).join('\n') + dim(`\n... (${remaining} more lines)`);
+      }
+      return lines.map((l: string) => output(l)).join('\n');
+    }
+    case 'edit': {
+      const diff = getToolDiff(result);
+      if (diff) {
+        return colorDiff(diff);
+      }
+      // Error case - show the error message
+      if (text) return chalk.hex(colors.accent)(text);
+      return isPartial ? dim('editing...') : '';
+    }
+    default: {
+      // Generic: show args as JSON then result text
+      const parts: string[] = [];
+      if (args && Object.keys(args).length > 0) {
+        parts.push(dim(JSON.stringify(args, null, 2)));
+      }
+      if (text) {
+        parts.push(output(text));
+      }
+      return parts.join('\n\n') || (isPartial ? dim('...') : '');
     }
   }
-  return text;
+};
+
+// Full tool render
+const renderTool = (toolName: string, args: any, result: unknown, isError: boolean, isPartial: boolean): string => {
+  const header = renderToolHeader(toolName, args, isError);
+  const body = renderToolBody(toolName, args, result, isPartial);
+  
+  if (body) {
+    return `${header}\n\n${body}`;
+  }
+  return header;
 };
 
 class FocusProxy implements Component {
@@ -151,16 +440,12 @@ export const runTui = async (args?: {
     return getModels(provider).find((m) => m.id === modelId);
   };
 
-  const header = new Text('');
-  const updateHeader = () => {
-    header.setText(
-      `mu (pi-core)\n` +
-        `provider=${currentProvider} model=${currentModelId} thinking=${currentThinking}\n` +
-        `Commands: /clear /abort /exit /model /thinking`,
-    );
-  };
-  updateHeader();
+  // Simple header - just app name
+  const header = new Text(chalk.hex(colors.dimmed)('mu'), 1, 0);
   tui.addChild(header);
+
+  // Footer with stats
+  const footer = new Footer(currentModelId, currentThinking, loaded.model.contextWindow);
 
   const editor = new Editor(editorTheme);
   const autocomplete = new CombinedAutocompleteProvider(
@@ -240,7 +525,7 @@ export const runTui = async (args?: {
 
   let isResponding = false;
   let currentAssistant: Markdown | undefined;
-  const toolBlocks = new Map<string, Markdown>();
+  const toolBlocks = new Map<string, { component: Text; data: { name: string; args: any } }>();
   let loader: Loader | undefined;
   let lastCtrlC = 0;
 
@@ -251,16 +536,17 @@ export const runTui = async (args?: {
   };
 
   const addMessage = (component: Component) => {
-    // Insert before the editor (which is last child)
-    const idx = Math.max(0, tui.children.length - 1);
+    // Insert before the editor and footer (last 2 children)
+    const idx = Math.max(0, tui.children.length - 2);
     tui.children.splice(idx, 0, component);
   };
 
   const clearConversation = () => {
-    // Keep header + editor
-    tui.children.splice(1, tui.children.length - 2);
+    // Keep header + editor + footer (first 1, last 2)
+    tui.children.splice(1, tui.children.length - 3);
     currentAssistant = undefined;
     toolBlocks.clear();
+    footer.reset();
     agent.reset();
     tui.requestRender();
   };
@@ -300,7 +586,11 @@ export const runTui = async (args?: {
   );
 
   tui.addChild(focusProxy);
+  tui.addChild(footer);
   tui.setFocus(focusProxy);
+
+  // Watch for git branch changes
+  footer.watchBranch(() => tui.requestRender());
 
   agent.subscribe((event: AgentEvent) => {
     if (event.type === 'message_start') {
@@ -325,32 +615,39 @@ export const runTui = async (args?: {
       if (event.message.role === 'assistant' && currentAssistant) {
         currentAssistant.setText(renderMessage(event.message as Message));
         currentAssistant = undefined;
+        // Update footer with usage stats
+        footer.addUsage(event.message as AssistantMessage);
         tui.requestRender();
       }
     }
 
     if (event.type === 'tool_execution_start') {
       removeLoader();
-      const md = new Markdown(`[tool:${event.toolName}]\n\n${JSON.stringify(event.args, null, 2)}`, 1, 1, markdownTheme);
-      toolBlocks.set(event.toolCallId, md);
-      addMessage(md);
+      const toolData = { name: event.toolName, args: event.args };
+      const content = renderTool(event.toolName, event.args, null, false, true);
+      const bgFn = (text: string) => chalk.bgHex(colors.toolPending)(text);
+      const txt = new Text(content, 1, 1, bgFn);
+      toolBlocks.set(event.toolCallId, { component: txt, data: toolData });
+      addMessage(txt);
       tui.requestRender();
     }
 
     if (event.type === 'tool_execution_update') {
-      const md = toolBlocks.get(event.toolCallId);
-      if (!md) return;
-      const body = renderToolResult(event.partialResult);
-      md.setText(`[tool:${event.toolName}]\n\n${body}`.trim());
+      const entry = toolBlocks.get(event.toolCallId);
+      if (!entry) return;
+      const content = renderTool(entry.data.name, entry.data.args, event.partialResult, false, true);
+      entry.component.setText(content);
       tui.requestRender();
     }
 
     if (event.type === 'tool_execution_end') {
-      const md = toolBlocks.get(event.toolCallId);
-      if (!md) return;
-      const body = renderToolResult(event.result);
-      const headerLine = event.isError ? `[tool:${event.toolName}] (error)` : `[tool:${event.toolName}]`;
-      md.setText(`${headerLine}\n\n${body}`.trim());
+      const entry = toolBlocks.get(event.toolCallId);
+      if (!entry) return;
+      const content = renderTool(entry.data.name, entry.data.args, event.result, event.isError, false);
+      // Change background based on success/error
+      const bgColor = event.isError ? colors.toolError : colors.toolSuccess;
+      entry.component.setCustomBgFn((text: string) => chalk.bgHex(bgColor)(text));
+      entry.component.setText(content);
       tui.requestRender();
     }
 
@@ -397,7 +694,7 @@ export const runTui = async (args?: {
       if (next === 'off' || next === 'minimal' || next === 'low' || next === 'medium' || next === 'high' || next === 'xhigh') {
         agent.setThinkingLevel(next);
         currentThinking = next;
-        updateHeader();
+        footer.setThinking(next);
         void updateAppConfig({ configDir: loaded.configDir, configPath: loaded.configPath }, { thinking: next });
         editor.setText('');
         tui.requestRender();
@@ -409,14 +706,14 @@ export const runTui = async (args?: {
       const rest = line.slice('/model'.length).trim();
 
       if (!rest) {
-        addMessage(new Text(chalk.dim('Usage: /model <provider> <modelId> (or /model <modelId>). Tip: use Tab completion.')));
+        addMessage(new Text(chalk.hex(colors.dimmed)('Usage: /model <provider> <modelId> (or /model <modelId>). Tip: use Tab completion.')));
         editor.setText('');
         tui.requestRender();
         return;
       }
 
       if (isResponding) {
-        addMessage(new Text(chalk.dim('Model cannot be changed while responding. Use /abort first.')));
+        addMessage(new Text(chalk.hex(colors.dimmed)('Model cannot be changed while responding. Use /abort first.')));
         editor.setText('');
         tui.requestRender();
         return;
@@ -431,7 +728,7 @@ export const runTui = async (args?: {
             .slice(0, 8)
             .map((m) => m.id)
             .join(', ');
-          addMessage(new Text(chalk.dim(`Pick a model: /model ${provider} <modelId>. Examples: ${examples}`)));
+          addMessage(new Text(chalk.hex(colors.dimmed)(`Pick a model: /model ${provider} <modelId>. Examples: ${examples}`)));
           editor.setText('');
           tui.requestRender();
           return;
@@ -443,7 +740,7 @@ export const runTui = async (args?: {
             .slice(0, 8)
             .map((m) => m.id)
             .join(', ');
-          addMessage(new Text(chalk.red(`Unknown model "${token}" for provider ${currentProvider}. Examples: ${examples}`)));
+          addMessage(new Text(chalk.hex(colors.accent)(`Unknown model "${token}" for provider ${currentProvider}. Examples: ${examples}`)));
           editor.setText('');
           tui.requestRender();
           return;
@@ -451,12 +748,12 @@ export const runTui = async (args?: {
 
         agent.setModel(model);
         currentModelId = model.id;
-        updateHeader();
+        footer.setModel(model.id, model.contextWindow);
         void updateAppConfig(
           { configDir: loaded.configDir, configPath: loaded.configPath },
           { provider: currentProvider, model: model.id },
         );
-        addMessage(new Text(chalk.dim(`Switched model to ${currentProvider} ${model.id}`)));
+        addMessage(new Text(chalk.hex(colors.dimmed)(`Switched model to ${currentProvider} ${model.id}`)));
         editor.setText('');
         tui.requestRender();
         return;
@@ -466,7 +763,7 @@ export const runTui = async (args?: {
       const modelId = modelParts.join(' ').trim();
       const provider = resolveProvider(providerRaw ?? '');
       if (!provider) {
-        addMessage(new Text(chalk.red(`Unknown provider "${providerRaw}". Known: ${getProviders().join(', ')}`)));
+        addMessage(new Text(chalk.hex(colors.accent)(`Unknown provider "${providerRaw}". Known: ${getProviders().join(', ')}`)));
         editor.setText('');
         tui.requestRender();
         return;
@@ -478,7 +775,7 @@ export const runTui = async (args?: {
           .slice(0, 8)
           .map((m) => m.id)
           .join(', ');
-        addMessage(new Text(chalk.red(`Unknown model "${modelId}" for provider ${provider}. Examples: ${examples}`)));
+        addMessage(new Text(chalk.hex(colors.accent)(`Unknown model "${modelId}" for provider ${provider}. Examples: ${examples}`)));
         editor.setText('');
         tui.requestRender();
         return;
@@ -487,9 +784,9 @@ export const runTui = async (args?: {
       agent.setModel(model);
       currentProvider = provider;
       currentModelId = model.id;
-      updateHeader();
+      footer.setModel(model.id, model.contextWindow);
       void updateAppConfig({ configDir: loaded.configDir, configPath: loaded.configPath }, { provider, model: model.id });
-      addMessage(new Text(chalk.dim(`Switched model to ${provider} ${model.id}`)));
+      addMessage(new Text(chalk.hex(colors.dimmed)(`Switched model to ${provider} ${model.id}`)));
       editor.setText('');
       tui.requestRender();
       return;
@@ -500,9 +797,9 @@ export const runTui = async (args?: {
 
     editor.setText('');
 
-    addMessage(new Markdown(line, 1, 1, markdownTheme));
+    addMessage(new Markdown(chalk.hex(colors.dimmed)('› ') + line, 1, 1, markdownTheme));
 
-    loader = new Loader(tui, (s) => chalk.cyan(s), (s) => chalk.dim(s), 'Thinking...');
+    loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Thinking...');
     addMessage(loader);
 
     isResponding = true;
@@ -511,7 +808,7 @@ export const runTui = async (args?: {
 
     void agent.prompt(line).catch((err) => {
       removeLoader();
-      addMessage(new Text(chalk.red(String(err instanceof Error ? err.message : err))));
+      addMessage(new Text(chalk.hex(colors.accent)(String(err instanceof Error ? err.message : err))));
       isResponding = false;
       editor.disableSubmit = false;
       tui.requestRender();
