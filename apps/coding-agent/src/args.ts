@@ -6,6 +6,8 @@ export interface ParsedArgs {
   provider?: string;
   model?: string;
   thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+  continue: boolean;
+  resume: boolean;
   help: boolean;
   version: boolean;
 }
@@ -19,6 +21,8 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     provider: undefined,
     model: undefined,
     thinking: undefined,
+    continue: false,
+    resume: false,
     help: false,
     version: false,
   };
@@ -32,6 +36,14 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (a === '--version' || a === '-v') {
       args.version = true;
+      continue;
+    }
+    if (a === '--continue' || a === '-c') {
+      args.continue = true;
+      continue;
+    }
+    if (a === '--resume' || a === '-r') {
+      args.resume = true;
       continue;
     }
     if (a === "--headless") {

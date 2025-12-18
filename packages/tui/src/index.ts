@@ -7,6 +7,8 @@ export {
 	CombinedAutocompleteProvider,
 	type SlashCommand,
 } from "./autocomplete.js";
+// File indexing
+export { FileIndex, type FileIndexOptions, type FileSearchResult } from "./file-index.js";
 // Components
 export { Box } from "./components/box.js";
 export { Editor, type EditorTheme } from "./components/editor.js";

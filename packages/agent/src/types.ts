@@ -6,7 +6,7 @@ import type {
 	Model,
 	ToolResultMessage,
 	UserMessage,
-} from "@mariozechner/pi-ai";
+} from "@mu-agents/ai";
 
 /**
  * Attachment type definition.
@@ -40,7 +40,7 @@ export type UserMessageWithAttachments = UserMessage & { attachments?: Attachmen
  *
  * @example
  * ```typescript
- * declare module "@mariozechner/agent" {
+ * declare module "@mu-agents/agent-core" {
  *   interface CustomMessages {
  *     artifact: ArtifactMessage;
  *     notification: NotificationMessage;

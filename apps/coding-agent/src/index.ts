@@ -15,13 +15,15 @@ const printHelp = () => {
       '  --thinking <level>           off|minimal|low|medium|high|xhigh',
       '  --config-dir <dir>           Config directory (default: ~/.config/mu-agent)',
       '  --config <path>              Config file path (default: <config-dir>/config.json)',
+      '  -c, --continue               Resume most recent session for current directory',
+      '  -r, --resume                 Pick from recent sessions to resume',
       '  --headless                   Run without TUI; reads prompt from args or stdin',
       '  -h, --help                   Show help',
       '  -v, --version                Print version',
       '',
       'Environment:',
       '  MU_PROVIDER / MU_MODEL / MU_THINKING / MU_SYSTEM_PROMPT',
-      '  OPENAI_API_KEY / ANTHROPIC_API_KEY / ... (pi-ai env var names)',
+      '  OPENAI_API_KEY / ANTHROPIC_API_KEY / ... (see below)',
       '',
     ].join('\n')
   );
@@ -59,6 +61,8 @@ const main = async () => {
     provider: args.provider,
     model: args.model,
     thinking: args.thinking,
+    continueSession: args.continue,
+    resumeSession: args.resume,
   });
 };
 

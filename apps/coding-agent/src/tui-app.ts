@@ -1,5 +1,5 @@
-import { Agent, ProviderTransport, type AgentEvent } from '@mariozechner/pi-agent-core';
-import { getApiKey, getModels, getProviders, type AssistantMessage, type Message, type TextContent, type ToolResultMessage } from '@mariozechner/pi-ai';
+import { Agent, ProviderTransport, type AgentEvent } from '@mu-agents/agent-core';
+import { getApiKey, getModels, getProviders, type AssistantMessage, type Message, type TextContent, type ToolResultMessage } from '@mu-agents/ai';
 import {
   CombinedAutocompleteProvider,
   Editor,
@@ -12,11 +12,12 @@ import {
   TUI,
   type Component,
   visibleWidth,
-} from '@mariozechner/pi-tui';
+} from '@mu-agents/tui';
 import chalk from 'chalk';
 import { codingTools } from '@mu-agents/base-tools';
-import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import type { ThinkingLevel } from '@mu-agents/agent-core';
 import { loadAppConfig, updateAppConfig } from './config.js';
+import { SessionManager, type LoadedSession, type SessionInfo } from './session-manager.js';
 import { existsSync, readFileSync, watch, type FSWatcher } from 'fs';
 import { dirname, join } from 'path';
 
@@ -409,6 +410,8 @@ export const runTui = async (args?: {
   provider?: string;
   model?: string;
   thinking?: ThinkingLevel;
+  continueSession?: boolean;
+  resumeSession?: boolean;
 }) => {
   const loaded = await loadAppConfig({
     configDir: args?.configDir,
@@ -523,6 +526,17 @@ export const runTui = async (args?: {
     },
   });
 
+  // Session management
+  const sessionManager = new SessionManager(loaded.configDir);
+  let sessionStarted = false;
+
+  const ensureSession = () => {
+    if (!sessionStarted) {
+      sessionManager.startSession(currentProvider, currentModelId, currentThinking);
+      sessionStarted = true;
+    }
+  };
+
   let isResponding = false;
   let currentAssistant: Markdown | undefined;
   const toolBlocks = new Map<string, { component: Text; data: { name: string; args: any } }>();
@@ -612,6 +626,9 @@ export const runTui = async (args?: {
     }
 
     if (event.type === 'message_end') {
+      // Save message to session
+      sessionManager.appendMessage(event.message as import('@mu-agents/agent-core').AppMessage);
+      
       if (event.message.role === 'assistant' && currentAssistant) {
         currentAssistant.setText(renderMessage(event.message as Message));
         currentAssistant = undefined;
@@ -797,6 +814,17 @@ export const runTui = async (args?: {
 
     editor.setText('');
 
+    // Ensure session is started on first message
+    ensureSession();
+    
+    // Save user message to session
+    const userMessage: import('@mu-agents/agent-core').AppMessage = {
+      role: 'user',
+      content: [{ type: 'text', text: line }],
+      timestamp: Date.now(),
+    };
+    sessionManager.appendMessage(userMessage);
+
     addMessage(new Markdown(chalk.hex(colors.dimmed)('› ') + line, 1, 1, markdownTheme));
 
     loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Thinking...');
@@ -814,6 +842,100 @@ export const runTui = async (args?: {
       tui.requestRender();
     });
   };
+
+  // Helper to restore a loaded session to the UI
+  const restoreSession = (session: LoadedSession) => {
+    const { metadata, messages } = session;
+    
+    // Update provider/model/thinking if different
+    const resolvedProvider = resolveProvider(metadata.provider);
+    if (resolvedProvider) {
+      const resolvedModel = resolveModel(resolvedProvider, metadata.modelId);
+      if (resolvedModel) {
+        currentProvider = resolvedProvider;
+        currentModelId = resolvedModel.id;
+        currentThinking = metadata.thinkingLevel;
+        agent.setModel(resolvedModel);
+        agent.setThinkingLevel(metadata.thinkingLevel);
+        footer.setModel(resolvedModel.id, resolvedModel.contextWindow);
+        footer.setThinking(metadata.thinkingLevel);
+      }
+    }
+    
+    // Restore messages to agent
+    agent.replaceMessages(messages);
+    
+    // Render conversation history
+    for (const msg of messages) {
+      if (msg.role === 'user') {
+        const text = typeof msg.content === 'string' 
+          ? msg.content 
+          : textFromBlocks(msg.content as Array<{ type: string }>);
+        addMessage(new Markdown(chalk.hex(colors.dimmed)('› ') + text, 1, 1, markdownTheme));
+      } else if (msg.role === 'assistant') {
+        const text = renderMessage(msg as Message);
+        if (text.trim()) {
+          addMessage(new Markdown(text, 1, 1, markdownTheme));
+        }
+        // Add usage to footer if available
+        const assistantMsg = msg as AssistantMessage;
+        if (assistantMsg.usage) {
+          footer.addUsage(assistantMsg);
+        }
+      }
+      // Note: toolResult messages are part of assistant turns, not rendered separately
+    }
+    
+    // Continue the existing session file
+    sessionManager.continueSession(sessionManager.listSessions().find(s => s.id === metadata.id)?.path || '', metadata.id);
+    sessionStarted = true;
+    
+    addMessage(new Text(chalk.hex(colors.dimmed)(`Session restored (${messages.length} messages)`)));
+  };
+
+  // Handle -c (continue most recent session)
+  if (args?.continueSession) {
+    const session = sessionManager.loadLatest();
+    if (session) {
+      restoreSession(session);
+    } else {
+      addMessage(new Text(chalk.hex(colors.dimmed)('No session found for this directory')));
+    }
+  }
+
+  // Handle -r (resume from picker)
+  if (args?.resumeSession) {
+    const sessions = sessionManager.listSessions();
+    if (sessions.length === 0) {
+      addMessage(new Text(chalk.hex(colors.dimmed)('No sessions found for this directory')));
+    } else {
+      // Simple non-interactive picker: show list and load most recent
+      // TODO: implement proper picker UI
+      const formatDate = (ts: number) => {
+        const d = new Date(ts);
+        return d.toLocaleString('en-US', { 
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+        });
+      };
+      
+      if (sessions.length === 1) {
+        const session = sessionManager.loadSession(sessions[0]!.path);
+        if (session) restoreSession(session);
+      } else {
+        // Show available sessions and load most recent
+        addMessage(new Text(chalk.hex(colors.dimmed)(`Found ${sessions.length} sessions:`)));
+        for (const s of sessions.slice(0, 5)) {
+          addMessage(new Text(chalk.hex(colors.dimmed)(`  ${formatDate(s.timestamp)} · ${s.provider}/${s.modelId}`)));
+        }
+        if (sessions.length > 5) {
+          addMessage(new Text(chalk.hex(colors.dimmed)(`  ... and ${sessions.length - 5} more`)));
+        }
+        addMessage(new Text(chalk.hex(colors.dimmed)('Loading most recent session...')));
+        const session = sessionManager.loadSession(sessions[0]!.path);
+        if (session) restoreSession(session);
+      }
+    }
+  }
 
   tui.start();
 };

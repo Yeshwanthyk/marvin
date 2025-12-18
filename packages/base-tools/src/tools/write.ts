@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-ai";
+import type { AgentTool } from "@mu-agents/ai";
 import { Type } from "@sinclair/typebox";
 import { mkdir, writeFile } from "fs/promises";
 import { dirname, resolve as resolvePath } from "path";

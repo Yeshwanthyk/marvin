@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentTool, Message, Model, QueuedMessage, ReasoningEffort } from "@mariozechner/pi-ai";
+import type { AgentEvent, AgentTool, Message, Model, QueuedMessage, ReasoningEffort } from "@mu-agents/ai";
 
 /**
  * The minimal configuration needed to run an agent turn.
@@ -16,7 +16,7 @@ export interface AgentRunConfig {
  * Transports handle the communication with LLM providers,
  * abstracting away the details of API calls, proxies, etc.
  *
- * Events yielded must match the @mariozechner/pi-ai AgentEvent types.
+ * Events yielded must match the @mu-agents/ai AgentEvent types.
  */
 export interface AgentTransport {
 	/** Run with a new user message */

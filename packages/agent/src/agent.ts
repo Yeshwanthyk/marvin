@@ -1,5 +1,5 @@
-import type { ImageContent, Message, QueuedMessage, ReasoningEffort, TextContent } from "@mariozechner/pi-ai";
-import { getModel } from "@mariozechner/pi-ai";
+import type { ImageContent, Message, QueuedMessage, ReasoningEffort, TextContent } from "@mu-agents/ai";
+import { getModel } from "@mu-agents/ai";
 import type { AgentTransport } from "./transports/types.js";
 import type { AgentEvent, AgentState, AppMessage, Attachment, ThinkingLevel } from "./types.js";
 

@@ -5,7 +5,7 @@ import {
 	agentLoopContinue,
 	type Message,
 	type UserMessage,
-} from "@mariozechner/pi-ai";
+} from "@mu-agents/ai";
 import type { AgentRunConfig, AgentTransport } from "./types.js";
 
 export interface ProviderTransportOptions {

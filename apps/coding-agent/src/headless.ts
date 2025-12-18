@@ -1,7 +1,7 @@
-import { Agent, ProviderTransport } from '@mariozechner/pi-agent-core';
-import { getApiKey, type Message, type TextContent } from '@mariozechner/pi-ai';
+import { Agent, ProviderTransport } from '@mu-agents/agent-core';
+import { getApiKey, type Message, type TextContent } from '@mu-agents/ai';
 import { codingTools } from '@mu-agents/base-tools';
-import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import type { ThinkingLevel } from '@mu-agents/agent-core';
 import { loadAppConfig } from './config.js';
 
 const readStdin = async (): Promise<string> => {

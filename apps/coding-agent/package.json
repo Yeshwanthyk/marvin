@@ -10,9 +10,9 @@
     "test": "bun test tests"
   },
   "dependencies": {
-    "@mariozechner/pi-ai": "file:../../packages/ai",
-    "@mariozechner/pi-agent-core": "file:../../packages/agent",
-    "@mariozechner/pi-tui": "file:../../packages/tui",
+    "@mu-agents/ai": "file:../../packages/ai",
+    "@mu-agents/agent-core": "file:../../packages/agent",
+    "@mu-agents/tui": "file:../../packages/tui",
     "@mu-agents/base-tools": "file:../../packages/base-tools",
     "chalk": "^5.6.2"
   }

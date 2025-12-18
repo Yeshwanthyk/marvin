@@ -26,4 +26,20 @@ describe("coding-agent args", () => {
     expect(args.help).toBe(true);
     expect(args.version).toBe(true);
   });
+
+  it("parses session flags -c and -r", () => {
+    const args1 = parseArgs(["-c"]);
+    expect(args1.continue).toBe(true);
+    expect(args1.resume).toBe(false);
+    
+    const args2 = parseArgs(["--continue"]);
+    expect(args2.continue).toBe(true);
+    
+    const args3 = parseArgs(["-r"]);
+    expect(args3.resume).toBe(true);
+    expect(args3.continue).toBe(false);
+    
+    const args4 = parseArgs(["--resume"]);
+    expect(args4.resume).toBe(true);
+  });
 });
