@@ -84,13 +84,17 @@ Retry 429/5xx with exponential backoff, UI status, `Esc` to cancel.
 - **Tool collapse (partial)** — Shows tail + "earlier lines", but no toggle yet
 - **Fuzzy file picker** — `@` triggers autocomplete with ripgrep + fuzzysort, respects gitignore
 - **Sessions (`-c`, `-r`)** — JSONL persistence in `~/.config/mu-agent/sessions/`, `-c` loads latest, `-r` shows list + loads latest
+- **Message queueing** — Submit while streaming queues message, shows `[N queued]` in footer, Esc restores to editor
+- **Ctrl+O toggle** — Toggles tool output between collapsed (last N lines) and full expanded view
+- **Auto retry/backoff** — Retries 429/5xx errors with exponential backoff, shows status in footer, Esc cancels
+- **Streaming indicator** — Loader component shows "Thinking..." / "Retrying..." during requests
 
 ---
 
 ## Implementation Order
 
 1. ~~Sessions (`-c`, `-r`)~~ ✓
-2. Message queueing
-3. Ctrl+O toggle
-4. Streaming/running indicator
-5. Auto retry/backoff
+2. ~~Message queueing~~ ✓
+3. ~~Ctrl+O toggle~~ ✓
+4. ~~Streaming/running indicator~~ ✓ (already had Loader)
+5. ~~Auto retry/backoff~~ ✓
