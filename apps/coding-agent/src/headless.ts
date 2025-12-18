@@ -1,23 +1,38 @@
-import { AgentSession } from '@mu-agents/runtime';
-import { createDefaultToolRegistry } from '@mu-agents/tools';
-import type { AgentEvent } from '@mu-agents/runtime';
-import type { AgentMessage } from '@mu-agents/types';
-import { loadAppConfig } from './config';
+import { Agent, ProviderTransport } from '@mariozechner/pi-agent-core';
+import { getApiKey, type Message, type TextContent } from '@mariozechner/pi-ai';
+import { codingTools } from '@mu-agents/base-tools';
+import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import { loadAppConfig } from './config.js';
 
 const readStdin = async (): Promise<string> => {
   const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.from(chunk));
-  }
+  for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
   return Buffer.concat(chunks).toString('utf8');
 };
 
-const getMessageText = (message: AgentMessage): string => {
-  if (message.role !== 'assistant' && message.role !== 'user') return '';
-  const parts = message.content
-    .filter((b) => b.type === 'text')
-    .map((b) => b.text ?? '');
+const textFromBlocks = (blocks: Array<{ type: string }>): string => {
+  const parts: string[] = [];
+  for (const block of blocks) {
+    if (block.type === 'text') parts.push((block as TextContent).text);
+  }
   return parts.join('');
+};
+
+const renderMessage = (message: Message): string => {
+  if (message.role === 'user') {
+    if (typeof message.content === 'string') return message.content;
+    return textFromBlocks(message.content);
+  }
+
+  if (message.role === 'assistant') {
+    const parts: string[] = [];
+    for (const block of message.content) {
+      if (block.type === 'text') parts.push(block.text);
+    }
+    return parts.join('');
+  }
+
+  return textFromBlocks(message.content);
 };
 
 export const runHeadless = async (args: {
@@ -26,7 +41,7 @@ export const runHeadless = async (args: {
   configPath?: string;
   provider?: string;
   model?: string;
-  thinking?: 'off' | 'low' | 'medium' | 'high';
+  thinking?: ThinkingLevel;
 }) => {
   const loaded = await loadAppConfig({
     configDir: args.configDir,
@@ -35,20 +50,22 @@ export const runHeadless = async (args: {
     model: args.model,
     thinking: args.thinking,
   });
-  const tools = createDefaultToolRegistry({ defaultContext: { cwd: process.cwd() } });
-  const agentConfig = {
-    ...loaded.agentConfig,
-    tools: loaded.agentConfig.tools ?? tools.listDefinitions(),
+
+  const getApiKeyForProvider = (provider: string): string | undefined => {
+    if (provider === 'anthropic') {
+      return process.env.ANTHROPIC_OAUTH_TOKEN || getApiKey(provider);
+    }
+    return getApiKey(provider);
   };
 
-  const session = new AgentSession({
-    config: agentConfig,
-    tools,
-    thinking: loaded.thinking,
-    queueStrategy: loaded.queueStrategy,
-    providerTransport: {
-      getApiKey: loaded.apiKeys.getApiKey,
-      setApiKey: loaded.apiKeys.setApiKey,
+  const transport = new ProviderTransport({ getApiKey: getApiKeyForProvider });
+  const agent = new Agent({
+    transport,
+    initialState: {
+      systemPrompt: loaded.systemPrompt,
+      model: loaded.model,
+      thinkingLevel: loaded.thinking,
+      tools: codingTools,
     },
   });
 
@@ -59,53 +76,37 @@ export const runHeadless = async (args: {
     return;
   }
 
-  let streamed = '';
-  let lastUsage: unknown | undefined;
-  let lastError: string | undefined;
-
-  const unsub = session.subscribe((event: AgentEvent) => {
-    if (event.type === 'provider') {
-      if (event.event.type === 'text-delta') streamed += event.event.text;
-      if (event.event.type === 'text-complete') streamed = event.event.text;
-      if (event.event.type === 'usage') lastUsage = event.event.usage;
-      if (event.event.type === 'error') lastError = event.event.error.message;
-    }
-    if (event.type === 'error') lastError = event.error.message;
-  });
-
   try {
-    // Set up turn-end listener BEFORE sending to avoid race
-    let resolveTurnEnd: () => void;
-    const turnEndPromise = new Promise<void>((resolve) => {
-      resolveTurnEnd = resolve;
-    });
-    
-    const turnUnsub = session.subscribe((event: AgentEvent) => {
-      if (event.type === 'turn-end' || event.type === 'error') {
-        turnUnsub();
-        resolveTurnEnd();
-      }
+    await agent.prompt(prompt);
+
+    const conversation = agent.state.messages.filter((m): m is Message => {
+      const role = (m as { role?: unknown }).role;
+      return role === 'user' || role === 'assistant' || role === 'toolResult';
     });
 
-    session.send(prompt);
-    await turnEndPromise;
-
-    const conversation = session.getConversation();
     const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
-    const assistantText = streamed || (lastAssistant ? getMessageText(lastAssistant) : '');
+    const assistant = lastAssistant ? renderMessage(lastAssistant) : '';
+
     process.stdout.write(
       JSON.stringify({
-        ok: !lastError,
-        provider: agentConfig.provider,
-        model: agentConfig.model,
+        ok: true,
+        provider: loaded.provider,
+        model: loaded.modelId,
         prompt,
-        assistant: assistantText,
-        usage: lastUsage,
-        error: lastError,
+        assistant,
       }) + '\n'
     );
-  } finally {
-    unsub();
-    session.close();
+  } catch (err) {
+    process.stdout.write(
+      JSON.stringify({
+        ok: false,
+        provider: loaded.provider,
+        model: loaded.modelId,
+        prompt,
+        assistant: '',
+        error: err instanceof Error ? err.message : String(err),
+      }) + '\n'
+    );
+    process.exitCode = 1;
   }
 };

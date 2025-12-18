@@ -1,72 +1,26 @@
-import { createApiKeyManager, createEnvApiKeyStore, createMemoryApiKeyStore, type ApiKeyStore } from '@mu-agents/providers';
-import type { ApiKeyManager } from '@mu-agents/providers';
-import type { QueueStrategy, ThinkingLevel } from '@mu-agents/runtime';
-import { Type } from '@sinclair/typebox';
+import { getModels, getProviders, type Api, type KnownProvider, type Model } from '@mariozechner/pi-ai';
+import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  AgentConfigSchema,
-  StrictObject,
-  validate,
-  type AgentConfig,
-} from '@mu-agents/types';
-
-const QueueStrategySchema = Type.Union(
-  [
-    Type.Literal('append'),
-    Type.Literal('interrupt'),
-    Type.Literal('merge'),
-    Type.Literal('latest'),
-    Type.Literal('serial'),
-  ],
-  { $id: 'QueueStrategy' }
-);
-
-const ThinkingLevelSchema = Type.Union(
-  [
-    Type.Literal('off'),
-    Type.Literal('low'),
-    Type.Literal('medium'),
-    Type.Literal('high'),
-  ],
-  { $id: 'ThinkingLevel' }
-);
-
-const MuAgentAppConfigSchema = StrictObject(
-  {
-    config: Type.Optional(AgentConfigSchema),
-    provider: Type.Optional(Type.String({ minLength: 1 })),
-    model: Type.Optional(Type.String({ minLength: 1 })),
-    queueStrategy: Type.Optional(QueueStrategySchema),
-    thinking: Type.Optional(ThinkingLevelSchema),
-    apiKeys: Type.Optional(Type.Record(Type.String({ minLength: 1 }), Type.String())),
-  },
-  { $id: 'MuAgentAppConfig' }
-);
 
 export interface LoadedAppConfig {
-  agentConfig: AgentConfig;
-  queueStrategy: QueueStrategy;
+  provider: KnownProvider;
+  modelId: string;
+  model: Model<Api>;
   thinking: ThinkingLevel;
-  apiKeys: ApiKeyManager;
-  sourcePath?: string;
+  systemPrompt: string;
   configDir: string;
   configPath: string;
 }
 
-const isQueueStrategy = (value: unknown): value is QueueStrategy =>
-  value === 'append' ||
-  value === 'interrupt' ||
-  value === 'merge' ||
-  value === 'latest' ||
-  value === 'serial';
-
 const isThinkingLevel = (value: unknown): value is ThinkingLevel =>
   value === 'off' ||
+  value === 'minimal' ||
   value === 'low' ||
   value === 'medium' ||
-  value === 'high';
+  value === 'high' ||
+  value === 'xhigh';
 
 const fileExists = async (p: string): Promise<boolean> => {
   try {
@@ -83,9 +37,18 @@ const readJsonIfExists = async (p: string): Promise<unknown | undefined> => {
   return JSON.parse(raw) as unknown;
 };
 
-const resolveConfigDir = (): string => {
-  const home = os.homedir();
-  return path.join(home, '.config', 'mu-agent');
+const resolveConfigDir = (): string => path.join(os.homedir(), '.config', 'mu-agent');
+
+const resolveProvider = (raw: unknown): KnownProvider | undefined => {
+  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+  const providers = getProviders();
+  return providers.includes(raw as KnownProvider) ? (raw as KnownProvider) : undefined;
+};
+
+const resolveModel = (provider: KnownProvider, raw: unknown): Model<Api> | undefined => {
+  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+  const models = getModels(provider);
+  return models.find((m) => m.id === raw) as Model<Api> | undefined;
 };
 
 export const loadAppConfig = async (options?: {
@@ -97,80 +60,57 @@ export const loadAppConfig = async (options?: {
 }): Promise<LoadedAppConfig> => {
   const configDir = options?.configDir ?? resolveConfigDir();
   const configPath = options?.configPath ?? path.join(configDir, 'config.json');
-  const secretsPath = path.join(configDir, 'secrets.json');
 
   const rawConfig = (await readJsonIfExists(configPath)) ?? {};
-  const rawSecrets = (await readJsonIfExists(secretsPath)) ?? {};
 
-  const mergedRaw =
-    typeof rawConfig === 'object' && rawConfig !== null && typeof rawSecrets === 'object' && rawSecrets !== null
-      ? { ...(rawConfig as Record<string, unknown>), ...(rawSecrets as Record<string, unknown>) }
-      : rawConfig;
+  const rawObj = typeof rawConfig === 'object' && rawConfig !== null ? (rawConfig as Record<string, unknown>) : {};
+  const nestedConfig =
+    typeof rawObj.config === 'object' && rawObj.config !== null ? (rawObj.config as Record<string, unknown>) : {};
 
-  const parsed = validate(MuAgentAppConfigSchema, mergedRaw, `Invalid config in ${configPath} / ${secretsPath}`);
-
-  const provider =
+  const providerRaw =
     options?.provider ??
-    parsed.config?.provider ??
-    parsed.provider ??
+    (typeof nestedConfig.provider === 'string' ? nestedConfig.provider : undefined) ??
+    (typeof rawObj.provider === 'string' ? rawObj.provider : undefined) ??
     process.env.MU_PROVIDER;
-  const model =
+
+  const provider = resolveProvider(providerRaw);
+  if (!provider) {
+    throw new Error(`Invalid or missing provider. Set MU_PROVIDER or pass --provider. Known: ${getProviders().join(', ')}`);
+  }
+
+  const modelIdRaw =
     options?.model ??
-    parsed.config?.model ??
-    parsed.model ??
+    (typeof nestedConfig.model === 'string' ? nestedConfig.model : undefined) ??
+    (typeof rawObj.model === 'string' ? rawObj.model : undefined) ??
     process.env.MU_MODEL;
 
-  if (!provider || !model) {
+  const model = resolveModel(provider, modelIdRaw);
+  if (!model) {
+    const available = getModels(provider)
+      .slice(0, 8)
+      .map((m) => m.id)
+      .join(', ');
     throw new Error(
-      `Missing provider/model. Set them in ${configPath} (config.provider/config.model) or via MU_PROVIDER/MU_MODEL or pass --provider/--model.`
+      `Invalid or missing model for provider ${provider}. Set MU_MODEL or pass --model. Examples: ${available}`
     );
   }
 
-  const agentConfig: AgentConfig = {
-    ...(parsed.config ?? { provider, model }),
-    provider,
-    model,
-  };
-
-  const queueStrategyRaw = parsed.queueStrategy ?? process.env.MU_QUEUE_STRATEGY;
-  const queueStrategy: QueueStrategy = isQueueStrategy(queueStrategyRaw) ? queueStrategyRaw : 'serial';
-
-  const thinkingRaw = options?.thinking ?? parsed.thinking ?? process.env.MU_THINKING;
+  const thinkingRaw = options?.thinking ?? rawObj.thinking ?? process.env.MU_THINKING;
   const thinking: ThinkingLevel = isThinkingLevel(thinkingRaw) ? thinkingRaw : 'off';
 
-  const memoryKeys = parsed.apiKeys ?? {};
-  const apiKeys = createApiKeyManager({
-    stores: [
-      createEnvApiKeyStore({
-        map: {
-          anthropic: 'ANTHROPIC_API_KEY',
-          openai: 'OPENAI_API_KEY',
-        },
-      }),
-      createEnvApiKeyStore({
-        map: {
-          anthropic: 'ANTHROPIC_OAUTH_TOKEN',
-        },
-      }),
-      createMemoryApiKeyStore(memoryKeys),
-    ],
-  });
+  const systemPromptRaw = rawObj.systemPrompt ?? process.env.MU_SYSTEM_PROMPT;
+  const systemPrompt = typeof systemPromptRaw === 'string' && systemPromptRaw.trim().length > 0 ? systemPromptRaw :
+    'You are a helpful coding agent. Use tools (read, bash, edit, write) when needed.';
 
   return {
-    agentConfig,
-    queueStrategy,
+    provider,
+    modelId: model.id,
+    model,
     thinking,
-    apiKeys,
-    sourcePath: await fileExists(configPath) ? configPath : undefined,
+    systemPrompt,
     configDir,
     configPath,
   };
-};
-
-const readConfigFile = async (p: string): Promise<Record<string, unknown>> => {
-  const raw = (await readJsonIfExists(p)) ?? {};
-  if (typeof raw === 'object' && raw !== null) return raw as Record<string, unknown>;
-  return {};
 };
 
 const writeConfigFile = async (p: string, value: Record<string, unknown>): Promise<void> => {
@@ -180,23 +120,19 @@ const writeConfigFile = async (p: string, value: Record<string, unknown>): Promi
 
 export const updateAppConfig = async (
   options: { configDir?: string; configPath?: string },
-  patch: { provider?: string; model?: string; thinking?: ThinkingLevel }
+  patch: { provider?: string; model?: string; thinking?: ThinkingLevel; systemPrompt?: string }
 ): Promise<void> => {
   const configDir = options.configDir ?? resolveConfigDir();
   const configPath = options.configPath ?? path.join(configDir, 'config.json');
-  const existing = await readConfigFile(configPath);
 
-  const next: Record<string, unknown> = { ...existing };
+  const existing = (await readJsonIfExists(configPath)) ?? {};
+  const existingObj = typeof existing === 'object' && existing !== null ? (existing as Record<string, unknown>) : {};
+
+  const next: Record<string, unknown> = { ...existingObj };
   if (patch.provider) next.provider = patch.provider;
   if (patch.model) next.model = patch.model;
   if (patch.thinking) next.thinking = patch.thinking;
-
-  if (typeof next.config === 'object' && next.config !== null) {
-    const cfg = { ...(next.config as Record<string, unknown>) };
-    if (patch.provider) cfg.provider = patch.provider;
-    if (patch.model) cfg.model = patch.model;
-    next.config = cfg;
-  }
+  if (patch.systemPrompt) next.systemPrompt = patch.systemPrompt;
 
   await writeConfigFile(configPath, next);
 };

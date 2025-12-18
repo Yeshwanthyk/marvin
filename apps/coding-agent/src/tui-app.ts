@@ -1,148 +1,116 @@
-import { Agent, ProviderTransport, type AgentEvent } from '@mu-agents/runtime';
-import type { ThinkingLevel } from '@mu-agents/runtime';
-import { createDefaultToolRegistry } from '@mu-agents/tools';
-import type { AgentMessage } from '@mu-agents/types';
+import { Agent, ProviderTransport, type AgentEvent } from '@mariozechner/pi-agent-core';
+import { getApiKey, getModels, getProviders, type Message, type TextContent, type ToolResultMessage } from '@mariozechner/pi-ai';
 import {
-  ChatTranscript,
-  type ChatTranscriptMessage,
-  FooterBar,
-  FooterBarModel,
-  GitBranchWatcher,
-  HeaderBar,
-  HeaderBarModel,
-  Input,
-  type KeyEvent,
-  KeyReader,
+  CombinedAutocompleteProvider,
+  Editor,
+  type EditorTheme,
+  Loader,
+  Markdown,
+  type MarkdownTheme,
   ProcessTerminal,
-  Tui,
-  type RenderContext,
-  type RenderResult,
-  type Style,
-  type Widget,
-} from '@mu-agents/tui-lite';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import { loadAppConfig, updateAppConfig, type LoadedAppConfig } from './config';
+  Text,
+  TUI,
+  type Component,
+} from '@mariozechner/pi-tui';
+import chalk from 'chalk';
+import { codingTools } from '@mu-agents/base-tools';
+import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
+import { loadAppConfig, updateAppConfig } from './config.js';
 
-const getAppInfo = async (): Promise<{ name: string; version?: string }> => {
-  try {
-    const pkgUrl = new URL('../package.json', import.meta.url);
-    const raw = await fs.readFile(pkgUrl, 'utf8');
-    const parsed = JSON.parse(raw) as { name?: string; version?: string };
-    const rawName = parsed.name ?? 'mu';
-    const name = rawName.includes('/') ? rawName.split('/').pop() ?? rawName : rawName;
-    return { name, version: parsed.version };
-  } catch {
-    return { name: 'mu' };
-  }
+const markdownTheme: MarkdownTheme = {
+  heading: (text) => chalk.bold.cyan(text),
+  link: (text) => chalk.blue(text),
+  linkUrl: (text) => chalk.dim(text),
+  code: (text) => chalk.yellow(text),
+  codeBlock: (text) => chalk.green(text),
+  codeBlockBorder: (text) => chalk.dim(text),
+  quote: (text) => chalk.italic(text),
+  quoteBorder: (text) => chalk.dim(text),
+  hr: (text) => chalk.dim(text),
+  listBullet: (text) => chalk.cyan(text),
+  bold: (text) => chalk.bold(text),
+  italic: (text) => chalk.italic(text),
+  strikethrough: (text) => chalk.strikethrough(text),
+  underline: (text) => chalk.underline(text),
 };
 
-const listContextFiles = async (cwd: string): Promise<string[]> => {
-  const dir = path.join(cwd, '.mu', 'agent');
-  try {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile())
-      .map((e) => e.name)
-      .sort((a, b) => a.localeCompare(b));
-  } catch {
-    return [];
-  }
+const editorTheme: EditorTheme = {
+  borderColor: (text) => chalk.dim(text),
+  selectList: {
+    selectedPrefix: (text) => chalk.blue(text),
+    selectedText: (text) => chalk.bold(text),
+    description: (text) => chalk.dim(text),
+    scrollInfo: (text) => chalk.dim(text),
+    noMatch: (text) => chalk.dim(text),
+  },
 };
 
-const getMessageText = (message: AgentMessage): string => {
-  let text = '';
-  for (const block of message.content) {
-    if (block.type === 'text') text += block.text;
+const textFromBlocks = (blocks: Array<{ type: string }>): string => {
+  const parts: string[] = [];
+  for (const block of blocks) {
+    if (block.type === 'text') parts.push((block as TextContent).text);
+  }
+  return parts.join('');
+};
+
+const renderMessage = (message: Message): string => {
+  if (message.role === 'user') {
+    if (typeof message.content === 'string') return message.content;
+    return textFromBlocks(message.content);
+  }
+
+  if (message.role === 'assistant') {
+    const parts: string[] = [];
+    for (const block of message.content) {
+      if (block.type === 'text') parts.push(block.text);
+    }
+    return parts.join('');
+  }
+
+  return textFromBlocks(message.content);
+};
+
+const renderToolResult = (result: unknown): string => {
+  if (!result || typeof result !== 'object') return String(result);
+  const maybe = result as { content?: unknown; details?: unknown };
+  const content = Array.isArray(maybe.content) ? maybe.content : [];
+  const text = textFromBlocks(content as Array<{ type: string }>);
+  if (maybe.details && typeof maybe.details === 'object') {
+    const diff = (maybe.details as { diff?: unknown }).diff;
+    if (typeof diff === 'string' && diff.trim()) {
+      return `${text}\n\n---\n\n${diff}`.trim();
+    }
   }
   return text;
 };
 
-const getToolText = (message: AgentMessage): string => {
-  const parts: string[] = [];
-  for (const block of message.content) {
-    if (block.type === 'tool-result') parts.push(JSON.stringify(block.result, null, 2));
-  }
-  return parts.join('\n');
-};
+class FocusProxy implements Component {
+  constructor(
+    private readonly editor: Editor,
+    private readonly onCtrlC: () => void,
+    private readonly onEscape: () => boolean,
+  ) {}
 
-const toTranscriptMessages = (conversation: AgentMessage[]): ChatTranscriptMessage[] =>
-  conversation
-    .map((m): ChatTranscriptMessage | undefined => {
-      if (m.role === 'user') return { role: 'user', text: getMessageText(m) };
-      if (m.role === 'assistant') return { role: 'assistant', text: getMessageText(m) };
-      if (m.role === 'tool') return { role: 'tool', text: getToolText(m), toolName: m.toolName };
-      if (m.role === 'system') return { role: 'system', text: getMessageText(m) };
-      return undefined;
-    })
-    .filter(Boolean) as ChatTranscriptMessage[];
-
-type PickerId = 'model' | 'thinking';
-
-const parseCommand = (line: string): { cmd: string; arg?: string } | undefined => {
-  if (!line.startsWith('/')) return undefined;
-  const trimmed = line.trim();
-  const space = trimmed.indexOf(' ');
-  if (space === -1) return { cmd: trimmed.slice(1) };
-  return { cmd: trimmed.slice(1, space), arg: trimmed.slice(space + 1).trim() };
-};
-
-class ChatScreen implements Widget {
-  private messages: ChatTranscriptMessage[] = [];
-  private inFlightAssistantText = '';
-
-  constructor(private readonly input: Input) {}
-
-  setState(state: { messages: ChatTranscriptMessage[]; inFlightAssistantText: string }): void {
-    this.messages = state.messages;
-    this.inFlightAssistantText = state.inFlightAssistantText;
+  render(width: number): string[] {
+    return this.editor.render(width);
   }
 
-  render(ctx: RenderContext): RenderResult {
-    const chatHeight = Math.max(0, ctx.height - 1);
-    const chat = new ChatTranscript({
-      messages: this.messages,
-      inFlightAssistantText: this.inFlightAssistantText,
-    }).render({ width: ctx.width, height: chatHeight });
-    const input = this.input.render({ width: ctx.width, height: 1 });
-    return { lines: [...chat.lines, ...input.lines], cursor: input.cursor };
-  }
-}
-
-class PickerScreen implements Widget {
-  private title = '';
-  private query = '';
-  private items: string[] = [];
-  private selected = 0;
-
-  setState(state: { title: string; query: string; items: string[]; selected: number }): void {
-    this.title = state.title;
-    this.query = state.query;
-    this.items = state.items;
-    this.selected = state.selected;
+  invalidate(): void {
+    this.editor.invalidate();
   }
 
-  render(ctx: RenderContext): RenderResult {
-    const lines: RenderResult['lines'] = [];
-    const header = `${this.title} (type to filter, esc to cancel)`;
-    lines.push([{ text: header, style: { fg: 'gray', dim: true } }]);
-    const queryLine = `search: ${this.query}`;
-    lines.push([{ text: queryLine, style: { fg: 'gray' } }]);
-
-    const listHeight = Math.max(0, ctx.height - 2);
-    const start = Math.max(0, Math.min(this.selected - Math.floor(listHeight / 2), Math.max(0, this.items.length - listHeight)));
-    const end = Math.min(this.items.length, start + listHeight);
-
-    for (let i = start; i < end; i++) {
-      const item = this.items[i]!;
-      const isSelected = i === this.selected;
-      const prefix = isSelected ? '→ ' : '  ';
-      const style: Style = isSelected ? { fg: 'cyan', bold: true } : { fg: 'default' };
-      lines.push([{ text: prefix + item, style }]);
+  handleInput(data: string): void {
+    if (data.charCodeAt(0) === 3) {
+      this.onCtrlC();
+      return;
     }
 
-    while (lines.length < ctx.height) lines.push([]);
-    return { lines };
+    if (data === '\x1b') {
+      const handled = this.onEscape();
+      if (handled) return;
+    }
+
+    this.editor.handleInput?.(data);
   }
 }
 
@@ -153,7 +121,6 @@ export const runTui = async (args?: {
   model?: string;
   thinking?: ThinkingLevel;
 }) => {
-  const cwd = process.cwd();
   const loaded = await loadAppConfig({
     configDir: args?.configDir,
     configPath: args?.configPath,
@@ -161,304 +128,395 @@ export const runTui = async (args?: {
     model: args?.model,
     thinking: args?.thinking,
   });
-  const appInfo = await getAppInfo();
-  const contextFiles = await listContextFiles(cwd);
 
   const terminal = new ProcessTerminal();
-  const keyReader = new KeyReader(terminal);
-  const input = new Input({ prompt: '> ', placeholder: 'Type a message, /model, /thinking, /clear' });
-  const chatScreen = new ChatScreen(input);
-  const pickerScreen = new PickerScreen();
+  const tui = new TUI(terminal);
 
-  const headerModel = new HeaderBarModel({
-    appName: appInfo.name,
-    version: appInfo.version,
-    shortcuts: 'esc interrupt  ctrl+c clear',
-    contextFiles: contextFiles.slice(0, 6),
-  });
-  const header = new HeaderBar({
-    model: headerModel,
-    titleStyle: { fg: 'cyan', bold: true },
-    metaStyle: { fg: 'gray', dim: true },
-  });
+  let currentProvider = loaded.provider;
+  let currentModelId = loaded.modelId;
+  let currentThinking = loaded.thinking;
 
-  const footerModel = new FooterBarModel({ cwd, branch: undefined, selectedModel: loaded.agentConfig.model });
-  const footer = new FooterBar({ model: footerModel });
+  type KnownProvider = ReturnType<typeof getProviders>[number];
 
-  let main: Widget = chatScreen;
-  const tui = new Tui(terminal, { header, main, footer, headerHeight: 2, footerHeight: 2 });
-
-  const tools = createDefaultToolRegistry({ defaultContext: { cwd } });
-  const toolDefs = tools.listDefinitions();
-  const transport = new ProviderTransport({
-    getApiKey: loaded.apiKeys.getApiKey,
-    setApiKey: loaded.apiKeys.setApiKey,
-  });
-
-  let agent: Agent | undefined;
-  let inFlightText = '';
-  let renderPending = false;
-  let drainRunning = false;
-
-  let pickerMode: PickerId | undefined;
-  let pickerQuery = '';
-  let pickerItems: string[] = [];
-  let pickerSelected = 0;
-  let lastCtrlCAt = 0;
-
-  const requestRender = () => {
-    if (renderPending) return;
-    renderPending = true;
-    queueMicrotask(() => {
-      renderPending = false;
-
-      if (pickerMode) {
-        const title = pickerMode === 'model' ? 'Select model' : 'Select thinking';
-        pickerScreen.setState({ title, query: pickerQuery, items: pickerItems, selected: pickerSelected });
-        main = pickerScreen;
-      } else {
-        chatScreen.setState({
-          messages: toTranscriptMessages(agent?.getConversation() ?? []),
-          inFlightAssistantText: inFlightText,
-        });
-        main = chatScreen;
-      }
-
-      tui.setLayout({ header, main, footer, headerHeight: 2, footerHeight: 2 });
-      tui.render();
-    });
+  const resolveProvider = (raw: string): KnownProvider | undefined => {
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    const providers = getProviders();
+    return providers.includes(trimmed as KnownProvider) ? (trimmed as KnownProvider) : undefined;
   };
 
-  const rebuildAgent = (config: LoadedAppConfig, options?: { preserveConversation?: boolean }) => {
-    inFlightText = '';
-    const agentConfig = {
-      ...config.agentConfig,
-      tools: config.agentConfig.tools ?? toolDefs,
-    };
-    const initialConversation = options?.preserveConversation ? agent?.getConversation() : undefined;
-    agent?.close();
-    agent = new Agent({
-      config: agentConfig,
-      transport,
-      tools,
-      queueStrategy: config.queueStrategy,
-      initialConversation,
-    });
-    agent.setThinking(config.thinking);
-
-    agent.events.subscribe((event: AgentEvent) => {
-      footerModel.ingestEvent(event);
-      if (event.type === 'provider') {
-        if (event.event.type === 'text-delta') {
-          inFlightText += event.event.text;
-        } else if (event.event.type === 'text-complete') {
-          inFlightText = event.event.text;
-        }
-      }
-      if (event.type === 'message' && event.message.role === 'assistant') {
-        inFlightText = '';
-      }
-      requestRender();
-    });
+  const resolveModel = (provider: KnownProvider, raw: string) => {
+    const modelId = raw.trim();
+    if (!modelId) return undefined;
+    return getModels(provider).find((m) => m.id === modelId);
   };
 
-  const drainQueue = async () => {
-    if (!agent || drainRunning) return;
-    drainRunning = true;
-    const current = agent;
-    try {
-      while (agent === current && (await current.runNextTurn())) {
-        // keep draining until idle
-      }
-    } finally {
-      drainRunning = false;
+  const header = new Text('');
+  const updateHeader = () => {
+    header.setText(
+      `mu (pi-core)\n` +
+        `provider=${currentProvider} model=${currentModelId} thinking=${currentThinking}\n` +
+        `Commands: /clear /abort /exit /model /thinking`,
+    );
+  };
+  updateHeader();
+  tui.addChild(header);
+
+  const editor = new Editor(editorTheme);
+  const autocomplete = new CombinedAutocompleteProvider(
+    [
+      { name: 'clear', description: 'Clear chat + reset agent' },
+      { name: 'abort', description: 'Abort in-flight request' },
+      { name: 'exit', description: 'Exit' },
+      {
+        name: 'model',
+        description: 'Set model: /model <provider> <modelId> (or /model <modelId>)',
+        getArgumentCompletions: (argumentText: string) => {
+          const text = argumentText.trimStart();
+          const providers = getProviders();
+
+          const providerItems = (prefix: string) =>
+            providers
+              .filter((p) => p.toLowerCase().startsWith(prefix.toLowerCase()))
+              .map((p) => ({ value: `${p} `, label: p, description: 'provider' }));
+
+          const spaceIdx = text.search(/\s/);
+          if (!text || spaceIdx === -1) {
+            const prefix = text;
+            const models = getModels(currentProvider)
+              .filter((m) => m.id.toLowerCase().startsWith(prefix.toLowerCase()))
+              .slice(0, 50)
+              .map((m) => ({ value: m.id, label: m.id, description: m.name }));
+
+            return [...providerItems(prefix), ...models];
+          }
+
+          const providerToken = text.slice(0, spaceIdx);
+          const provider = resolveProvider(providerToken);
+          if (!provider) {
+            return providerItems(providerToken);
+          }
+
+          const modelPrefix = text.slice(spaceIdx + 1).trimStart();
+          return getModels(provider)
+            .filter((m) => m.id.toLowerCase().startsWith(modelPrefix.toLowerCase()))
+            .slice(0, 50)
+            .map((m) => ({ value: `${provider} ${m.id}`, label: m.id, description: m.name }));
+        },
+      },
+      {
+        name: 'thinking',
+        description: 'Set thinking: /thinking off|minimal|low|medium|high|xhigh',
+        getArgumentCompletions: (argumentPrefix: string) => {
+          const levels: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+          const prefix = argumentPrefix.trim().toLowerCase();
+          return levels
+            .filter((level) => level.startsWith(prefix))
+            .map((level) => ({ value: level, label: level }));
+        },
+      },
+    ],
+    process.cwd(),
+  );
+  editor.setAutocompleteProvider(autocomplete);
+
+  const getApiKeyForProvider = (provider: string): string | undefined => {
+    if (provider === 'anthropic') {
+      return process.env.ANTHROPIC_OAUTH_TOKEN || getApiKey(provider);
     }
+    return getApiKey(provider);
   };
 
-  const getModelCandidates = (): string[] => {
-    const current = loaded.agentConfig.model;
-    const provider = loaded.agentConfig.provider;
-    const base =
-      provider === 'anthropic'
-        ? ['claude-3-5-sonnet-latest', 'claude-3-5-haiku-latest', 'claude-3-opus-20240229']
-        : provider === 'openai'
-          ? ['o3-mini', 'o3', 'o1', 'gpt-4o', 'gpt-4.1', 'gpt-5']
-          : ['gpt-4o', 'claude-3-5-sonnet-latest'];
-    const all = Array.from(new Set([current, ...base].filter(Boolean)));
-    const q = pickerQuery.trim().toLowerCase();
-    return q ? all.filter((m) => m.toLowerCase().includes(q)) : all;
+  const transport = new ProviderTransport({ getApiKey: getApiKeyForProvider });
+  const agent = new Agent({
+    transport,
+    initialState: {
+      systemPrompt: loaded.systemPrompt,
+      model: loaded.model,
+      thinkingLevel: loaded.thinking,
+      tools: codingTools,
+    },
+  });
+
+  let isResponding = false;
+  let currentAssistant: Markdown | undefined;
+  const toolBlocks = new Map<string, Markdown>();
+  let loader: Loader | undefined;
+  let lastCtrlC = 0;
+
+  const removeLoader = () => {
+    if (!loader) return;
+    tui.removeChild(loader);
+    loader = undefined;
   };
 
-  const openPicker = (id: PickerId) => {
-    pickerMode = id;
-    pickerQuery = '';
-    pickerSelected = 0;
-    pickerItems = id === 'model' ? getModelCandidates() : ['off', 'low', 'medium', 'high'];
-    requestRender();
+  const addMessage = (component: Component) => {
+    // Insert before the editor (which is last child)
+    const idx = Math.max(0, tui.children.length - 1);
+    tui.children.splice(idx, 0, component);
   };
 
-  const closePicker = () => {
-    pickerMode = undefined;
-    pickerQuery = '';
-    pickerItems = [];
-    pickerSelected = 0;
-    requestRender();
+  const clearConversation = () => {
+    // Keep header + editor
+    tui.children.splice(1, tui.children.length - 2);
+    currentAssistant = undefined;
+    toolBlocks.clear();
+    agent.reset();
+    tui.requestRender();
   };
 
-  const exitApp = (branch: { stop: () => void }, keys: { stop: () => void }, app: { stop: () => void }) => {
-    agent?.close();
-    branch.stop();
-    keys.stop();
-    app.stop();
+  const abort = () => {
+    agent.abort();
+    tui.requestRender();
+  };
+
+  const exit = () => {
+    tui.stop();
     process.stdout.write('\n');
     process.exit(0);
   };
 
-  rebuildAgent(loaded);
-
-  const branchWatcher = new GitBranchWatcher();
-  const branch = await branchWatcher.start(cwd, (b: string | undefined) => {
-    footerModel.setBranch(b);
-    requestRender();
-  });
-
-  const app = tui.start();
-  const keys = keyReader.start((key: KeyEvent) => {
-    if (key.name === 'ctrl-c') {
+  const focusProxy = new FocusProxy(
+    editor,
+    () => {
       const now = Date.now();
-      if (now - lastCtrlCAt < 750) {
-        exitApp(branch, keys, app);
-      }
-      lastCtrlCAt = now;
-
-      if (pickerMode) {
-        closePicker();
+      if (now - lastCtrlC < 750) {
+        exit();
         return;
       }
+      lastCtrlC = now;
+      // First Ctrl+C clears editor
+      editor.setText('');
+      tui.requestRender();
+    },
+    () => {
+      // Escape aborts when agent is streaming; otherwise let editor handle it.
+      if (isResponding) {
+        abort();
+        return true;
+      }
+      return false;
+    },
+  );
 
-      rebuildAgent(loaded);
-      requestRender();
-      return;
+  tui.addChild(focusProxy);
+  tui.setFocus(focusProxy);
+
+  agent.subscribe((event: AgentEvent) => {
+    if (event.type === 'message_start') {
+      if (event.message.role === 'assistant') {
+        removeLoader();
+        currentAssistant = new Markdown('', 1, 1, markdownTheme);
+        addMessage(currentAssistant);
+        tui.requestRender();
+      }
     }
 
-    if (key.name === 'escape') {
-      if (pickerMode) {
-        closePicker();
-        return;
+    if (event.type === 'message_update') {
+      if (event.message.role === 'assistant' && currentAssistant) {
+        const text = renderMessage(event.message as Message);
+        currentAssistant.setText(text);
+        removeLoader();
+        tui.requestRender();
       }
-      agent?.stop('interrupted');
-      requestRender();
-      return;
     }
 
-    if (pickerMode) {
-      if (key.name === 'up') {
-        pickerSelected = pickerSelected <= 0 ? Math.max(0, pickerItems.length - 1) : pickerSelected - 1;
-        requestRender();
-        return;
+    if (event.type === 'message_end') {
+      if (event.message.role === 'assistant' && currentAssistant) {
+        currentAssistant.setText(renderMessage(event.message as Message));
+        currentAssistant = undefined;
+        tui.requestRender();
       }
-      if (key.name === 'down') {
-        pickerSelected = pickerSelected >= pickerItems.length - 1 ? 0 : pickerSelected + 1;
-        requestRender();
-        return;
-      }
-      if (key.name === 'backspace') {
-        pickerQuery = pickerQuery.slice(0, -1);
-        pickerItems = pickerMode === 'model' ? getModelCandidates() : pickerItems;
-        pickerSelected = Math.min(pickerSelected, Math.max(0, pickerItems.length - 1));
-        requestRender();
-        return;
-      }
-      if (key.name === 'char' && key.char) {
-        pickerQuery += key.char;
-        pickerItems = pickerMode === 'model' ? getModelCandidates() : pickerItems;
-        pickerSelected = Math.min(pickerSelected, Math.max(0, pickerItems.length - 1));
-        requestRender();
-        return;
-      }
-      if (key.name === 'enter') {
-        const selected = pickerItems[pickerSelected];
-        if (!selected) {
-          closePicker();
-          return;
-        }
-        if (pickerMode === 'model') {
-          loaded.agentConfig = { ...loaded.agentConfig, model: selected };
-          footerModel.setSelectedModel(selected);
-          void updateAppConfig({ configDir: loaded.configDir, configPath: loaded.configPath }, { model: selected });
-          rebuildAgent(loaded, { preserveConversation: true });
-          closePicker();
-          return;
-        }
-        if (pickerMode === 'thinking') {
-          loaded.thinking = selected as ThinkingLevel;
-          void updateAppConfig({ configDir: loaded.configDir, configPath: loaded.configPath }, { thinking: loaded.thinking });
-          rebuildAgent(loaded, { preserveConversation: true });
-          closePicker();
-          return;
-        }
-      }
-      requestRender();
-      return;
     }
 
-    const { submitted } = input.handleKey(key);
-    if (submitted === undefined) {
-      requestRender();
-      return;
+    if (event.type === 'tool_execution_start') {
+      removeLoader();
+      const md = new Markdown(`[tool:${event.toolName}]\n\n${JSON.stringify(event.args, null, 2)}`, 1, 1, markdownTheme);
+      toolBlocks.set(event.toolCallId, md);
+      addMessage(md);
+      tui.requestRender();
     }
 
-    const line = submitted.trim();
-    input.setValue('');
-
-    const cmd = parseCommand(line);
-    if (cmd) {
-      if (cmd.cmd === 'clear') {
-        rebuildAgent(loaded);
-        requestRender();
-        return;
-      }
-      if (cmd.cmd === 'exit' || cmd.cmd === 'quit') {
-        exitApp(branch, keys, app);
-        return;
-      }
-      if (cmd.cmd === 'model') {
-        const next = cmd.arg?.trim();
-        if (next) {
-          loaded.agentConfig = { ...loaded.agentConfig, model: next };
-          footerModel.setSelectedModel(next);
-          void updateAppConfig({ configDir: loaded.configDir, configPath: loaded.configPath }, { model: next });
-          rebuildAgent(loaded, { preserveConversation: true });
-          requestRender();
-          return;
-        }
-        openPicker('model');
-        return;
-      }
-      if (cmd.cmd === 'thinking') {
-        const next = cmd.arg?.trim();
-        if (next === 'off' || next === 'low' || next === 'medium' || next === 'high') {
-          loaded.thinking = next;
-          void updateAppConfig({ configDir: loaded.configDir, configPath: loaded.configPath }, { thinking: next });
-          rebuildAgent(loaded, { preserveConversation: true });
-          requestRender();
-          return;
-        }
-        openPicker('thinking');
-        return;
-      }
-      // Unknown command: treat as normal prompt.
+    if (event.type === 'tool_execution_update') {
+      const md = toolBlocks.get(event.toolCallId);
+      if (!md) return;
+      const body = renderToolResult(event.partialResult);
+      md.setText(`[tool:${event.toolName}]\n\n${body}`.trim());
+      tui.requestRender();
     }
 
-    if (!line.length) {
-      requestRender();
-      return;
+    if (event.type === 'tool_execution_end') {
+      const md = toolBlocks.get(event.toolCallId);
+      if (!md) return;
+      const body = renderToolResult(event.result);
+      const headerLine = event.isError ? `[tool:${event.toolName}] (error)` : `[tool:${event.toolName}]`;
+      md.setText(`${headerLine}\n\n${body}`.trim());
+      tui.requestRender();
     }
 
-    agent?.enqueueUserText(line);
-    void drainQueue();
-    requestRender();
+    if (event.type === 'turn_end') {
+      // turn_end includes assistant message + toolResults; tool execution already rendered.
+      if (event.message.role === 'assistant' && event.message.errorMessage) {
+        removeLoader();
+      }
+    }
+
+    if (event.type === 'agent_end') {
+      removeLoader();
+      isResponding = false;
+      editor.disableSubmit = false;
+      tui.requestRender();
+    }
   });
 
-  requestRender();
+  editor.onSubmit = (value: string) => {
+    const line = value.trim();
+
+    if (!line) return;
+
+    // Slash commands
+    if (line === '/exit' || line === '/quit') {
+      exit();
+      return;
+    }
+
+    if (line === '/clear') {
+      clearConversation();
+      editor.setText('');
+      return;
+    }
+
+    if (line === '/abort') {
+      abort();
+      editor.setText('');
+      return;
+    }
+
+    if (line.startsWith('/thinking')) {
+      const next = line.slice('/thinking'.length).trim();
+      if (next === 'off' || next === 'minimal' || next === 'low' || next === 'medium' || next === 'high' || next === 'xhigh') {
+        agent.setThinkingLevel(next);
+        currentThinking = next;
+        updateHeader();
+        void updateAppConfig({ configDir: loaded.configDir, configPath: loaded.configPath }, { thinking: next });
+        editor.setText('');
+        tui.requestRender();
+        return;
+      }
+    }
+
+    if (line.startsWith('/model')) {
+      const rest = line.slice('/model'.length).trim();
+
+      if (!rest) {
+        addMessage(new Text(chalk.dim('Usage: /model <provider> <modelId> (or /model <modelId>). Tip: use Tab completion.')));
+        editor.setText('');
+        tui.requestRender();
+        return;
+      }
+
+      if (isResponding) {
+        addMessage(new Text(chalk.dim('Model cannot be changed while responding. Use /abort first.')));
+        editor.setText('');
+        tui.requestRender();
+        return;
+      }
+
+      const parts = rest.split(/\s+/);
+      if (parts.length === 1) {
+        const token = parts[0] ?? '';
+        const provider = resolveProvider(token);
+        if (provider) {
+          const examples = getModels(provider)
+            .slice(0, 8)
+            .map((m) => m.id)
+            .join(', ');
+          addMessage(new Text(chalk.dim(`Pick a model: /model ${provider} <modelId>. Examples: ${examples}`)));
+          editor.setText('');
+          tui.requestRender();
+          return;
+        }
+
+        const model = resolveModel(currentProvider, token);
+        if (!model) {
+          const examples = getModels(currentProvider)
+            .slice(0, 8)
+            .map((m) => m.id)
+            .join(', ');
+          addMessage(new Text(chalk.red(`Unknown model "${token}" for provider ${currentProvider}. Examples: ${examples}`)));
+          editor.setText('');
+          tui.requestRender();
+          return;
+        }
+
+        agent.setModel(model);
+        currentModelId = model.id;
+        updateHeader();
+        void updateAppConfig(
+          { configDir: loaded.configDir, configPath: loaded.configPath },
+          { provider: currentProvider, model: model.id },
+        );
+        addMessage(new Text(chalk.dim(`Switched model to ${currentProvider} ${model.id}`)));
+        editor.setText('');
+        tui.requestRender();
+        return;
+      }
+
+      const [providerRaw, ...modelParts] = parts;
+      const modelId = modelParts.join(' ').trim();
+      const provider = resolveProvider(providerRaw ?? '');
+      if (!provider) {
+        addMessage(new Text(chalk.red(`Unknown provider "${providerRaw}". Known: ${getProviders().join(', ')}`)));
+        editor.setText('');
+        tui.requestRender();
+        return;
+      }
+
+      const model = resolveModel(provider, modelId);
+      if (!model) {
+        const examples = getModels(provider)
+          .slice(0, 8)
+          .map((m) => m.id)
+          .join(', ');
+        addMessage(new Text(chalk.red(`Unknown model "${modelId}" for provider ${provider}. Examples: ${examples}`)));
+        editor.setText('');
+        tui.requestRender();
+        return;
+      }
+
+      agent.setModel(model);
+      currentProvider = provider;
+      currentModelId = model.id;
+      updateHeader();
+      void updateAppConfig({ configDir: loaded.configDir, configPath: loaded.configPath }, { provider, model: model.id });
+      addMessage(new Text(chalk.dim(`Switched model to ${provider} ${model.id}`)));
+      editor.setText('');
+      tui.requestRender();
+      return;
+    }
+
+    // Normal prompt
+    if (isResponding) return;
+
+    editor.setText('');
+
+    addMessage(new Markdown(line, 1, 1, markdownTheme));
+
+    loader = new Loader(tui, (s) => chalk.cyan(s), (s) => chalk.dim(s), 'Thinking...');
+    addMessage(loader);
+
+    isResponding = true;
+    editor.disableSubmit = true;
+    tui.requestRender();
+
+    void agent.prompt(line).catch((err) => {
+      removeLoader();
+      addMessage(new Text(chalk.red(String(err instanceof Error ? err.message : err))));
+      isResponding = false;
+      editor.disableSubmit = false;
+      tui.requestRender();
+    });
+  };
+
+  tui.start();
 };

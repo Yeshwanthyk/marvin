@@ -5,7 +5,10 @@
     "outDir": "dist",
     "declaration": true,
     "composite": true,
-    "lib": ["ES2020", "DOM"],
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "lib": ["ES2022", "DOM"],
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],

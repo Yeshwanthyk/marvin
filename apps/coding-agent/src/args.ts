@@ -5,7 +5,7 @@ export interface ParsedArgs {
   configPath?: string;
   provider?: string;
   model?: string;
-  thinking?: 'off' | 'low' | 'medium' | 'high';
+  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   help: boolean;
   version: boolean;
 }
@@ -60,7 +60,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (a === '--thinking') {
       const level = argv[i + 1];
-      if (level === 'off' || level === 'low' || level === 'medium' || level === 'high') {
+      if (level === 'off' || level === 'minimal' || level === 'low' || level === 'medium' || level === 'high' || level === 'xhigh') {
         args.thinking = level;
       } else if (level !== undefined) {
         rest.push(a, level);
