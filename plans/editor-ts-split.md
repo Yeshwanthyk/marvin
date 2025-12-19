@@ -48,12 +48,12 @@ Keep `packages/tui/src/components/editor.ts` as the only exported entry:
 ## Step-by-step
 - [x] 1. **Baseline safety**: add 1–2 characterization tests for paste marker substitution + bracketed paste buffering (currently untested).
 - [x] 2. Extract `types.ts` + move `layoutText`/visual-line mapping into `layout.ts` (pure functions; no behavior change).
-- [ ] 3. Extract `document.ts` (text ops + cursor movement). Keep exact semantics; only relocate code.
-- [ ] 4. Extract `history.ts`; remove repeated `historyIndex = -1` by centralizing “exit history mode” in one call site.
-- [ ] 5. Extract `paste.ts`; remove stray dead comment; make paste marker regex generation unit-testable.
-- [ ] 6. Extract `autocomplete.ts`; remove `as any` casts where avoidable; keep trigger rules identical.
-- [ ] 7. Shrink `Editor.handleInput` into a small staged pipeline; ensure each stage returns `{handled, remaining}` (prevents nested conditionals).
-- [ ] 8. Run typecheck + editor tests; ensure no public export/import changes.
+- [x] 3. Extract `document.ts` (text ops + cursor movement). Keep exact semantics; only relocate code.
+- [x] 4. Extract `history.ts`; remove repeated `historyIndex = -1` by centralizing “exit history mode” in one call site.
+- [x] 5. Extract `paste.ts`; remove stray dead comment; make paste marker regex generation unit-testable.
+- [x] 6. Extract `autocomplete.ts`; remove `as any` casts where avoidable; keep trigger rules identical.
+- [x] 7. Shrink `Editor.handleInput` into a small staged pipeline; ensure each stage returns `{handled, remaining}` (prevents nested conditionals).
+- [x] 8. Run typecheck + editor tests; ensure no public export/import changes.
 
 ## Risks
 - ESM pathing (`.js` extensions) when moving files; avoid runtime cycles by using `import type`.
