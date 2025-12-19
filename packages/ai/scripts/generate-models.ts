@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 
 import { writeFileSync } from "fs";
-import { join, dirname } from "path";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { Api, KnownProvider, Model } from "../src/types.js";
+import { Api, type KnownProvider, type Model } from "../src/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -49,7 +49,7 @@ async function fetchOpenRouterModels(): Promise<Model<any>[]> {
 			if (!model.supported_parameters?.includes("tools")) continue;
 
 			// Parse provider from model ID
-			let provider: KnownProvider = "openrouter";
+			const provider: KnownProvider = "openrouter";
 			let modelKey = model.id;
 
 			modelKey = model.id; // Keep full ID for OpenRouter
@@ -62,9 +62,12 @@ async function fetchOpenRouterModels(): Promise<Model<any>[]> {
 
 			// Convert pricing from $/token to $/million tokens
 			const inputCost = parseFloat(model.pricing?.prompt || "0") * 1_000_000;
-			const outputCost = parseFloat(model.pricing?.completion || "0") * 1_000_000;
-			const cacheReadCost = parseFloat(model.pricing?.input_cache_read || "0") * 1_000_000;
-			const cacheWriteCost = parseFloat(model.pricing?.input_cache_write || "0") * 1_000_000;
+			const outputCost =
+				parseFloat(model.pricing?.completion || "0") * 1_000_000;
+			const cacheReadCost =
+				parseFloat(model.pricing?.input_cache_read || "0") * 1_000_000;
+			const cacheWriteCost =
+				parseFloat(model.pricing?.input_cache_write || "0") * 1_000_000;
 
 			const normalizedModel: Model<any> = {
 				id: modelKey,
@@ -115,7 +118,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					provider: "anthropic",
 					baseUrl: "https://api.anthropic.com",
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					input: m.modalities?.input?.includes("image")
+						? ["text", "image"]
+						: ["text"],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -141,7 +146,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					provider: "google",
 					baseUrl: "https://generativelanguage.googleapis.com/v1beta",
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					input: m.modalities?.input?.includes("image")
+						? ["text", "image"]
+						: ["text"],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -167,7 +174,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					provider: "openai",
 					baseUrl: "https://api.openai.com/v1",
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					input: m.modalities?.input?.includes("image")
+						? ["text", "image"]
+						: ["text"],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -193,7 +202,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					provider: "groq",
 					baseUrl: "https://api.groq.com/openai/v1",
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					input: m.modalities?.input?.includes("image")
+						? ["text", "image"]
+						: ["text"],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -219,7 +230,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					provider: "cerebras",
 					baseUrl: "https://api.cerebras.ai/v1",
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					input: m.modalities?.input?.includes("image")
+						? ["text", "image"]
+						: ["text"],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -245,7 +258,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					provider: "xai",
 					baseUrl: "https://api.x.ai/v1",
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					input: m.modalities?.input?.includes("image")
+						? ["text", "image"]
+						: ["text"],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -271,7 +286,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					provider: "zai",
 					baseUrl: "https://api.z.ai/api/anthropic",
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					input: m.modalities?.input?.includes("image")
+						? ["text", "image"]
+						: ["text"],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -297,7 +314,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					provider: "mistral",
 					baseUrl: "https://api.mistral.ai/v1",
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					input: m.modalities?.input?.includes("image")
+						? ["text", "image"]
+						: ["text"],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -312,7 +331,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
 		// Process GitHub Copilot models
 		if (data["github-copilot"]?.models) {
-			for (const [modelId, model] of Object.entries(data["github-copilot"].models)) {
+			for (const [modelId, model] of Object.entries(
+				data["github-copilot"].models,
+			)) {
 				const m = model as ModelsDevModel & { status?: string };
 				if (m.tool_call !== true) continue;
 				if (m.status === "deprecated") continue;
@@ -327,7 +348,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					provider: "github-copilot",
 					baseUrl: "https://api.individual.githubcopilot.com",
 					reasoning: m.reasoning === true,
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					input: m.modalities?.input?.includes("image")
+						? ["text", "image"]
+						: ["text"],
 					cost: {
 						input: m.cost?.input || 0,
 						output: m.cost?.output || 0,
@@ -338,13 +361,15 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					maxTokens: m.limit?.output || 8192,
 					headers: { ...COPILOT_STATIC_HEADERS },
 					// compat only applies to openai-completions
-					...(needsResponsesApi ? {} : {
-						compat: {
-							supportsStore: false,
-							supportsDeveloperRole: false,
-							supportsReasoningEffort: false,
-						},
-					}),
+					...(needsResponsesApi
+						? {}
+						: {
+								compat: {
+									supportsStore: false,
+									supportsDeveloperRole: false,
+									supportsReasoningEffort: false,
+								},
+							}),
 				};
 
 				models.push(copilotModel);
@@ -371,14 +396,20 @@ async function generateModels() {
 
 	// Fix incorrect cache pricing for Claude Opus 4.5 from models.dev
 	// models.dev has 3x the correct pricing (1.5/18.75 instead of 0.5/6.25)
-	const opus45 = allModels.find(m => m.provider === "anthropic" && m.id === "claude-opus-4-5");
+	const opus45 = allModels.find(
+		(m) => m.provider === "anthropic" && m.id === "claude-opus-4-5",
+	);
 	if (opus45) {
 		opus45.cost.cacheRead = 0.5;
 		opus45.cost.cacheWrite = 6.25;
 	}
 
 	// Add missing gpt models
-	if (!allModels.some(m => m.provider === "openai" && m.id === "gpt-5-chat-latest")) {
+	if (
+		!allModels.some(
+			(m) => m.provider === "openai" && m.id === "gpt-5-chat-latest",
+		)
+	) {
 		allModels.push({
 			id: "gpt-5-chat-latest",
 			name: "GPT-5 Chat Latest",
@@ -398,7 +429,9 @@ async function generateModels() {
 		});
 	}
 
-	if (!allModels.some(m => m.provider === "openai" && m.id === "gpt-5.1-codex")) {
+	if (
+		!allModels.some((m) => m.provider === "openai" && m.id === "gpt-5.1-codex")
+	) {
 		allModels.push({
 			id: "gpt-5.1-codex",
 			name: "GPT-5.1 Codex",
@@ -418,7 +451,11 @@ async function generateModels() {
 		});
 	}
 
-	if (!allModels.some(m => m.provider === "openai" && m.id === "gpt-5.1-codex-max")) {
+	if (
+		!allModels.some(
+			(m) => m.provider === "openai" && m.id === "gpt-5.1-codex-max",
+		)
+	) {
 		allModels.push({
 			id: "gpt-5.1-codex-max",
 			name: "GPT-5.1 Codex Max",
@@ -439,7 +476,9 @@ async function generateModels() {
 	}
 
 	// Add missing Grok models
-	if (!allModels.some(m => m.provider === "xai" && m.id === "grok-code-fast-1")) {
+	if (
+		!allModels.some((m) => m.provider === "xai" && m.id === "grok-code-fast-1")
+	) {
 		allModels.push({
 			id: "grok-code-fast-1",
 			name: "Grok Code Fast 1",
@@ -460,7 +499,11 @@ async function generateModels() {
 	}
 
 	// Add missing OpenRouter model
-	if (!allModels.some(m => m.provider === "openrouter" && m.id === "openrouter/auto")) {
+	if (
+		!allModels.some(
+			(m) => m.provider === "openrouter" && m.id === "openrouter/auto",
+		)
+	) {
 		allModels.push({
 			id: "openrouter/auto",
 			name: "OpenRouter: Auto Router",
@@ -472,15 +515,33 @@ async function generateModels() {
 			cost: {
 				// we dont know about the costs because OpenRouter auto routes to different models
 				// and then charges you for the underlying used model
-				input:0,
-				output:0,
-				cacheRead:0,
-				cacheWrite:0,
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
 			},
 			contextWindow: 2000000,
 			maxTokens: 30000,
 		});
 	}
+
+	// Add Codex models (ChatGPT subscription OAuth access)
+	// GPT-5.2 with different reasoning levels
+	const codexBase = {
+		api: "openai-responses" as const,
+		baseUrl: "https://chatgpt.com/backend-api",
+		provider: "codex" as const,
+		reasoning: true,
+		input: ["text", "image"] as ("text" | "image")[],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, // Free with subscription
+		contextWindow: 200000,
+		maxTokens: 32000,
+	};
+
+	allModels.push(
+		{ ...codexBase, id: "gpt-5.2", name: "GPT-5.2" },
+		{ ...codexBase, id: "gpt-5.2-mini", name: "GPT-5.2 Mini" },
+	);
 
 	// Group by provider and deduplicate by model ID
 	const providers: Record<string, Record<string, Model<any>>> = {};
@@ -525,7 +586,7 @@ export const MODELS = {
 `;
 			}
 			output += `\t\t\treasoning: ${model.reasoning},\n`;
-			output += `\t\t\tinput: [${model.input.map(i => `"${i}"`).join(", ")}],\n`;
+			output += `\t\t\tinput: [${model.input.map((i) => `"${i}"`).join(", ")}],\n`;
 			output += `\t\t\tcost: {\n`;
 			output += `\t\t\t\tinput: ${model.cost.input},\n`;
 			output += `\t\t\t\toutput: ${model.cost.output},\n`;
@@ -549,7 +610,7 @@ export const MODELS = {
 
 	// Print statistics
 	const totalModels = allModels.length;
-	const reasoningModels = allModels.filter(m => m.reasoning).length;
+	const reasoningModels = allModels.filter((m) => m.reasoning).length;
 
 	console.log(`\nModel Statistics:`);
 	console.log(`  Total tool-capable models: ${totalModels}`);
