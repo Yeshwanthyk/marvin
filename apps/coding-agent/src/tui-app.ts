@@ -26,11 +26,12 @@ import {
   createAgentEventHandler,
   handleSlashCommand,
   handleContinueSession,
-  handleResumeSession,
+  restoreSession,
   resolveProvider,
   resolveModel,
   type ToolBlockEntry,
 } from './tui/index.js';
+import { selectSession } from './tui/session-picker.js';
 
 type KnownProvider = ReturnType<typeof getProviders>[number];
 
@@ -62,6 +63,18 @@ export const runTui = async (args?: {
     model: firstModel,
     thinking: args?.thinking,
   });
+
+  // Handle resume BEFORE creating main TUI (picker runs its own TUI)
+  const sessionManager = new SessionManager(loaded.configDir);
+  let selectedSessionPath: string | null = null;
+
+  if (args?.resumeSession) {
+    selectedSessionPath = await selectSession(sessionManager);
+    if (selectedSessionPath === null) {
+      process.stdout.write('No session selected\n');
+      return;
+    }
+  }
 
   const terminal = new ProcessTerminal();
   const tui = new TUI(terminal);
@@ -148,7 +161,6 @@ export const runTui = async (args?: {
   // ─────────────────────────────────────────────────────────────────
   // Session Management
   // ─────────────────────────────────────────────────────────────────
-  const sessionManager = new SessionManager(loaded.configDir);
   let sessionStarted = false;
 
   const ensureSession = () => {
@@ -414,8 +426,9 @@ export const runTui = async (args?: {
   if (args?.continueSession) {
     handleContinueSession(sessionManager, sessionRestoreCtx);
   }
-  if (args?.resumeSession) {
-    handleResumeSession(sessionManager, sessionRestoreCtx);
+  if (selectedSessionPath) {
+    const session = sessionManager.loadSession(selectedSessionPath);
+    if (session) restoreSession(session, sessionRestoreCtx);
   }
 
   // ─────────────────────────────────────────────────────────────────

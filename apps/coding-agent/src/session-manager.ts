@@ -32,6 +32,11 @@ export interface SessionInfo {
   modelId: string;
 }
 
+export interface SessionDetails extends SessionInfo {
+  messageCount: number;
+  firstMessage: string;
+}
+
 export interface LoadedSession {
   metadata: SessionMetadata;
   messages: AppMessage[];
@@ -137,6 +142,65 @@ export class SessionManager {
           path,
           provider: metadata.provider,
           modelId: metadata.modelId,
+        });
+      } catch {
+        // Skip invalid files
+      }
+    }
+
+    return sessions;
+  }
+
+  /**
+   * Load all sessions with message details for picker display
+   */
+  loadAllSessions(): SessionDetails[] {
+    if (!existsSync(this.sessionDir)) return [];
+
+    const files = readdirSync(this.sessionDir)
+      .filter(f => f.endsWith('.jsonl'))
+      .sort()
+      .reverse();
+
+    const sessions: SessionDetails[] = [];
+    for (const file of files) {
+      const path = join(this.sessionDir, file);
+      try {
+        const content = readFileSync(path, 'utf8');
+        const lines = content.trim().split('\n').filter(l => l.length > 0);
+        if (lines.length === 0) continue;
+
+        const metadata = JSON.parse(lines[0]!) as SessionMetadata;
+        if (metadata.type !== 'session') continue;
+
+        let messageCount = 0;
+        let firstMessage = '';
+
+        for (let i = 1; i < lines.length; i++) {
+          const entry = JSON.parse(lines[i]!) as SessionEntry;
+          if (entry.type === 'message') {
+            messageCount++;
+            // Capture first user message for display
+            if (!firstMessage && entry.message.role === 'user') {
+              const content = entry.message.content;
+              if (typeof content === 'string') {
+                firstMessage = content;
+              } else if (Array.isArray(content)) {
+                const textBlock = content.find(b => b.type === 'text') as { type: 'text'; text: string } | undefined;
+                if (textBlock) firstMessage = textBlock.text;
+              }
+            }
+          }
+        }
+
+        sessions.push({
+          id: metadata.id,
+          timestamp: metadata.timestamp,
+          path,
+          provider: metadata.provider,
+          modelId: metadata.modelId,
+          messageCount,
+          firstMessage: firstMessage || '(empty session)',
         });
       } catch {
         // Skip invalid files

@@ -18,4 +18,4 @@ export { createAutocompleteCommands, type AutocompleteContext } from './autocomp
 export { handleCompact, SUMMARY_PREFIX, SUMMARY_SUFFIX, type CompactOptions, type CompactResult } from './compact-handler.js';
 export { createAgentEventHandler, type AgentEventHandlerState, type ToolBlockEntry, type RetryConfig, type RetryState } from './agent-events.js';
 export { handleSlashCommand, resolveProvider, resolveModel, type CommandContext } from './command-handlers.js';
-export { restoreSession, handleContinueSession, handleResumeSession, type SessionRestoreContext } from './session-restore.js';
+export { restoreSession, handleContinueSession, type SessionRestoreContext } from './session-restore.js';

@@ -87,38 +87,4 @@ export function handleContinueSession(sessionManager: SessionManager, ctx: Sessi
   }
 }
 
-export function handleResumeSession(sessionManager: SessionManager, ctx: SessionRestoreContext) {
-  const sessions = sessionManager.listSessions();
-  if (sessions.length === 0) {
-    ctx.addMessage(new Text(chalk.hex(colors.dimmed)('No sessions found for this directory')));
-    return;
-  }
 
-  const formatDate = (ts: number) => {
-    const d = new Date(ts);
-    return d.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  if (sessions.length === 1) {
-    const session = sessionManager.loadSession(sessions[0]!.path);
-    if (session) restoreSession(session, ctx);
-    return;
-  }
-
-  // Show available sessions and load most recent
-  ctx.addMessage(new Text(chalk.hex(colors.dimmed)(`Found ${sessions.length} sessions:`)));
-  for (const s of sessions.slice(0, 5)) {
-    ctx.addMessage(new Text(chalk.hex(colors.dimmed)(`  ${formatDate(s.timestamp)} · ${s.provider}/${s.modelId}`)));
-  }
-  if (sessions.length > 5) {
-    ctx.addMessage(new Text(chalk.hex(colors.dimmed)(`  ... and ${sessions.length - 5} more`)));
-  }
-  ctx.addMessage(new Text(chalk.hex(colors.dimmed)('Loading most recent session...')));
-  const session = sessionManager.loadSession(sessions[0]!.path);
-  if (session) restoreSession(session, ctx);
-}
