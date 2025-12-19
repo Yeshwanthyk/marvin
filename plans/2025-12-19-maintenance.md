@@ -10,9 +10,9 @@ Track:
   - [ ] footer
   - [ ] message rendering
   - [ ] keybinding controller
-- [ ] Fix naming/typos
-  - [ ] rename `transorm-messages.ts` -> `transform-messages.ts` + update imports
-  - [ ] fix user-facing typos ("unknown error occurred", etc)
+- [x] Fix naming/typos
+  - [x] rename `transorm-messages.ts` -> `transform-messages.ts` + update imports
+  - [x] fix user-facing typos ("unknown error occurred", etc)
 - [ ] Docs/env var standardize on `GEMINI_API_KEY`
 - [ ] Remove `MU_*` env var usage/docs
 - [ ] Remove unused `vitest.config.ts` (or wire up)

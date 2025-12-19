@@ -26,7 +26,7 @@ import type {
 import { AssistantMessageEventStream } from "../utils/event-stream.js";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
 
-import { transformMessages } from "./transorm-messages.js";
+import { transformMessages } from "./transform-messages.js";
 
 export interface GoogleOptions extends StreamOptions {
 	toolChoice?: "auto" | "none" | "any";
@@ -232,7 +232,7 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 			}
 
 			if (output.stopReason === "aborted" || output.stopReason === "error") {
-				throw new Error("An unkown error ocurred");
+				throw new Error("An unknown error occurred");
 			}
 
 			stream.push({ type: "done", reason: output.stopReason, message: output });

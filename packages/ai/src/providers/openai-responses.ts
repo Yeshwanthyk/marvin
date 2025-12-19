@@ -28,7 +28,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream.js";
 import { parseStreamingJson } from "../utils/json-parse.js";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
 
-import { transformMessages } from "./transorm-messages.js";
+import { transformMessages } from "./transform-messages.js";
 
 // OpenAI Responses-specific options
 export interface OpenAIResponsesOptions extends StreamOptions {
@@ -358,7 +358,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 			}
 
 			if (output.stopReason === "aborted" || output.stopReason === "error") {
-				throw new Error("An unkown error ocurred");
+				throw new Error("An unknown error occurred");
 			}
 
 			stream.push({ type: "done", reason: output.stopReason, message: output });
