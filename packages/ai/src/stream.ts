@@ -1,8 +1,17 @@
 import { ThinkingLevel } from "@google/genai";
-import { type AnthropicOptions, streamAnthropic } from "./providers/anthropic.js";
+import {
+	type AnthropicOptions,
+	streamAnthropic,
+} from "./providers/anthropic.js";
 import { type GoogleOptions, streamGoogle } from "./providers/google.js";
-import { type OpenAICompletionsOptions, streamOpenAICompletions } from "./providers/openai-completions.js";
-import { type OpenAIResponsesOptions, streamOpenAIResponses } from "./providers/openai-responses.js";
+import {
+	type OpenAICompletionsOptions,
+	streamOpenAICompletions,
+} from "./providers/openai-completions.js";
+import {
+	type OpenAIResponsesOptions,
+	streamOpenAIResponses,
+} from "./providers/openai-responses.js";
 import type {
 	Api,
 	AssistantMessage,
@@ -32,7 +41,11 @@ export function getApiKey(provider: any): string | undefined {
 
 	// Fall back to environment variables
 	if (provider === "github-copilot") {
-		return process.env.COPILOT_GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+		return (
+			process.env.COPILOT_GITHUB_TOKEN ||
+			process.env.GH_TOKEN ||
+			process.env.GITHUB_TOKEN
+		);
 	}
 
 	const envMap: Record<string, string> = {
@@ -65,16 +78,32 @@ export function stream<TApi extends Api>(
 	const api: Api = model.api;
 	switch (api) {
 		case "anthropic-messages":
-			return streamAnthropic(model as Model<"anthropic-messages">, context, providerOptions);
+			return streamAnthropic(
+				model as Model<"anthropic-messages">,
+				context,
+				providerOptions,
+			);
 
 		case "openai-completions":
-			return streamOpenAICompletions(model as Model<"openai-completions">, context, providerOptions as any);
+			return streamOpenAICompletions(
+				model as Model<"openai-completions">,
+				context,
+				providerOptions as any,
+			);
 
 		case "openai-responses":
-			return streamOpenAIResponses(model as Model<"openai-responses">, context, providerOptions as any);
+			return streamOpenAIResponses(
+				model as Model<"openai-responses">,
+				context,
+				providerOptions as any,
+			);
 
 		case "google-generative-ai":
-			return streamGoogle(model as Model<"google-generative-ai">, context, providerOptions);
+			return streamGoogle(
+				model as Model<"google-generative-ai">,
+				context,
+				providerOptions,
+			);
 
 		default: {
 			// This should never be reached if all Api cases are handled
@@ -129,7 +158,8 @@ function mapOptionsForApi<TApi extends Api>(
 	};
 
 	// Helper to clamp xhigh to high for providers that don't support it
-	const clampReasoning = (effort: ReasoningEffort | undefined) => (effort === "xhigh" ? "high" : effort);
+	const clampReasoning = (effort: ReasoningEffort | undefined) =>
+		effort === "xhigh" ? "high" : effort;
 
 	switch (model.api) {
 		case "anthropic-messages": {
@@ -148,7 +178,8 @@ function mapOptionsForApi<TApi extends Api>(
 			return {
 				...base,
 				thinkingEnabled: true,
-				thinkingBudgetTokens: anthropicBudgets[clampReasoning(options.reasoning)!],
+				thinkingBudgetTokens:
+					anthropicBudgets[clampReasoning(options.reasoning)!],
 			} satisfies AnthropicOptions;
 		}
 
@@ -162,13 +193,18 @@ function mapOptionsForApi<TApi extends Api>(
 			return {
 				...base,
 				reasoningEffort: options?.reasoning,
+				fetch: options?.fetch,
+				instructions: options?.instructions,
 			} satisfies OpenAIResponsesOptions;
 
 		case "google-generative-ai": {
 			// Explicitly disable thinking when reasoning is not specified
 			// This is needed because Gemini has "dynamic thinking" enabled by default
 			if (!options?.reasoning) {
-				return { ...base, thinking: { enabled: false } } satisfies GoogleOptions;
+				return {
+					...base,
+					thinking: { enabled: false },
+				} satisfies GoogleOptions;
 			}
 
 			const googleModel = model as Model<"google-generative-ai">;
@@ -222,7 +258,10 @@ function getGoogleThinkingLevel(effort: ClampedReasoningEffort): ThinkingLevel {
 	}
 }
 
-function getGoogleBudget(model: Model<"google-generative-ai">, effort: ClampedReasoningEffort): number {
+function getGoogleBudget(
+	model: Model<"google-generative-ai">,
+	effort: ClampedReasoningEffort,
+): number {
 	// See https://ai.google.dev/gemini-api/docs/thinking#set-budget
 	if (model.id.includes("2.5-pro")) {
 		const budgets: Record<ClampedReasoningEffort, number> = {

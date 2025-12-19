@@ -34,6 +34,10 @@ import { transformMessages } from "./transorm-messages.js";
 export interface OpenAIResponsesOptions extends StreamOptions {
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 	reasoningSummary?: "auto" | "detailed" | "concise" | null;
+	/** Custom fetch for OAuth/proxy scenarios */
+	fetch?: typeof globalThis.fetch;
+	/** Instructions for Codex API (replaces system prompt in body) */
+	instructions?: string;
 }
 
 /**
@@ -68,13 +72,28 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 
 		try {
 			// Create OpenAI client
-			const client = createClient(model, context, options?.apiKey);
+			const client = createClient(
+				model,
+				context,
+				options?.apiKey,
+				options?.fetch,
+			);
 			const params = buildParams(model, context, options);
-			const openaiStream = await client.responses.create(params, { signal: options?.signal });
+			const openaiStream = await client.responses.create(params, {
+				signal: options?.signal,
+			});
 			stream.push({ type: "start", partial: output });
 
-			let currentItem: ResponseReasoningItem | ResponseOutputMessage | ResponseFunctionToolCall | null = null;
-			let currentBlock: ThinkingContent | TextContent | (ToolCall & { partialJson: string }) | null = null;
+			let currentItem:
+				| ResponseReasoningItem
+				| ResponseOutputMessage
+				| ResponseFunctionToolCall
+				| null = null;
+			let currentBlock:
+				| ThinkingContent
+				| TextContent
+				| (ToolCall & { partialJson: string })
+				| null = null;
 			const blocks = output.content;
 			const blockIndex = () => blocks.length - 1;
 
@@ -86,12 +105,20 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 						currentItem = item;
 						currentBlock = { type: "thinking", thinking: "" };
 						output.content.push(currentBlock);
-						stream.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
+						stream.push({
+							type: "thinking_start",
+							contentIndex: blockIndex(),
+							partial: output,
+						});
 					} else if (item.type === "message") {
 						currentItem = item;
 						currentBlock = { type: "text", text: "" };
 						output.content.push(currentBlock);
-						stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+						stream.push({
+							type: "text_start",
+							contentIndex: blockIndex(),
+							partial: output,
+						});
 					} else if (item.type === "function_call") {
 						currentItem = item;
 						currentBlock = {
@@ -102,7 +129,11 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 							partialJson: item.arguments || "",
 						};
 						output.content.push(currentBlock);
-						stream.push({ type: "toolcall_start", contentIndex: blockIndex(), partial: output });
+						stream.push({
+							type: "toolcall_start",
+							contentIndex: blockIndex(),
+							partial: output,
+						});
 					}
 				}
 				// Handle reasoning summary deltas
@@ -119,7 +150,8 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 						currentBlock.type === "thinking"
 					) {
 						currentItem.summary = currentItem.summary || [];
-						const lastPart = currentItem.summary[currentItem.summary.length - 1];
+						const lastPart =
+							currentItem.summary[currentItem.summary.length - 1];
 						if (lastPart) {
 							currentBlock.thinking += event.delta;
 							lastPart.text += event.delta;
@@ -141,7 +173,8 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 						currentBlock.type === "thinking"
 					) {
 						currentItem.summary = currentItem.summary || [];
-						const lastPart = currentItem.summary[currentItem.summary.length - 1];
+						const lastPart =
+							currentItem.summary[currentItem.summary.length - 1];
 						if (lastPart) {
 							currentBlock.thinking += "\n\n";
 							lastPart.text += "\n\n";
@@ -159,13 +192,22 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 					if (currentItem && currentItem.type === "message") {
 						currentItem.content = currentItem.content || [];
 						// Filter out ReasoningText, only accept output_text and refusal
-						if (event.part.type === "output_text" || event.part.type === "refusal") {
+						if (
+							event.part.type === "output_text" ||
+							event.part.type === "refusal"
+						) {
 							currentItem.content.push(event.part);
 						}
 					}
 				} else if (event.type === "response.output_text.delta") {
-					if (currentItem && currentItem.type === "message" && currentBlock && currentBlock.type === "text") {
-						const lastPart = currentItem.content[currentItem.content.length - 1];
+					if (
+						currentItem &&
+						currentItem.type === "message" &&
+						currentBlock &&
+						currentBlock.type === "text"
+					) {
+						const lastPart =
+							currentItem.content[currentItem.content.length - 1];
 						if (lastPart && lastPart.type === "output_text") {
 							currentBlock.text += event.delta;
 							lastPart.text += event.delta;
@@ -178,8 +220,14 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 						}
 					}
 				} else if (event.type === "response.refusal.delta") {
-					if (currentItem && currentItem.type === "message" && currentBlock && currentBlock.type === "text") {
-						const lastPart = currentItem.content[currentItem.content.length - 1];
+					if (
+						currentItem &&
+						currentItem.type === "message" &&
+						currentBlock &&
+						currentBlock.type === "text"
+					) {
+						const lastPart =
+							currentItem.content[currentItem.content.length - 1];
 						if (lastPart && lastPart.type === "refusal") {
 							currentBlock.text += event.delta;
 							lastPart.refusal += event.delta;
@@ -201,7 +249,9 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 						currentBlock.type === "toolCall"
 					) {
 						currentBlock.partialJson += event.delta;
-						currentBlock.arguments = parseStreamingJson(currentBlock.partialJson);
+						currentBlock.arguments = parseStreamingJson(
+							currentBlock.partialJson,
+						);
 						stream.push({
 							type: "toolcall_delta",
 							contentIndex: blockIndex(),
@@ -214,8 +264,13 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 				else if (event.type === "response.output_item.done") {
 					const item = event.item;
 
-					if (item.type === "reasoning" && currentBlock && currentBlock.type === "thinking") {
-						currentBlock.thinking = item.summary?.map((s) => s.text).join("\n\n") || "";
+					if (
+						item.type === "reasoning" &&
+						currentBlock &&
+						currentBlock.type === "thinking"
+					) {
+						currentBlock.thinking =
+							item.summary?.map((s) => s.text).join("\n\n") || "";
 						currentBlock.thinkingSignature = JSON.stringify(item);
 						stream.push({
 							type: "thinking_end",
@@ -224,8 +279,14 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 							partial: output,
 						});
 						currentBlock = null;
-					} else if (item.type === "message" && currentBlock && currentBlock.type === "text") {
-						currentBlock.text = item.content.map((c) => (c.type === "output_text" ? c.text : c.refusal)).join("");
+					} else if (
+						item.type === "message" &&
+						currentBlock &&
+						currentBlock.type === "text"
+					) {
+						currentBlock.text = item.content
+							.map((c) => (c.type === "output_text" ? c.text : c.refusal))
+							.join("");
 						currentBlock.textSignature = item.id;
 						stream.push({
 							type: "text_end",
@@ -242,14 +303,20 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 							arguments: JSON.parse(item.arguments),
 						};
 
-						stream.push({ type: "toolcall_end", contentIndex: blockIndex(), toolCall, partial: output });
+						stream.push({
+							type: "toolcall_end",
+							contentIndex: blockIndex(),
+							toolCall,
+							partial: output,
+						});
 					}
 				}
 				// Handle completion
 				else if (event.type === "response.completed") {
 					const response = event.response;
 					if (response?.usage) {
-						const cachedTokens = response.usage.input_tokens_details?.cached_tokens || 0;
+						const cachedTokens =
+							response.usage.input_tokens_details?.cached_tokens || 0;
 						output.usage = {
 							// OpenAI includes cached tokens in input_tokens, so subtract to get non-cached input
 							input: (response.usage.input_tokens || 0) - cachedTokens,
@@ -257,19 +324,30 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 							cacheRead: cachedTokens,
 							cacheWrite: 0,
 							totalTokens: response.usage.total_tokens || 0,
-							cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+							cost: {
+								input: 0,
+								output: 0,
+								cacheRead: 0,
+								cacheWrite: 0,
+								total: 0,
+							},
 						};
 					}
 					calculateCost(model, output.usage);
 					// Map status to stop reason
 					output.stopReason = mapStopReason(response?.status);
-					if (output.content.some((b) => b.type === "toolCall") && output.stopReason === "stop") {
+					if (
+						output.content.some((b) => b.type === "toolCall") &&
+						output.stopReason === "stop"
+					) {
 						output.stopReason = "toolUse";
 					}
 				}
 				// Handle errors
 				else if (event.type === "error") {
-					throw new Error(`Error Code ${event.code}: ${event.message}` || "Unknown error");
+					throw new Error(
+						`Error Code ${event.code}: ${event.message}` || "Unknown error",
+					);
 				} else if (event.type === "response.failed") {
 					throw new Error("Unknown error");
 				}
@@ -288,7 +366,8 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 		} catch (error) {
 			for (const block of output.content) delete (block as any).index;
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+			output.errorMessage =
+				error instanceof Error ? error.message : JSON.stringify(error);
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}
@@ -297,7 +376,12 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 	return stream;
 };
 
-function createClient(model: Model<"openai-responses">, context: Context, apiKey?: string) {
+function createClient(
+	model: Model<"openai-responses">,
+	context: Context,
+	apiKey?: string,
+	customFetch?: typeof globalThis.fetch,
+) {
 	if (!apiKey) {
 		if (!process.env.OPENAI_API_KEY) {
 			throw new Error(
@@ -312,7 +396,9 @@ function createClient(model: Model<"openai-responses">, context: Context, apiKey
 		// Copilot expects X-Initiator to indicate whether the request is user-initiated
 		// or agent-initiated. It's an agent call if ANY message in history has assistant/tool role.
 		const messages = context.messages || [];
-		const isAgentCall = messages.some((msg) => msg.role === "assistant" || msg.role === "toolResult");
+		const isAgentCall = messages.some(
+			(msg) => msg.role === "assistant" || msg.role === "toolResult",
+		);
 		headers["X-Initiator"] = isAgentCall ? "agent" : "user";
 		headers["Openai-Intent"] = "conversation-edits";
 	}
@@ -322,17 +408,28 @@ function createClient(model: Model<"openai-responses">, context: Context, apiKey
 		baseURL: model.baseUrl,
 		dangerouslyAllowBrowser: true,
 		defaultHeaders: headers,
+		fetch: customFetch,
 	});
 }
 
-function buildParams(model: Model<"openai-responses">, context: Context, options?: OpenAIResponsesOptions) {
+function buildParams(
+	model: Model<"openai-responses">,
+	context: Context,
+	options?: OpenAIResponsesOptions,
+) {
 	const messages = convertMessages(model, context);
 
-	const params: ResponseCreateParamsStreaming = {
+	const params: ResponseCreateParamsStreaming & { instructions?: string; store?: boolean } = {
 		model: model.id,
 		input: messages,
 		stream: true,
 	};
+
+	// Codex API requires instructions and store=false
+	if (options?.instructions) {
+		params.instructions = options.instructions;
+		params.store = false;
+	}
 
 	if (options?.maxTokens) {
 		params.max_output_tokens = options?.maxTokens;
@@ -372,7 +469,10 @@ function buildParams(model: Model<"openai-responses">, context: Context, options
 	return params;
 }
 
-function convertMessages(model: Model<"openai-responses">, context: Context): ResponseInput {
+function convertMessages(
+	model: Model<"openai-responses">,
+	context: Context,
+): ResponseInput {
 	const messages: ResponseInput = [];
 
 	const transformedMessages = transformMessages(context.messages, model);
@@ -390,23 +490,27 @@ function convertMessages(model: Model<"openai-responses">, context: Context): Re
 			if (typeof msg.content === "string") {
 				messages.push({
 					role: "user",
-					content: [{ type: "input_text", text: sanitizeSurrogates(msg.content) }],
+					content: [
+						{ type: "input_text", text: sanitizeSurrogates(msg.content) },
+					],
 				});
 			} else {
-				const content: ResponseInputContent[] = msg.content.map((item): ResponseInputContent => {
-					if (item.type === "text") {
-						return {
-							type: "input_text",
-							text: sanitizeSurrogates(item.text),
-						} satisfies ResponseInputText;
-					} else {
-						return {
-							type: "input_image",
-							detail: "auto",
-							image_url: `data:${item.mimeType};base64,${item.data}`,
-						} satisfies ResponseInputImage;
-					}
-				});
+				const content: ResponseInputContent[] = msg.content.map(
+					(item): ResponseInputContent => {
+						if (item.type === "text") {
+							return {
+								type: "input_text",
+								text: sanitizeSurrogates(item.text),
+							} satisfies ResponseInputText;
+						} else {
+							return {
+								type: "input_image",
+								detail: "auto",
+								image_url: `data:${item.mimeType};base64,${item.data}`,
+							} satisfies ResponseInputImage;
+						}
+					},
+				);
 				const filteredContent = !model.input.includes("image")
 					? content.filter((c) => c.type !== "input_image")
 					: content;
@@ -431,9 +535,17 @@ function convertMessages(model: Model<"openai-responses">, context: Context): Re
 					output.push({
 						type: "message",
 						role: "assistant",
-						content: [{ type: "output_text", text: sanitizeSurrogates(textBlock.text), annotations: [] }],
+						content: [
+							{
+								type: "output_text",
+								text: sanitizeSurrogates(textBlock.text),
+								annotations: [],
+							},
+						],
 						status: "completed",
-						id: textBlock.textSignature || "msg_" + Math.random().toString(36).substring(2, 15),
+						id:
+							textBlock.textSignature ||
+							"msg_" + Math.random().toString(36).substring(2, 15),
 					} satisfies ResponseOutputMessage);
 					// Do not submit toolcall blocks if the completion had an error (i.e. abort)
 				} else if (block.type === "toolCall" && msg.stopReason !== "error") {
@@ -462,7 +574,9 @@ function convertMessages(model: Model<"openai-responses">, context: Context): Re
 			messages.push({
 				type: "function_call_output",
 				call_id: msg.toolCallId.split("|")[0],
-				output: sanitizeSurrogates(hasText ? textResult : "(see attached image)"),
+				output: sanitizeSurrogates(
+					hasText ? textResult : "(see attached image)",
+				),
 			});
 
 			// If there are images and model supports them, send a follow-up user message with images
@@ -507,7 +621,9 @@ function convertTools(tools: Tool[]): OpenAITool[] {
 	}));
 }
 
-function mapStopReason(status: OpenAI.Responses.ResponseStatus | undefined): StopReason {
+function mapStopReason(
+	status: OpenAI.Responses.ResponseStatus | undefined,
+): StopReason {
 	if (!status) return "stop";
 	switch (status) {
 		case "completed":

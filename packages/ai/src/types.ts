@@ -6,7 +6,11 @@ import type { AssistantMessageEventStream } from "./utils/event-stream.js";
 
 export type { AssistantMessageEventStream } from "./utils/event-stream.js";
 
-export type Api = "openai-completions" | "openai-responses" | "anthropic-messages" | "google-generative-ai";
+export type Api =
+	| "openai-completions"
+	| "openai-responses"
+	| "anthropic-messages"
+	| "google-generative-ai";
 
 export interface ApiOptionsMap {
 	"anthropic-messages": AnthropicOptions;
@@ -19,7 +23,10 @@ export interface ApiOptionsMap {
 type _CheckExhaustive = ApiOptionsMap extends Record<Api, StreamOptions>
 	? Record<Api, StreamOptions> extends ApiOptionsMap
 		? true
-		: ["ApiOptionsMap is missing some KnownApi values", Exclude<Api, keyof ApiOptionsMap>]
+		: [
+				"ApiOptionsMap is missing some KnownApi values",
+				Exclude<Api, keyof ApiOptionsMap>,
+			]
 	: ["ApiOptionsMap doesn't extend Record<KnownApi, StreamOptions>"];
 const _exhaustive: _CheckExhaustive = true;
 
@@ -30,6 +37,7 @@ export type KnownProvider =
 	| "anthropic"
 	| "google"
 	| "openai"
+	| "codex"
 	| "github-copilot"
 	| "xai"
 	| "groq"
@@ -52,6 +60,10 @@ export interface StreamOptions {
 // Unified options with reasoning passed to streamSimple() and completeSimple()
 export interface SimpleStreamOptions extends StreamOptions {
 	reasoning?: ReasoningEffort;
+	/** Custom fetch for OAuth/proxy scenarios */
+	fetch?: typeof globalThis.fetch;
+	/** Instructions for Codex API (top-level, replaces system message) */
+	instructions?: string;
 }
 
 // Generic StreamFunction with typed options
@@ -151,16 +163,54 @@ export interface Context {
 export type AssistantMessageEvent =
 	| { type: "start"; partial: AssistantMessage }
 	| { type: "text_start"; contentIndex: number; partial: AssistantMessage }
-	| { type: "text_delta"; contentIndex: number; delta: string; partial: AssistantMessage }
-	| { type: "text_end"; contentIndex: number; content: string; partial: AssistantMessage }
+	| {
+			type: "text_delta";
+			contentIndex: number;
+			delta: string;
+			partial: AssistantMessage;
+	  }
+	| {
+			type: "text_end";
+			contentIndex: number;
+			content: string;
+			partial: AssistantMessage;
+	  }
 	| { type: "thinking_start"; contentIndex: number; partial: AssistantMessage }
-	| { type: "thinking_delta"; contentIndex: number; delta: string; partial: AssistantMessage }
-	| { type: "thinking_end"; contentIndex: number; content: string; partial: AssistantMessage }
+	| {
+			type: "thinking_delta";
+			contentIndex: number;
+			delta: string;
+			partial: AssistantMessage;
+	  }
+	| {
+			type: "thinking_end";
+			contentIndex: number;
+			content: string;
+			partial: AssistantMessage;
+	  }
 	| { type: "toolcall_start"; contentIndex: number; partial: AssistantMessage }
-	| { type: "toolcall_delta"; contentIndex: number; delta: string; partial: AssistantMessage }
-	| { type: "toolcall_end"; contentIndex: number; toolCall: ToolCall; partial: AssistantMessage }
-	| { type: "done"; reason: Extract<StopReason, "stop" | "length" | "toolUse">; message: AssistantMessage }
-	| { type: "error"; reason: Extract<StopReason, "aborted" | "error">; error: AssistantMessage };
+	| {
+			type: "toolcall_delta";
+			contentIndex: number;
+			delta: string;
+			partial: AssistantMessage;
+	  }
+	| {
+			type: "toolcall_end";
+			contentIndex: number;
+			toolCall: ToolCall;
+			partial: AssistantMessage;
+	  }
+	| {
+			type: "done";
+			reason: Extract<StopReason, "stop" | "length" | "toolUse">;
+			message: AssistantMessage;
+	  }
+	| {
+			type: "error";
+			reason: Extract<StopReason, "aborted" | "error">;
+			error: AssistantMessage;
+	  };
 
 /**
  * Compatibility settings for openai-completions API.
