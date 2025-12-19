@@ -2,6 +2,7 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { Editor } from "../src/components/editor.js";
+import { buildPasteMarkerRegex } from "../src/components/editor/paste.js";
 import { visibleWidth } from "../src/utils.js";
 import { defaultEditorTheme } from "./test-themes.js";
 
@@ -531,6 +532,13 @@ describe("Editor component", () => {
 
 			assert.strictEqual(submitted, largePaste);
 			assert.strictEqual(editor.getText(), "");
+		});
+
+		it("buildPasteMarkerRegex matches known marker formats", () => {
+			assert.strictEqual("[paste #3]".replace(buildPasteMarkerRegex(3), "X"), "X");
+			assert.strictEqual("[paste #3 +11 lines]".replace(buildPasteMarkerRegex(3), "X"), "X");
+			assert.strictEqual("[paste #3 1234 chars]".replace(buildPasteMarkerRegex(3), "X"), "X");
+			assert.strictEqual("[paste #4]".replace(buildPasteMarkerRegex(3), "X"), "[paste #4]");
 		});
 	});
 });

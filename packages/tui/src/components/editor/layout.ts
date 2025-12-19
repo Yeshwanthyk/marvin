@@ -4,10 +4,16 @@ import type { EditorState, LayoutLine, VisualLine } from "./types.js";
 // Grapheme segmenter for proper Unicode iteration (handles emojis, etc.)
 const segmenter = new Intl.Segmenter();
 
-export function layoutText(state: EditorState, contentWidth: number): LayoutLine[] {
+export function layoutText(
+	state: EditorState,
+	contentWidth: number,
+): LayoutLine[] {
 	const layoutLines: LayoutLine[] = [];
 
-	if (state.lines.length === 0 || (state.lines.length === 1 && state.lines[0] === "")) {
+	if (
+		state.lines.length === 0 ||
+		(state.lines.length === 1 && state.lines[0] === "")
+	) {
 		layoutLines.push({
 			text: "",
 			hasCursor: true,
@@ -35,7 +41,8 @@ export function layoutText(state: EditorState, contentWidth: number): LayoutLine
 				});
 			}
 		} else {
-			const chunks: { text: string; startIndex: number; endIndex: number }[] = [];
+			const chunks: { text: string; startIndex: number; endIndex: number }[] =
+				[];
 			let currentChunk = "";
 			let currentWidth = 0;
 			let chunkStartIndex = 0;
@@ -45,7 +52,10 @@ export function layoutText(state: EditorState, contentWidth: number): LayoutLine
 				const grapheme = seg.segment;
 				const graphemeWidth = visibleWidth(grapheme);
 
-				if (currentWidth + graphemeWidth > contentWidth && currentChunk !== "") {
+				if (
+					currentWidth + graphemeWidth > contentWidth &&
+					currentChunk !== ""
+				) {
 					chunks.push({
 						text: currentChunk,
 						startIndex: chunkStartIndex,
@@ -78,7 +88,9 @@ export function layoutText(state: EditorState, contentWidth: number): LayoutLine
 				const hasCursorInChunk =
 					isCurrentLine &&
 					cursorPos >= chunk.startIndex &&
-					(isLastChunk ? cursorPos <= chunk.endIndex : cursorPos < chunk.endIndex);
+					(isLastChunk
+						? cursorPos <= chunk.endIndex
+						: cursorPos < chunk.endIndex);
 
 				if (hasCursorInChunk) {
 					layoutLines.push({
@@ -99,7 +111,10 @@ export function layoutText(state: EditorState, contentWidth: number): LayoutLine
 	return layoutLines;
 }
 
-export function buildVisualLineMap(lines: string[], width: number): VisualLine[] {
+export function buildVisualLineMap(
+	lines: string[],
+	width: number,
+): VisualLine[] {
 	const visualLines: VisualLine[] = [];
 
 	for (let i = 0; i < lines.length; i++) {
@@ -119,7 +134,10 @@ export function buildVisualLineMap(lines: string[], width: number): VisualLine[]
 				const grapheme = seg.segment;
 				const graphemeWidth = visibleWidth(grapheme);
 
-				if (currentWidth + graphemeWidth > width && currentIndex > chunkStartIndex) {
+				if (
+					currentWidth + graphemeWidth > width &&
+					currentIndex > chunkStartIndex
+				) {
 					visualLines.push({
 						logicalLine: i,
 						startCol: chunkStartIndex,
@@ -146,15 +164,25 @@ export function buildVisualLineMap(lines: string[], width: number): VisualLine[]
 	return visualLines;
 }
 
-export function findCurrentVisualLine(visualLines: VisualLine[], cursorLine: number, cursorCol: number): number {
+export function findCurrentVisualLine(
+	visualLines: VisualLine[],
+	cursorLine: number,
+	cursorCol: number,
+): number {
 	for (let i = 0; i < visualLines.length; i++) {
 		const vl = visualLines[i];
 		if (!vl) continue;
 
 		if (vl.logicalLine === cursorLine) {
 			const colInSegment = cursorCol - vl.startCol;
-			const isLastSegmentOfLine = i === visualLines.length - 1 || visualLines[i + 1]?.logicalLine !== vl.logicalLine;
-			if (colInSegment >= 0 && (colInSegment < vl.length || (isLastSegmentOfLine && colInSegment <= vl.length))) {
+			const isLastSegmentOfLine =
+				i === visualLines.length - 1 ||
+				visualLines[i + 1]?.logicalLine !== vl.logicalLine;
+			if (
+				colInSegment >= 0 &&
+				(colInSegment < vl.length ||
+					(isLastSegmentOfLine && colInSegment <= vl.length))
+			) {
 				return i;
 			}
 		}
