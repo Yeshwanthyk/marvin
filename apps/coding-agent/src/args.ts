@@ -4,6 +4,7 @@ export interface ParsedArgs {
   configDir?: string;
   configPath?: string;
   provider?: string;
+  /** Single model or comma-separated list for Ctrl+P cycling */
   model?: string;
   thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   continue: boolean;

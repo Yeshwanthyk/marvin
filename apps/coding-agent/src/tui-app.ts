@@ -1,4 +1,4 @@
-import { Agent, ProviderTransport, type AgentEvent } from '@marvin-agents/agent-core';
+import { Agent, ProviderTransport, RouterTransport, CodexTransport, type AgentEvent } from '@marvin-agents/agent-core';
 import { getApiKey, getModels, getProviders, completeSimple, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@marvin-agents/ai';
 import {
   CombinedAutocompleteProvider,
@@ -630,6 +630,8 @@ class FocusProxy implements Component {
     private readonly onCtrlC: () => void,
     private readonly onEscape: () => boolean,
     private readonly onCtrlO: () => void,
+    private readonly onCtrlP: () => void,
+    private readonly onShiftTab: () => void,
   ) {}
 
   render(width: number): string[] {
@@ -655,6 +657,18 @@ class FocusProxy implements Component {
       return;
     }
 
+    // Ctrl+P (cycle models)
+    if (code === 16) {
+      this.onCtrlP();
+      return;
+    }
+
+    // Shift+Tab (cycle thinking)
+    if (data === '\x1b[Z') {
+      this.onShiftTab();
+      return;
+    }
+
     if (data === '\x1b') {
       const handled = this.onEscape();
       if (handled) return;
@@ -673,11 +687,21 @@ export const runTui = async (args?: {
   continueSession?: boolean;
   resumeSession?: boolean;
 }) => {
+  // Extract first model for initial config (rest used for cycling)
+  // Parse provider/model format if present
+  const firstModelRaw = args?.model?.split(',')[0]?.trim();
+  let firstProvider = args?.provider;
+  let firstModel = firstModelRaw;
+  if (firstModelRaw?.includes('/')) {
+    const [p, m] = firstModelRaw.split('/');
+    firstProvider = p;
+    firstModel = m;
+  }
   const loaded = await loadAppConfig({
     configDir: args?.configDir,
     configPath: args?.configPath,
-    provider: args?.provider,
-    model: args?.model,
+    provider: firstProvider,
+    model: firstModel,
     thinking: args?.thinking,
   });
 
@@ -709,6 +733,39 @@ export const runTui = async (args?: {
 
   // Footer with stats
   const footer = new Footer(currentModelId, currentThinking, loaded.model.contextWindow);
+
+  // Model cycling setup - parse comma-separated models from args
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type ModelEntry = { provider: KnownProvider; model: import('@marvin-agents/ai').Model<any> };
+  const cycleModels: ModelEntry[] = [];
+  const modelIds = args?.model?.split(',').map(s => s.trim()).filter(Boolean) || [currentModelId];
+  for (const id of modelIds) {
+    const hasSlash = id.includes('/');
+    if (hasSlash) {
+      const [provStr, modelStr] = id.split('/');
+      const prov = resolveProvider(provStr!);
+      if (!prov) continue;
+      const model = resolveModel(prov, modelStr!);
+      if (model) cycleModels.push({ provider: prov, model });
+    } else {
+      // Search all providers for this model id
+      for (const prov of getProviders()) {
+        const model = resolveModel(prov, id);
+        if (model) {
+          cycleModels.push({ provider: prov, model });
+          break;
+        }
+      }
+    }
+  }
+  // Ensure at least current model in cycle
+  if (cycleModels.length === 0) {
+    cycleModels.push({ provider: currentProvider, model: loaded.model });
+  }
+  let cycleIndex = 0;
+
+  // Thinking levels for Shift+Tab cycling
+  const thinkingLevels: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 
   const editor = new Editor(editorTheme);
   const autocomplete = new CombinedAutocompleteProvider(
@@ -776,7 +833,30 @@ export const runTui = async (args?: {
     return getApiKey(provider);
   };
 
-  const transport = new ProviderTransport({ getApiKey: getApiKeyForProvider });
+  const providerTransport = new ProviderTransport({ getApiKey: getApiKeyForProvider });
+  
+  // Codex token management (~/.marvin/codex-tokens.json)
+  const codexTokensPath = join(process.env.HOME || '', '.marvin', 'codex-tokens.json');
+  const codexTransport = new CodexTransport({
+    getTokens: async () => {
+      try {
+        const data = readFileSync(codexTokensPath, 'utf-8');
+        return JSON.parse(data);
+      } catch { return null; }
+    },
+    setTokens: async (tokens) => {
+      const { writeFileSync, mkdirSync } = await import('fs');
+      mkdirSync(dirname(codexTokensPath), { recursive: true });
+      writeFileSync(codexTokensPath, JSON.stringify(tokens, null, 2));
+    },
+    clearTokens: async () => {
+      try { const { unlinkSync } = await import('fs'); unlinkSync(codexTokensPath); } catch {}
+    },
+  });
+  const transport = new RouterTransport({
+    provider: providerTransport,
+    codex: codexTransport,
+  });
   const agent = new Agent({
     transport,
     initialState: {
@@ -999,6 +1079,26 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
       // Ctrl+O: toggle tool output expanded
       toolOutputExpanded = !toolOutputExpanded;
       rerenderToolBlocks();
+      tui.requestRender();
+    },
+    () => {
+      // Ctrl+P: cycle models
+      if (cycleModels.length <= 1) return;
+      cycleIndex = (cycleIndex + 1) % cycleModels.length;
+      const entry = cycleModels[cycleIndex]!;
+      currentProvider = entry.provider;
+      currentModelId = entry.model!.id;
+      agent.setModel(entry.model!);
+      footer.setModel(entry.model!.id, entry.model!.contextWindow);
+      tui.requestRender();
+    },
+    () => {
+      // Shift+Tab: cycle thinking levels
+      const idx = thinkingLevels.indexOf(currentThinking);
+      const nextIdx = (idx + 1) % thinkingLevels.length;
+      currentThinking = thinkingLevels[nextIdx]!;
+      agent.setThinkingLevel(currentThinking);
+      footer.setThinking(currentThinking);
       tui.requestRender();
     },
   );

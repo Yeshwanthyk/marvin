@@ -1,4 +1,4 @@
-import { Agent, ProviderTransport } from '@marvin-agents/agent-core';
+import { Agent, ProviderTransport, RouterTransport, CodexTransport } from '@marvin-agents/agent-core';
 import { getApiKey, type Message, type TextContent } from '@marvin-agents/ai';
 import { codingTools } from '@marvin-agents/base-tools';
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
@@ -43,11 +43,19 @@ export const runHeadless = async (args: {
   model?: string;
   thinking?: ThinkingLevel;
 }) => {
+  // Parse provider/model format if present
+  let provider = args.provider;
+  let model = args.model;
+  if (args.model?.includes('/')) {
+    const [p, m] = args.model.split('/');
+    provider = p;
+    model = m;
+  }
   const loaded = await loadAppConfig({
     configDir: args.configDir,
     configPath: args.configPath,
-    provider: args.provider,
-    model: args.model,
+    provider,
+    model,
     thinking: args.thinking,
   });
 
@@ -58,7 +66,24 @@ export const runHeadless = async (args: {
     return getApiKey(provider);
   };
 
-  const transport = new ProviderTransport({ getApiKey: getApiKeyForProvider });
+  const providerTransport = new ProviderTransport({ getApiKey: getApiKeyForProvider });
+  
+  // Codex token management
+  const { readFileSync, writeFileSync, mkdirSync, unlinkSync } = await import('fs');
+  const { join, dirname } = await import('path');
+  const codexTokensPath = join(process.env.HOME || '', '.marvin', 'codex-tokens.json');
+  const codexTransport = new CodexTransport({
+    getTokens: async () => {
+      try { return JSON.parse(readFileSync(codexTokensPath, 'utf-8')); } catch { return null; }
+    },
+    setTokens: async (tokens) => {
+      mkdirSync(dirname(codexTokensPath), { recursive: true });
+      writeFileSync(codexTokensPath, JSON.stringify(tokens, null, 2));
+    },
+    clearTokens: async () => { try { unlinkSync(codexTokensPath); } catch {} },
+  });
+  const transport = new RouterTransport({ provider: providerTransport, codex: codexTransport });
+  
   const agent = new Agent({
     transport,
     initialState: {
