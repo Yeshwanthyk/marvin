@@ -290,11 +290,10 @@ export class TUI extends Container {
 
 		buffer += "\r"; // Move to column 0
 
-		// Render from first changed line to end, clearing each line before writing
-		// This avoids the \x1b[J clear-to-end which can cause flicker in xterm.js
+		// Render from first changed line to end
+		// Write content first, then clear remainder - avoids flash from pre-clearing
 		for (let i = firstChanged; i < newLines.length; i++) {
 			if (i > firstChanged) buffer += "\r\n";
-			buffer += "\x1b[2K"; // Clear current line
 			const line = newLines[i];
 			const isImageLine = this.containsImage(line);
 			if (!isImageLine && visibleWidth(line) > width) {
@@ -314,6 +313,7 @@ export class TUI extends Container {
 				throw new Error(`Rendered line ${i} exceeds terminal width. Debug log written to ${crashLogPath}`);
 			}
 			buffer += line;
+			buffer += "\x1b[K"; // Clear from cursor to EOL (handles shorter new lines)
 		}
 
 		// If we had more lines before, clear them and move cursor back
