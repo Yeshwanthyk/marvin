@@ -40,6 +40,8 @@ export interface MarkdownTheme {
 	italic: (text: string) => string;
 	strikethrough: (text: string) => string;
 	underline: (text: string) => string;
+	/** Optional hook to syntax-highlight fenced code blocks. */
+	highlightCode?: (code: string, lang?: string) => string[];
 }
 
 export class Markdown implements Component {
@@ -263,10 +265,17 @@ export class Markdown implements Component {
 
 			case "code": {
 				lines.push(this.theme.codeBlockBorder("```" + (token.lang || "")));
-				// Split code by newlines and style each line
-				const codeLines = token.text.split("\n");
-				for (const codeLine of codeLines) {
-					lines.push("  " + this.theme.codeBlock(codeLine));
+				if (this.theme.highlightCode) {
+					const highlightedLines = this.theme.highlightCode(token.text, token.lang);
+					for (const hlLine of highlightedLines) {
+						lines.push("  " + hlLine);
+					}
+				} else {
+					// Split code by newlines and style each line
+					const codeLines = token.text.split("\n");
+					for (const codeLine of codeLines) {
+						lines.push("  " + this.theme.codeBlock(codeLine));
+					}
 				}
 				lines.push(this.theme.codeBlockBorder("```"));
 				if (nextTokenType !== "space") {
@@ -471,9 +480,16 @@ export class Markdown implements Component {
 			} else if (token.type === "code") {
 				// Code block in list item
 				lines.push(this.theme.codeBlockBorder("```" + (token.lang || "")));
-				const codeLines = token.text.split("\n");
-				for (const codeLine of codeLines) {
-					lines.push("  " + this.theme.codeBlock(codeLine));
+				if (this.theme.highlightCode) {
+					const highlightedLines = this.theme.highlightCode(token.text, token.lang);
+					for (const hlLine of highlightedLines) {
+						lines.push("  " + hlLine);
+					}
+				} else {
+					const codeLines = token.text.split("\n");
+					for (const codeLine of codeLines) {
+						lines.push("  " + this.theme.codeBlock(codeLine));
+					}
 				}
 				lines.push(this.theme.codeBlockBorder("```"));
 			} else {

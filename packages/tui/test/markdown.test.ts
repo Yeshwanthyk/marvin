@@ -471,6 +471,56 @@ again, hello world`,
 		});
 	});
 
+	describe("Syntax highlighting", () => {
+		it("should use theme.highlightCode for fenced code blocks", () => {
+			let calls = 0;
+			let lastLang: string | undefined;
+			let lastCode: string | undefined;
+
+			const theme = {
+				...defaultMarkdownTheme,
+				highlightCode: (code: string, lang?: string) => {
+					calls++;
+					lastLang = lang;
+					lastCode = code;
+					return code.split("\n").map((line) => chalk.magenta(line));
+				},
+			};
+
+			const markdown = new Markdown("```js\nconst x = 1;\n```", 0, 0, theme);
+			const lines = markdown.render(80);
+			const joined = lines.join("\n");
+
+			assert.strictEqual(calls, 1);
+			assert.strictEqual(lastLang, "js");
+			assert.ok(lastCode?.includes("const x"));
+			assert.ok(joined.includes("\x1b[35m"), "Should include magenta ANSI from highlightCode");
+		});
+
+		it("should use theme.highlightCode for fenced code blocks inside lists", () => {
+			let calls = 0;
+
+			const theme = {
+				...defaultMarkdownTheme,
+				highlightCode: (code: string) => {
+					calls++;
+					return code.split("\n").map((line) => chalk.magenta(line));
+				},
+			};
+
+			const markdown = new Markdown(
+				`- item\n\n  \`\`\`js\n  const y = 2;\n  \`\`\``,
+				0,
+				0,
+				theme,
+			);
+
+			const lines = markdown.render(80);
+			assert.ok(lines.join("\n").includes("const y = 2;"));
+			assert.strictEqual(calls, 1);
+		});
+	});
+
 	describe("Spacing after dividers", () => {
 		it("should have only one blank line between divider and following paragraph", () => {
 			const markdown = new Markdown(
