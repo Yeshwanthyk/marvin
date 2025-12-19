@@ -58,6 +58,12 @@ export class Editor implements Component {
 
 	public onSubmit?: (text: string) => void;
 	public onChange?: (text: string) => void;
+	public onEscape?: () => void;
+	public onCtrlP?: () => void;
+	public onShiftTab?: () => void;
+	public onCtrlT?: () => void;
+	public onCtrlO?: () => void;
+	public onCtrlC?: () => void;
 	public disableSubmit: boolean = false;
 
 	constructor(theme: EditorTheme) {
@@ -258,8 +264,39 @@ export class Editor implements Component {
 
 		// Handle special key combinations first
 
-		// Ctrl+C - Exit (let parent handle this)
+		// Ctrl+C
 		if (data.charCodeAt(0) === 3) {
+			if (this.onCtrlC) this.onCtrlC();
+			return;
+		}
+
+		// Ctrl+P - cycle models
+		if (data.charCodeAt(0) === 16) {
+			if (this.onCtrlP) this.onCtrlP();
+			return;
+		}
+
+		// Ctrl+T - toggle thinking visibility
+		if (data.charCodeAt(0) === 20) {
+			if (this.onCtrlT) this.onCtrlT();
+			return;
+		}
+
+		// Ctrl+O - toggle output expansion
+		if (data.charCodeAt(0) === 15) {
+			if (this.onCtrlO) this.onCtrlO();
+			return;
+		}
+
+		// Shift+Tab - cycle thinking level
+		if (data === "\x1b[Z") {
+			if (this.onShiftTab) this.onShiftTab();
+			return;
+		}
+
+		// Escape (when not autocompleting)
+		if (data === "\x1b" && !this.isAutocompleting) {
+			if (this.onEscape) this.onEscape();
 			return;
 		}
 
