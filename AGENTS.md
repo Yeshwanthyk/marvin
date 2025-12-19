@@ -16,8 +16,8 @@ bun test apps/coding-agent/tests  # specific package
 # Run dev
 bun run marvin             # alias for coding-agent
 
-# Compile binary
-cd apps/coding-agent && bun build --compile --minify src/index.ts --outfile ~/commands/marvin
+# Compile binary (run after changes to coding-agent)
+cd apps/coding-agent && bun build --compile src/index.ts --outfile ~/commands/marvin
 ```
 
 ## Structure
