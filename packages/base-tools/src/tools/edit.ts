@@ -51,15 +51,16 @@ function generateStructuredDiff(oldContent: string, newContent: string, contextL
 				j++;
 			}
 
-			// Try to pair removed/added lines for word-level diff
-			const maxPairs = Math.min(removed.length, added.length);
+			// Only apply word-level diffing when this is a true 1-line modification.
+			// Index-based pairing across multi-line changes produces misleading highlights.
+			const shouldIntraLine = removed.length === 1 && added.length === 1;
+
 			for (let k = 0; k < removed.length; k++) {
 				const line = removed[k];
 				let segments: Array<[boolean, string]> | undefined;
 
-				if (k < maxPairs) {
-					// Compute word-level diff against paired added line
-					const wordDiff = Diff.diffWords(line, added[k]);
+				if (shouldIntraLine) {
+					const wordDiff = Diff.diffWords(line, added[0]!);
 					segments = [];
 					for (const wd of wordDiff) {
 						if (wd.removed) segments.push([true, wd.value]);
@@ -75,8 +76,8 @@ function generateStructuredDiff(oldContent: string, newContent: string, contextL
 				const line = added[k];
 				let segments: Array<[boolean, string]> | undefined;
 
-				if (k < maxPairs) {
-					const wordDiff = Diff.diffWords(removed[k], line);
+				if (shouldIntraLine) {
+					const wordDiff = Diff.diffWords(removed[0]!, line);
 					segments = [];
 					for (const wd of wordDiff) {
 						if (wd.added) segments.push([true, wd.value]);
