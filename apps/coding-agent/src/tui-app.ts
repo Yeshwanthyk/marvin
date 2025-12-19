@@ -15,6 +15,7 @@ import {
 } from '@marvin-agents/tui';
 import chalk from 'chalk';
 import { codingTools, type StructuredDiff, type DiffLine } from '@marvin-agents/base-tools';
+import { getLanguageFromPath, highlightCode as highlightCodeLines, replaceTabs } from './syntax-highlighting.js';
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
 import { loadAppConfig, updateAppConfig } from './config.js';
 import { SessionManager, type LoadedSession, type SessionInfo } from './session-manager.js';
@@ -50,6 +51,13 @@ const markdownTheme: MarkdownTheme = {
   italic: (text) => chalk.italic(text),
   strikethrough: (text) => chalk.strikethrough(text),
   underline: (text) => chalk.underline(text),
+  highlightCode: (code, lang) => {
+    try {
+      return highlightCodeLines(replaceTabs(code), lang);
+    } catch {
+      return replaceTabs(code).split('\n').map((line) => chalk.hex('#abb2bf')(line));
+    }
+  },
 };
 
 const editorTheme: EditorTheme = {
@@ -448,6 +456,12 @@ const toolColors: Record<string, string> = {
   edit: '#c678dd',   // purple
 };
 
+const bashBadge = (cmd: string): string => {
+  const first = cmd.trim().split(/\s+/)[0] || '';
+  return { git: 'GIT', ls: 'LIST', fd: 'LIST', cat: 'READ', head: 'READ', tail: 'READ',
+    rg: 'SEARCH', grep: 'SEARCH', npm: 'NPM', cargo: 'CARGO', bun: 'BUN' }[first] || 'RUN';
+};
+
 // Render tool header based on tool type
 const renderToolHeader = (toolName: string, args: any, isError: boolean = false): string => {
   const dim = chalk.hex(colors.dimmed);
@@ -457,11 +471,10 @@ const renderToolHeader = (toolName: string, args: any, isError: boolean = false)
   switch (toolName) {
     case 'bash': {
       const cmd = args?.command || '...';
-      // Truncate long commands, show first line if multiline
       const firstLine = cmd.split('\n')[0];
-      const truncated = firstLine.length > 100 ? firstLine.slice(0, 97) + dim('...') : firstLine;
-      const multiline = cmd.includes('\n') ? dim(' [multiline]') : '';
-      return dim('$ ') + text(truncated) + multiline;
+      const badge = bashBadge(cmd);
+      const truncated = firstLine.length > 80 ? firstLine.slice(0, 77) + '...' : firstLine;
+      return toolColor.bold(badge) + ' ' + dim(truncated);
     }
     case 'read': {
       const path = shortenPath(args?.path || args?.file_path || '');
@@ -531,15 +544,34 @@ const renderToolBody = (toolName: string, args: any, result: unknown, isPartial:
     case 'write': {
       const content = args?.content || '';
       if (!content) return isPartial ? dim('writing...') : '';
-      const lines = content.split('\n');
+
+      const rawPath = args?.path || args?.file_path || '';
+      const lang = getLanguageFromPath(rawPath);
+      const normalized = replaceTabs(content);
+
+      let lines: string[];
+      let highlighted = false;
+      if (lang) {
+        try {
+          lines = highlightCodeLines(normalized, lang);
+          highlighted = true;
+        } catch {
+          lines = normalized.split('\n');
+        }
+      } else {
+        lines = normalized.split('\n');
+      }
+
+      const renderLine = (line: string) => highlighted ? line : output(line);
+
       const maxLines = 15;
       const prefix = isPartial ? dim('Creating file:\n\n') : '';
       if (lines.length > maxLines) {
         const shown = lines.slice(0, maxLines);
         const remaining = lines.length - maxLines;
-        return prefix + shown.map((l: string) => output(l)).join('\n') + dim(`\n... (${remaining} more lines)`);
+        return prefix + shown.map(renderLine).join('\n') + dim(`\n... (${remaining} more lines)`);
       }
-      return prefix + lines.map((l: string) => output(l)).join('\n');
+      return prefix + lines.map(renderLine).join('\n');
     }
     case 'edit': {
       const diff = getStructuredDiff(result);
