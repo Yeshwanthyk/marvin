@@ -228,7 +228,22 @@ export async function authenticate(
 	return codexTokens;
 }
 
-// Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-	authenticate().catch(console.error);
+// Run if called directly (skip in compiled binaries)
+if (
+	import.meta.url === `file://${process.argv[1]}` &&
+	!process.argv[1]?.includes("marvin")
+) {
+	const existing = loadTokens();
+	if (existing && existing.expires > Date.now()) {
+		const accountId = extractAccountId(existing.access);
+		console.log(`✅ Already authenticated`);
+		console.log(`   Account: ${accountId || "unknown"}`);
+		console.log(`   Expires: ${new Date(existing.expires).toLocaleString()}`);
+		console.log(`\nRun with --force to re-authenticate`);
+	} else if (process.argv.includes("--force") || !existing) {
+		authenticate().catch(console.error);
+	} else {
+		console.log(`⚠️  Token expired at ${new Date(existing.expires).toLocaleString()}`);
+		authenticate().catch(console.error);
+	}
 }
