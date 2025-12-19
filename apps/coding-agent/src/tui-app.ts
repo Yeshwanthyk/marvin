@@ -95,6 +95,20 @@ function getCurrentBranch(): string | null {
   }
 }
 
+function getGitDiffStats(): { files: number; ins: number; del: number } | null {
+  try {
+    const result = Bun.spawnSync(['git', 'diff', '--shortstat'], { cwd: process.cwd() });
+    const output = result.stdout.toString().trim();
+    if (!output) return { files: 0, ins: 0, del: 0 };
+    const files = output.match(/(\d+) files? changed/)?.[1] ?? '0';
+    const ins = output.match(/(\d+) insertions?/)?.[1] ?? '0';
+    const del = output.match(/(\d+) deletions?/)?.[1] ?? '0';
+    return { files: +files, ins: +ins, del: +del };
+  } catch {
+    return null;
+  }
+}
+
 // Footer component
 class Footer implements Component {
   private totalInput = 0;
@@ -110,6 +124,13 @@ class Footer implements Component {
   private onBranchChange: (() => void) | null = null;
   private queueCount = 0;
   private retryStatus: string | null = null;
+  private cachedGitStats: { files: number; ins: number; del: number } | null = null;
+  private gitStatsTime = 0;
+  private activityState: 'idle' | 'thinking' | 'streaming' | 'tool' | 'waiting' = 'idle';
+  private activityStart = 0;
+  private spinnerFrame = 0;
+  private spinnerInterval: NodeJS.Timeout | null = null;
+  private onSpinnerTick: (() => void) | null = null;
 
   constructor(modelId: string, thinking: ThinkingLevel, contextWindow: number = 0) {
     this.modelId = modelId;
@@ -124,6 +145,26 @@ class Footer implements Component {
   setThinking(thinking: ThinkingLevel) { this.thinking = thinking; }
   setQueueCount(count: number) { this.queueCount = count; }
   setRetryStatus(status: string | null) { this.retryStatus = status; }
+  
+  setActivity(state: 'idle' | 'thinking' | 'streaming' | 'tool' | 'waiting', onTick?: () => void) {
+    const wasIdle = this.activityState === 'idle';
+    this.activityState = state;
+    this.onSpinnerTick = onTick || null;
+    if (state === 'idle') {
+      if (this.spinnerInterval) {
+        clearInterval(this.spinnerInterval);
+        this.spinnerInterval = null;
+      }
+    } else {
+      if (wasIdle) this.activityStart = Date.now();
+      if (!this.spinnerInterval) {
+        this.spinnerInterval = setInterval(() => {
+          this.spinnerFrame = (this.spinnerFrame + 1) % 8;
+          if (this.onSpinnerTick) this.onSpinnerTick();
+        }, 80);
+      }
+    }
+  }
 
   addUsage(msg: AssistantMessage) {
     this.totalInput += msg.usage.input;
@@ -171,47 +212,81 @@ class Footer implements Component {
     return this.cachedBranch;
   }
 
+  private getGitStats(): { files: number; ins: number; del: number } | null {
+    const now = Date.now();
+    if (now - this.gitStatsTime > 2000) {
+      this.cachedGitStats = getGitDiffStats();
+      this.gitStatsTime = now;
+    }
+    return this.cachedGitStats;
+  }
+
   render(width: number): string[] {
     const fmt = (n: number) => n < 1000 ? String(n) : n < 10000 ? (n/1000).toFixed(1)+'k' : Math.round(n/1000)+'k';
     const dim = chalk.hex(colors.dimmed);
     const accent = chalk.hex(colors.accent);
+    const green = chalk.hex('#a3be8c');
+    const red = chalk.hex('#bf616a');
+    const sep = dim(' · ');
 
-    // Retry status takes precedence (full width)
+    // Retry status takes precedence
     if (this.retryStatus) {
       return [accent(this.retryStatus)];
     }
 
-    // Get project name (last part of cwd)
+    const parts: string[] = [];
+
+    // Project (branch)
     const cwd = process.cwd();
     const project = cwd.split('/').pop() || cwd;
-    
-    // Branch
     const branch = this.getBranch();
-    
-    // Context percentage
-    let ctx = '';
+    parts.push(dim(project + (branch ? ` (${branch})` : '')));
+
+    // Model · thinking
+    parts.push(this.modelId + (this.thinking !== 'off' ? dim(' · ') + this.thinking : ''));
+
+    // Context %
     if (this.contextWindow > 0 && this.lastContextTokens > 0) {
       const pct = (this.lastContextTokens / this.contextWindow) * 100;
       const pctStr = pct < 10 ? pct.toFixed(1) : Math.round(pct).toString();
-      ctx = `${pctStr}%/${fmt(this.contextWindow)}`;
+      let ctx = `${pctStr}%`;
       if (pct > 90) ctx = accent(ctx);
       else if (pct > 70) ctx = chalk.hex('#ffcc00')(ctx);
+      parts.push(ctx);
+    }
+
+    // Git diff stats
+    const stats = this.getGitStats();
+    if (stats && (stats.ins > 0 || stats.del > 0)) {
+      parts.push(green(`+${stats.ins}`) + dim('/') + red(`-${stats.del}`));
     }
 
     // Queue indicator
-    const queue = this.queueCount > 0 ? chalk.hex('#88c0d0')(`[${this.queueCount} queued] `) : '';
+    if (this.queueCount > 0) {
+      parts.push(chalk.hex('#88c0d0')(`${this.queueCount}q`));
+    }
 
-    // Model + thinking
-    const model = this.modelId + (this.thinking !== 'off' ? ` · ${this.thinking}` : '');
+    // Activity spinner
+    if (this.activityState !== 'idle') {
+      const spinners = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'];
+      const spinner = spinners[this.spinnerFrame];
+      const labels: Record<string, string> = {
+        thinking: 'thinking',
+        streaming: 'streaming', 
+        tool: 'running',
+        waiting: 'waiting',
+      };
+      const stateColors: Record<string, string> = {
+        thinking: '#b48ead',
+        streaming: '#88c0d0',
+        tool: '#ebcb8b',
+        waiting: '#a3be8c',
+      };
+      const color = chalk.hex(stateColors[this.activityState] || colors.accent);
+      parts.push(color(`${spinner} ${labels[this.activityState]}`));
+    }
 
-    // Single line: project branch | queue | context | model
-    const left = project + (branch ? ` ${dim('(')}${branch}${dim(')')}` : '');
-    const right = queue + (ctx ? ctx + '  ' : '') + model;
-    const leftWidth = visibleWidth(left);
-    const rightWidth = visibleWidth(right);
-    const padding = Math.max(2, width - leftWidth - rightWidth);
-    
-    return [dim(left + ' '.repeat(padding)) + right];
+    return [parts.join(sep)];
   }
 }
 
@@ -990,6 +1065,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
           // Add a new loader for the queued message
           loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Thinking...');
           addMessage(loader);
+          footer.setActivity('thinking', () => tui.requestRender());
           tui.requestRender();
         }
       }
@@ -1010,6 +1086,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
 
     if (event.type === 'message_update') {
       if (event.message.role === 'assistant' && currentAssistant) {
+        footer.setActivity('streaming', () => tui.requestRender());
         const text = renderMessage(event.message as Message);
         currentAssistant.setText(text);
         tui.requestRender();
@@ -1031,6 +1108,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
 
     if (event.type === 'tool_execution_start') {
       removeLoader();
+      footer.setActivity('tool', () => tui.requestRender());
       const toolData = { name: event.toolName, args: event.args };
       const content = renderTool(event.toolName, event.args, null, false, true);
       const bgFn = (text: string) => chalk.bgHex(colors.toolPending)(text);
@@ -1073,6 +1151,7 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
 
     if (event.type === 'agent_end') {
       removeLoader();
+      footer.setActivity('idle');
       
       // Check for retryable error
       const lastMsg = agent.state.messages[agent.state.messages.length - 1];
@@ -1105,9 +1184,11 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
           agent.replaceMessages(agent.state.messages.slice(0, -1));
           loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Retrying...');
           addMessage(loader);
+          footer.setActivity('thinking', () => tui.requestRender());
           tui.requestRender();
           void agent.continue().catch((err) => {
             removeLoader();
+            footer.setActivity('idle');
             addMessage(new Text(chalk.hex(colors.accent)(String(err instanceof Error ? err.message : err))));
             isResponding = false;
             tui.requestRender();
@@ -1276,10 +1357,12 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
       // Show compacting status
       loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Compacting context...');
       addMessage(loader);
+      footer.setActivity('thinking', () => tui.requestRender());
       tui.requestRender();
 
       void handleCompact(customInstructions).catch((err) => {
         removeLoader();
+        footer.setActivity('idle');
         addMessage(new Text(chalk.hex(colors.accent)(`Compact failed: ${err instanceof Error ? err.message : String(err)}`)));
         tui.requestRender();
       });
@@ -1321,10 +1404,12 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
     addMessage(loader);
 
     isResponding = true;
+    footer.setActivity('thinking', () => tui.requestRender());
     tui.requestRender();
 
     void agent.prompt(line).catch((err) => {
       removeLoader();
+      footer.setActivity('idle');
       addMessage(new Text(chalk.hex(colors.accent)(String(err instanceof Error ? err.message : err))));
       isResponding = false;
       editor.disableSubmit = false;
