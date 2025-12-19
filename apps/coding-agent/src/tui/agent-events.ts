@@ -10,13 +10,14 @@ import {
   textFromBlocks,
   renderMessage,
   getToolText,
+  getEditDiffText,
   renderTool,
   renderToolWithExpand,
 } from './index.js';
 
 export interface ToolBlockEntry {
   component: Text;
-  data: { name: string; args: unknown; fullOutput?: string };
+  data: { name: string; args: unknown; fullOutput?: string; editDiff?: string };
 }
 
 export interface AgentEventHandlerState {
@@ -135,8 +136,13 @@ export function createAgentEventHandler(
       if (!entry) return;
       const fullOutput = getToolText(event.result);
       entry.data.fullOutput = fullOutput;
+      // Store edit diff for expand toggle
+      if (entry.data.name === 'edit') {
+        const editDiff = getEditDiffText(event.result);
+        if (editDiff) entry.data.editDiff = editDiff;
+      }
       const content = getToolOutputExpanded()
-        ? renderToolWithExpand(entry.data.name, entry.data.args, fullOutput, true)
+        ? renderToolWithExpand(entry.data.name, entry.data.args, fullOutput, true, entry.data.editDiff)
         : renderTool(entry.data.name, entry.data.args, event.result, event.isError, false);
       entry.component.setText(content);
       tui.requestRender();

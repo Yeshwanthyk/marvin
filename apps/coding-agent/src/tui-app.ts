@@ -212,7 +212,7 @@ export const runTui = async (args?: {
   const rerenderToolBlocks = () => {
     for (const [, entry] of toolBlocks) {
       if (entry.data.fullOutput !== undefined) {
-        const content = renderToolWithExpand(entry.data.name, entry.data.args, entry.data.fullOutput, toolOutputExpanded);
+        const content = renderToolWithExpand(entry.data.name, entry.data.args, entry.data.fullOutput, toolOutputExpanded, entry.data.editDiff);
         entry.component.setText(content);
       }
     }
