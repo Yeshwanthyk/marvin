@@ -9,8 +9,12 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult
 
 const readSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
-	offset: Type.Optional(Type.Number({ description: "Line number to start reading from (1-indexed)" })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
+	offset: Type.Optional(
+		Type.Number({ description: "Line number to start from (1-indexed). Only use to continue after truncation." }),
+	),
+	limit: Type.Optional(
+		Type.Number({ description: "Max lines to read. Only use if you need a specific portion of the file." }),
+	),
 });
 
 interface ReadToolDetails {
@@ -20,7 +24,7 @@ interface ReadToolDetails {
 export const readTool: AgentTool<typeof readSchema> = {
 	name: "read",
 	label: "read",
-	description: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp). Images are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files.`,
+	description: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp). Images are sent as attachments. Returns full file content by default — only files exceeding ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB are truncated (with instructions to continue).`,
 	parameters: readSchema,
 	execute: async (
 		_toolCallId: string,
