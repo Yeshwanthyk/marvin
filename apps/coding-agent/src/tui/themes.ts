@@ -9,11 +9,6 @@ export const colors = {
   accent: '#e06c75',    // soft red
   code: '#98c379',      // soft green
   border: '#3e3e3e',    // subtle border
-  // Tool backgrounds
-  toolPending: '#2c2c2c',
-  toolSuccess: '#1e2a1e',
-  toolError: '#2a1e1e',
-  toolBorder: '#4a4a4a',
 };
 
 export const markdownTheme: MarkdownTheme = {

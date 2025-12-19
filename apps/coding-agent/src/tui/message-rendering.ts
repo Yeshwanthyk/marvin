@@ -145,9 +145,9 @@ export const renderToolBody = (toolName: string, args: any, result: unknown, isP
       const lines = text.trim().split('\n');
       const total = lines.length;
       
-      // Compact: show first 3 + last 5 lines max
-      const headCount = 3;
-      const tailCount = 5;
+      // Compact: show first 2 + last 3 lines max
+      const headCount = 2;
+      const tailCount = 3;
       const maxShow = headCount + tailCount;
       
       if (total <= maxShow) {
@@ -160,7 +160,7 @@ export const renderToolBody = (toolName: string, args: any, result: unknown, isP
       const skipped = total - maxShow;
       return [
         ...head.map(l => output(l)),
-        dim(`  ... ${skipped} lines ...`),
+        dim(`  ... ${skipped} lines, Ctrl+O to expand ...`),
         ...tail.map(l => output(l)),
       ].join('\n');
     }
@@ -193,12 +193,12 @@ export const renderToolBody = (toolName: string, args: any, result: unknown, isP
 
       const renderLine = (line: string) => highlighted ? line : output(line);
 
-      const maxLines = 15;
+      const maxLines = 8;
       const prefix = isPartial ? dim('Creating file:\n\n') : '';
       if (lines.length > maxLines) {
         const shown = lines.slice(0, maxLines);
         const remaining = lines.length - maxLines;
-        return prefix + shown.map(renderLine).join('\n') + dim(`\n... (${remaining} more lines)`);
+        return prefix + shown.map(renderLine).join('\n') + dim(`\n... ${remaining} more lines, Ctrl+O to expand`);
       }
       return prefix + lines.map(renderLine).join('\n');
     }

@@ -116,8 +116,7 @@ export function createAgentEventHandler(
       footer.setActivity('tool', () => tui.requestRender());
       const toolData = { name: event.toolName, args: event.args };
       const content = renderTool(event.toolName, event.args, null, false, true);
-      const bgFn = (text: string) => chalk.bgHex(colors.toolPending)(text);
-      const txt = new Text(content, 1, 1, bgFn);
+      const txt = new Text(content, 1, 1);
       toolBlocks.set(event.toolCallId, { component: txt, data: toolData });
       addMessage(txt);
       tui.requestRender();
@@ -139,8 +138,6 @@ export function createAgentEventHandler(
       const content = getToolOutputExpanded()
         ? renderToolWithExpand(entry.data.name, entry.data.args, fullOutput, true)
         : renderTool(entry.data.name, entry.data.args, event.result, event.isError, false);
-      const bgColor = event.isError ? colors.toolError : colors.toolSuccess;
-      entry.component.setCustomBgFn((text: string) => chalk.bgHex(bgColor)(text));
       entry.component.setText(content);
       tui.requestRender();
     }
