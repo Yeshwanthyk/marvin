@@ -79,6 +79,7 @@ export class TUI extends Container {
 	private previousWidth = 0;
 	private focusedComponent: Component | null = null;
 	private renderRequested = false;
+	private rendering = false; // Guard against re-entrant render (Bun spawnSync triggers nextTick synchronously)
 	private cursorRow = 0; // Track where cursor is (0-indexed, relative to our first line)
 	private inputBuffer = ""; // Buffer for parsing terminal responses
 	private cellSizeQueryPending = false;
@@ -195,6 +196,18 @@ export class TUI extends Container {
 	}
 
 	private doRender(): void {
+		// Prevent re-entrant render (Bun's spawnSync executes nextTick callbacks synchronously)
+		if (this.rendering) return;
+		this.rendering = true;
+
+		try {
+			this.doRenderInternal();
+		} finally {
+			this.rendering = false;
+		}
+	}
+
+	private doRenderInternal(): void {
 		const width = this.terminal.columns;
 		const height = this.terminal.rows;
 

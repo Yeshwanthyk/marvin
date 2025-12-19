@@ -322,7 +322,11 @@
 
     "@marvin-agents/base-tools/@sinclair/typebox": ["@sinclair/typebox@0.34.41", "", {}, "sha512-6gS8pZzSXdyRHTIqoqSVknxolr1kzfy4/CeDnrzsVz8TTIWUbOBr6gnzOmTYJ3eXQNh4IYHIGi5aIL7sOZ2G/g=="],
 
+    "@marvin-agents/coding-agent/@marvin-agents/agent-core": ["@marvin-agents/agent-core@file:packages/agent", { "dependencies": { "@marvin-agents/ai": "file:../ai", "@marvin-agents/tui": "file:../tui" } }],
+
     "@marvin-agents/coding-agent/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "^0.34.41", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
+
+    "@marvin-agents/coding-agent/@marvin-agents/base-tools": ["@marvin-agents/base-tools@file:packages/base-tools", { "dependencies": { "@marvin-agents/ai": "file:../ai", "@sinclair/typebox": "^0.34.41", "diff": "^8.0.2", "file-type": "^21.1.1" } }],
 
     "@marvin-agents/coding-agent/@marvin-agents/tui": ["@marvin-agents/tui@file:packages/tui", { "dependencies": { "@types/mime-types": "^2.1.4", "chalk": "^5.5.0", "fuzzysort": "^3.1.0", "marked": "^15.0.12", "mime-types": "^3.0.1", "string-width": "^8.1.0" } }],
 
@@ -354,7 +358,15 @@
 
     "@marvin-agents/agent-core/@marvin-agents/ai/@sinclair/typebox": ["@sinclair/typebox@0.34.41", "", {}, "sha512-6gS8pZzSXdyRHTIqoqSVknxolr1kzfy4/CeDnrzsVz8TTIWUbOBr6gnzOmTYJ3eXQNh4IYHIGi5aIL7sOZ2G/g=="],
 
+    "@marvin-agents/coding-agent/@marvin-agents/agent-core/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
+
+    "@marvin-agents/coding-agent/@marvin-agents/agent-core/@marvin-agents/tui": ["@marvin-agents/tui@file:packages/tui", {}],
+
     "@marvin-agents/coding-agent/@marvin-agents/ai/@sinclair/typebox": ["@sinclair/typebox@0.34.41", "", {}, "sha512-6gS8pZzSXdyRHTIqoqSVknxolr1kzfy4/CeDnrzsVz8TTIWUbOBr6gnzOmTYJ3eXQNh4IYHIGi5aIL7sOZ2G/g=="],
+
+    "@marvin-agents/coding-agent/@marvin-agents/base-tools/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
+
+    "@marvin-agents/coding-agent/@marvin-agents/base-tools/@sinclair/typebox": ["@sinclair/typebox@0.34.41", "", {}, "sha512-6gS8pZzSXdyRHTIqoqSVknxolr1kzfy4/CeDnrzsVz8TTIWUbOBr6gnzOmTYJ3eXQNh4IYHIGi5aIL7sOZ2G/g=="],
 
     "cliui/strip-ansi/ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
 

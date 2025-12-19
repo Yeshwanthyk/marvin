@@ -501,4 +501,36 @@ describe("Editor component", () => {
 			}
 		});
 	});
+
+	describe("Bracketed paste + large paste markers", () => {
+		it("buffers bracketed paste across input chunks and preserves trailing input", () => {
+			const editor = new Editor(defaultEditorTheme);
+
+			editor.handleInput("\x1b[200~hello");
+			editor.handleInput(" world\x1b[201");
+			// Still in paste mode; this chunk completes the end marker and adds trailing input.
+			editor.handleInput("~!");
+
+			assert.strictEqual(editor.getText(), "hello world!");
+		});
+
+		it("substitutes large paste markers with stored content on submit", () => {
+			const editor = new Editor(defaultEditorTheme);
+
+			let submitted: string | undefined;
+			editor.onSubmit = (text) => {
+				submitted = text;
+			};
+
+			const largePaste = Array.from({ length: 11 }, (_, i) => `line${i}`).join("\n");
+			editor.handleInput(`\x1b[200~${largePaste}\x1b[201~`);
+
+			assert.strictEqual(editor.getText(), "[paste #1 +11 lines]");
+
+			editor.handleInput("\r");
+
+			assert.strictEqual(submitted, largePaste);
+			assert.strictEqual(editor.getText(), "");
+		});
+	});
 });
