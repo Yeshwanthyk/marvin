@@ -124,19 +124,19 @@ export const loadAppConfig = async (options?: {
   const providerRaw =
     options?.provider ??
     (typeof nestedConfig.provider === 'string' ? nestedConfig.provider : undefined) ??
-    (typeof rawObj.provider === 'string' ? rawObj.provider : undefined) ??
-    process.env.MU_PROVIDER;
+    (typeof rawObj.provider === 'string' ? rawObj.provider : undefined);
 
   const provider = resolveProvider(providerRaw);
   if (!provider) {
-    throw new Error(`Invalid or missing provider. Set MU_PROVIDER or pass --provider. Known: ${getProviders().join(', ')}`);
+    throw new Error(
+      `Invalid or missing provider. Set "provider" in ${configPath} or pass --provider. Known: ${getProviders().join(', ')}`
+    );
   }
 
   const modelIdRaw =
     options?.model ??
     (typeof nestedConfig.model === 'string' ? nestedConfig.model : undefined) ??
-    (typeof rawObj.model === 'string' ? rawObj.model : undefined) ??
-    process.env.MU_MODEL;
+    (typeof rawObj.model === 'string' ? rawObj.model : undefined);
 
   const model = resolveModel(provider, modelIdRaw);
   if (!model) {
@@ -145,11 +145,11 @@ export const loadAppConfig = async (options?: {
       .map((m) => m.id)
       .join(', ');
     throw new Error(
-      `Invalid or missing model for provider ${provider}. Set MU_MODEL or pass --model. Examples: ${available}`
+      `Invalid or missing model for provider ${provider}. Set "model" in ${configPath} or pass --model. Examples: ${available}`
     );
   }
 
-  const thinkingRaw = options?.thinking ?? rawObj.thinking ?? process.env.MU_THINKING;
+  const thinkingRaw = options?.thinking ?? rawObj.thinking;
   const thinking: ThinkingLevel = isThinkingLevel(thinkingRaw) ? thinkingRaw : 'off';
 
   // Load AGENTS.md from global (~/.config/marvin/agents.md, ~/.codex/agents.md, ~/.claude/CLAUDE.md)
@@ -160,9 +160,7 @@ export const loadAppConfig = async (options?: {
   const basePrompt =
     typeof rawObj.systemPrompt === 'string' && rawObj.systemPrompt.trim().length > 0
       ? rawObj.systemPrompt
-      : typeof process.env.MU_SYSTEM_PROMPT === 'string' && process.env.MU_SYSTEM_PROMPT.trim().length > 0
-        ? process.env.MU_SYSTEM_PROMPT
-        : 'You are a helpful coding agent. Use tools (read, bash, edit, write) when needed.';
+      : 'You are a helpful coding agent. Use tools (read, bash, edit, write) when needed.';
 
   const systemPrompt = agentsConfig.combined
     ? `${basePrompt}\n\n${agentsConfig.combined}`

@@ -13,6 +13,6 @@ Track:
 - [x] Fix naming/typos
   - [x] rename `transorm-messages.ts` -> `transform-messages.ts` + update imports
   - [x] fix user-facing typos ("unknown error occurred", etc)
-- [ ] Docs/env var standardize on `GEMINI_API_KEY`
-- [ ] Remove `MU_*` env var usage/docs
+- [x] Docs/env var standardize on `GEMINI_API_KEY`
+- [x] Remove `MU_*` env var usage/docs
 - [ ] Remove unused `vitest.config.ts` (or wire up)

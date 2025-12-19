@@ -28,8 +28,7 @@ const printHelp = () => {
       '  Esc                          Abort current request',
       '',
       'Environment:',
-      '  MU_PROVIDER / MU_MODEL / MU_THINKING / MU_SYSTEM_PROMPT',
-      '  OPENAI_API_KEY / ANTHROPIC_API_KEY / ... (see below)',
+      '  OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY / ...',
       '',
     ].join('\n')
   );

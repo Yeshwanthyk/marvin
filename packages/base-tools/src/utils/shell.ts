@@ -30,7 +30,7 @@ const findOnPath = (exe: string): string | null => {
 export function getShellConfig(): { shell: string; args: string[] } {
   if (cachedShellConfig) return cachedShellConfig;
 
-  const envShell = process.env.MU_SHELL || process.env.SHELL;
+  const envShell = process.env.SHELL;
 
   // Prefer bash when available (matches tool contract).
   const bashPath = process.platform === 'win32' ? findOnPath('bash.exe') : findOnPath('bash');
