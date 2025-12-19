@@ -14,7 +14,7 @@ import {
   visibleWidth,
 } from '@marvin-agents/tui';
 import chalk from 'chalk';
-import { codingTools, type StructuredDiff, type DiffLine } from '@marvin-agents/base-tools';
+import { codingTools } from '@marvin-agents/base-tools';
 import { getLanguageFromPath, highlightCode as highlightCodeLines, replaceTabs } from './syntax-highlighting.js';
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
 import { loadAppConfig, updateAppConfig } from './config.js';
@@ -266,186 +266,27 @@ const getToolText = (result: unknown): string => {
   return textFromBlocks(content as Array<{ type: string }>);
 };
 
-// Get structured diff from tool result details
-const getStructuredDiff = (result: unknown): StructuredDiff | null => {
+// Get diff text from tool result details (edit tool)
+const getEditDiffText = (result: unknown): string | null => {
   if (!result || typeof result !== 'object') return null;
-  const maybe = result as { details?: { structuredDiff?: StructuredDiff } };
-  return maybe.details?.structuredDiff || null;
+  const maybe = result as { details?: { diff?: string } };
+  return maybe.details?.diff || null;
 };
 
-// Render side-by-side diff with word-level highlighting
-const renderSideBySideDiff = (diff: StructuredDiff, termWidth: number): string => {
-  const dim = chalk.hex(colors.dimmed);
-  const removed = chalk.hex('#bf616a');           // muted red
-  const added = chalk.hex('#a3be8c');             // muted green
-  const removedHl = chalk.hex('#bf616a').bold.underline;  // bold+underline for changed
-  const addedHl = chalk.hex('#a3be8c').bold.underline;
-  const gutter = chalk.hex(colors.border);
-  
-  // Calculate column widths: [lineNum] content │ [lineNum] content
-  const maxLineNum = Math.max(...diff.lines.filter(l => l.lineNum).map(l => l.lineNum!), 1);
-  const lineNumWidth = Math.max(String(maxLineNum).length, 2);
-  const gutterWidth = 3; // " │ "
-  const availableWidth = termWidth - gutterWidth - (lineNumWidth + 1) * 2;
-  const colWidth = Math.floor(availableWidth / 2);
-  
-  if (colWidth < 20) {
-    // Fall back to unified for narrow terminals
-    return renderUnifiedDiff(diff);
-  }
-  
-  // Pair up removed/added lines for side-by-side display
-  const rows: Array<{ left?: DiffLine; right?: DiffLine; type: 'change' | 'context' | 'ellipsis' }> = [];
-  let i = 0;
-  
-  while (i < diff.lines.length) {
-    const line = diff.lines[i];
-    
-    if (line.type === 'ellipsis') {
-      rows.push({ type: 'ellipsis' });
-      i++;
-    } else if (line.type === 'context') {
-      rows.push({ left: line, right: line, type: 'context' });
-      i++;
-    } else if (line.type === 'removed') {
-      // Collect consecutive removed lines
-      const removedLines: DiffLine[] = [];
-      while (i < diff.lines.length && diff.lines[i].type === 'removed') {
-        removedLines.push(diff.lines[i]);
-        i++;
-      }
-      // Collect consecutive added lines
-      const addedLines: DiffLine[] = [];
-      while (i < diff.lines.length && diff.lines[i].type === 'added') {
-        addedLines.push(diff.lines[i]);
-        i++;
-      }
-      // Pair them up
-      const maxLen = Math.max(removedLines.length, addedLines.length);
-      for (let j = 0; j < maxLen; j++) {
-        rows.push({
-          left: removedLines[j],
-          right: addedLines[j],
-          type: 'change'
-        });
-      }
-    } else if (line.type === 'added') {
-      // Added without preceding removed
-      rows.push({ right: line, type: 'change' });
-      i++;
-    } else {
-      i++;
-    }
-  }
-  
-  // Render each row
-  const output: string[] = [];
-  
-  for (const row of rows) {
-    if (row.type === 'ellipsis') {
-      const pad = ' '.repeat(lineNumWidth);
-      output.push(dim(`${pad} ...${' '.repeat(colWidth - 3)}`) + gutter(' │ ') + dim(`${pad} ...`));
-      continue;
-    }
-    
-    const renderSide = (line: DiffLine | undefined, isLeft: boolean): string => {
-      if (!line) {
-        return ' '.repeat(lineNumWidth + 1 + colWidth);
-      }
-      
-      const lineNum = line.lineNum ? String(line.lineNum).padStart(lineNumWidth, ' ') : ' '.repeat(lineNumWidth);
-      const colorFn = line.type === 'removed' ? removed : line.type === 'added' ? added : dim;
-      const hlFn = line.type === 'removed' ? removedHl : addedHl;
-      
-      let content: string;
-      if (line.segments && line.type !== 'context') {
-        content = line.segments.map(([isHl, text]) => isHl ? hlFn(text) : colorFn(text)).join('');
-      } else {
-        content = colorFn(line.content);
-      }
-      
-      // Truncate/pad content to fit column
-      const contentVisible = visibleWidth(content);
-      if (contentVisible > colWidth) {
-        content = truncateAnsi(content, colWidth - 1) + dim('…');
-      } else if (contentVisible < colWidth) {
-        content = content + ' '.repeat(colWidth - contentVisible);
-      }
-      
-      return (line.type === 'context' ? dim(lineNum) : colorFn(lineNum)) + ' ' + content;
-    };
-    
-    const left = renderSide(row.left, true);
-    const right = renderSide(row.right, false);
-    output.push(left + gutter(' │ ') + right);
-  }
-  
-  return output.join('\n');
-};
-
-// Truncate string with ANSI codes to visible width
-const truncateAnsi = (str: string, maxWidth: number): string => {
-  let visible = 0;
-  let result = '';
-  let inEscape = false;
-  
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    
-    if (char === '\x1b') {
-      inEscape = true;
-      result += char;
-    } else if (inEscape) {
-      result += char;
-      if (char === 'm') inEscape = false;
-    } else {
-      const charWidth = char.charCodeAt(0) > 0xFFFF ? 2 : 1;
-      if (visible + charWidth > maxWidth) break;
-      visible += charWidth;
-      result += char;
-    }
-  }
-  
-  return result + '\x1b[0m'; // Reset at end
-};
-
-// Unified diff fallback for narrow terminals
-const renderUnifiedDiff = (diff: StructuredDiff): string => {
+const renderEditDiff = (diffText: string): string => {
   const dim = chalk.hex(colors.dimmed);
   const removed = chalk.hex('#bf616a');
   const added = chalk.hex('#a3be8c');
-  const removedHl = chalk.hex('#bf616a').bold.underline;
-  const addedHl = chalk.hex('#a3be8c').bold.underline;
-  
-  const maxLineNum = Math.max(...diff.lines.filter(l => l.lineNum).map(l => l.lineNum!), 1);
-  const lineNumWidth = String(maxLineNum).length;
-  
-  return diff.lines.map(line => {
-    const pad = (n?: number) => n ? String(n).padStart(lineNumWidth, ' ') : ' '.repeat(lineNumWidth);
-    
-    switch (line.type) {
-      case 'ellipsis':
-        return dim(`  ${pad()} ...`);
-      case 'context':
-        return dim(`  ${pad(line.lineNum)} ${line.content}`);
-      case 'removed': {
-        const prefix = removed(`- ${pad(line.lineNum)} `);
-        if (line.segments) {
-          const content = line.segments.map(([isHl, text]) => isHl ? removedHl(text) : removed(text)).join('');
-          return prefix + content;
-        }
-        return prefix + removed(line.content);
-      }
-      case 'added': {
-        const prefix = added(`+ ${pad(line.lineNum)} `);
-        if (line.segments) {
-          const content = line.segments.map(([isHl, text]) => isHl ? addedHl(text) : added(text)).join('');
-          return prefix + content;
-        }
-        return prefix + added(line.content);
-      }
-    }
-  }).join('\n');
+
+  return diffText
+    .split('\n')
+    .map((line) => {
+      const normalized = replaceTabs(line);
+      if (normalized.startsWith('+')) return added(normalized);
+      if (normalized.startsWith('-')) return removed(normalized);
+      return dim(normalized);
+    })
+    .join('\n');
 };
 
 // Tool-specific colors
@@ -574,12 +415,8 @@ const renderToolBody = (toolName: string, args: any, result: unknown, isPartial:
       return prefix + lines.map(renderLine).join('\n');
     }
     case 'edit': {
-      const diff = getStructuredDiff(result);
-      if (diff) {
-        // Use terminal width for side-by-side, fallback to 120
-        const termWidth = process.stdout.columns || 120;
-        return renderSideBySideDiff(diff, termWidth - 4); // -4 for padding
-      }
+      const diffText = getEditDiffText(result);
+      if (diffText) return renderEditDiff(diffText);
       // Error case - show the error message
       if (text) return chalk.hex(colors.accent)(text);
       return isPartial ? dim('editing...') : '';

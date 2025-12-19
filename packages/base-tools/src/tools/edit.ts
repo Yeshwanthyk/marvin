@@ -6,97 +6,46 @@ import { access, readFile, writeFile } from "fs/promises";
 import { resolve as resolvePath } from "path";
 import { expandPath } from "./path-utils.js";
 
-export interface DiffLine {
-	type: "context" | "added" | "removed" | "ellipsis";
-	lineNum?: number;
-	content: string;
-	// For added/removed lines, word-level changes (array of [isHighlight, text] tuples)
-	segments?: Array<[boolean, string]>;
-}
-
-export interface StructuredDiff {
-	lines: DiffLine[];
-	stats: { added: number; removed: number };
-}
-
 /**
- * Generate a structured diff with word-level highlighting
+ * Generate a unified diff string with line numbers and context.
  */
-function generateStructuredDiff(oldContent: string, newContent: string, contextLines = 3): StructuredDiff {
-	const lineParts = Diff.diffLines(oldContent, newContent);
-	const output: DiffLine[] = [];
-	let stats = { added: 0, removed: 0 };
+function generateDiffString(oldContent: string, newContent: string, contextLines = 4): string {
+	const parts = Diff.diffLines(oldContent, newContent);
+	const output: string[] = [];
+
+	const oldLines = oldContent.split("\n");
+	const newLines = newContent.split("\n");
+	const maxLineNum = Math.max(oldLines.length, newLines.length);
+	const lineNumWidth = String(maxLineNum).length;
 
 	let oldLineNum = 1;
 	let newLineNum = 1;
 	let lastWasChange = false;
 
-	for (let i = 0; i < lineParts.length; i++) {
-		const part = lineParts[i];
+	for (let i = 0; i < parts.length; i++) {
+		const part = parts[i];
 		const raw = part.value.split("\n");
-		if (raw[raw.length - 1] === "") raw.pop();
+		if (raw[raw.length - 1] === "") {
+			raw.pop();
+		}
 
 		if (part.added || part.removed) {
-			// Collect consecutive removed and added for word-level diff
-			const removed: string[] = [];
-			const added: string[] = [];
-			let j = i;
-
-			while (j < lineParts.length && (lineParts[j].added || lineParts[j].removed)) {
-				const p = lineParts[j];
-				const lines = p.value.split("\n");
-				if (lines[lines.length - 1] === "") lines.pop();
-				if (p.removed) removed.push(...lines);
-				else added.push(...lines);
-				j++;
-			}
-
-			// Only apply word-level diffing when this is a true 1-line modification.
-			// Index-based pairing across multi-line changes produces misleading highlights.
-			const shouldIntraLine = removed.length === 1 && added.length === 1;
-
-			for (let k = 0; k < removed.length; k++) {
-				const line = removed[k];
-				let segments: Array<[boolean, string]> | undefined;
-
-				if (shouldIntraLine) {
-					const wordDiff = Diff.diffWords(line, added[0]!);
-					segments = [];
-					for (const wd of wordDiff) {
-						if (wd.removed) segments.push([true, wd.value]);
-						else if (!wd.added) segments.push([false, wd.value]);
-					}
+			for (const line of raw) {
+				if (part.added) {
+					const lineNum = String(newLineNum).padStart(lineNumWidth, " ");
+					output.push(`+${lineNum} ${line}`);
+					newLineNum++;
+				} else {
+					const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
+					output.push(`-${lineNum} ${line}`);
+					oldLineNum++;
 				}
-
-				output.push({ type: "removed", lineNum: oldLineNum++, content: line, segments });
-				stats.removed++;
 			}
-
-			for (let k = 0; k < added.length; k++) {
-				const line = added[k];
-				let segments: Array<[boolean, string]> | undefined;
-
-				if (shouldIntraLine) {
-					const wordDiff = Diff.diffWords(removed[0]!, line);
-					segments = [];
-					for (const wd of wordDiff) {
-						if (wd.added) segments.push([true, wd.value]);
-						else if (!wd.removed) segments.push([false, wd.value]);
-					}
-				}
-
-				output.push({ type: "added", lineNum: newLineNum++, content: line, segments });
-				stats.added++;
-			}
-
-			// Skip parts we've processed
-			i = j - 1;
 			lastWasChange = true;
 		} else {
-			// Context lines
-			const nextIsChange = i < lineParts.length - 1 && (lineParts[i + 1].added || lineParts[i + 1].removed);
+			const nextPartIsChange = i < parts.length - 1 && (parts[i + 1].added || parts[i + 1].removed);
 
-			if (lastWasChange || nextIsChange) {
+			if (lastWasChange || nextPartIsChange) {
 				let linesToShow = raw;
 				let skipStart = 0;
 				let skipEnd = 0;
@@ -106,24 +55,26 @@ function generateStructuredDiff(oldContent: string, newContent: string, contextL
 					linesToShow = raw.slice(skipStart);
 				}
 
-				if (!nextIsChange && linesToShow.length > contextLines) {
+				if (!nextPartIsChange && linesToShow.length > contextLines) {
 					skipEnd = linesToShow.length - contextLines;
 					linesToShow = linesToShow.slice(0, contextLines);
 				}
 
 				if (skipStart > 0) {
-					output.push({ type: "ellipsis", content: "..." });
+					output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
 					oldLineNum += skipStart;
 					newLineNum += skipStart;
 				}
 
 				for (const line of linesToShow) {
-					output.push({ type: "context", lineNum: oldLineNum++, content: line });
+					const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
+					output.push(` ${lineNum} ${line}`);
+					oldLineNum++;
 					newLineNum++;
 				}
 
 				if (skipEnd > 0) {
-					output.push({ type: "ellipsis", content: "..." });
+					output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
 					oldLineNum += skipEnd;
 					newLineNum += skipEnd;
 				}
@@ -136,7 +87,7 @@ function generateStructuredDiff(oldContent: string, newContent: string, contextL
 		}
 	}
 
-	return { lines: output, stats };
+	return output.join("\n");
 }
 
 const editSchema = Type.Object({
@@ -160,9 +111,8 @@ export const editTool: AgentTool<typeof editSchema> = {
 
 		return new Promise<{
 			content: Array<{ type: "text"; text: string }>;
-			details: { structuredDiff: StructuredDiff } | undefined;
+			details: { diff: string } | undefined;
 		}>((resolve, reject) => {
-			// Check if already aborted
 			if (signal?.aborted) {
 				reject(new Error("Operation aborted"));
 				return;
@@ -170,7 +120,6 @@ export const editTool: AgentTool<typeof editSchema> = {
 
 			let aborted = false;
 
-			// Set up abort handler
 			const onAbort = () => {
 				aborted = true;
 				reject(new Error("Operation aborted"));
@@ -180,10 +129,8 @@ export const editTool: AgentTool<typeof editSchema> = {
 				signal.addEventListener("abort", onAbort, { once: true });
 			}
 
-			// Perform the edit operation
 			(async () => {
 				try {
-					// Check if file exists
 					try {
 						await access(absolutePath, constants.R_OK | constants.W_OK);
 					} catch {
@@ -194,20 +141,16 @@ export const editTool: AgentTool<typeof editSchema> = {
 						return;
 					}
 
-					// Check if aborted before reading
 					if (aborted) {
 						return;
 					}
 
-					// Read the file
 					const content = await readFile(absolutePath, "utf-8");
 
-					// Check if aborted after reading
 					if (aborted) {
 						return;
 					}
 
-					// Check if old text exists
 					if (!content.includes(oldText)) {
 						if (signal) {
 							signal.removeEventListener("abort", onAbort);
@@ -220,9 +163,7 @@ export const editTool: AgentTool<typeof editSchema> = {
 						return;
 					}
 
-					// Count occurrences
 					const occurrences = content.split(oldText).length - 1;
-
 					if (occurrences > 1) {
 						if (signal) {
 							signal.removeEventListener("abort", onAbort);
@@ -235,17 +176,13 @@ export const editTool: AgentTool<typeof editSchema> = {
 						return;
 					}
 
-					// Check if aborted before writing
 					if (aborted) {
 						return;
 					}
 
-					// Perform replacement using indexOf + substring (raw string replace, no special character interpretation)
-					// String.replace() interprets $ in the replacement string, so we do manual replacement
 					const index = content.indexOf(oldText);
 					const newContent = content.substring(0, index) + newText + content.substring(index + oldText.length);
 
-					// Verify the replacement actually changed something
 					if (content === newContent) {
 						if (signal) {
 							signal.removeEventListener("abort", onAbort);
@@ -260,17 +197,14 @@ export const editTool: AgentTool<typeof editSchema> = {
 
 					await writeFile(absolutePath, newContent, "utf-8");
 
-					// Check if aborted after writing
 					if (aborted) {
 						return;
 					}
 
-					// Clean up abort handler
 					if (signal) {
 						signal.removeEventListener("abort", onAbort);
 					}
 
-					const diff = generateStructuredDiff(content, newContent);
 					resolve({
 						content: [
 							{
@@ -278,10 +212,9 @@ export const editTool: AgentTool<typeof editSchema> = {
 								text: `Successfully replaced text in ${path}. Changed ${oldText.length} characters to ${newText.length} characters.`,
 							},
 						],
-						details: { structuredDiff: diff },
+						details: { diff: generateDiffString(content, newContent) },
 					});
 				} catch (error: any) {
-					// Clean up abort handler
 					if (signal) {
 						signal.removeEventListener("abort", onAbort);
 					}
