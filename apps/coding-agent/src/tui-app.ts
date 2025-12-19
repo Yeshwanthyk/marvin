@@ -3,7 +3,6 @@ import { getApiKey, getModels, getProviders } from '@marvin-agents/ai';
 import {
   CombinedAutocompleteProvider,
   Editor,
-  Loader,
   Markdown,
   ProcessTerminal,
   Text,
@@ -165,7 +164,6 @@ export const runTui = async (args?: {
   let isResponding = false;
   let currentAssistant: Markdown | undefined;
   const toolBlocks = new Map<string, ToolBlockEntry>();
-  let loader: Loader | undefined;
   let lastCtrlC = 0;
   const queuedMessages: string[] = [];
   let toolOutputExpanded = false;
@@ -178,9 +176,7 @@ export const runTui = async (args?: {
   // Helpers
   // ─────────────────────────────────────────────────────────────────
   const removeLoader = () => {
-    if (!loader) return;
-    tui.removeChild(loader);
-    loader = undefined;
+    // no-op: loader removed, footer handles activity state
   };
 
   const addMessage = (component: Component) => {
@@ -299,8 +295,6 @@ export const runTui = async (args?: {
         toolBlocks,
         getCurrentAssistant: () => currentAssistant,
         setCurrentAssistant: (md) => { currentAssistant = md; },
-        getLoader: () => loader,
-        setLoader: (l) => { loader = l; },
         removeLoader,
         addMessage,
         getToolOutputExpanded: () => toolOutputExpanded,
@@ -334,7 +328,6 @@ export const runTui = async (args?: {
     getQueuedMessages: () => queuedMessages,
     addMessage,
     removeLoader,
-    setLoader: (l: Loader | undefined) => { loader = l; },
     clearConversation,
     abort,
     exit,
@@ -388,9 +381,6 @@ export const runTui = async (args?: {
     sessionManager.appendMessage(userMessage);
 
     addMessage(new Markdown(chalk.hex(colors.dimmed)('› ') + line, 1, 1, markdownTheme));
-
-    loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Thinking...');
-    addMessage(loader);
 
     isResponding = true;
     footer.setActivity('thinking', () => tui.requestRender());

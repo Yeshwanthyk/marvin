@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import type { Agent, AppMessage, ThinkingLevel } from '@marvin-agents/agent-core';
 import { getModels, getProviders } from '@marvin-agents/ai';
-import { Loader, Markdown, Text, type TUI, type Component } from '@marvin-agents/tui';
+import { Markdown, Text, type TUI, type Component } from '@marvin-agents/tui';
 import type { Footer } from './footer.js';
 import type { SessionManager } from '../session-manager.js';
 import { handleCompact, type CompactOptions } from './compact-handler.js';
@@ -41,7 +41,6 @@ export interface CommandContext {
   getQueuedMessages: () => string[];
   addMessage: (component: Component) => void;
   removeLoader: () => void;
-  setLoader: (l: Loader | undefined) => void;
   clearConversation: () => void;
   abort: () => void;
   exit: () => void;
@@ -66,7 +65,6 @@ export function handleSlashCommand(line: string, ctx: CommandContext): boolean {
     getIsResponding,
     addMessage,
     removeLoader,
-    setLoader,
   } = ctx;
 
   if (line === '/exit' || line === '/quit') {
@@ -184,9 +182,6 @@ export function handleSlashCommand(line: string, ctx: CommandContext): boolean {
 
     const customInstructions = line.startsWith('/compact ') ? line.slice(9).trim() : undefined;
 
-    const loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Compacting context...');
-    addMessage(loader);
-    setLoader(loader);
     footer.setActivity('thinking', () => tui.requestRender());
     tui.requestRender();
 

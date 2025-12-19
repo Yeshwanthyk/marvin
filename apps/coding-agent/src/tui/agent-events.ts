@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import type { AgentEvent, Agent, AppMessage } from '@marvin-agents/agent-core';
 import type { AssistantMessage, Message } from '@marvin-agents/ai';
-import { Loader, Markdown, Text, type TUI } from '@marvin-agents/tui';
+import { Markdown, Text, type TUI } from '@marvin-agents/tui';
 import type { Footer } from './footer.js';
 import type { SessionManager } from '../session-manager.js';
 import {
@@ -27,10 +27,8 @@ export interface AgentEventHandlerState {
   toolBlocks: Map<string, ToolBlockEntry>;
   getCurrentAssistant: () => Markdown | undefined;
   setCurrentAssistant: (md: Markdown | undefined) => void;
-  getLoader: () => Loader | undefined;
-  setLoader: (l: Loader | undefined) => void;
   removeLoader: () => void;
-  addMessage: (component: Text | Markdown | Loader) => void;
+  addMessage: (component: Text | Markdown) => void;
   getToolOutputExpanded: () => boolean;
   setIsResponding: (v: boolean) => void;
   getQueuedMessages: () => string[];
@@ -61,8 +59,6 @@ export function createAgentEventHandler(
     toolBlocks,
     getCurrentAssistant,
     setCurrentAssistant,
-    getLoader,
-    setLoader,
     removeLoader,
     addMessage,
     getToolOutputExpanded,
@@ -82,25 +78,14 @@ export function createAgentEventHandler(
             ? event.message.content
             : textFromBlocks(event.message.content as Array<{ type: string }>);
           addMessage(new Markdown(chalk.hex(colors.dimmed)('› ') + text, 1, 1, markdownTheme));
-          const loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Thinking...');
-          addMessage(loader);
-          setLoader(loader);
           footer.setActivity('thinking', () => tui.requestRender());
           tui.requestRender();
         }
       }
       if (event.message.role === 'assistant') {
-        const loader = getLoader();
-        if (loader) {
-          tui.removeChild(loader);
-          loader.setMessage('');
-        }
         const assistant = new Markdown('', 1, 1, markdownTheme);
         setCurrentAssistant(assistant);
         addMessage(assistant);
-        if (loader) {
-          addMessage(loader);
-        }
         tui.requestRender();
       }
     }
@@ -199,13 +184,9 @@ export function createAgentEventHandler(
             footer.setRetryStatus(null);
             retryState.abortController = null;
             agent.replaceMessages(agent.state.messages.slice(0, -1));
-            const loader = new Loader(tui, (s) => chalk.hex(colors.accent)(s), (s) => chalk.hex(colors.dimmed)(s), 'Retrying...');
-            addMessage(loader);
-            setLoader(loader);
             footer.setActivity('thinking', () => tui.requestRender());
             tui.requestRender();
             void agent.continue().catch((err) => {
-              removeLoader();
               footer.setActivity('idle');
               addMessage(new Text(chalk.hex(colors.accent)(String(err instanceof Error ? err.message : err))));
               setIsResponding(false);
