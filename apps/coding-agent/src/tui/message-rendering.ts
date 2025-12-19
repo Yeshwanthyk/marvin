@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import * as Diff from 'diff';
 import type { Message, TextContent, ThinkingContent } from '@marvin-agents/ai';
 import { getLanguageFromPath, highlightCode as highlightCodeLines, replaceTabs } from '../syntax-highlighting.js';
 import { colors } from './themes.js';
@@ -69,21 +70,151 @@ export const getEditDiffText = (result: unknown): string | null => {
   return maybe.details?.diff || null;
 };
 
+/**
+ * Render a diff with word-level highlighting for 1:1 line changes.
+ * Format expected: `+NN content`, `-NN content`, ` NN content`, ` NN ...`
+ */
 export const renderEditDiff = (diffText: string): string => {
   const dim = chalk.hex(colors.dimmed);
-  const removed = chalk.hex('#bf616a');
-  const added = chalk.hex('#a3be8c');
+  const removedColor = chalk.hex('#bf616a');
+  const addedColor = chalk.hex('#a3be8c');
 
-  return diffText
-    .split('\n')
-    .map((line) => {
-      const normalized = replaceTabs(line);
-      if (normalized.startsWith('+')) return added(normalized);
-      if (normalized.startsWith('-')) return removed(normalized);
-      return dim(normalized);
-    })
-    .join('\n');
+  interface ParsedLine {
+    type: '+' | '-' | ' ';
+    prefix: string; // the "+NN " or "-NN " or " NN " part
+    content: string;
+    raw: string;
+  }
+
+  const lines = diffText.split('\n');
+  const parsed: ParsedLine[] = [];
+
+  // Parse each line into type, prefix, content
+  for (const line of lines) {
+    const normalized = replaceTabs(line);
+    if (normalized.length === 0) {
+      parsed.push({ type: ' ', prefix: '', content: '', raw: normalized });
+      continue;
+    }
+
+    const firstChar = normalized[0];
+    if (firstChar === '+' || firstChar === '-' || firstChar === ' ') {
+      // Find end of line number portion (prefix includes the +/-/space and line number)
+      // Format: "+NN " or "-NN " or " NN " where NN is padded line number
+      const match = normalized.match(/^([+\- ])(\s*\d+\s)/);
+      if (match) {
+        const prefix = match[0];
+        const content = normalized.slice(prefix.length);
+        parsed.push({ type: firstChar as '+' | '-' | ' ', prefix, content, raw: normalized });
+      } else {
+        // Fallback for lines that don't match expected format (like "  ...")
+        parsed.push({ type: firstChar as '+' | '-' | ' ', prefix: normalized, content: '', raw: normalized });
+      }
+    } else {
+      parsed.push({ type: ' ', prefix: '', content: normalized, raw: normalized });
+    }
+  }
+
+  // Render with word-level diffs for 1:1 removed/added pairs
+  const output: string[] = [];
+  let i = 0;
+
+  while (i < parsed.length) {
+    const line = parsed[i];
+
+    // Look for consecutive removed lines followed by consecutive added lines
+    if (line.type === '-') {
+      const removedLines: ParsedLine[] = [];
+      let j = i;
+      while (j < parsed.length && parsed[j].type === '-') {
+        removedLines.push(parsed[j]);
+        j++;
+      }
+
+      const addedLines: ParsedLine[] = [];
+      while (j < parsed.length && parsed[j].type === '+') {
+        addedLines.push(parsed[j]);
+        j++;
+      }
+
+      // If exactly 1 removed + 1 added: word-level diff
+      if (removedLines.length === 1 && addedLines.length === 1) {
+        const rm = removedLines[0];
+        const add = addedLines[0];
+
+        output.push(renderWordDiffLine(rm.prefix, rm.content, removedColor, add.content, false));
+        output.push(renderWordDiffLine(add.prefix, add.content, addedColor, rm.content, true));
+        i = j;
+        continue;
+      }
+
+      // Otherwise: whole-line coloring
+      for (const r of removedLines) {
+        output.push(removedColor(r.raw));
+      }
+      for (const a of addedLines) {
+        output.push(addedColor(a.raw));
+      }
+      i = j;
+      continue;
+    }
+
+    // Context or other lines
+    if (line.type === '+') {
+      output.push(addedColor(line.raw));
+    } else {
+      output.push(dim(line.raw));
+    }
+    i++;
+  }
+
+  return output.join('\n');
 };
+
+/**
+ * Render a single line with word-level diff highlighting.
+ * Highlights tokens that differ from the comparison line using inverse.
+ */
+function renderWordDiffLine(
+  prefix: string,
+  content: string,
+  baseColor: ReturnType<typeof chalk.hex>,
+  compareContent: string,
+  isAdded: boolean,
+): string {
+  // Extract leading whitespace to avoid inverting indentation
+  const leadingMatch = content.match(/^(\s*)/);
+  const leadingWs = leadingMatch ? leadingMatch[1] : '';
+  const textContent = content.slice(leadingWs.length);
+
+  const compareLeadingMatch = compareContent.match(/^(\s*)/);
+  const compareLeadingWs = compareLeadingMatch ? compareLeadingMatch[1] : '';
+  const compareTextContent = compareContent.slice(compareLeadingWs.length);
+
+  // Get word-level diff
+  const wordDiff = Diff.diffWords(compareTextContent, textContent);
+
+  const parts: string[] = [];
+  for (const part of wordDiff) {
+    if (isAdded) {
+      // For added line: highlight added parts
+      if (part.added) {
+        parts.push(baseColor.inverse(part.value));
+      } else if (!part.removed) {
+        parts.push(baseColor(part.value));
+      }
+    } else {
+      // For removed line: highlight removed parts
+      if (part.removed) {
+        parts.push(baseColor.inverse(part.value));
+      } else if (!part.added) {
+        parts.push(baseColor(part.value));
+      }
+    }
+  }
+
+  return baseColor(prefix + leadingWs) + parts.join('');
+}
 
 const bashBadge = (cmd: string): string => {
   const first = cmd.trim().split(/\s+/)[0] || '';
@@ -250,7 +381,13 @@ export const renderTool = (toolName: string, args: any, result: unknown, isError
 };
 
 // Tool render with expand/collapse toggle for stored output
-export const renderToolWithExpand = (toolName: string, args: any, fullOutput: string, expanded: boolean): string => {
+export const renderToolWithExpand = (
+  toolName: string,
+  args: any,
+  fullOutput: string,
+  expanded: boolean,
+  editDiff?: string,
+): string => {
   // Read: always single line, no expand
   if (toolName === 'read') {
     const dim = chalk.hex(colors.dimmed);
@@ -260,23 +397,68 @@ export const renderToolWithExpand = (toolName: string, args: any, fullOutput: st
     const lineCount = fullOutput ? fullOutput.split('\n').length : 0;
     return toolColor.bold('read') + ' ' + text(path) + (lineCount ? dim(` (${lineCount} lines)`) : '');
   }
-  
+
   const header = renderToolHeader(toolName, args);
   const dim = chalk.hex(colors.dimmed);
   const output = chalk.hex('#c5c5c0');
-  
+
+  // edit: always show diff (expanded or collapsed uses same diff rendering)
+  if (toolName === 'edit' && editDiff) {
+    return `${header}\n\n${renderEditDiff(editDiff)}`;
+  }
+
+  // write: show full content with syntax highlighting
+  if (toolName === 'write') {
+    const content = args?.content || '';
+    if (!content) return header;
+
+    const rawPath = args?.path || args?.file_path || '';
+    const lang = getLanguageFromPath(rawPath);
+    const normalized = replaceTabs(content);
+
+    let lines: string[];
+    let highlighted = false;
+    if (lang) {
+      try {
+        lines = highlightCodeLines(normalized, lang);
+        highlighted = true;
+      } catch {
+        lines = normalized.split('\n');
+      }
+    } else {
+      lines = normalized.split('\n');
+    }
+
+    const renderLine = (line: string) => (highlighted ? line : output(line));
+
+    if (expanded) {
+      // Show full content
+      return `${header}\n\n${lines.map(renderLine).join('\n')}`;
+    } else {
+      // Show collapsed with hint
+      const maxLines = 8;
+      if (lines.length > maxLines) {
+        const shown = lines.slice(0, maxLines);
+        const remaining = lines.length - maxLines;
+        return `${header}\n\n${shown.map(renderLine).join('\n')}${dim(`\n... ${remaining} more lines, Ctrl+O to expand`)}`;
+      }
+      return `${header}\n\n${lines.map(renderLine).join('\n')}`;
+    }
+  }
+
+  // Default behavior for other tools (bash, etc.)
   if (!fullOutput) return header;
-  
+
   const lines = fullOutput.trim().split('\n');
   const maxLines = toolName === 'bash' ? 25 : 15;
-  
+
   if (expanded || lines.length <= maxLines) {
     // Show full output
-    return `${header}\n\n${lines.map(l => output(l)).join('\n')}`;
+    return `${header}\n\n${lines.map((l) => output(l)).join('\n')}`;
   } else {
     // Show collapsed with hint
     const skipped = lines.length - maxLines;
     const shown = lines.slice(-maxLines);
-    return `${header}\n\n${dim(`... (${skipped} earlier lines, Ctrl+O to expand)\n`)}${shown.map(l => output(l)).join('\n')}`;
+    return `${header}\n\n${dim(`... (${skipped} earlier lines, Ctrl+O to expand)\n`)}${shown.map((l) => output(l)).join('\n')}`;
   }
 };
