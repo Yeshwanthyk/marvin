@@ -38,6 +38,11 @@ export class CodexTransport implements AgentTransport {
 		});
 	}
 
+	/** Get the custom fetch for direct API calls (compaction, etc.) */
+	getFetch(): typeof fetch {
+		return this.customFetch;
+	}
+
 	private async getInstructions(): Promise<string> {
 		if (!this.cachedInstructions) {
 			this.cachedInstructions = await getCodexInstructions();

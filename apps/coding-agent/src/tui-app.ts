@@ -1,4 +1,4 @@
-import { Agent, ProviderTransport, RouterTransport, CodexTransport, type AgentEvent } from '@marvin-agents/agent-core';
+import { Agent, ProviderTransport, RouterTransport, CodexTransport, loadTokens, saveTokens, clearTokens, type AgentEvent } from '@marvin-agents/agent-core';
 import { getApiKey, getModels, getProviders, completeSimple, type AssistantMessage, type Message, type TextContent, type ThinkingContent, type ToolResultMessage } from '@marvin-agents/ai';
 import {
   CombinedAutocompleteProvider,
@@ -703,25 +703,14 @@ export const runTui = async (args?: {
   };
 
   const providerTransport = new ProviderTransport({ getApiKey: getApiKeyForProvider });
-  
-  // Codex token management (~/.marvin/codex-tokens.json)
-  const codexTokensPath = join(process.env.HOME || '', '.marvin', 'codex-tokens.json');
+
+  // Codex token management (defaults to ~/.config/marvin/codex-tokens.json)
   const codexTransport = new CodexTransport({
-    getTokens: async () => {
-      try {
-        const data = readFileSync(codexTokensPath, 'utf-8');
-        return JSON.parse(data);
-      } catch { return null; }
-    },
-    setTokens: async (tokens) => {
-      const { writeFileSync, mkdirSync } = await import('fs');
-      mkdirSync(dirname(codexTokensPath), { recursive: true });
-      writeFileSync(codexTokensPath, JSON.stringify(tokens, null, 2));
-    },
-    clearTokens: async () => {
-      try { const { unlinkSync } = await import('fs'); unlinkSync(codexTokensPath); } catch {}
-    },
+    getTokens: async () => loadTokens({ configDir: loaded.configDir }),
+    setTokens: async (tokens) => saveTokens(tokens, { configDir: loaded.configDir }),
+    clearTokens: async () => clearTokens({ configDir: loaded.configDir }),
   });
+
   const transport = new RouterTransport({
     provider: providerTransport,
     codex: codexTransport,
@@ -856,9 +845,17 @@ Be concise, structured, and focused on helping the next LLM seamlessly continue 
       },
     ];
 
-    // Generate summary
-    const apiKey = getApiKeyForProvider(currentProvider);
-    const response = await completeSimple(model, { messages: summarizationMessages }, { maxTokens: 8192, apiKey });
+    // Generate summary - use codex fetch for OAuth, regular API key otherwise
+    const isCodex = currentProvider === 'codex';
+    const response = await completeSimple(
+      model,
+      { messages: summarizationMessages },
+      {
+        maxTokens: 8192,
+        apiKey: isCodex ? 'codex-oauth' : getApiKeyForProvider(currentProvider),
+        fetch: isCodex ? codexTransport.getFetch() : undefined,
+      },
+    );
 
     // Check for error response
     if (response.errorMessage) {
