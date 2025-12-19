@@ -15,6 +15,7 @@
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"check": "tsgo --noEmit",
 		"test": "node -e \"process.exit(0)\"",
+		"codex-auth": "npx tsx src/codex-auth-cli.ts",
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {

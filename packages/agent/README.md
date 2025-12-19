@@ -98,12 +98,14 @@ Transports abstract LLM communication:
 
 - **`ProviderTransport`**: Direct API calls using `@marvin-agents/ai`
 - **`AppTransport`**: Proxy through a backend server (for browser apps)
+- **`CodexTransport`**: OAuth-based access via ChatGPT subscription (gpt-5.2)
+- **`RouterTransport`**: Auto-routes to correct transport based on model provider
 
 ```typescript
 // Direct provider access (Node.js)
 const agent = new Agent({
   transport: new ProviderTransport({
-    apiKey: process.env.ANTHROPIC_API_KEY
+    getApiKey: (provider) => process.env[`${provider.toUpperCase()}_API_KEY`]
   })
 });
 
@@ -114,6 +116,22 @@ const agent = new Agent({
     headers: { 'Authorization': 'Bearer ...' }
   })
 });
+
+// Multi-provider with Codex + API keys
+import { RouterTransport, CodexTransport, ProviderTransport, loadTokens, saveTokens, clearTokens } from '@marvin-agents/agent-core';
+
+const router = new RouterTransport({
+  codex: new CodexTransport({
+    getTokens: async () => loadTokens(),
+    setTokens: async (t) => saveTokens(t),
+    clearTokens: async () => clearTokens(),
+  }),
+  provider: new ProviderTransport({
+    getApiKey: (p) => process.env[`${p.toUpperCase()}_API_KEY`],
+  }),
+});
+
+const agent = new Agent({ transport: router, initialState: { ... } });
 ```
 
 ## Message Queue
