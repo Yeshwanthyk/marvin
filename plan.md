@@ -87,11 +87,13 @@ Legend: **P0** must-have to dogfood, **P1** parity/UX, **P2** maintainability.
 - [x] **Footer layout fixed** - uses terminal dimensions to stay at bottom
 
 ### Autocomplete parity
-- [ ] **Slash command autocomplete** (+ argument completion)
-  - Legacy: `createAutocompleteCommands()` in `apps/coding-agent/src/tui/autocomplete-commands.ts`.
-- [ ] **File path + `@` fuzzy file attachment autocomplete**
-  - Legacy: `packages/tui/src/autocomplete.ts` (CombinedAutocompleteProvider).
-- [ ] **UI for suggestions**: popover list using OpenTUI `SelectList`.
+- [x] **Slash command autocomplete** (+ argument completion)
+  - Uses `CombinedAutocompleteProvider` from legacy, wired to OpenTUI textarea via `onContentChange`
+  - Navigation: Ctrl+N/Ctrl+P (up/down consumed by textarea)
+  - Selection: Tab or Enter
+- [x] **File path + `@` fuzzy file attachment autocomplete**
+  - Uses `FileIndex` from legacy for fuzzy search
+- [x] **UI for suggestions**: inline text list above input
 
 ### Shutdown/signal handling
 - [ ] **Graceful stop**: ensure renderer teardown + watcher cleanup on exit.

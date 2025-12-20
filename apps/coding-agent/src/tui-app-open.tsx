@@ -20,6 +20,8 @@ import { getApiKey, getModels, getProviders, type Model, type Api, type Assistan
 import { codingTools } from "@marvin-agents/base-tools"
 import { loadAppConfig, updateAppConfig } from "./config.js"
 import { handleCompact, SUMMARY_PREFIX, SUMMARY_SUFFIX } from "./tui/compact-handler.js"
+import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/tui"
+import { createAutocompleteCommands } from "./tui/autocomplete-commands.js"
 import { SessionManager, type LoadedSession, type SessionDetails } from "./session-manager.js"
 import { colors } from "./tui/themes.js"
 import { ToolBlock as ToolBlockComponent, Thinking, getToolText, getEditDiffText } from "./tui-open-rendering.js"
@@ -965,6 +967,7 @@ function App(props: AppProps) {
 				thinkingVisible={thinkingVisible()}
 				modelId={displayModelId()}
 				thinking={displayThinking()}
+				provider={currentProvider}
 				contextTokens={contextTokens()}
 				contextWindow={displayContextWindow()}
 				queueCount={queueCount()}
@@ -991,6 +994,7 @@ function MainView(props: {
 	thinkingVisible: boolean
 	modelId: string
 	thinking: ThinkingLevel
+	provider: KnownProvider
 	contextTokens: number
 	contextWindow: number
 	queueCount: number
@@ -1006,6 +1010,56 @@ function MainView(props: {
 	const dimensions = useTerminalDimensions()
 	let textareaRef: TextareaRenderable | undefined
 	let lastCtrlC = 0
+
+	// Autocomplete state (must be before useKeyboard that references it)
+	const autocompleteProvider = new CombinedAutocompleteProvider(
+		createAutocompleteCommands(() => ({ currentProvider: props.provider })),
+		process.cwd()
+	)
+	const [autocompleteItems, setAutocompleteItems] = createSignal<AutocompleteItem[]>([])
+	const [autocompletePrefix, setAutocompletePrefix] = createSignal("")
+	const [autocompleteIndex, setAutocompleteIndex] = createSignal(0)
+	const [showAutocomplete, setShowAutocomplete] = createSignal(false)
+
+	const updateAutocomplete = (text: string, cursorLine: number, cursorCol: number) => {
+		const lines = text.split("\n")
+		const result = autocompleteProvider.getSuggestions(lines, cursorLine, cursorCol)
+		if (result && result.items.length > 0) {
+			const prevPrefix = autocompletePrefix()
+			const newItems = result.items.slice(0, 10)
+			setAutocompleteItems(newItems)
+			setAutocompletePrefix(result.prefix)
+			if (result.prefix !== prevPrefix) {
+				setAutocompleteIndex(0)
+			} else {
+				setAutocompleteIndex((i) => Math.min(i, newItems.length - 1))
+			}
+			setShowAutocomplete(true)
+		} else {
+			setShowAutocomplete(false)
+			setAutocompleteItems([])
+		}
+	}
+
+	const applyAutocomplete = () => {
+		if (!showAutocomplete() || !textareaRef) return false
+		const items = autocompleteItems()
+		const idx = autocompleteIndex()
+		if (idx < 0 || idx >= items.length) return false
+
+		const item = items[idx]!
+		const text = textareaRef.plainText
+		const lines = text.split("\n")
+		const cursorLine = lines.length - 1
+		const cursorCol = lines[cursorLine]?.length ?? 0
+		const prefix = autocompletePrefix()
+
+		const result = autocompleteProvider.applyCompletion(lines, cursorLine, cursorCol, item, prefix)
+		textareaRef.setText(result.lines.join("\n"))
+		setShowAutocomplete(false)
+		setAutocompleteItems([])
+		return true
+	}
 
 	// Git state
 	const [branch, setBranch] = createSignal<string | null>(getCurrentBranch())
@@ -1060,6 +1114,48 @@ function MainView(props: {
 	})
 
 	const handleKeyDown = (e: KeyEvent) => {
+
+
+		// Autocomplete: up/down navigation, tab/return selection
+		if (showAutocomplete()) {
+			const items = autocompleteItems()
+			if (e.name === "up") {
+				setAutocompleteIndex((i) => (i > 0 ? i - 1 : items.length - 1))
+				e.preventDefault()
+				return
+			}
+			if (e.name === "down") {
+				setAutocompleteIndex((i) => (i < items.length - 1 ? i + 1 : 0))
+				e.preventDefault()
+				return
+			}
+			if (e.name === "tab" || e.name === "return") {
+				if (applyAutocomplete()) {
+					e.preventDefault()
+					return
+				}
+			}
+			if (e.name === "escape") {
+				setShowAutocomplete(false)
+				e.preventDefault()
+				return
+			}
+		}
+
+		// Ctrl+N/Ctrl+P for autocomplete (up/down are consumed by textarea)
+		if (showAutocomplete() && e.ctrl && (e.name === "n" || e.name === "p")) {
+			const items = autocompleteItems()
+
+			if (e.name === "n") {
+				setAutocompleteIndex((i) => (i < items.length - 1 ? i + 1 : 0))
+			} else {
+				setAutocompleteIndex((i) => (i > 0 ? i - 1 : items.length - 1))
+			}
+
+			e.preventDefault()
+			return
+		}
+
 		// Ctrl+C - abort or exit
 		if (e.ctrl && e.name === "c") {
 			const now = Date.now()
@@ -1117,6 +1213,7 @@ function MainView(props: {
 			e.preventDefault()
 			return
 		}
+
 	}
 
 
@@ -1261,6 +1358,29 @@ function MainView(props: {
 				</box>
 			</scrollbox>
 
+			{/* Autocomplete popup */}
+			<Show when={showAutocomplete() && autocompleteItems().length > 0}>
+				<box
+					flexDirection="column"
+					border={["top"]}
+					borderColor={theme.border}
+					paddingLeft={2}
+					maxHeight={8}
+					flexShrink={0}
+				>
+					<For each={autocompleteItems()}>
+						{(item, i) => {
+							const isSelected = createMemo(() => i() === autocompleteIndex())
+							return (
+								<text fg={isSelected() ? theme.primary : theme.text}>
+									{isSelected() ? "→ " : "  "}{item.label}{item.description ? `  ${item.description}` : ""}
+								</text>
+							)
+						}}
+					</For>
+				</box>
+			</Show>
+
 			{/* Input area */}
 			<box border={["top"]} borderColor={theme.border} paddingTop={1}>
 				<textarea
@@ -1279,8 +1399,7 @@ function MainView(props: {
 						{ name: "return", meta: true, action: "newline" as const },
 						{ name: "left", action: "move-left" as const },
 						{ name: "right", action: "move-right" as const },
-						{ name: "up", action: "move-up" as const },
-						{ name: "down", action: "move-down" as const },
+						// up/down handled in onKeyDown for autocomplete support
 						{ name: "backspace", action: "backspace" as const },
 						{ name: "delete", action: "delete" as const },
 						{ name: "a", ctrl: true, action: "line-home" as const },
@@ -1290,6 +1409,17 @@ function MainView(props: {
 						{ name: "w", ctrl: true, action: "delete-word-backward" as const },
 					]}
 					onKeyDown={handleKeyDown}
+					onContentChange={() => {
+
+						// Update autocomplete on text change
+						if (textareaRef) {
+							const text = textareaRef.plainText
+							const lines = text.split("\n")
+							const cursorLine = lines.length - 1
+							const cursorCol = lines[cursorLine]?.length ?? 0
+							updateAutocomplete(text, cursorLine, cursorCol)
+						}
+					}}
 					onSubmit={() => {
 						if (textareaRef) {
 							const ref = textareaRef
