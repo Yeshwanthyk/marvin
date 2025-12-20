@@ -26,21 +26,21 @@ marvin-agent/
 ### Dependency Graph
 
 ```
-             coding-agent
-                  │
-      ┌───────────┼───────────┐
-      │           │           │
-      ▼           ▼           ▼
-  ┌──────┐   ┌─────────┐   ┌─────┐
-  │  ai  │◄──│ agent-  │   │ tui │
-  │      │   │  core   │   │     │
-  └──────┘   └─────────┘   └─────┘
-      │           │
-      └─────┬─────┘
-            ▼
-      ┌───────────┐
-      │base-tools │
-      └───────────┘
+                  coding-agent
+                       │
+      ┌────────────────┼────────────────┐
+      │                │                │
+      ▼                ▼                ▼
+  ┌──────┐       ┌─────────┐       ┌──────────┐
+  │  ai  │◄──────│ agent-  │       │ open-tui │
+  │      │       │  core   │       │          │
+  └──────┘       └─────────┘       └──────────┘
+      │                │
+      └───────┬────────┘
+              ▼
+        ┌───────────┐
+        │base-tools │
+        └───────────┘
 ```
 
 ### Core Packages
@@ -49,6 +49,7 @@ marvin-agent/
 |---------|-----|-------------|
 | **ai** | `@marvin-agents/ai` | Unified LLM API supporting OpenAI, Anthropic, Google, Mistral, Groq, xAI, OpenRouter, and OpenAI-compatible endpoints. Auto model discovery, token/cost tracking, streaming. |
 | **agent-core** | `@marvin-agents/agent-core` | Stateful agent with transport abstraction. Manages conversation state, emits granular events (message updates, tool execution), supports pluggable transports. |
+| **open-tui** | `@marvin-agents/open-tui` | SolidJS-based terminal UI built on OpenTUI. Reactive rendering, theme system (dark/light), tree-sitter syntax highlighting. Components: Markdown, Diff, Editor, SelectList, Image, Dialog, Toast, etc. |
 | **tui** | `@marvin-agents/tui` | Terminal UI framework with differential rendering for flicker-free updates. Components: Text, Editor, Markdown, SelectList, Image, etc. |
 | **base-tools** | `@marvin-agents/base-tools` | Standard tool implementations: `read` (files/images), `bash` (command execution), `edit` (surgical text replacement), `write` (file creation). |
 
@@ -97,7 +98,7 @@ bun run check        # typecheck + test
 coding-agent
 ├── ai               # LLM API
 ├── agent-core       # Agent state management (depends on ai, base-tools)
-├── tui              # Terminal UI
+├── open-tui         # Terminal UI (SolidJS + OpenTUI)
 └── base-tools       # Tool implementations (depends on ai)
 ```
 
