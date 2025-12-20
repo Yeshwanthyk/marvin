@@ -4,8 +4,19 @@
 
 import { TextareaRenderable, InputRenderable, ScrollBoxRenderable, type KeyEvent } from "@opentui/core"
 import { render, useTerminalDimensions, useKeyboard } from "@opentui/solid"
-import { createSignal, createEffect, createMemo, For, Show, onCleanup, onMount, batch } from "solid-js"
-import { ThemeProvider, useTheme, TextAttributes } from "@marvin-agents/open-tui"
+import { createSignal, createEffect, createMemo, For, Show, Switch, Match, onCleanup, onMount, batch } from "solid-js"
+import {
+	Divider,
+	Markdown,
+	MouseButton,
+	TextAttributes,
+	ThemeProvider,
+	ToastViewport,
+	useRenderer,
+	useTheme,
+	type ToastItem,
+	type RGBA,
+} from "@marvin-agents/open-tui"
 import {
 	Agent,
 	ProviderTransport,
@@ -23,7 +34,6 @@ import { handleCompact, SUMMARY_PREFIX, SUMMARY_SUFFIX } from "./tui/compact-han
 import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/tui"
 import { createAutocompleteCommands } from "./tui/autocomplete-commands.js"
 import { SessionManager, type LoadedSession, type SessionDetails } from "./session-manager.js"
-import { colors } from "./tui/themes.js"
 import { ToolBlock as ToolBlockComponent, Thinking, getToolText, getEditDiffText } from "./tui-open-rendering.js"
 import { existsSync, readFileSync, watch, appendFileSync, type FSWatcher } from "fs"
 
@@ -60,6 +70,7 @@ interface UIMessage {
 	thinking?: { summary: string; full: string }
 	isStreaming?: boolean  // true while actively streaming
 	tools?: ToolBlock[]    // tools associated with this message
+	timestamp?: number     // unix timestamp for optional display
 }
 
 interface ToolBlock {
@@ -323,7 +334,6 @@ function App(props: AppProps) {
 	const [activityState, setActivityState] = createSignal<ActivityState>("idle")
 
 	// Toggle states
-	const [toolOutputExpanded, setToolOutputExpanded] = createSignal(false)
 	const [thinkingVisible, setThinkingVisible] = createSignal(true)
 
 	// Footer state (reactive for cycling)
@@ -427,7 +437,7 @@ function App(props: AppProps) {
 					const text = typeof event.message.content === "string"
 						? event.message.content
 						: extractText(event.message.content as unknown[])
-					setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text }])
+					setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() }])
 					setActivityState("thinking")
 				}
 			}
@@ -445,6 +455,7 @@ function App(props: AppProps) {
 							content: "",
 							isStreaming: true,
 							tools: [],
+							timestamp: Date.now(),
 						},
 					])
 				})
@@ -874,7 +885,7 @@ function App(props: AppProps) {
 		sessionManager.appendMessage(userMessage)
 
 		batch(() => {
-			setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text }])
+			setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() }])
 			setToolBlocks([])
 			setIsResponding(true)
 			setActivityState("thinking")
@@ -926,12 +937,6 @@ function App(props: AppProps) {
 		return restore
 	}
 
-	const toggleToolExpand = () => {
-		setToolOutputExpanded((v) => {
-			debugLog("toggleToolExpand", { from: v, to: !v })
-			return !v
-		})
-	}
 	const toggleThinking = () => setThinkingVisible((v) => !v)
 
 	// Ctrl+P model cycling
@@ -963,7 +968,6 @@ function App(props: AppProps) {
 				toolBlocks={toolBlocks()}
 				isResponding={isResponding()}
 				activityState={activityState()}
-				toolOutputExpanded={toolOutputExpanded()}
 				thinkingVisible={thinkingVisible()}
 				modelId={displayModelId()}
 				thinking={displayThinking()}
@@ -974,7 +978,6 @@ function App(props: AppProps) {
 				retryStatus={retryStatus()}
 				onSubmit={handleSubmit}
 				onAbort={handleAbort}
-				onToggleToolExpand={toggleToolExpand}
 				onToggleThinking={toggleThinking}
 				onCycleModel={cycleModel}
 				onCycleThinking={cycleThinking}
@@ -990,7 +993,6 @@ function MainView(props: {
 	toolBlocks: ToolBlock[]
 	isResponding: boolean
 	activityState: ActivityState
-	toolOutputExpanded: boolean
 	thinkingVisible: boolean
 	modelId: string
 	thinking: ThinkingLevel
@@ -1001,7 +1003,6 @@ function MainView(props: {
 	retryStatus: string | null
 	onSubmit: (text: string, clearFn?: () => void) => void
 	onAbort: () => string | null
-	onToggleToolExpand: () => void
 	onToggleThinking: () => void
 	onCycleModel: () => void
 	onCycleThinking: () => void
@@ -1009,7 +1010,10 @@ function MainView(props: {
 	const { theme } = useTheme()
 	const dimensions = useTerminalDimensions()
 	let textareaRef: TextareaRenderable | undefined
+	let scrollRef: ScrollBoxRenderable | undefined
 	let lastCtrlC = 0
+
+
 
 	// Autocomplete state (must be before useKeyboard that references it)
 	const autocompleteProvider = new CombinedAutocompleteProvider(
@@ -1113,8 +1117,73 @@ function MainView(props: {
 		}
 	})
 
-	const handleKeyDown = (e: KeyEvent) => {
+	// Sticky-bottom scroll: scroll to bottom when new content arrives
+	createEffect(() => {
+		// Track these to trigger effect on changes
+		const _messages = props.messages.length
+		const _tools = props.toolBlocks.length
+		const _responding = props.isResponding
 
+		// Scroll to bottom after render
+		if (scrollRef) {
+			scrollRef.scrollBy(100_000)
+		}
+	})
+
+	// Scroll to bottom helper
+	const scrollToBottom = () => {
+		if (scrollRef) scrollRef.scrollBy(100_000)
+	}
+
+	const renderer = useRenderer()
+
+	const [toasts, setToasts] = createSignal<ToastItem[]>([])
+	const pushToast = (toast: Omit<ToastItem, "id">, ttlMs = 2000) => {
+		const id = crypto.randomUUID()
+		const item: ToastItem = { id, ...toast }
+		setToasts((prev) => [item, ...prev].slice(0, 3))
+		const timeout = setTimeout(() => {
+			setToasts((prev) => prev.filter((t) => t.id !== id))
+		}, ttlMs)
+		onCleanup(() => clearTimeout(timeout))
+	}
+
+	// Copy selection to clipboard via OSC52
+	const copySelectionToClipboard = () => {
+		const selection = renderer.getSelection()
+		if (!selection) return
+
+		const text = selection.getSelectedText()
+		if (!text || text.length === 0) return
+
+		// OSC52 escape sequence for clipboard copy
+		const base64 = Buffer.from(text).toString("base64")
+		const osc52 = `\x1b]52;c;${base64}\x07`
+		// Wrap for tmux if needed
+		const finalOsc52 = process.env["TMUX"] ? `\x1bPtmux;\x1b${osc52}\x1b\\` : osc52
+		process.stdout.write(finalOsc52)
+
+		pushToast({ title: "Copied to clipboard", variant: "success" }, 1500)
+		renderer.clearSelection()
+	}
+
+	const [expandedToolIds, setExpandedToolIds] = createSignal<Set<string>>(new Set())
+	const isToolExpanded = (id: string) => expandedToolIds().has(id)
+	const toggleToolExpanded = (id: string) => {
+		setExpandedToolIds((prev) => {
+			const next = new Set(prev)
+			if (next.has(id)) next.delete(id)
+			else next.add(id)
+			return next
+		})
+	}
+	const toggleLastToolExpanded = () => {
+		const tools = props.toolBlocks
+		const last = tools[tools.length - 1]
+		if (last) toggleToolExpanded(last.id)
+	}
+
+	const handleKeyDown = (e: KeyEvent) => {
 
 		// Autocomplete: up/down navigation, tab/return selection
 		if (showAutocomplete()) {
@@ -1186,9 +1255,9 @@ function MainView(props: {
 			}
 		}
 
-		// Ctrl+O - toggle tool output expansion
+		// Ctrl+O - toggle latest tool block
 		if (e.ctrl && e.name === "o") {
-			props.onToggleToolExpand()
+			toggleLastToolExpanded()
 			e.preventDefault()
 			return
 		}
@@ -1203,6 +1272,13 @@ function MainView(props: {
 		// Ctrl+P - cycle model
 		if (e.ctrl && e.name === "p") {
 			props.onCycleModel()
+			e.preventDefault()
+			return
+		}
+
+		// Ctrl+Y - copy selection to clipboard
+		if (e.ctrl && e.name === "y") {
+			copySelectionToClipboard()
 			e.preventDefault()
 			return
 		}
@@ -1230,7 +1306,7 @@ function MainView(props: {
 		if (props.contextWindow <= 0 || props.contextTokens <= 0) return null
 		const pct = (props.contextTokens / props.contextWindow) * 100
 		const pctStr = pct < 10 ? pct.toFixed(1) : Math.round(pct).toString()
-		const color = pct > 90 ? "#e06c75" : pct > 70 ? "#ffcc00" : colors.dimmed
+		const color = pct > 90 ? theme.error : pct > 70 ? theme.warning : theme.textMuted
 		return { text: `${pctStr}%`, color }
 	}
 
@@ -1244,11 +1320,11 @@ function MainView(props: {
 			tool: "running",
 			idle: "",
 		}
-		const stateColors: Record<ActivityState, string> = {
-			thinking: "#b48ead",
-			streaming: "#88c0d0",
-			tool: "#ebcb8b",
-			idle: colors.dimmed,
+		const stateColors: Record<ActivityState, typeof theme.text> = {
+			thinking: theme.secondary,
+			streaming: theme.info,
+			tool: theme.warning,
+			idle: theme.textMuted,
 		}
 		return {
 			text: `${spinner} ${labels[props.activityState]}`,
@@ -1309,50 +1385,77 @@ function MainView(props: {
 	}
 
 	return (
-		<box flexDirection="column" width={dimensions().width} height={dimensions().height}>
+		<box
+			flexDirection="column"
+			width={dimensions().width}
+			height={dimensions().height}
+			onMouseUp={() => {
+				// Auto-copy selection on mouse release
+				const selection = renderer.getSelection()
+				if (selection && selection.getSelectedText()) {
+					copySelectionToClipboard()
+				}
+			}}
+		>
 			{/* Header */}
 			<text fg={theme.textMuted}>marvin</text>
 
 			{/* Messages - single For loop for deterministic order */}
-			<scrollbox flexGrow={1} flexShrink={1}>
-				<box flexDirection="column">
+			<scrollbox
+				ref={(r: ScrollBoxRenderable) => { scrollRef = r }}
+				flexGrow={1}
+				flexShrink={1}
+			>
+				<box flexDirection="column" gap={1} paddingTop={1}>
 					<For each={contentItems()}>
 						{(item) => (
-							<box flexDirection="column">
-								{item.type === "user" && (
-									<box padding={1}>
-										<text fg={theme.textMuted}>{"› "}{item.content}</text>
-									</box>
-								)}
-								{item.type === "thinking" && (
-									<box paddingLeft={1} paddingRight={1}>
-										<text fg="#8a7040">
-											{"thinking "}
-											<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>
-												{item.summary}
-											</span>
-										</text>
-									</box>
-								)}
-								{item.type === "assistant" && (
-									<box padding={1}>
-										<text fg={theme.text}>{item.content}</text>
-									</box>
-								)}
-								{item.type === "tool" && (
-									<box paddingLeft={1} paddingRight={1} paddingTop={1} paddingBottom={1}>
-										<ToolBlockComponent
-											name={item.tool.name}
-											args={item.tool.args}
-											output={item.tool.output || null}
-											editDiff={item.tool.editDiff || null}
-											isError={item.tool.isError}
-											isComplete={item.tool.isComplete}
-											expanded={props.toolOutputExpanded}
-										/>
-									</box>
-								)}
-							</box>
+							<Switch>
+								<Match when={item.type === "user" && item}>
+									{(userItem) => (
+										<box paddingLeft={1}>
+											<text fg={theme.text}>
+												<span style={{ fg: theme.textMuted }}>{"› "}</span>
+												{userItem().content}
+											</text>
+										</box>
+									)}
+								</Match>
+								<Match when={item.type === "thinking" && item}>
+									{(thinkingItem) => (
+										<box paddingLeft={1}>
+											<text>
+												<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>thinking </span>
+												<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>
+													{thinkingItem().summary}
+												</span>
+											</text>
+										</box>
+									)}
+								</Match>
+								<Match when={item.type === "assistant" && item}>
+									{(assistantItem) => (
+										<box paddingLeft={1}>
+											<text fg={theme.text}>{assistantItem().content}</text>
+										</box>
+									)}
+								</Match>
+								<Match when={item.type === "tool" && item}>
+									{(toolItem) => (
+										<box paddingLeft={3}>
+											<ToolBlockComponent
+												name={toolItem().tool.name}
+												args={toolItem().tool.args}
+												output={toolItem().tool.output || null}
+												editDiff={toolItem().tool.editDiff || null}
+												isError={toolItem().tool.isError}
+												isComplete={toolItem().tool.isComplete}
+												expanded={isToolExpanded(toolItem().tool.id)}
+												onToggleExpanded={() => toggleToolExpanded(toolItem().tool.id)}
+											/>
+										</box>
+									)}
+								</Match>
+							</Switch>
 						)}
 					</For>
 				</box>
@@ -1437,26 +1540,26 @@ function MainView(props: {
 			{/* Footer */}
 			<box flexDirection="row" justifyContent="space-between" paddingLeft={1} paddingRight={1} flexShrink={0} minHeight={1}>
 				<box flexDirection="row" gap={1}>
-					<text fg={colors.dimmed}>{getProjectBranch()}</text>
-					<text fg={colors.dimmed}>·</text>
+					<text fg={theme.textMuted}>{getProjectBranch()}</text>
+					<text fg={theme.textMuted}>·</text>
 					<text fg={theme.text}>{props.modelId}</text>
 					<Show when={props.thinking !== "off"}>
-						<text fg={colors.dimmed}>·</text>
+						<text fg={theme.textMuted}>·</text>
 						<text fg={theme.textMuted}>{props.thinking}</text>
 					</Show>
 					<Show when={getContextPct()}>
-						<text fg={colors.dimmed}>·</text>
+						<text fg={theme.textMuted}>·</text>
 						<text fg={getContextPct()!.color}>{getContextPct()!.text}</text>
 					</Show>
 					<Show when={gitStats() && (gitStats()!.ins > 0 || gitStats()!.del > 0)}>
-						<text fg={colors.dimmed}>·</text>
-						<text fg="#a3be8c">+{gitStats()!.ins}</text>
-						<text fg={colors.dimmed}>/</text>
-						<text fg="#bf616a">-{gitStats()!.del}</text>
+						<text fg={theme.textMuted}>·</text>
+						<text fg={theme.success}>+{gitStats()!.ins}</text>
+						<text fg={theme.textMuted}>/</text>
+						<text fg={theme.error}>-{gitStats()!.del}</text>
 					</Show>
 					<Show when={props.queueCount > 0}>
-						<text fg={colors.dimmed}>·</text>
-						<text fg="#ebcb8b">{props.queueCount}q</text>
+						<text fg={theme.textMuted}>·</text>
+						<text fg={theme.warning}>{props.queueCount}q</text>
 					</Show>
 				</box>
 				<Show when={props.retryStatus} fallback={
@@ -1467,6 +1570,9 @@ function MainView(props: {
 					<text fg="#ebcb8b">{props.retryStatus}</text>
 				</Show>
 			</box>
+
+			{/* Toast viewport */}
+			<ToastViewport toasts={toasts()} />
 		</box>
 	)
 }

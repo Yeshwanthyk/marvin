@@ -1,38 +1,10 @@
 /**
- * OpenTUI-native rendering components for tool output
- * Replaces chalk-based message-rendering.ts for use with OpenTUI
+ * OpenTUI-native rendering components for tool output.
  */
 
-import { TextAttributes } from "@marvin-agents/open-tui"
-import { Show, For } from "solid-js"
-import type { JSX } from "solid-js"
-import * as Diff from "diff"
-import { colors as themeColors } from "./tui/themes.js"
+import { CodeBlock, Diff, TextAttributes, useTheme, type MouseEvent } from "@marvin-agents/open-tui"
+import { Show, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
-
-// Tool-specific colors
-const toolColors: Record<string, string> = {
-	bash: "#98c379",
-	read: "#61afef",
-	write: "#e5c07b",
-	edit: "#c678dd",
-}
-
-const colors = {
-	dimmed: themeColors.dimmed,
-	text: themeColors.text,
-	accent: themeColors.accent,
-	removed: "#bf616a",
-	added: "#a3be8c",
-	output: "#c5c5c0",
-}
-
-// Shorten path with ~ for home directory
-const shortenPath = (p: string): string => {
-	const home = process.env.HOME || process.env.USERPROFILE || ""
-	if (home && p.startsWith(home)) return "~" + p.slice(home.length)
-	return p
-}
 
 // Get text content from tool result
 export const getToolText = (result: unknown): string => {
@@ -55,430 +27,99 @@ export const getEditDiffText = (result: unknown): string | null => {
 	return maybe.details?.diff || null
 }
 
+const shortenPath = (p: string): string => {
+	const home = process.env.HOME || process.env.USERPROFILE || ""
+	if (home && p.startsWith(home)) return "~" + p.slice(home.length)
+	return p
+}
+
 const bashBadge = (cmd: string): string => {
 	const first = cmd.trim().split(/\s+/)[0] || ""
 	return (
-		{ git: "GIT", ls: "LIST", fd: "LIST", cat: "READ", head: "READ", tail: "READ", rg: "SEARCH", grep: "SEARCH", npm: "NPM", cargo: "CARGO", bun: "BUN" }[first] || "RUN"
+		{
+			git: "GIT",
+			ls: "LIST",
+			fd: "LIST",
+			cat: "READ",
+			head: "READ",
+			tail: "READ",
+			rg: "SEARCH",
+			grep: "SEARCH",
+			npm: "NPM",
+			cargo: "CARGO",
+			bun: "BUN",
+		}[first] || "RUN"
 	)
 }
 
-// ----- Tool Header Components -----
-
-interface ToolHeaderProps {
-	name: string
-	args: any
-	isError?: boolean
-}
-
-export function ToolHeader(props: ToolHeaderProps): JSX.Element {
-	const toolColor = () => toolColors[props.name] || themeColors.code
-
-	return (
-		<box flexDirection="row">
-			<Show when={props.name === "bash"}>
-				<BashHeader args={props.args} color={toolColor()} />
-			</Show>
-			<Show when={props.name === "read"}>
-				<ReadHeader args={props.args} color={toolColor()} />
-			</Show>
-			<Show when={props.name === "write"}>
-				<WriteHeader args={props.args} color={toolColor()} />
-			</Show>
-			<Show when={props.name === "edit"}>
-				<EditHeader args={props.args} color={toolColor()} />
-			</Show>
-			<Show when={!["bash", "read", "write", "edit"].includes(props.name)}>
-				<text fg={toolColor()} attributes={TextAttributes.BOLD}>
-					{props.name}
-				</text>
-			</Show>
-		</box>
-	)
-}
-
-function BashHeader(props: { args: any; color: string }): JSX.Element {
-	const cmd = () => props.args?.command || "..."
-	const badge = () => bashBadge(cmd())
-	const firstLine = () => {
-		const line = cmd().split("\n")[0]
-		return line.length > 80 ? line.slice(0, 77) + "..." : line
+function truncateHeadTail(text: string, headCount: number, tailCount: number): { text: string; truncated: boolean; omitted: number } {
+	const lines = replaceTabs(text).split("\n")
+	if (lines.length <= headCount + tailCount) {
+		return { text: lines.join("\n"), truncated: false, omitted: 0 }
 	}
 
-	return (
-		<>
-			<text fg={props.color} attributes={TextAttributes.BOLD}>
-				{badge()}
-			</text>
-			<text> </text>
-			<text fg={colors.dimmed}>{firstLine()}</text>
-		</>
-	)
-}
-
-function ReadHeader(props: { args: any; color: string }): JSX.Element {
-	const path = () => shortenPath(props.args?.path || props.args?.file_path || "")
-	const offset = () => props.args?.offset
-	const limit = () => props.args?.limit
-
-	const range = () => {
-		if (!offset() && !limit()) return ""
-		const start = offset() || 1
-		const end = limit() ? start + limit() - 1 : ""
-		return `:${start}${end ? `-${end}` : ""}`
+	const head = lines.slice(0, headCount)
+	const tail = lines.slice(-tailCount)
+	return {
+		text: [...head, "", `… ${lines.length - (headCount + tailCount)} lines omitted …`, "", ...tail].join("\n"),
+		truncated: true,
+		omitted: lines.length - (headCount + tailCount),
 	}
-
-	return (
-		<>
-			<text fg={props.color} attributes={TextAttributes.BOLD}>
-				read{" "}
-			</text>
-			<text fg={colors.text}>{path() || "..."}</text>
-			<Show when={range()}>
-				<text fg={colors.dimmed}>{range()}</text>
-			</Show>
-		</>
-	)
 }
 
-function WriteHeader(props: { args: any; color: string }): JSX.Element {
-	const path = () => shortenPath(props.args?.path || props.args?.file_path || "")
-	const content = () => props.args?.content || ""
-	const lineCount = () => content().split("\n").length
-
-	return (
-		<>
-			<text fg={props.color} attributes={TextAttributes.BOLD}>
-				write{" "}
-			</text>
-			<text fg={colors.text}>{path() || "..."}</text>
-			<Show when={lineCount() > 1}>
-				<text fg={colors.dimmed}> ({lineCount()} lines)</text>
-			</Show>
-		</>
-	)
+function truncateLines(text: string, maxLines: number): { text: string; truncated: boolean; omitted: number } {
+	const lines = replaceTabs(text).split("\n")
+	if (lines.length <= maxLines) return { text: lines.join("\n"), truncated: false, omitted: 0 }
+	return {
+		text: [...lines.slice(0, maxLines), `… ${lines.length - maxLines} more lines …`].join("\n"),
+		truncated: true,
+		omitted: lines.length - maxLines,
+	}
 }
 
-function EditHeader(props: { args: any; color: string }): JSX.Element {
-	const path = () => shortenPath(props.args?.path || props.args?.file_path || "")
-
-	return (
-		<>
-			<text fg={props.color} attributes={TextAttributes.BOLD}>
-				edit{" "}
-			</text>
-			<text fg={colors.text}>{path() || "..."}</text>
-		</>
-	)
+function toolColor(theme: ReturnType<typeof useTheme>["theme"], name: string) {
+	switch (name) {
+		case "bash":
+			return theme.success
+		case "read":
+			return theme.info
+		case "write":
+			return theme.warning
+		case "edit":
+			return theme.secondary
+		default:
+			return theme.textMuted
+	}
 }
 
-// ----- Tool Body Components -----
-
-interface ToolBodyProps {
-	name: string
-	args: any
-	output: string | null
-	isPartial: boolean
-	expanded?: boolean
-}
-
-export function ToolBody(props: ToolBodyProps): JSX.Element {
-	return (
-		<>
-			<Show when={props.name === "bash"}>
-				<BashBody output={props.output} isPartial={props.isPartial} expanded={props.expanded} />
-			</Show>
-			<Show when={props.name === "read"}>
-				<ReadBody output={props.output} isPartial={props.isPartial} />
-			</Show>
-			<Show when={props.name === "write"}>
-				<WriteBody args={props.args} isPartial={props.isPartial} expanded={props.expanded} />
-			</Show>
-			<Show when={!["bash", "read", "write", "edit"].includes(props.name)}>
-				<GenericBody args={props.args} output={props.output} isPartial={props.isPartial} />
-			</Show>
-		</>
-	)
-}
-
-function BashBody(props: { output: string | null; isPartial: boolean; expanded?: boolean }): JSX.Element {
-	const lines = () => (props.output || "").trim().split("\n").filter(Boolean)
-	const total = () => lines().length
-
-	const headCount = 2
-	const tailCount = 3
-	const maxShow = headCount + tailCount
-
-	const shouldTruncate = () => !props.expanded && total() > maxShow
-	const head = () => lines().slice(0, headCount)
-	const tail = () => lines().slice(-tailCount)
-	const skipped = () => total() - maxShow
-
-	return (
-		<box flexDirection="column">
-			<Show when={!props.output && props.isPartial}>
-				<text fg={colors.dimmed}>...</text>
-			</Show>
-			<Show when={props.output && !shouldTruncate()}>
-				<For each={lines()}>{(line) => <text fg={colors.output}>{line}</text>}</For>
-			</Show>
-			<Show when={props.output && shouldTruncate()}>
-				<For each={head()}>{(line) => <text fg={colors.output}>{line}</text>}</For>
-				<text fg={colors.dimmed}>  ... {skipped()} lines, Ctrl+O to expand ...</text>
-				<For each={tail()}>{(line) => <text fg={colors.output}>{line}</text>}</For>
-			</Show>
-		</box>
-	)
-}
-
-function ReadBody(props: { output: string | null; isPartial: boolean }): JSX.Element {
-	const lineCount = () => (props.output || "").split("\n").length
-
-	return (
-		<>
-			<Show when={props.isPartial && !props.output}>
-				<text fg={colors.dimmed}>reading...</text>
-			</Show>
-			<Show when={props.output}>
-				<text fg={colors.dimmed}>{lineCount()} lines</text>
-			</Show>
-		</>
-	)
-}
-
-function WriteBody(props: { args: any; isPartial: boolean; expanded?: boolean }): JSX.Element {
-	const content = () => props.args?.content || ""
-	const lines = () => replaceTabs(content()).split("\n")
-	const maxLines = 8
-
-	const shouldTruncate = () => !props.expanded && lines().length > maxLines
-	const shownLines = () => lines().slice(0, maxLines)
-	const remaining = () => lines().length - maxLines
-
-	return (
-		<box flexDirection="column">
-			<Show when={!content() && props.isPartial}>
-				<text fg={colors.dimmed}>writing...</text>
-			</Show>
-			<Show when={content()}>
-				<Show when={props.isPartial}>
-					<text fg={colors.dimmed}>Creating file:</text>
-					<text />
-				</Show>
-				<For each={shouldTruncate() ? shownLines() : lines()}>
-					{(line) => <text fg={colors.output}>{line}</text>}
-				</For>
-				<Show when={shouldTruncate()}>
-					<text fg={colors.dimmed}>... {remaining()} more lines, Ctrl+O to expand</text>
-				</Show>
-			</Show>
-		</box>
-	)
-}
-
-function GenericBody(props: { args: any; output: string | null; isPartial: boolean }): JSX.Element {
-	const hasArgs = () => props.args && Object.keys(props.args).length > 0
-
-	return (
-		<box flexDirection="column">
-			<Show when={hasArgs()}>
-				<text fg={colors.dimmed}>{JSON.stringify(props.args, null, 2)}</text>
-			</Show>
-			<Show when={props.output}>
-				<text fg={colors.output}>{props.output}</text>
-			</Show>
-			<Show when={!props.output && props.isPartial}>
-				<text fg={colors.dimmed}>...</text>
-			</Show>
-		</box>
-	)
-}
-
-// ----- Edit Diff Component -----
-
-interface DiffLine {
-	type: "+" | "-" | " "
-	prefix: string
-	content: string
-	raw: string
-}
-
-function parseDiffLines(diffText: string): DiffLine[] {
-	const lines = diffText.split("\n")
-	const parsed: DiffLine[] = []
-
-	for (const line of lines) {
-		const normalized = replaceTabs(line)
-		if (normalized.length === 0) {
-			parsed.push({ type: " ", prefix: "", content: "", raw: normalized })
-			continue
+function toolTitle(name: string, args: any): string {
+	switch (name) {
+		case "bash": {
+			const cmd = String(args?.command || "…")
+			return cmd.split("\n")[0] || "…"
 		}
-
-		const firstChar = normalized[0]
-		if (firstChar === "+" || firstChar === "-" || firstChar === " ") {
-			const match = normalized.match(/^([+\- ])(\s*\d+\s)/)
-			if (match) {
-				const prefix = match[0]
-				const content = normalized.slice(prefix.length)
-				parsed.push({ type: firstChar as "+" | "-" | " ", prefix, content, raw: normalized })
-			} else {
-				parsed.push({ type: firstChar as "+" | "-" | " ", prefix: normalized, content: "", raw: normalized })
-			}
-		} else {
-			parsed.push({ type: " ", prefix: "", content: normalized, raw: normalized })
-		}
+		case "read":
+			return shortenPath(String(args?.path || args?.file_path || "…"))
+		case "write":
+			return shortenPath(String(args?.path || args?.file_path || "…"))
+		case "edit":
+			return shortenPath(String(args?.path || args?.file_path || "…"))
+		default:
+			return name
 	}
-
-	return parsed
 }
 
-interface EditDiffProps {
-	diffText: string
-}
-
-export function EditDiff(props: EditDiffProps): JSX.Element {
-	const parsed = () => parseDiffLines(props.diffText)
-
-	// Process lines into renderable groups
-	const processedLines = () => {
-		const lines = parsed()
-		const result: Array<{ type: "context" | "removed" | "added" | "wordDiff"; lines: DiffLine[]; compare?: DiffLine }> = []
-		let i = 0
-
-		while (i < lines.length) {
-			const line = lines[i]
-
-			if (line.type === "-") {
-				// Collect consecutive removed lines
-				const removedLines: DiffLine[] = []
-				let j = i
-				while (j < lines.length && lines[j].type === "-") {
-					removedLines.push(lines[j])
-					j++
-				}
-
-				// Collect consecutive added lines after
-				const addedLines: DiffLine[] = []
-				while (j < lines.length && lines[j].type === "+") {
-					addedLines.push(lines[j])
-					j++
-				}
-
-				// 1:1 pair gets word diff treatment
-				if (removedLines.length === 1 && addedLines.length === 1) {
-					result.push({ type: "wordDiff", lines: [removedLines[0]], compare: addedLines[0] })
-					result.push({ type: "wordDiff", lines: [addedLines[0]], compare: removedLines[0] })
-				} else {
-					for (const r of removedLines) {
-						result.push({ type: "removed", lines: [r] })
-					}
-					for (const a of addedLines) {
-						result.push({ type: "added", lines: [a] })
-					}
-				}
-				i = j
-				continue
-			}
-
-			if (line.type === "+") {
-				result.push({ type: "added", lines: [line] })
-			} else {
-				result.push({ type: "context", lines: [line] })
-			}
-			i++
-		}
-
-		return result
-	}
-
-	return (
-		<box flexDirection="column">
-			<For each={processedLines()}>
-				{(group) => (
-					<>
-						<Show when={group.type === "context"}>
-							<text fg={colors.dimmed}>{group.lines[0].raw}</text>
-						</Show>
-						<Show when={group.type === "removed"}>
-							<text fg={colors.removed}>{group.lines[0].raw}</text>
-						</Show>
-						<Show when={group.type === "added"}>
-							<text fg={colors.added}>{group.lines[0].raw}</text>
-						</Show>
-						<Show when={group.type === "wordDiff"}>
-							<WordDiffLine line={group.lines[0]} compare={group.compare!} />
-						</Show>
-					</>
-				)}
-			</For>
-		</box>
-	)
-}
-
-function WordDiffLine(props: { line: DiffLine; compare: DiffLine }): JSX.Element {
-	const isAdded = () => props.line.type === "+"
-	const baseColor = () => (isAdded() ? colors.added : colors.removed)
-
-	// Extract leading whitespace
-	const leadingWs = () => {
-		const match = props.line.content.match(/^(\s*)/)
-		return match ? match[1] : ""
-	}
-	const textContent = () => props.line.content.slice(leadingWs().length)
-
-	const compareLeadingWs = () => {
-		const match = props.compare.content.match(/^(\s*)/)
-		return match ? match[1] : ""
-	}
-	const compareTextContent = () => props.compare.content.slice(compareLeadingWs().length)
-
-	// Get word diff parts
-	const diffParts = () => Diff.diffWords(compareTextContent(), textContent())
-
+export function Thinking(props: { summary: string }): JSX.Element {
+	const { theme } = useTheme()
 	return (
 		<text>
-			<span style={{ fg: baseColor() }}>{props.line.prefix + leadingWs()}</span>
-			<For each={diffParts()}>
-				{(part) => (
-					<>
-						<Show when={isAdded() && part.added}>
-							<span style={{ fg: baseColor(), attributes: TextAttributes.INVERSE }}>{part.value}</span>
-						</Show>
-						<Show when={isAdded() && !part.added && !part.removed}>
-							<span style={{ fg: baseColor() }}>{part.value}</span>
-						</Show>
-						<Show when={!isAdded() && part.removed}>
-							<span style={{ fg: baseColor(), attributes: TextAttributes.INVERSE }}>{part.value}</span>
-						</Show>
-						<Show when={!isAdded() && !part.removed && !part.added}>
-							<span style={{ fg: baseColor() }}>{part.value}</span>
-						</Show>
-					</>
-				)}
-			</For>
+			<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>thinking </span>
+			<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>{props.summary}</span>
 		</text>
 	)
 }
 
-// ----- Thinking Component -----
-
-interface ThinkingProps {
-	summary: string
-}
-
-export function Thinking(props: ThinkingProps): JSX.Element {
-	return (
-		<box flexDirection="row">
-			<text fg="#8a7040">thinking </text>
-			<text fg={colors.dimmed} attributes={TextAttributes.ITALIC}>
-				{props.summary}
-			</text>
-		</box>
-	)
-}
-
-// ----- Complete Tool Block Component -----
-
-interface ToolBlockProps {
+export interface ToolBlockProps {
 	name: string
 	args: any
 	output: string | null
@@ -486,17 +127,213 @@ interface ToolBlockProps {
 	isError: boolean
 	isComplete: boolean
 	expanded?: boolean
+	onToggleExpanded?: () => void
+}
+
+type ToolRenderMode = "inline" | "block"
+
+interface ToolRenderContext {
+	name: string
+	args: any
+	output: string | null
+	editDiff: string | null
+	isError: boolean
+	isComplete: boolean
+	expanded: boolean
+}
+
+interface ToolRenderer {
+	mode: (ctx: ToolRenderContext) => ToolRenderMode
+	renderHeader?: (ctx: ToolRenderContext) => JSX.Element
+	renderBody?: (ctx: ToolRenderContext) => JSX.Element
+}
+
+function defaultHeader(ctx: ToolRenderContext): JSX.Element {
+	const { theme } = useTheme()
+	const color = toolColor(theme, ctx.name)
+	const title = toolTitle(ctx.name, ctx.args)
+
+	return (
+		<text>
+			<span style={{ fg: color, attributes: TextAttributes.BOLD }}>{ctx.name.toUpperCase()}</span>
+			<span style={{ fg: theme.text }}>{" "}{title}</span>
+			<Show when={!ctx.isComplete}>
+				<span style={{ fg: theme.textMuted }}> …</span>
+			</Show>
+			<Show when={ctx.isError}>
+				<span style={{ fg: theme.error, attributes: TextAttributes.BOLD }}> ERROR</span>
+			</Show>
+		</text>
+	)
+}
+
+const registry: Record<string, ToolRenderer> = {
+	bash: {
+		mode: () => "block",
+		renderHeader: (ctx) => {
+			const { theme } = useTheme()
+			const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
+			const badge = bashBadge(cmd)
+			return (
+				<text>
+					<span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>{badge}</span>
+					<span style={{ fg: theme.text }}>{" "}{cmd}</span>
+					<Show when={!ctx.isComplete}>
+						<span style={{ fg: theme.textMuted }}> …</span>
+					</Show>
+					<Show when={ctx.isError}>
+						<span style={{ fg: theme.error, attributes: TextAttributes.BOLD }}> ERROR</span>
+					</Show>
+				</text>
+			)
+		},
+		renderBody: (ctx) => {
+			const { theme } = useTheme()
+			if (!ctx.output && !ctx.isComplete) return <text fg={theme.textMuted}>running…</text>
+			if (!ctx.output) return <text fg={theme.textMuted}>no output</text>
+
+			const rendered = ctx.expanded ? replaceTabs(ctx.output) : truncateHeadTail(ctx.output, 2, 6).text
+			return <CodeBlock content={rendered} filetype="text" showLineNumbers={false} wrapMode="none" />
+		},
+	},
+	read: {
+		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
+		renderHeader: (ctx) => {
+			const { theme } = useTheme()
+			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
+			const lines = ctx.output ? replaceTabs(ctx.output).split("\n").length : null
+			return (
+				<text>
+					<span style={{ fg: theme.info, attributes: TextAttributes.BOLD }}>READ</span>
+					<span style={{ fg: theme.text }}>{" "}{path}</span>
+					<Show when={lines !== null}>
+						<span style={{ fg: theme.textMuted }}> ({lines} lines)</span>
+					</Show>
+				</text>
+			)
+		},
+		renderBody: (ctx) => {
+			const { theme } = useTheme()
+			if (!ctx.output) return <text fg={theme.textMuted}>reading…</text>
+			const rendered = ctx.expanded ? replaceTabs(ctx.output) : truncateLines(ctx.output, 20).text
+			const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
+			return <CodeBlock content={rendered} filetype={filetype} title="preview" />
+		},
+	},
+	write: {
+		mode: () => "block",
+		renderHeader: (ctx) => {
+			const { theme } = useTheme()
+			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
+			return (
+				<text>
+					<span style={{ fg: theme.warning, attributes: TextAttributes.BOLD }}>WRITE</span>
+					<span style={{ fg: theme.text }}>{" "}{path}</span>
+					<Show when={!ctx.isComplete}>
+						<span style={{ fg: theme.textMuted }}> …</span>
+					</Show>
+				</text>
+			)
+		},
+		renderBody: (ctx) => {
+			const { theme } = useTheme()
+			const content = String(ctx.args?.content || "")
+			if (!content && !ctx.isComplete) return <text fg={theme.textMuted}>writing…</text>
+			if (!content) return <text fg={theme.textMuted}>no content</text>
+
+			const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
+			const rendered = ctx.expanded ? replaceTabs(content) : truncateLines(content, 40).text
+			return <CodeBlock content={rendered} filetype={filetype} title="write" />
+		},
+	},
+	edit: {
+		mode: () => "block",
+		renderHeader: (ctx) => {
+			const { theme } = useTheme()
+			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
+			return (
+				<text>
+					<span style={{ fg: theme.secondary, attributes: TextAttributes.BOLD }}>EDIT</span>
+					<span style={{ fg: theme.text }}>{" "}{path}</span>
+					<Show when={!ctx.isComplete}>
+						<span style={{ fg: theme.textMuted }}> …</span>
+					</Show>
+					<Show when={ctx.isError}>
+						<span style={{ fg: theme.error, attributes: TextAttributes.BOLD }}> ERROR</span>
+					</Show>
+				</text>
+			)
+		},
+		renderBody: (ctx) => {
+			const { theme } = useTheme()
+			if (ctx.editDiff) {
+				const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
+				return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode="word" />
+			}
+			if (!ctx.output && !ctx.isComplete) return <text fg={theme.textMuted}>editing…</text>
+			return <text fg={ctx.isError ? theme.error : theme.text}>{ctx.output ?? ""}</text>
+		},
+	},
 }
 
 export function ToolBlock(props: ToolBlockProps): JSX.Element {
+	const { theme } = useTheme()
+
+	const ctx: ToolRenderContext = {
+		name: props.name,
+		args: props.args,
+		output: props.output,
+		editDiff: props.editDiff,
+		isError: props.isError,
+		isComplete: props.isComplete,
+		expanded: props.expanded ?? false,
+	}
+
+	const renderer = registry[props.name] ?? {
+		mode: () => "block",
+		renderBody: (ctx) => {
+			const out = ctx.output ? ctx.output : JSON.stringify(ctx.args ?? {}, null, 2)
+			const rendered = ctx.expanded ? replaceTabs(out) : truncateLines(out, 20).text
+			return <CodeBlock content={rendered} filetype="text" title="output" showLineNumbers={false} />
+		},
+	}
+
+	const mode = renderer.mode(ctx)
+	const header = renderer.renderHeader?.(ctx) ?? defaultHeader(ctx)
+	const body = renderer.renderBody?.(ctx)
+
+	if (mode === "inline") {
+		return (
+			<box
+				flexDirection="column"
+				onMouseUp={(event: MouseEvent) => {
+					if (event.isSelecting) return
+					props.onToggleExpanded?.()
+				}}
+			>
+				{header}
+			</box>
+		)
+	}
+
+	// Minimal block layout - no heavy borders
 	return (
-		<box flexDirection="column" gap={1}>
-			<ToolHeader name={props.name} args={props.args} isError={props.isError} />
-			<Show when={props.name === "edit" && props.editDiff}>
-				<EditDiff diffText={props.editDiff!} />
+		<box
+			flexDirection="column"
+			gap={0}
+			onMouseUp={(event: MouseEvent) => {
+				if (event.isSelecting) return
+				props.onToggleExpanded?.()
+			}}
+		>
+			{header}
+			<Show when={body}>
+				<box paddingLeft={0} paddingTop={1}>
+					{body}
+				</box>
 			</Show>
-			<Show when={props.name !== "edit" || !props.editDiff}>
-				<ToolBody name={props.name} args={props.args} output={props.output} isPartial={!props.isComplete} expanded={props.expanded} />
+			<Show when={!props.expanded && props.isComplete}>
+				<text fg={theme.textMuted}>(click to expand)</text>
 			</Show>
 		</box>
 	)
