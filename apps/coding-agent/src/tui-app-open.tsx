@@ -1382,7 +1382,7 @@ function MainView(props: {
 			</Show>
 
 			{/* Input area */}
-			<box border={["top"]} borderColor={theme.border} paddingTop={1}>
+			<box border={["top"]} borderColor={theme.border} paddingTop={1} flexShrink={0}>
 				<textarea
 					ref={(r: TextareaRenderable) => {
 						textareaRef = r
@@ -1410,10 +1410,14 @@ function MainView(props: {
 					]}
 					onKeyDown={handleKeyDown}
 					onContentChange={() => {
-
 						// Update autocomplete on text change
 						if (textareaRef) {
 							const text = textareaRef.plainText
+							// Only trigger autocomplete for / commands or @ file refs
+							if (!text.startsWith("/") && !text.includes("@")) {
+								setShowAutocomplete(false)
+								return
+							}
 							const lines = text.split("\n")
 							const cursorLine = lines.length - 1
 							const cursorCol = lines[cursorLine]?.length ?? 0
@@ -1431,7 +1435,7 @@ function MainView(props: {
 			</box>
 
 			{/* Footer */}
-			<box flexDirection="row" justifyContent="space-between" paddingLeft={1} paddingRight={1}>
+			<box flexDirection="row" justifyContent="space-between" paddingLeft={1} paddingRight={1} flexShrink={0} minHeight={1}>
 				<box flexDirection="row" gap={1}>
 					<text fg={colors.dimmed}>{getProjectBranch()}</text>
 					<text fg={colors.dimmed}>·</text>
