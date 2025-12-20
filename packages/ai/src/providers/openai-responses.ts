@@ -15,6 +15,7 @@ import type {
 	Api,
 	AssistantMessage,
 	Context,
+	FetchFunction,
 	Model,
 	StopReason,
 	StreamFunction,
@@ -35,7 +36,7 @@ export interface OpenAIResponsesOptions extends StreamOptions {
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 	reasoningSummary?: "auto" | "detailed" | "concise" | null;
 	/** Custom fetch for OAuth/proxy scenarios */
-	fetch?: typeof globalThis.fetch;
+	fetch?: FetchFunction;
 	/** Instructions for Codex API (replaces system prompt in body) */
 	instructions?: string;
 }
@@ -380,7 +381,7 @@ function createClient(
 	model: Model<"openai-responses">,
 	context: Context,
 	apiKey?: string,
-	customFetch?: typeof globalThis.fetch,
+	customFetch?: FetchFunction,
 ) {
 	if (!apiKey) {
 		if (!process.env.OPENAI_API_KEY) {

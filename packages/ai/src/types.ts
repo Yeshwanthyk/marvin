@@ -58,10 +58,13 @@ export interface StreamOptions {
 }
 
 // Unified options with reasoning passed to streamSimple() and completeSimple()
+/** Custom fetch function type (compatible with standard fetch signature) */
+export type FetchFunction = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
 export interface SimpleStreamOptions extends StreamOptions {
 	reasoning?: ReasoningEffort;
 	/** Custom fetch for OAuth/proxy scenarios */
-	fetch?: typeof globalThis.fetch;
+	fetch?: FetchFunction;
 	/** Instructions for Codex API (top-level, replaces system message) */
 	instructions?: string;
 }

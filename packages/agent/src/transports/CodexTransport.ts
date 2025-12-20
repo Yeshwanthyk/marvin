@@ -24,9 +24,11 @@ export interface CodexTransportOptions {
 /**
  * Transport for Codex (ChatGPT subscription) OAuth-based access
  */
+type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
 export class CodexTransport implements AgentTransport {
 	private options: CodexTransportOptions;
-	private customFetch: typeof fetch;
+	private customFetch: FetchFn;
 	private cachedInstructions: string | null = null;
 
 	constructor(options: CodexTransportOptions) {
@@ -39,7 +41,7 @@ export class CodexTransport implements AgentTransport {
 	}
 
 	/** Get the custom fetch for direct API calls (compaction, etc.) */
-	getFetch(): typeof fetch {
+	getFetch(): FetchFn {
 		return this.customFetch;
 	}
 

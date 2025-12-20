@@ -20,7 +20,7 @@ function extractAccountId(accessToken: string): string | null {
  * Create custom fetch for Codex API
  * Handles OAuth headers, token refresh, and URL rewriting
  */
-export function createCodexFetch(options: CodexFetchOptions): typeof fetch {
+export function createCodexFetch(options: CodexFetchOptions): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
 	let accountId: string | null = null;
 
 	return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
