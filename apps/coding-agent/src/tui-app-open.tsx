@@ -2,9 +2,9 @@
  * OpenTUI-based TUI application for coding-agent
  */
 
-import { TextareaRenderable, type KeyEvent } from "@opentui/core"
-import { render } from "@opentui/solid"
-import { createSignal, createEffect, For, Show, onCleanup, onMount, batch } from "solid-js"
+import { TextareaRenderable, InputRenderable, ScrollBoxRenderable, type KeyEvent } from "@opentui/core"
+import { render, useTerminalDimensions, useKeyboard } from "@opentui/solid"
+import { createSignal, createEffect, createMemo, For, Show, onCleanup, onMount, batch } from "solid-js"
 import { ThemeProvider, useTheme, TextAttributes } from "@marvin-agents/open-tui"
 import {
 	Agent,
@@ -19,6 +19,7 @@ import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent
 import { getApiKey, getModels, getProviders, type Model, type Api, type AssistantMessage, type Message } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
 import { loadAppConfig, updateAppConfig } from "./config.js"
+import { handleCompact, SUMMARY_PREFIX, SUMMARY_SUFFIX } from "./tui/compact-handler.js"
 import { SessionManager, type LoadedSession, type SessionDetails } from "./session-manager.js"
 import { colors } from "./tui/themes.js"
 import { ToolBlock as ToolBlockComponent, Thinking, getToolText, getEditDiffText } from "./tui-open-rendering.js"
@@ -38,11 +39,14 @@ type KnownProvider = ReturnType<typeof getProviders>[number]
 
 // ----- Session Picker -----
 
-// Use legacy session picker for now - OpenTUI picker needs keyboard handling refactor
-import { selectSession as selectSessionLegacy } from "./tui/session-picker.js"
-
 async function selectSessionOpen(sessionManager: SessionManager): Promise<string | null> {
-	return selectSessionLegacy(sessionManager)
+	const sessions = sessionManager.loadAllSessions()
+	if (sessions.length === 0) return null
+	if (sessions.length === 1) return sessions[0]!.path
+
+	// Use legacy picker for now - OpenTUI render doesn't provide cleanup mechanism
+	const { selectSession } = await import("./tui/session-picker.js")
+	return selectSession(sessionManager)
 }
 
 // ----- Types -----
@@ -233,6 +237,8 @@ export const runTuiOpen = async (args?: {
 				cycleModels={cycleModels}
 				configDir={loaded.configDir}
 				configPath={loaded.configPath}
+				codexTransport={codexTransport}
+				getApiKey={getApiKeyForProvider}
 			/>
 		),
 		{
@@ -285,6 +291,8 @@ interface AppProps {
 	cycleModels: Array<{ provider: KnownProvider; model: Model<Api> }>
 	configDir: string
 	configPath: string
+	codexTransport: CodexTransport
+	getApiKey: (provider: string) => string | undefined
 }
 
 function App(props: AppProps) {
@@ -761,16 +769,64 @@ function App(props: AppProps) {
 			return true
 		}
 
-		// TODO: Implement /compact
+		// /compact - summarize and restart session
 		if (line === "/compact" || line.startsWith("/compact ")) {
-			setMessages((prev) => [
-				...prev,
-				{
-					id: crypto.randomUUID(),
-					role: "assistant",
-					content: "/compact not yet implemented in OpenTUI",
-				},
-			])
+			if (isResponding()) {
+				setMessages((prev) => [
+					...prev,
+					{ id: crypto.randomUUID(), role: "assistant", content: "Cannot compact while responding. Use /abort first." },
+				])
+				return true
+			}
+
+			const messages = agent.state.messages
+			if (messages.length < 2) {
+				setMessages((prev) => [
+					...prev,
+					{ id: crypto.randomUUID(), role: "assistant", content: "Nothing to compact (need at least one exchange)" },
+				])
+				return true
+			}
+
+			const customInstructions = line.startsWith("/compact ") ? line.slice(9).trim() : undefined
+
+			setActivityState("thinking")
+			setIsResponding(true)
+
+			handleCompact({
+				agent,
+				currentProvider,
+				getApiKey: props.getApiKey,
+				codexTransport: props.codexTransport,
+				customInstructions,
+			})
+				.then(({ summary, summaryMessage }) => {
+					// Reset agent and add summary message
+					agent.reset()
+					agent.replaceMessages([summaryMessage])
+
+					// Clear UI and show compaction result
+					setMessages([
+						{ id: crypto.randomUUID(), role: "assistant", content: `Context compacted:\n\n${summary}` },
+					])
+					setToolBlocks([])
+					setContextTokens(0)
+
+					// Start new session with compacted context
+					ensureSession()
+					sessionManager.appendMessage(summaryMessage)
+				})
+				.catch((err) => {
+					setMessages((prev) => [
+						...prev,
+						{ id: crypto.randomUUID(), role: "assistant", content: `Compact failed: ${err instanceof Error ? err.message : String(err)}` },
+					])
+				})
+				.finally(() => {
+					setIsResponding(false)
+					setActivityState("idle")
+				})
+
 			return true
 		}
 
@@ -947,6 +1003,7 @@ function MainView(props: {
 	onCycleThinking: () => void
 }) {
 	const { theme } = useTheme()
+	const dimensions = useTerminalDimensions()
 	let textareaRef: TextareaRenderable | undefined
 	let lastCtrlC = 0
 
@@ -1155,12 +1212,12 @@ function MainView(props: {
 	}
 
 	return (
-		<box flexDirection="column" flexGrow={1}>
+		<box flexDirection="column" width={dimensions().width} height={dimensions().height}>
 			{/* Header */}
 			<text fg={theme.textMuted}>marvin</text>
 
 			{/* Messages - single For loop for deterministic order */}
-			<scrollbox flexGrow={1}>
+			<scrollbox flexGrow={1} flexShrink={1}>
 				<box flexDirection="column">
 					<For each={contentItems()}>
 						{(item) => (
