@@ -6,6 +6,11 @@ import { CodeBlock, Diff, TextAttributes, useTheme, type MouseEvent } from "@mar
 import { Show, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
 
+// Design tokens
+const badgeColor = "#A66E7A"  // dusty rose
+const badgeTextColor = "#ffffff"
+const toolSymbol = "◆"
+
 // Get text content from tool result
 export const getToolText = (result: unknown): string => {
 	if (!result || typeof result !== "object") return String(result)
@@ -82,9 +87,8 @@ function toolTitle(name: string, args: any): string {
 export function Thinking(props: { summary: string }): JSX.Element {
 	const { theme } = useTheme()
 	return (
-		<text selectable={false}>
-			<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>thinking </span>
-			<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>{props.summary}</span>
+		<text selectable={false} fg={theme.textMuted} attributes={TextAttributes.ITALIC}>
+			thinking {props.summary}
 		</text>
 	)
 }
@@ -98,6 +102,7 @@ export interface ToolBlockProps {
 	isComplete: boolean
 	expanded?: boolean
 	onToggleExpanded?: () => void
+	diffWrapMode?: "word" | "none"
 }
 
 type ToolRenderMode = "inline" | "block"
@@ -110,6 +115,7 @@ interface ToolRenderContext {
 	isError: boolean
 	isComplete: boolean
 	expanded: boolean
+	diffWrapMode: "word" | "none"
 }
 
 interface ToolRenderer {
@@ -121,17 +127,38 @@ interface ToolRenderer {
 function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 	const { theme } = useTheme()
 	const title = toolTitle(ctx.name, ctx.args)
-
-	return (
-		<text selectable={false}>
-			<span style={{ fg: theme.primary, attributes: TextAttributes.BOLD }}>{ctx.name}</span>
-			<span style={{ fg: theme.textMuted }}> {title}</span>
+	const suffix = (
+		<>
 			<Show when={!ctx.isComplete}>
 				<span style={{ fg: theme.textMuted }}> …</span>
 			</Show>
 			<Show when={ctx.isError}>
 				<span style={{ fg: theme.error }}> error</span>
 			</Show>
+		</>
+	)
+	return <ToolHeader label={ctx.name.toUpperCase()} detail={title} suffix={suffix} />
+}
+
+// Badge component - dusty rose background, white text, uppercase
+function Badge(props: { label: string }): JSX.Element {
+	return (
+		<span style={{ bg: badgeColor, fg: badgeTextColor, attributes: TextAttributes.BOLD }}> {props.label} </span>
+	)
+}
+
+// Tool header with symbol and badge
+function ToolHeader(props: { label: string; detail?: string; suffix?: JSX.Element }): JSX.Element {
+	const { theme } = useTheme()
+	return (
+		<text selectable={false}>
+			<span style={{ fg: badgeColor }}>{toolSymbol}</span>
+			{" "}
+			<Badge label={props.label} />
+			<Show when={props.detail}>
+				<span style={{ fg: theme.text }}> {props.detail}</span>
+			</Show>
+			{props.suffix}
 		</text>
 	)
 }
@@ -144,10 +171,8 @@ const registry: Record<string, ToolRenderer> = {
 			const { theme } = useTheme()
 			const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
 			const lines = ctx.output ? ctx.output.split("\n").length : null
-			return (
-				<text selectable={false}>
-					<span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>run</span>
-					<span style={{ fg: theme.textMuted }}> {cmd}</span>
+			const suffix = (
+				<>
 					<Show when={!ctx.isComplete}>
 						<span style={{ fg: theme.textMuted }}> …</span>
 					</Show>
@@ -157,8 +182,9 @@ const registry: Record<string, ToolRenderer> = {
 					<Show when={ctx.isError}>
 						<span style={{ fg: theme.error }}> error</span>
 					</Show>
-				</text>
+				</>
 			)
+			return <ToolHeader label="BASH" detail={cmd} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -174,15 +200,12 @@ const registry: Record<string, ToolRenderer> = {
 			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const lines = ctx.output ? replaceTabs(ctx.output).split("\n").length : null
-			return (
-				<text selectable={false}>
-					<span style={{ fg: theme.info, attributes: TextAttributes.BOLD }}>read</span>
-					<span style={{ fg: theme.textMuted }}> {path}</span>
-					<Show when={lines !== null}>
-						<span style={{ fg: theme.textMuted }}> ({lines})</span>
-					</Show>
-				</text>
+			const suffix = (
+				<Show when={lines !== null}>
+					<span style={{ fg: theme.textMuted }}> ({lines})</span>
+				</Show>
 			)
+			return <ToolHeader label="READ" detail={path} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -197,15 +220,12 @@ const registry: Record<string, ToolRenderer> = {
 		renderHeader: (ctx) => {
 			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
-			return (
-				<text selectable={false}>
-					<span style={{ fg: theme.warning, attributes: TextAttributes.BOLD }}>write</span>
-					<span style={{ fg: theme.textMuted }}> {path}</span>
-					<Show when={!ctx.isComplete}>
-						<span style={{ fg: theme.textMuted }}> …</span>
-					</Show>
-				</text>
+			const suffix = (
+				<Show when={!ctx.isComplete}>
+					<span style={{ fg: theme.textMuted }}> …</span>
+				</Show>
 			)
+			return <ToolHeader label="WRITE" detail={path} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -223,24 +243,23 @@ const registry: Record<string, ToolRenderer> = {
 		renderHeader: (ctx) => {
 			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
-			return (
-				<text selectable={false}>
-					<span style={{ fg: theme.secondary, attributes: TextAttributes.BOLD }}>edit</span>
-					<span style={{ fg: theme.textMuted }}> {path}</span>
+			const suffix = (
+				<>
 					<Show when={!ctx.isComplete}>
 						<span style={{ fg: theme.textMuted }}> …</span>
 					</Show>
 					<Show when={ctx.isError}>
 						<span style={{ fg: theme.error }}> error</span>
 					</Show>
-				</text>
+				</>
 			)
+			return <ToolHeader label="EDIT" detail={path} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
 			if (ctx.editDiff) {
 				const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
-				return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode="word" />
+				return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode={ctx.diffWrapMode} />
 			}
 			if (!ctx.output && !ctx.isComplete) return <text fg={theme.textMuted}>editing…</text>
 			return <text fg={ctx.isError ? theme.error : theme.text}>{ctx.output ?? ""}</text>
@@ -260,6 +279,7 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 		isError: props.isError,
 		isComplete: props.isComplete,
 		get expanded() { return props.expanded ?? false },
+		get diffWrapMode() { return props.diffWrapMode ?? "word" },
 	}
 
 	const renderer = registry[props.name] ?? {

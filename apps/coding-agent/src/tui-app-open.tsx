@@ -335,6 +335,7 @@ function App(props: AppProps) {
 
 	// Toggle states
 	const [thinkingVisible, setThinkingVisible] = createSignal(true)
+	const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
 
 	// Footer state (reactive for cycling)
 	const [displayModelId, setDisplayModelId] = createSignal(props.modelId)
@@ -691,6 +692,11 @@ function App(props: AppProps) {
 			return false
 		}
 
+		if (line === "/diffwrap") {
+			setDiffWrapMode((prev) => (prev === "word" ? "none" : "word"))
+			return true
+		}
+
 		if (line.startsWith("/model")) {
 			const rest = line.slice("/model".length).trim()
 
@@ -978,6 +984,7 @@ function App(props: AppProps) {
 				contextWindow={displayContextWindow()}
 				queueCount={queueCount()}
 				retryStatus={retryStatus()}
+				diffWrapMode={diffWrapMode()}
 				onSubmit={handleSubmit}
 				onAbort={handleAbort}
 				onToggleThinking={toggleThinking}
@@ -994,6 +1001,7 @@ function ToolBlockWrapper(props: {
 	tool: ToolBlock
 	isExpanded: (id: string) => boolean
 	onToggle: (id: string) => void
+	diffWrapMode: "word" | "none"
 }) {
 	const expanded = createMemo(() => props.isExpanded(props.tool.id))
 	
@@ -1006,6 +1014,7 @@ function ToolBlockWrapper(props: {
 			isError={props.tool.isError}
 			isComplete={props.tool.isComplete}
 			expanded={expanded()}
+			diffWrapMode={props.diffWrapMode}
 			onToggleExpanded={() => props.onToggle(props.tool.id)}
 		/>
 	)
@@ -1033,11 +1042,8 @@ function ThinkingBlockWrapper(props: {
 					props.onToggle(props.id)
 				}}
 			>
-				<text selectable={false}>
-					<span style={{ fg: props.theme.textMuted, attributes: TextAttributes.ITALIC }}>thinking </span>
-					<span style={{ fg: props.theme.textMuted, attributes: TextAttributes.ITALIC }}>
-						{expanded() ? "" : props.summary}
-					</span>
+				<text selectable={false} fg={props.theme.textMuted} attributes={TextAttributes.ITALIC}>
+					thinking {expanded() ? "" : props.summary}
 				</text>
 				<text selectable={false} fg={props.theme.textMuted}>{expanded() ? "▴" : "▸"}</text>
 			</box>
@@ -1067,6 +1073,7 @@ function MainView(props: {
 	contextWindow: number
 	queueCount: number
 	retryStatus: string | null
+	diffWrapMode: "word" | "none"
 	onSubmit: (text: string, clearFn?: () => void) => void
 	onAbort: () => string | null
 	onToggleThinking: () => void
@@ -1541,6 +1548,7 @@ function MainView(props: {
 												tool={toolItem().tool}
 												isExpanded={isToolExpanded}
 												onToggle={toggleToolExpanded}
+												diffWrapMode={props.diffWrapMode}
 											/>
 										</box>
 									)}

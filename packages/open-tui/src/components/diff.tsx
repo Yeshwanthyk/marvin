@@ -32,7 +32,7 @@ export function Diff(props: DiffProps): JSX.Element {
 			diff={local.diffText}
 			view={computedView()}
 			filetype={local.filetype ?? "text"}
-			wrapMode={local.wrapMode ?? "none"}
+			wrapMode={local.wrapMode ?? "word"}
 			syntaxStyle={syntaxStyle}
 			treeSitterClient={getTreeSitterClient()}
 			showLineNumbers

@@ -67,6 +67,7 @@ Features:
 - Headless mode for scripting (`--headless`)
 - Configurable provider/model (`--provider`, `--model`)
 - Thinking levels for reasoning models (`--thinking`)
+- Copy-on-select: selected text auto-copies to clipboard (OSC 52 + pbcopy fallback)
 
 ## Usage
 
