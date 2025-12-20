@@ -83,72 +83,76 @@ export interface ThemeColors {
 export type Theme = ThemeColors
 
 /**
- * Default dark theme colors
+ * Default dark theme colors - soft contrast, minimal aesthetic
  */
 const defaultDarkTheme: Theme = {
-	primary: parseColor("#fab283"),
-	secondary: parseColor("#89b4fa"),
-	accent: parseColor("#a6e3a1"),
-	error: parseColor("#f38ba8"),
-	warning: parseColor("#f9e2af"),
-	success: parseColor("#a6e3a1"),
-	info: parseColor("#89b4fa"),
+	// Muted, desaturated primaries
+	primary: parseColor("#d4a373"),    // warm muted tan
+	secondary: parseColor("#7d9bba"),  // soft steel blue
+	accent: parseColor("#87a987"),     // sage green
+	error: parseColor("#c47a7a"),      // soft coral
+	warning: parseColor("#d4b483"),    // muted gold
+	success: parseColor("#87a987"),    // sage green
+	info: parseColor("#7d9bba"),       // soft steel blue
 
-	text: parseColor("#cdd6f4"),
-	textMuted: parseColor("#6c7086"),
+	text: parseColor("#c8c8c8"),       // soft white
+	textMuted: parseColor("#6b6b6b"),  // medium gray
 
-	background: parseColor("#1e1e2e"),
-	backgroundPanel: parseColor("#181825"),
-	backgroundElement: parseColor("#313244"),
-	backgroundMenu: parseColor("#11111b"),
+	background: parseColor("#161616"), // near black
+	backgroundPanel: parseColor("#1a1a1a"),  // slightly lifted
+	backgroundElement: parseColor("#222222"), // subtle contrast
+	backgroundMenu: parseColor("#131313"),
 
-	border: parseColor("#45475a"),
-	borderSubtle: parseColor("#313244"),
-	borderActive: parseColor("#89b4fa"),
+	border: parseColor("#2a2a2a"),     // very subtle
+	borderSubtle: parseColor("#222222"),
+	borderActive: parseColor("#7d9bba"),
 
-	selectionBg: parseColor("#45475a"),
-	selectionFg: parseColor("#cdd6f4"),
+	selectionBg: parseColor("#333333"),
+	selectionFg: parseColor("#e0e0e0"),
 
-	diffAdded: parseColor("#a6e3a1"),
-	diffRemoved: parseColor("#f38ba8"),
-	diffContext: parseColor("#6c7086"),
-	diffAddedBg: parseColor("#203b2a"),
-	diffRemovedBg: parseColor("#3a2228"),
+	// Softer diff colors
+	diffAdded: parseColor("#87a987"),
+	diffRemoved: parseColor("#c47a7a"),
+	diffContext: parseColor("#6b6b6b"),
+	diffAddedBg: parseColor("#1a2a1a"),
+	diffRemovedBg: parseColor("#2a1a1a"),
 	diffContextBg: parseColor("transparent"),
-	diffLineNumberFg: parseColor("#6c7086"),
+	diffLineNumberFg: parseColor("#4a4a4a"),
 	diffLineNumberBg: parseColor("transparent"),
-	diffAddedLineNumberBg: parseColor("#203b2a"),
-	diffRemovedLineNumberBg: parseColor("#3a2228"),
-	diffAddedSign: parseColor("#22c55e"),
-	diffRemovedSign: parseColor("#ef4444"),
-	diffHighlightAddedBg: parseColor("#2a5a3a"),
-	diffHighlightRemovedBg: parseColor("#5a2a35"),
+	diffAddedLineNumberBg: parseColor("#1a2a1a"),
+	diffRemovedLineNumberBg: parseColor("#2a1a1a"),
+	diffAddedSign: parseColor("#6b9b6b"),
+	diffRemovedSign: parseColor("#b06060"),
+	diffHighlightAddedBg: parseColor("#253525"),
+	diffHighlightRemovedBg: parseColor("#352525"),
 
-	markdownText: parseColor("#cdd6f4"),
-	markdownHeading: parseColor("#89b4fa"),
-	markdownLink: parseColor("#f5c2e7"),
-	markdownLinkUrl: parseColor("#6c7086"),
-	markdownCode: parseColor("#fab387"),
-	markdownCodeBlock: parseColor("#cdd6f4"),
-	markdownCodeBlockBorder: parseColor("#313244"),
-	markdownBlockQuote: parseColor("#6c7086"),
-	markdownBlockQuoteBorder: parseColor("#313244"),
-	markdownHr: parseColor("#313244"),
-	markdownListBullet: parseColor("#a6e3a1"),
+	// Markdown - muted
+	markdownText: parseColor("#c8c8c8"),
+	markdownHeading: parseColor("#a0a0a0"),
+	markdownLink: parseColor("#9090a0"),
+	markdownLinkUrl: parseColor("#606060"),
+	markdownCode: parseColor("#b0a090"),
+	markdownCodeBlock: parseColor("#b0b0b0"),
+	markdownCodeBlockBorder: parseColor("#2a2a2a"),
+	markdownBlockQuote: parseColor("#707070"),
+	markdownBlockQuoteBorder: parseColor("#303030"),
+	markdownHr: parseColor("#303030"),
+	markdownListBullet: parseColor("#707070"),
 
-	syntaxComment: parseColor("#6c7086"),
-	syntaxString: parseColor("#a6e3a1"),
-	syntaxKeyword: parseColor("#cba6f7"),
-	syntaxFunction: parseColor("#89b4fa"),
-	syntaxVariable: parseColor("#cdd6f4"),
-	syntaxType: parseColor("#f9e2af"),
-	syntaxNumber: parseColor("#fab387"),
-	syntaxConstant: parseColor("#fab387"),
-	syntaxOperator: parseColor("#cdd6f4"),
-	syntaxPunctuation: parseColor("#bac2de"),
-	syntaxProperty: parseColor("#94e2d5"),
-	syntaxTag: parseColor("#f38ba8"),
-	syntaxAttribute: parseColor("#f9e2af"),
+	// Syntax - soft but readable contrast
+	syntaxComment: parseColor("#5a5a5a"),
+	syntaxString: parseColor("#98b998"),   // sage green, slightly brighter
+	syntaxKeyword: parseColor("#b09cc0"),  // soft lavender
+	syntaxFunction: parseColor("#8aafc8"), // steel blue
+	syntaxVariable: parseColor("#c0c0c0"),
+	syntaxType: parseColor("#d4c48a"),     // warm gold
+	syntaxNumber: parseColor("#d4a87a"),   // soft orange
+	syntaxConstant: parseColor("#d4a87a"),
+	syntaxOperator: parseColor("#a0a0a0"),
+	syntaxPunctuation: parseColor("#909090"),
+	syntaxProperty: parseColor("#8ac0b0"), // teal
+	syntaxTag: parseColor("#c09090"),      // dusty rose
+	syntaxAttribute: parseColor("#d4c48a"),
 }
 
 /**
