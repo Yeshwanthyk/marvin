@@ -986,6 +986,70 @@ function App(props: AppProps) {
 	)
 }
 
+// ----- Tool Block Wrapper for reactivity -----
+
+function ToolBlockWrapper(props: {
+	tool: ToolBlock
+	isExpanded: (id: string) => boolean
+	onToggle: (id: string) => void
+}) {
+	const expanded = createMemo(() => props.isExpanded(props.tool.id))
+	
+	return (
+		<ToolBlockComponent
+			name={props.tool.name}
+			args={props.tool.args}
+			output={props.tool.output || null}
+			editDiff={props.tool.editDiff || null}
+			isError={props.tool.isError}
+			isComplete={props.tool.isComplete}
+			expanded={expanded()}
+			onToggleExpanded={() => props.onToggle(props.tool.id)}
+		/>
+	)
+}
+
+// ----- Thinking Block Wrapper for reactivity -----
+
+function ThinkingBlockWrapper(props: {
+	id: string
+	summary: string
+	full: string
+	isExpanded: (id: string) => boolean
+	onToggle: (id: string) => void
+	theme: any
+}) {
+	const expanded = createMemo(() => props.isExpanded(props.id))
+	
+	return (
+		<box 
+			paddingLeft={1} 
+			flexDirection="column"
+			onMouseUp={(e: { isSelecting?: boolean }) => {
+				if (e.isSelecting) return
+				props.onToggle(props.id)
+			}}
+		>
+			<box flexDirection="row" gap={1}>
+				<text>
+					<span style={{ fg: props.theme.textMuted, attributes: TextAttributes.ITALIC }}>thinking </span>
+					<span style={{ fg: props.theme.textMuted, attributes: TextAttributes.ITALIC }}>
+						{expanded() ? "" : props.summary}
+					</span>
+				</text>
+				<text fg={props.theme.textMuted}>{expanded() ? "▴" : "▸"}</text>
+			</box>
+			<Show when={expanded()}>
+				<box paddingLeft={2} paddingTop={1}>
+					<text fg={props.theme.textMuted} attributes={TextAttributes.ITALIC}>
+						{props.full}
+					</text>
+				</box>
+			</Show>
+		</box>
+	)
+}
+
 // ----- MainView Component -----
 
 function MainView(props: {
@@ -1158,10 +1222,16 @@ function MainView(props: {
 
 		// OSC52 escape sequence for clipboard copy
 		const base64 = Buffer.from(text).toString("base64")
-		const osc52 = `\x1b]52;c;${base64}\x07`
-		// Wrap for tmux if needed
-		const finalOsc52 = process.env["TMUX"] ? `\x1bPtmux;\x1b${osc52}\x1b\\` : osc52
-		process.stdout.write(finalOsc52)
+		// OSC52 clipboard escape sequence
+		// For tmux, need to double-escape and wrap in DCS passthrough
+		let osc52: string
+		if (process.env["TMUX"]) {
+			// tmux: DCS tmux; ESC ESC ] 52 ; c ; base64 BEL ESC backslash
+			osc52 = `\x1bPtmux;\x1b\x1b]52;c;${base64}\x07\x1b\\`
+		} else {
+			osc52 = `\x1b]52;c;${base64}\x07`
+		}
+		process.stdout.write(osc52)
 
 		pushToast({ title: "Copied to clipboard", variant: "success" }, 1500)
 		renderer.clearSelection()
@@ -1181,6 +1251,18 @@ function MainView(props: {
 		const tools = props.toolBlocks
 		const last = tools[tools.length - 1]
 		if (last) toggleToolExpanded(last.id)
+	}
+
+	// Thinking expansion state
+	const [expandedThinkingIds, setExpandedThinkingIds] = createSignal<Set<string>>(new Set())
+	const isThinkingExpanded = (id: string) => expandedThinkingIds().has(id)
+	const toggleThinkingExpanded = (id: string) => {
+		setExpandedThinkingIds((prev) => {
+			const next = new Set(prev)
+			if (next.has(id)) next.delete(id)
+			else next.add(id)
+			return next
+		})
 	}
 
 	const handleKeyDown = (e: KeyEvent) => {
@@ -1335,7 +1417,7 @@ function MainView(props: {
 	// Build unified content array for deterministic render order
 	type ContentItem =
 		| { type: "user"; content: string }
-		| { type: "thinking"; summary: string; isStreaming?: boolean }
+		| { type: "thinking"; id: string; summary: string; full: string; isStreaming?: boolean }
 		| { type: "assistant"; content: string; isStreaming?: boolean }
 		| { type: "tool"; tool: ToolBlock }
 
@@ -1353,7 +1435,13 @@ function MainView(props: {
 			} else if (msg.role === "assistant") {
 				// Thinking first
 				if (props.thinkingVisible && msg.thinking) {
-					items.push({ type: "thinking", summary: msg.thinking.summary, isStreaming: msg.isStreaming })
+					items.push({ 
+						type: "thinking", 
+						id: `thinking-${msg.id}`,
+						summary: msg.thinking.summary, 
+						full: msg.thinking.full,
+						isStreaming: msg.isStreaming 
+					})
 				}
 
 				// Tools from message
@@ -1422,35 +1510,30 @@ function MainView(props: {
 								</Match>
 								<Match when={item.type === "thinking" && item}>
 									{(thinkingItem) => (
-										<box paddingLeft={1}>
-											<text>
-												<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>thinking </span>
-												<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>
-													{thinkingItem().summary}
-												</span>
-											</text>
-										</box>
+										<ThinkingBlockWrapper
+											id={thinkingItem().id}
+											summary={thinkingItem().summary}
+											full={thinkingItem().full}
+											isExpanded={isThinkingExpanded}
+											onToggle={toggleThinkingExpanded}
+											theme={theme}
+										/>
 									)}
 								</Match>
 								<Match when={item.type === "assistant" && item}>
 									{(assistantItem) => (
 										<box paddingLeft={1}>
-											<text fg={theme.text}>{assistantItem().content}</text>
+											<Markdown text={assistantItem().content} />
 										</box>
 									)}
 								</Match>
 								<Match when={item.type === "tool" && item}>
 									{(toolItem) => (
 										<box paddingLeft={3}>
-											<ToolBlockComponent
-												name={toolItem().tool.name}
-												args={toolItem().tool.args}
-												output={toolItem().tool.output || null}
-												editDiff={toolItem().tool.editDiff || null}
-												isError={toolItem().tool.isError}
-												isComplete={toolItem().tool.isComplete}
-												expanded={isToolExpanded(toolItem().tool.id)}
-												onToggleExpanded={() => toggleToolExpanded(toolItem().tool.id)}
+											<ToolBlockWrapper
+												tool={toolItem().tool}
+												isExpanded={isToolExpanded}
+												onToggle={toggleToolExpanded}
 											/>
 										</box>
 									)}
