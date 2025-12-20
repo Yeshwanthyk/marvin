@@ -1,0 +1,87 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.3.7/schema.json",
+	"vcs": {
+		"enabled": false
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"indentWidth": 2,
+		"lineWidth": 100
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double",
+			"semicolons": "asNeeded"
+		}
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"complexity": {
+				"noExcessiveCognitiveComplexity": {
+					"level": "warn",
+					"options": { "maxAllowedComplexity": 20 }
+				},
+				"noVoid": "error",
+				"useLiteralKeys": "error",
+				"useOptionalChain": "error"
+			},
+			"correctness": {
+				"noUnusedImports": "error",
+				"noUnusedVariables": "error",
+				"noUnusedFunctionParameters": "warn",
+				"useExhaustiveDependencies": "warn",
+				"useHookAtTopLevel": "error"
+			},
+			"nursery": {
+				"useExplicitType": "error",
+				"noFloatingPromises": "error"
+			},
+			"performance": {
+				"noAccumulatingSpread": "error",
+				"noBarrelFile": "off",
+				"noDelete": "warn"
+			},
+			"style": {
+				"noNonNullAssertion": "error",
+				"useBlockStatements": "off",
+				"useCollapsedElseIf": "error",
+				"useConsistentBuiltinInstantiation": "error",
+				"useDefaultSwitchClause": "error",
+				"useExplicitLengthCheck": "error",
+				"useForOf": "error",
+				"useFragmentSyntax": "error",
+				"useNamingConvention": {
+					"level": "warn",
+					"options": {
+						"strictCase": false,
+						"conventions": [
+							{
+								"selector": { "kind": "typeProperty" },
+								"formats": ["camelCase", "PascalCase", "snake_case"]
+							}
+						]
+					}
+				},
+				"useShorthandAssign": "error",
+				"useThrowNewError": "error",
+				"useThrowOnlyError": "error"
+			},
+			"suspicious": {
+				"noConfusingVoidType": "error",
+				"noConsole": "warn",
+				"noEmptyBlockStatements": "error",
+				"noEvolvingTypes": "error",
+				"noExplicitAny": "error",
+				"noMisplacedAssertion": "error",
+				"useAwait": "error",
+				"useErrorMessage": "error"
+			}
+		}
+	},
+	"files": {
+		"includes": ["src/**/*.ts", "src/**/*.tsx"]
+	}
+}

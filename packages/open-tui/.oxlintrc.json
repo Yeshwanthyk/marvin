@@ -1,0 +1,50 @@
+{
+	"$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+	"plugins": ["typescript", "import", "promise", "unicorn"],
+	"categories": {
+		"correctness": "error",
+		"suspicious": "warn",
+		"pedantic": "warn",
+		"style": "warn",
+		"restriction": "off",
+		"nursery": "off"
+	},
+	"rules": {
+		"no-unused-vars": "error",
+		"no-undef": "error",
+		"no-console": "warn",
+		"prefer-const": "error",
+		"no-var": "error",
+		"eqeqeq": "error",
+		"no-await-in-loop": "warn",
+
+		"typescript/no-explicit-any": "error",
+		"typescript/no-non-null-assertion": "error",
+		"typescript/prefer-ts-expect-error": "error",
+		"typescript/no-unnecessary-type-constraint": "error",
+		"typescript/consistent-type-imports": "warn",
+
+		"import/no-duplicates": "error",
+		"import/no-self-import": "error",
+		"import/no-cycle": "warn",
+		"import/first": "error",
+
+		"promise/no-return-wrap": "error",
+		"promise/param-names": "error",
+		"promise/no-nesting": "warn",
+		"promise/no-promise-in-callback": "warn",
+		"promise/no-callback-in-promise": "warn",
+		"promise/no-return-in-finally": "error",
+
+		"unicorn/no-null": "off",
+		"unicorn/prefer-module": "error",
+		"unicorn/prefer-node-protocol": "error",
+		"unicorn/prefer-top-level-await": "warn",
+		"unicorn/no-useless-undefined": "error",
+		"unicorn/prefer-string-slice": "error",
+		"unicorn/prefer-ternary": "warn",
+		"unicorn/switch-case-braces": "error",
+		"unicorn/throw-new-error": "error"
+	},
+	"ignorePatterns": ["node_modules", "dist", "*.d.ts"]
+}

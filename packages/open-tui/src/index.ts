@@ -1,0 +1,85 @@
+/**
+ * @marvin-agents/open-tui
+ *
+ * OpenTUI-based Terminal User Interface with SolidJS reactive rendering
+ */
+
+// Re-export commonly used OpenTUI types and utilities
+export {
+	BoxRenderable,
+	// Renderer config
+	type CliRendererConfig,
+	type ColorInput,
+	InputRenderable,
+	MouseButton,
+	// Mouse events
+	MouseEvent,
+	// Color utilities
+	parseColor,
+	// Renderable types for advanced usage
+	type Renderable,
+	ScrollBoxRenderable,
+	SelectRenderable,
+	// Text attributes
+	TextAttributes,
+	TextareaRenderable,
+	TextRenderable,
+} from "@opentui/core"
+// Re-export SolidJS render and hooks
+export { render, testRender } from "@opentui/solid"
+// App entry point
+export { type AppConfig, startApp } from "./app.js"
+export {
+	type CliRenderer,
+	type KeyEvent,
+	onResize,
+	type PasteEvent,
+	RendererContext,
+	useRenderer,
+	useTerminalDimensions,
+} from "./context/terminal.js"
+// Context providers
+export {
+	RGBA,
+	type Theme,
+	type ThemeColors,
+	type ThemeMode,
+	ThemeProvider,
+	type ThemeProviderProps,
+	toRGBA,
+	useTheme,
+} from "./context/theme.js"
+export type { UseKeyboardOptions } from "./hooks/use-keyboard.js"
+// Hooks
+export { useKeyboard, usePaste } from "./hooks/use-keyboard.js"
+// Utilities
+export {
+	stripAnsi,
+	truncateToWidth,
+	visibleWidth,
+} from "./utils/text-width.js"
+// Components
+export { Editor, Input, type EditorProps, type EditorRef, type EditorTheme, type InputProps } from "./components/editor.js"
+export {
+	getCellDimensions,
+	getCapabilities,
+	getImageDimensions,
+	Image,
+	type ImageDimensions,
+	type ImageProps,
+	type ImageProtocol,
+	resetCapabilitiesCache,
+	setCellDimensions,
+	type TerminalCapabilities,
+} from "./components/image.js"
+export { Loader, type LoaderProps } from "./components/loader.js"
+export { Markdown, type MarkdownProps, type MarkdownTheme } from "./components/markdown.js"
+export {
+	SelectList,
+	SelectListKeys,
+	type SelectItem,
+	type SelectListProps,
+	type SelectListRef,
+	type SelectListTheme,
+} from "./components/select-list.js"
+export { Spacer, type SpacerProps } from "./components/spacer.js"

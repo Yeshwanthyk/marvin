@@ -1,0 +1,54 @@
+{
+	"name": "@marvin-agents/open-tui",
+	"version": "0.1.0",
+	"description": "OpenTUI-based Terminal User Interface with SolidJS reactive rendering",
+	"type": "module",
+	"main": "src/index.ts",
+	"types": "src/index.ts",
+	"scripts": {
+		"clean": "rm -rf dist",
+		"lint": "biome check --write . && oxlint .",
+		"lint:check": "biome check . && oxlint .",
+		"typecheck": "tsc --noEmit",
+		"check": "bun run lint:check && bun run typecheck",
+		"test": "bun test",
+		"demo": "bun run examples/run.ts"
+	},
+	"files": [
+		"dist/**/*",
+		"README.md"
+	],
+	"keywords": [
+		"tui",
+		"terminal",
+		"ui",
+		"opentui",
+		"solid-js",
+		"reactive"
+	],
+	"author": "Yesh Yendamuri",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Yeshwanthyk/marvin.git",
+		"directory": "packages/open-tui"
+	},
+	"engines": {
+		"node": ">=20.0.0",
+		"bun": ">=1.2.0"
+	},
+	"dependencies": {
+		"@opentui/core": "0.1.62",
+		"@opentui/solid": "0.1.62",
+		"marked": "^15.0.12",
+		"opentui-spinner": "^0.0.6",
+		"solid-js": "1.9.9"
+	},
+	"devDependencies": {
+		"@babel/core": "^7.28.5",
+		"@babel/preset-typescript": "^7.28.5",
+		"@types/bun": "latest",
+		"@types/node": "^24.0.0",
+		"babel-preset-solid": "^1.9.10"
+	}
+}
