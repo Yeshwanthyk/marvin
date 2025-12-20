@@ -531,34 +531,37 @@ function MainView(props: {
 			{/* Messages */}
 			<scrollbox flexGrow={1} stickyScroll={true} stickyStart="bottom">
 				<box flexDirection="column">
+					{/* Completed messages */}
 					<For each={props.messages}>
 						{(msg) => (
-							<>
-								{/* Show thinking block before assistant message if visible */}
-								<Show when={msg.role === "assistant" && props.thinkingVisible && msg.thinking}>
-									<box paddingLeft={1} paddingRight={1}>
-										<text fg="#8a7040">
-											{"thinking "}
-											<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>
-												{msg.thinking?.summary || ""}
-											</span>
-										</text>
+							<box flexDirection="column">
+								<Show when={msg.role === "user"}>
+									<box padding={1}>
+										<text fg={theme.textMuted}>{"› "}{msg.content}</text>
 									</box>
 								</Show>
-
-								<box padding={1}>
-									<Show when={msg.role === "user"}>
-										<text fg={theme.textMuted}>{"› "}{msg.content}</text>
+								<Show when={msg.role === "assistant"}>
+									<Show when={props.thinkingVisible && msg.thinking}>
+										<box paddingLeft={1} paddingRight={1}>
+											<text fg="#8a7040">
+												{"thinking "}
+												<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>
+													{msg.thinking?.summary || ""}
+												</span>
+											</text>
+										</box>
 									</Show>
-									<Show when={msg.role === "assistant"}>
-										<text fg={theme.text}>{msg.content}</text>
+									<Show when={msg.content}>
+										<box padding={1}>
+											<text fg={theme.text}>{msg.content}</text>
+										</box>
 									</Show>
-								</box>
-							</>
+								</Show>
+							</box>
 						)}
 					</For>
 
-					{/* Current thinking (streaming) */}
+					{/* Current turn: thinking -> tools -> streaming text */}
 					<Show when={props.thinkingVisible && props.currentThinking}>
 						<box paddingLeft={1} paddingRight={1}>
 							<text fg="#8a7040">
@@ -570,7 +573,6 @@ function MainView(props: {
 						</box>
 					</Show>
 
-					{/* Tool blocks */}
 					<For each={props.toolBlocks}>
 						{(tool) => (
 							<box paddingLeft={1} paddingRight={1} paddingTop={1} paddingBottom={1}>
@@ -586,7 +588,6 @@ function MainView(props: {
 						)}
 					</For>
 
-					{/* Streaming content */}
 					<Show when={props.currentText}>
 						<box padding={1}>
 							<text fg={theme.text}>{props.currentText}</text>
