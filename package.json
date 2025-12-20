@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "typecheck": "tsc --noEmit -p packages/ai/tsconfig.json && tsc --noEmit -p packages/agent/tsconfig.json && tsc --noEmit -p packages/tui/tsconfig.json && tsc --noEmit -p packages/base-tools/tsconfig.json && tsc --noEmit -p apps/coding-agent/tsconfig.json",
+    "typecheck": "tsc --noEmit -p packages/ai/tsconfig.json && tsc --noEmit -p packages/agent/tsconfig.json && tsc --noEmit -p packages/tui/tsconfig.json && tsc --noEmit -p packages/open-tui/tsconfig.json && tsc --noEmit -p packages/base-tools/tsconfig.json && tsc --noEmit -p apps/coding-agent/tsconfig.json",
     "test": "bun scripts/test-all.ts",
     "check": "bun run typecheck && bun run test",
     "marvin": "bun apps/coding-agent/src/index.ts"
