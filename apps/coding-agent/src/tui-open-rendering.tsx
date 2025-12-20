@@ -33,24 +33,7 @@ const shortenPath = (p: string): string => {
 	return p
 }
 
-const bashBadge = (cmd: string): string => {
-	const first = cmd.trim().split(/\s+/)[0] || ""
-	return (
-		{
-			git: "GIT",
-			ls: "LIST",
-			fd: "LIST",
-			cat: "READ",
-			head: "READ",
-			tail: "READ",
-			rg: "SEARCH",
-			grep: "SEARCH",
-			npm: "NPM",
-			cargo: "CARGO",
-			bun: "BUN",
-		}[first] || "RUN"
-	)
-}
+
 
 function truncateHeadTail(text: string, headCount: number, tailCount: number): { text: string; truncated: boolean; omitted: number } {
 	const lines = replaceTabs(text).split("\n")
@@ -77,20 +60,7 @@ function truncateLines(text: string, maxLines: number): { text: string; truncate
 	}
 }
 
-function toolColor(theme: ReturnType<typeof useTheme>["theme"], name: string) {
-	switch (name) {
-		case "bash":
-			return theme.success
-		case "read":
-			return theme.info
-		case "write":
-			return theme.warning
-		case "edit":
-			return theme.secondary
-		default:
-			return theme.textMuted
-	}
-}
+
 
 function toolTitle(name: string, args: any): string {
 	switch (name) {
@@ -150,18 +120,17 @@ interface ToolRenderer {
 
 function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 	const { theme } = useTheme()
-	const color = toolColor(theme, ctx.name)
 	const title = toolTitle(ctx.name, ctx.args)
 
 	return (
 		<text>
-			<span style={{ fg: color, attributes: TextAttributes.BOLD }}>{ctx.name.toUpperCase()}</span>
-			<span style={{ fg: theme.text }}>{" "}{title}</span>
+			<span style={{ fg: theme.primary, attributes: TextAttributes.BOLD }}>{ctx.name}</span>
+			<span style={{ fg: theme.textMuted }}> {title}</span>
 			<Show when={!ctx.isComplete}>
 				<span style={{ fg: theme.textMuted }}> …</span>
 			</Show>
 			<Show when={ctx.isError}>
-				<span style={{ fg: theme.error, attributes: TextAttributes.BOLD }}> ERROR</span>
+				<span style={{ fg: theme.error }}> error</span>
 			</Show>
 		</text>
 	)
@@ -169,31 +138,34 @@ function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 
 const registry: Record<string, ToolRenderer> = {
 	bash: {
-		mode: () => "block",
+		// Inline when collapsed (just command), block when expanded (show output)
+		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
 		renderHeader: (ctx) => {
 			const { theme } = useTheme()
 			const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
-			const badge = bashBadge(cmd)
+			const lines = ctx.output ? ctx.output.split("\n").length : null
 			return (
 				<text>
-					<span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>{badge}</span>
-					<span style={{ fg: theme.text }}>{" "}{cmd}</span>
+					<span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>run</span>
+					<span style={{ fg: theme.textMuted }}> {cmd}</span>
 					<Show when={!ctx.isComplete}>
 						<span style={{ fg: theme.textMuted }}> …</span>
 					</Show>
+					<Show when={ctx.isComplete && lines !== null}>
+						<span style={{ fg: theme.textMuted }}> ({lines})</span>
+					</Show>
 					<Show when={ctx.isError}>
-						<span style={{ fg: theme.error, attributes: TextAttributes.BOLD }}> ERROR</span>
+						<span style={{ fg: theme.error }}> error</span>
 					</Show>
 				</text>
 			)
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
-			if (!ctx.output && !ctx.isComplete) return <text fg={theme.textMuted}>running…</text>
+			// Only show body when expanded
+			if (!ctx.expanded) return null
 			if (!ctx.output) return <text fg={theme.textMuted}>no output</text>
-
-			const rendered = ctx.expanded ? replaceTabs(ctx.output) : truncateHeadTail(ctx.output, 2, 6).text
-			return <CodeBlock content={rendered} filetype="text" showLineNumbers={false} wrapMode="none" />
+			return <CodeBlock content={replaceTabs(ctx.output)} filetype="text" showLineNumbers={false} wrapMode="none" />
 		},
 	},
 	read: {
@@ -204,10 +176,10 @@ const registry: Record<string, ToolRenderer> = {
 			const lines = ctx.output ? replaceTabs(ctx.output).split("\n").length : null
 			return (
 				<text>
-					<span style={{ fg: theme.info, attributes: TextAttributes.BOLD }}>READ</span>
-					<span style={{ fg: theme.text }}>{" "}{path}</span>
+					<span style={{ fg: theme.info, attributes: TextAttributes.BOLD }}>read</span>
+					<span style={{ fg: theme.textMuted }}> {path}</span>
 					<Show when={lines !== null}>
-						<span style={{ fg: theme.textMuted }}> ({lines} lines)</span>
+						<span style={{ fg: theme.textMuted }}> ({lines})</span>
 					</Show>
 				</text>
 			)
@@ -227,8 +199,8 @@ const registry: Record<string, ToolRenderer> = {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			return (
 				<text>
-					<span style={{ fg: theme.warning, attributes: TextAttributes.BOLD }}>WRITE</span>
-					<span style={{ fg: theme.text }}>{" "}{path}</span>
+					<span style={{ fg: theme.warning, attributes: TextAttributes.BOLD }}>write</span>
+					<span style={{ fg: theme.textMuted }}> {path}</span>
 					<Show when={!ctx.isComplete}>
 						<span style={{ fg: theme.textMuted }}> …</span>
 					</Show>
@@ -253,13 +225,13 @@ const registry: Record<string, ToolRenderer> = {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			return (
 				<text>
-					<span style={{ fg: theme.secondary, attributes: TextAttributes.BOLD }}>EDIT</span>
-					<span style={{ fg: theme.text }}>{" "}{path}</span>
+					<span style={{ fg: theme.secondary, attributes: TextAttributes.BOLD }}>edit</span>
+					<span style={{ fg: theme.textMuted }}> {path}</span>
 					<Show when={!ctx.isComplete}>
 						<span style={{ fg: theme.textMuted }}> …</span>
 					</Show>
 					<Show when={ctx.isError}>
-						<span style={{ fg: theme.error, attributes: TextAttributes.BOLD }}> ERROR</span>
+						<span style={{ fg: theme.error }}> error</span>
 					</Show>
 				</text>
 			)
@@ -279,6 +251,7 @@ const registry: Record<string, ToolRenderer> = {
 export function ToolBlock(props: ToolBlockProps): JSX.Element {
 	const { theme } = useTheme()
 
+	// Use a getter for expanded to maintain reactivity
 	const ctx: ToolRenderContext = {
 		name: props.name,
 		args: props.args,
@@ -286,55 +259,64 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 		editDiff: props.editDiff,
 		isError: props.isError,
 		isComplete: props.isComplete,
-		expanded: props.expanded ?? false,
+		get expanded() { return props.expanded ?? false },
 	}
 
 	const renderer = registry[props.name] ?? {
 		mode: () => "block",
-		renderBody: (ctx) => {
-			const out = ctx.output ? ctx.output : JSON.stringify(ctx.args ?? {}, null, 2)
-			const rendered = ctx.expanded ? replaceTabs(out) : truncateLines(out, 20).text
+		renderBody: (innerCtx) => {
+			const out = innerCtx.output ? innerCtx.output : JSON.stringify(innerCtx.args ?? {}, null, 2)
+			const rendered = innerCtx.expanded ? replaceTabs(out) : truncateLines(out, 20).text
 			return <CodeBlock content={rendered} filetype="text" title="output" showLineNumbers={false} />
 		},
 	}
 
-	const mode = renderer.mode(ctx)
-	const header = renderer.renderHeader?.(ctx) ?? defaultHeader(ctx)
-	const body = renderer.renderBody?.(ctx)
+	// Use functions to ensure reactivity
+	const mode = () => renderer.mode(ctx)
+	const header = () => renderer.renderHeader?.(ctx) ?? defaultHeader(ctx)
+	const body = () => renderer.renderBody?.(ctx)
 
-	if (mode === "inline") {
-		return (
+	return (
+		<Show when={mode() === "inline"} fallback={
+			// Block layout
 			<box
 				flexDirection="column"
-				onMouseUp={(event: MouseEvent) => {
-					if (event.isSelecting) return
+				gap={0}
+				onMouseUp={(e: MouseEvent) => {
+					if (e.isSelecting) return
 					props.onToggleExpanded?.()
 				}}
 			>
-				{header}
-			</box>
-		)
-	}
-
-	// Minimal block layout - no heavy borders
-	return (
-		<box
-			flexDirection="column"
-			gap={0}
-			onMouseUp={(event: MouseEvent) => {
-				if (event.isSelecting) return
-				props.onToggleExpanded?.()
-			}}
-		>
-			{header}
-			<Show when={body}>
-				<box paddingLeft={0} paddingTop={1}>
-					{body}
+				<box flexDirection="row" gap={1}>
+					{header()}
+					<Show when={!props.expanded && props.isComplete}>
+						<text fg={theme.textMuted}>▾</text>
+					</Show>
+					<Show when={props.expanded && props.isComplete}>
+						<text fg={theme.textMuted}>▴</text>
+					</Show>
 				</box>
-			</Show>
-			<Show when={!props.expanded && props.isComplete}>
-				<text fg={theme.textMuted}>(click to expand)</text>
-			</Show>
-		</box>
+				<Show when={body()}>
+					<box paddingLeft={0} paddingTop={1}>
+						{body()}
+					</box>
+				</Show>
+			</box>
+		}>
+			{/* Inline layout */}
+			<box
+				flexDirection="row"
+				gap={1}
+				onMouseUp={(e: MouseEvent) => {
+					if (e.isSelecting) return
+					props.onToggleExpanded?.()
+				}}
+			>
+				{header()}
+				<Show when={props.isComplete}>
+					<text fg={theme.textMuted}>▸</text>
+				</Show>
+			</box>
+		</Show>
 	)
 }
