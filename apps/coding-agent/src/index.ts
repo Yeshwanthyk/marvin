@@ -1,14 +1,21 @@
 import pkg from '../package.json';
 import { parseArgs } from './args.js';
 import { runHeadless } from './headless.js';
-import { runTui } from './tui-app.js';
+import type { ThinkingLevel } from '@marvin-agents/agent-core';
 
-// Dynamic import for OpenTUI (requires solid plugin)
-const runOpenTui = async (args: Parameters<typeof runTui>[0]) => {
-  // Register solid plugin before importing TSX
+// Dynamic import for TUI (requires solid plugin for TSX)
+const runTui = async (args: {
+  configDir?: string;
+  configPath?: string;
+  provider?: string;
+  model?: string;
+  thinking?: ThinkingLevel;
+  continueSession?: boolean;
+  resumeSession?: boolean;
+}) => {
   const solidPlugin = (await import("@opentui/solid/bun-plugin")).default;
   Bun.plugin(solidPlugin);
-  const { runTuiOpen } = await import("./tui-app-open.js");
+  const { runTuiOpen } = await import("./tui-app.js");
   return runTuiOpen(args);
 };
 
@@ -27,7 +34,6 @@ const printHelp = () => {
       '  -c, --continue               Resume most recent session for current directory',
       '  -r, --resume                 Pick from recent sessions to resume',
       '  --headless                   Run without TUI; reads prompt from args or stdin',
-      '  --open                       Use OpenTUI (experimental)',
       '  -h, --help                   Show help',
       '  -v, --version                Print version',
       '',
@@ -70,7 +76,7 @@ const main = async () => {
     return;
   }
 
-  const tuiArgs = {
+  await runTui({
     configDir: args.configDir,
     configPath: args.configPath,
     provider: args.provider,
@@ -78,14 +84,7 @@ const main = async () => {
     thinking: args.thinking,
     continueSession: args.continue,
     resumeSession: args.resume,
-  };
-
-  if (args.open) {
-    await runOpenTui(tuiArgs);
-    return;
-  }
-
-  await runTui(tuiArgs);
+  });
 };
 
 await main();

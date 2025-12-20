@@ -30,9 +30,9 @@ import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent
 import { getApiKey, getModels, getProviders, type Model, type Api, type AssistantMessage, type Message } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
 import { loadAppConfig, updateAppConfig } from "./config.js"
-import { handleCompact, SUMMARY_PREFIX, SUMMARY_SUFFIX } from "./tui/compact-handler.js"
+import { handleCompact, SUMMARY_PREFIX, SUMMARY_SUFFIX } from "./compact-handler.js"
 import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/tui"
-import { createAutocompleteCommands } from "./tui/autocomplete-commands.js"
+import { createAutocompleteCommands } from "./autocomplete-commands.js"
 import { SessionManager, type LoadedSession, type SessionDetails } from "./session-manager.js"
 import { ToolBlock as ToolBlockComponent, Thinking, getToolText, getEditDiffText } from "./tui-open-rendering.js"
 import { existsSync, readFileSync, watch, appendFileSync, type FSWatcher } from "fs"
@@ -49,17 +49,7 @@ import { dirname, join } from "path"
 
 type KnownProvider = ReturnType<typeof getProviders>[number]
 
-// ----- Session Picker -----
-
-async function selectSessionOpen(sessionManager: SessionManager): Promise<string | null> {
-	const sessions = sessionManager.loadAllSessions()
-	if (sessions.length === 0) return null
-	if (sessions.length === 1) return sessions[0]!.path
-
-	// Use legacy picker for now - OpenTUI render doesn't provide cleanup mechanism
-	const { selectSession } = await import("./tui/session-picker.js")
-	return selectSession(sessionManager)
-}
+import { selectSession as selectSessionOpen } from "./session-picker.js"
 
 // ----- Types -----
 
