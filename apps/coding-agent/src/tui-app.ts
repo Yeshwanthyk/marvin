@@ -175,6 +175,7 @@ export const runTui = async (args?: {
   // ─────────────────────────────────────────────────────────────────
   let isResponding = false;
   let currentAssistant: Markdown | undefined;
+  let thinkingTextComponent: Text | undefined;
   const toolBlocks = new Map<string, ToolBlockEntry>();
   let lastCtrlC = 0;
   const queuedMessages: string[] = [];
@@ -307,6 +308,8 @@ export const runTui = async (args?: {
         toolBlocks,
         getCurrentAssistant: () => currentAssistant,
         setCurrentAssistant: (md) => { currentAssistant = md; },
+        getThinkingText: () => thinkingTextComponent,
+        setThinkingText: (t) => { thinkingTextComponent = t; },
         removeLoader,
         addMessage,
         getToolOutputExpanded: () => toolOutputExpanded,

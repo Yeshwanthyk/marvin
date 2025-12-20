@@ -4,6 +4,7 @@ export {
   toolColors,
   textFromBlocks,
   renderMessage,
+  renderThinking,
   shortenPath,
   getToolText,
   getEditDiffText,

@@ -9,6 +9,7 @@ import {
   markdownTheme,
   textFromBlocks,
   renderMessage,
+  renderThinking,
   getToolText,
   getEditDiffText,
   renderTool,
@@ -28,6 +29,8 @@ export interface AgentEventHandlerState {
   toolBlocks: Map<string, ToolBlockEntry>;
   getCurrentAssistant: () => Markdown | undefined;
   setCurrentAssistant: (md: Markdown | undefined) => void;
+  getThinkingText: () => Text | undefined;
+  setThinkingText: (t: Text | undefined) => void;
   removeLoader: () => void;
   addMessage: (component: Text | Markdown) => void;
   getToolOutputExpanded: () => boolean;
@@ -60,6 +63,8 @@ export function createAgentEventHandler(
     toolBlocks,
     getCurrentAssistant,
     setCurrentAssistant,
+    getThinkingText,
+    setThinkingText,
     removeLoader,
     addMessage,
     getToolOutputExpanded,
@@ -95,6 +100,20 @@ export function createAgentEventHandler(
       const currentAssistant = getCurrentAssistant();
       if (event.message.role === 'assistant' && currentAssistant) {
         footer.setActivity('streaming', () => tui.requestRender());
+        
+        // Handle thinking separately (rendered as Text to preserve chalk styling)
+        const thinkingText = renderThinking(event.message as Message);
+        let thinkingComp = getThinkingText();
+        if (thinkingText) {
+          if (!thinkingComp) {
+            thinkingComp = new Text(thinkingText, 1, 1);
+            setThinkingText(thinkingComp);
+            addMessage(thinkingComp);
+          } else {
+            thinkingComp.setText(thinkingText);
+          }
+        }
+        
         const text = renderMessage(event.message as Message);
         currentAssistant.setText(text);
         tui.requestRender();
@@ -105,6 +124,14 @@ export function createAgentEventHandler(
       sessionManager.appendMessage(event.message as AppMessage);
       const currentAssistant = getCurrentAssistant();
       if (event.message.role === 'assistant' && currentAssistant) {
+        // Finalize thinking component
+        const thinkingText = renderThinking(event.message as Message);
+        const thinkingComp = getThinkingText();
+        if (thinkingComp && thinkingText) {
+          thinkingComp.setText(thinkingText);
+        }
+        setThinkingText(undefined);
+        
         currentAssistant.setText(renderMessage(event.message as Message));
         setCurrentAssistant(undefined);
         footer.addUsage(event.message as AssistantMessage);

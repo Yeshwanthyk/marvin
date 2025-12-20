@@ -20,7 +20,7 @@ export const textFromBlocks = (blocks: Array<{ type: string }>): string => {
   return parts.join('');
 };
 
-export const renderMessage = (message: Message, includeThinking = true): string => {
+export const renderMessage = (message: Message, _includeThinking = true): string => {
   if (message.role === 'user') {
     if (typeof message.content === 'string') return message.content;
     return textFromBlocks(message.content);
@@ -28,24 +28,41 @@ export const renderMessage = (message: Message, includeThinking = true): string 
 
   if (message.role === 'assistant') {
     const parts: string[] = [];
-    const dim = chalk.hex(colors.dimmed);
     
     for (const block of message.content) {
       if (block.type === 'text') {
         parts.push(block.text);
-      } else if (block.type === 'thinking' && includeThinking) {
-        const thinking = (block as ThinkingContent).thinking;
-        if (thinking?.trim()) {
-          // Render thinking with label
-          const label = chalk.hex('#e5c07b')('Thinking: ');
-          parts.push(label + dim.italic(thinking.trim()));
-        }
       }
+      // Thinking is rendered separately via renderThinking() to preserve styling
     }
     return parts.join('\n\n');
   }
 
   return textFromBlocks(message.content);
+};
+
+// Extract and render thinking blocks - single line header like tools
+// Returns null if no thinking content
+export const renderThinking = (message: Message): string | null => {
+  if (message.role !== 'assistant') return null;
+  
+  const dim = chalk.hex(colors.dimmed);
+  const label = chalk.hex('#8a7040')('thinking ');
+  
+  for (const block of message.content) {
+    if (block.type === 'thinking') {
+      const thinking = (block as ThinkingContent).thinking;
+      if (thinking?.trim()) {
+        // Extract first meaningful line as summary (skip short lines)
+        const lines = thinking.trim().split('\n').filter(l => l.trim().length > 20);
+        const summary = lines[0]?.trim().slice(0, 80) || thinking.trim().slice(0, 80);
+        const truncated = summary.length >= 80 ? summary + '...' : summary;
+        return label + dim.italic(truncated);
+      }
+    }
+  }
+  
+  return null;
 };
 
 // Shorten path with ~ for home directory
