@@ -37,7 +37,9 @@ export {
 	onResize,
 	type PasteEvent,
 	RendererContext,
+	type Selection,
 	useRenderer,
+	useSelectionHandler,
 	useTerminalDimensions,
 } from "./context/terminal.js"
 // Context providers
@@ -57,6 +59,7 @@ export type { UseKeyboardOptions } from "./hooks/use-keyboard.js"
 // Hooks
 export { useKeyboard, usePaste } from "./hooks/use-keyboard.js"
 // Utilities
+export { copyToClipboard } from "./utils/clipboard.js"
 export {
 	stripAnsi,
 	truncateToWidth,

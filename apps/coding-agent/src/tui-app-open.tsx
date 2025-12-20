@@ -6,13 +6,16 @@ import { TextareaRenderable, InputRenderable, ScrollBoxRenderable, type KeyEvent
 import { render, useTerminalDimensions, useKeyboard } from "@opentui/solid"
 import { createSignal, createEffect, createMemo, For, Show, Switch, Match, onCleanup, onMount, batch } from "solid-js"
 import {
+	copyToClipboard,
 	Divider,
 	Markdown,
 	MouseButton,
+	type Selection,
 	TextAttributes,
 	ThemeProvider,
 	ToastViewport,
 	useRenderer,
+	useSelectionHandler,
 	useTheme,
 	type ToastItem,
 	type RGBA,
@@ -354,6 +357,17 @@ function App(props: AppProps) {
 	let retryAttempt = 0
 	let retryAbortController: AbortController | null = null
 	const [retryStatus, setRetryStatus] = createSignal<string | null>(null)
+
+	// Copy to clipboard when selection ends
+	let wasSelecting = false
+	useSelectionHandler((selection: Selection) => {
+		if (wasSelecting && !selection.isSelecting) {
+			// Selection just ended
+			const text = selection.getSelectedText()
+			if (text) copyToClipboard(text)
+		}
+		wasSelecting = selection.isSelecting
+	})
 
 	// Restore session on mount
 	onMount(() => {
