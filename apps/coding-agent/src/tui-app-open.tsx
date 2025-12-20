@@ -32,6 +32,8 @@ interface Message {
 	role: "user" | "assistant"
 	content: string
 	thinking?: { summary: string; full: string }
+	isStreaming?: boolean  // true while actively streaming
+	tools?: ToolBlock[]    // tools associated with this message
 }
 
 interface ToolBlock {
@@ -190,8 +192,6 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 	const [messages, setMessages] = createSignal<Message[]>([])
 	const [toolBlocks, setToolBlocks] = createSignal<ToolBlock[]>([])
 	const [isResponding, setIsResponding] = createSignal(false)
-	const [currentText, setCurrentText] = createSignal("")
-	const [currentThinking, setCurrentThinking] = createSignal<{ summary: string; full: string } | null>(null)
 	const [activityState, setActivityState] = createSignal<ActivityState>("idle")
 
 	// Toggle states
@@ -214,9 +214,26 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 		onCleanup(() => unsubscribe())
 	})
 
+	// Track current streaming message ID
+	let streamingMessageId: string | null = null
+
 	const handleAgentEvent = (event: AgentEvent) => {
 		if (event.type === "message_start" && event.message.role === "assistant") {
-			setActivityState("streaming")
+			// Create streaming message entry immediately
+			streamingMessageId = crypto.randomUUID()
+			batch(() => {
+				setActivityState("streaming")
+				setMessages((prev) => [
+					...prev,
+					{
+						id: streamingMessageId!,
+						role: "assistant",
+						content: "",
+						isStreaming: true,
+						tools: [],
+					},
+				])
+			})
 		}
 
 		if (event.type === "message_update" && event.message.role === "assistant") {
@@ -224,13 +241,20 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 			const text = extractText(content)
 			const thinking = extractThinking(content)
 
-			batch(() => {
-				setCurrentText(text)
-				if (thinking) {
-					setCurrentThinking(thinking)
-					if (!text) setActivityState("thinking")
-				}
-			})
+			// Update the streaming message in place
+			setMessages((prev) =>
+				prev.map((msg) =>
+					msg.id === streamingMessageId
+						? {
+								...msg,
+								content: text,
+								thinking: thinking || msg.thinking,
+						  }
+						: msg
+				)
+			)
+
+			if (thinking && !text) setActivityState("thinking")
 		}
 
 		if (event.type === "message_end" && event.message.role === "assistant") {
@@ -238,21 +262,21 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 			const text = extractText(content)
 			const thinking = extractThinking(content)
 
-			batch(() => {
-				if (text || thinking) {
-					setMessages((prev) => [
-						...prev,
-						{
-							id: crypto.randomUUID(),
-							role: "assistant",
-							content: text,
-							thinking: thinking || undefined,
-						},
-					])
-				}
-				setCurrentText("")
-				setCurrentThinking(null)
-			})
+			// Finalize the streaming message
+			setMessages((prev) =>
+				prev.map((msg) =>
+					msg.id === streamingMessageId
+						? {
+								...msg,
+								content: text,
+								thinking: thinking || msg.thinking,
+								isStreaming: false,
+						  }
+						: msg
+				)
+			)
+
+			streamingMessageId = null
 
 			// Update usage
 			const msg = event.message as { usage?: { input: number; output: number; cacheRead: number; cacheWrite?: number } }
@@ -271,22 +295,41 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 				isError: false,
 				isComplete: false,
 			}
+			// Add tool to current streaming message
+			if (streamingMessageId) {
+				setMessages((prev) =>
+					prev.map((msg) =>
+						msg.id === streamingMessageId
+							? { ...msg, tools: [...(msg.tools || []), newTool] }
+							: msg
+					)
+				)
+			}
 			setToolBlocks((prev) => [...prev, newTool])
 		}
 
 		if (event.type === "tool_execution_update") {
-			setToolBlocks((prev) =>
-				prev.map((t) =>
+			const updateTool = (tools: ToolBlock[]) =>
+				tools.map((t) =>
 					t.id === event.toolCallId
 						? { ...t, output: getToolText(event.partialResult) }
 						: t
 				)
-			)
+			setToolBlocks(updateTool)
+			if (streamingMessageId) {
+				setMessages((prev) =>
+					prev.map((msg) =>
+						msg.id === streamingMessageId
+							? { ...msg, tools: updateTool(msg.tools || []) }
+							: msg
+					)
+				)
+			}
 		}
 
 		if (event.type === "tool_execution_end") {
-			setToolBlocks((prev) =>
-				prev.map((t) =>
+			const updateTool = (tools: ToolBlock[]) =>
+				tools.map((t) =>
 					t.id === event.toolCallId
 						? {
 								...t,
@@ -297,13 +340,23 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 						  }
 						: t
 				)
-			)
+			setToolBlocks(updateTool)
+			if (streamingMessageId) {
+				setMessages((prev) =>
+					prev.map((msg) =>
+						msg.id === streamingMessageId
+							? { ...msg, tools: updateTool(msg.tools || []) }
+							: msg
+					)
+				)
+			}
 		}
 
 		if (event.type === "turn_end" || event.type === "agent_end") {
 			batch(() => {
 				setIsResponding(false)
 				setActivityState("idle")
+				streamingMessageId = null
 			})
 		}
 	}
@@ -352,8 +405,6 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 			<MainView
 				messages={messages()}
 				toolBlocks={toolBlocks()}
-				currentText={currentText()}
-				currentThinking={currentThinking()}
 				isResponding={isResponding()}
 				activityState={activityState()}
 				toolOutputExpanded={toolOutputExpanded()}
@@ -376,8 +427,6 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 function MainView(props: {
 	messages: Message[]
 	toolBlocks: ToolBlock[]
-	currentText: string
-	currentThinking: { summary: string; full: string } | null
 	isResponding: boolean
 	activityState: ActivityState
 	toolOutputExpanded: boolean
@@ -523,76 +572,104 @@ function MainView(props: {
 		}
 	}
 
+	// Build unified content array for deterministic render order
+	type ContentItem =
+		| { type: "user"; content: string }
+		| { type: "thinking"; summary: string; isStreaming?: boolean }
+		| { type: "assistant"; content: string; isStreaming?: boolean }
+		| { type: "tool"; tool: ToolBlock }
+
+	const contentItems = (): ContentItem[] => {
+		const items: ContentItem[] = []
+		const renderedToolIds = new Set<string>()
+		const messages = props.messages
+
+		for (let i = 0; i < messages.length; i++) {
+			const msg = messages[i]
+			const isLastMessage = i === messages.length - 1
+
+			if (msg.role === "user") {
+				items.push({ type: "user", content: msg.content })
+			} else if (msg.role === "assistant") {
+				// Thinking first
+				if (props.thinkingVisible && msg.thinking) {
+					items.push({ type: "thinking", summary: msg.thinking.summary, isStreaming: msg.isStreaming })
+				}
+
+				// Tools from message
+				for (const tool of msg.tools || []) {
+					if (!renderedToolIds.has(tool.id)) {
+						items.push({ type: "tool", tool })
+						renderedToolIds.add(tool.id)
+					}
+				}
+
+				// For last message, insert orphan toolBlocks BEFORE text content
+				if (isLastMessage) {
+					for (const tool of props.toolBlocks) {
+						if (!renderedToolIds.has(tool.id)) {
+							items.push({ type: "tool", tool })
+							renderedToolIds.add(tool.id)
+						}
+					}
+				}
+
+				// Then text content
+				if (msg.content) {
+					items.push({ type: "assistant", content: msg.content, isStreaming: msg.isStreaming })
+				}
+			}
+		}
+
+		return items
+	}
+
 	return (
 		<box flexDirection="column" flexGrow={1}>
 			{/* Header */}
 			<text fg={theme.textMuted}>marvin</text>
 
-			{/* Messages */}
-			<scrollbox flexGrow={1} stickyScroll={true} stickyStart="bottom">
+			{/* Messages - single For loop for deterministic order */}
+			<scrollbox flexGrow={1}>
 				<box flexDirection="column">
-					{/* Completed messages */}
-					<For each={props.messages}>
-						{(msg) => (
+					<For each={contentItems()}>
+						{(item) => (
 							<box flexDirection="column">
-								<Show when={msg.role === "user"}>
+								{item.type === "user" && (
 									<box padding={1}>
-										<text fg={theme.textMuted}>{"› "}{msg.content}</text>
+										<text fg={theme.textMuted}>{"› "}{item.content}</text>
 									</box>
-								</Show>
-								<Show when={msg.role === "assistant"}>
-									<Show when={props.thinkingVisible && msg.thinking}>
-										<box paddingLeft={1} paddingRight={1}>
-											<text fg="#8a7040">
-												{"thinking "}
-												<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>
-													{msg.thinking?.summary || ""}
-												</span>
-											</text>
-										</box>
-									</Show>
-									<Show when={msg.content}>
-										<box padding={1}>
-											<text fg={theme.text}>{msg.content}</text>
-										</box>
-									</Show>
-								</Show>
+								)}
+								{item.type === "thinking" && (
+									<box paddingLeft={1} paddingRight={1}>
+										<text fg="#8a7040">
+											{"thinking "}
+											<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>
+												{item.summary}
+											</span>
+										</text>
+									</box>
+								)}
+								{item.type === "assistant" && (
+									<box padding={1}>
+										<text fg={theme.text}>{item.content}</text>
+									</box>
+								)}
+								{item.type === "tool" && (
+									<box paddingLeft={1} paddingRight={1} paddingTop={1} paddingBottom={1}>
+										<ToolBlockComponent
+											name={item.tool.name}
+											args={item.tool.args}
+											output={item.tool.output || null}
+											editDiff={item.tool.editDiff || null}
+											isError={item.tool.isError}
+											isComplete={item.tool.isComplete}
+										/>
+									</box>
+								)}
 							</box>
 						)}
 					</For>
-
-					{/* Current turn: thinking -> tools -> streaming text */}
-					<Show when={props.thinkingVisible && props.currentThinking}>
-						<box paddingLeft={1} paddingRight={1}>
-							<text fg="#8a7040">
-								{"thinking "}
-								<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>
-									{props.currentThinking?.summary || ""}
-								</span>
-							</text>
-						</box>
-					</Show>
-
-					<For each={props.toolBlocks}>
-						{(tool) => (
-							<box paddingLeft={1} paddingRight={1} paddingTop={1} paddingBottom={1}>
-								<ToolBlockComponent
-									name={tool.name}
-									args={tool.args}
-									output={tool.output || null}
-									editDiff={tool.editDiff || null}
-									isError={tool.isError}
-									isComplete={tool.isComplete}
-								/>
-							</box>
-						)}
-					</For>
-
-					<Show when={props.currentText}>
-						<box padding={1}>
-							<text fg={theme.text}>{props.currentText}</text>
-						</box>
-					</Show>
 				</box>
 			</scrollbox>
 
