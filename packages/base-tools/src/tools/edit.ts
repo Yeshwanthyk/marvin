@@ -7,87 +7,10 @@ import { resolve as resolvePath } from "path";
 import { expandPath } from "./path-utils.js";
 
 /**
- * Generate a unified diff string with line numbers and context.
+ * Generate a unified diff (parsePatch compatible).
  */
-function generateDiffString(oldContent: string, newContent: string, contextLines = 4): string {
-	const parts = Diff.diffLines(oldContent, newContent);
-	const output: string[] = [];
-
-	const oldLines = oldContent.split("\n");
-	const newLines = newContent.split("\n");
-	const maxLineNum = Math.max(oldLines.length, newLines.length);
-	const lineNumWidth = String(maxLineNum).length;
-
-	let oldLineNum = 1;
-	let newLineNum = 1;
-	let lastWasChange = false;
-
-	for (let i = 0; i < parts.length; i++) {
-		const part = parts[i];
-		const raw = part.value.split("\n");
-		if (raw[raw.length - 1] === "") {
-			raw.pop();
-		}
-
-		if (part.added || part.removed) {
-			for (const line of raw) {
-				if (part.added) {
-					const lineNum = String(newLineNum).padStart(lineNumWidth, " ");
-					output.push(`+${lineNum} ${line}`);
-					newLineNum++;
-				} else {
-					const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-					output.push(`-${lineNum} ${line}`);
-					oldLineNum++;
-				}
-			}
-			lastWasChange = true;
-		} else {
-			const nextPartIsChange = i < parts.length - 1 && (parts[i + 1].added || parts[i + 1].removed);
-
-			if (lastWasChange || nextPartIsChange) {
-				let linesToShow = raw;
-				let skipStart = 0;
-				let skipEnd = 0;
-
-				if (!lastWasChange) {
-					skipStart = Math.max(0, raw.length - contextLines);
-					linesToShow = raw.slice(skipStart);
-				}
-
-				if (!nextPartIsChange && linesToShow.length > contextLines) {
-					skipEnd = linesToShow.length - contextLines;
-					linesToShow = linesToShow.slice(0, contextLines);
-				}
-
-				if (skipStart > 0) {
-					output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
-					oldLineNum += skipStart;
-					newLineNum += skipStart;
-				}
-
-				for (const line of linesToShow) {
-					const lineNum = String(oldLineNum).padStart(lineNumWidth, " ");
-					output.push(` ${lineNum} ${line}`);
-					oldLineNum++;
-					newLineNum++;
-				}
-
-				if (skipEnd > 0) {
-					output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
-					oldLineNum += skipEnd;
-					newLineNum += skipEnd;
-				}
-			} else {
-				oldLineNum += raw.length;
-				newLineNum += raw.length;
-			}
-
-			lastWasChange = false;
-		}
-	}
-
-	return output.join("\n");
+function generateDiffString(path: string, oldContent: string, newContent: string, contextLines = 4): string {
+	return Diff.createTwoFilesPatch(path, path, oldContent, newContent, "", "", { context: contextLines });
 }
 
 const editSchema = Type.Object({
@@ -212,7 +135,7 @@ export const editTool: AgentTool<typeof editSchema> = {
 								text: `Successfully replaced text in ${path}. Changed ${oldText.length} characters to ${newText.length} characters.`,
 							},
 						],
-						details: { diff: generateDiffString(content, newContent) },
+						details: { diff: generateDiffString(path, content, newContent) },
 					});
 				} catch (error: any) {
 					if (signal) {
