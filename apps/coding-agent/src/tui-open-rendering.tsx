@@ -178,19 +178,20 @@ interface ToolBodyProps {
 	args: any
 	output: string | null
 	isPartial: boolean
+	expanded?: boolean
 }
 
 export function ToolBody(props: ToolBodyProps): JSX.Element {
 	return (
 		<>
 			<Show when={props.name === "bash"}>
-				<BashBody output={props.output} isPartial={props.isPartial} />
+				<BashBody output={props.output} isPartial={props.isPartial} expanded={props.expanded} />
 			</Show>
 			<Show when={props.name === "read"}>
 				<ReadBody output={props.output} isPartial={props.isPartial} />
 			</Show>
 			<Show when={props.name === "write"}>
-				<WriteBody args={props.args} isPartial={props.isPartial} />
+				<WriteBody args={props.args} isPartial={props.isPartial} expanded={props.expanded} />
 			</Show>
 			<Show when={!["bash", "read", "write", "edit"].includes(props.name)}>
 				<GenericBody args={props.args} output={props.output} isPartial={props.isPartial} />
@@ -199,7 +200,7 @@ export function ToolBody(props: ToolBodyProps): JSX.Element {
 	)
 }
 
-function BashBody(props: { output: string | null; isPartial: boolean }): JSX.Element {
+function BashBody(props: { output: string | null; isPartial: boolean; expanded?: boolean }): JSX.Element {
 	const lines = () => (props.output || "").trim().split("\n").filter(Boolean)
 	const total = () => lines().length
 
@@ -207,7 +208,7 @@ function BashBody(props: { output: string | null; isPartial: boolean }): JSX.Ele
 	const tailCount = 3
 	const maxShow = headCount + tailCount
 
-	const shouldTruncate = () => total() > maxShow
+	const shouldTruncate = () => !props.expanded && total() > maxShow
 	const head = () => lines().slice(0, headCount)
 	const tail = () => lines().slice(-tailCount)
 	const skipped = () => total() - maxShow
@@ -244,12 +245,12 @@ function ReadBody(props: { output: string | null; isPartial: boolean }): JSX.Ele
 	)
 }
 
-function WriteBody(props: { args: any; isPartial: boolean }): JSX.Element {
+function WriteBody(props: { args: any; isPartial: boolean; expanded?: boolean }): JSX.Element {
 	const content = () => props.args?.content || ""
 	const lines = () => replaceTabs(content()).split("\n")
 	const maxLines = 8
 
-	const shouldTruncate = () => lines().length > maxLines
+	const shouldTruncate = () => !props.expanded && lines().length > maxLines
 	const shownLines = () => lines().slice(0, maxLines)
 	const remaining = () => lines().length - maxLines
 
@@ -484,6 +485,7 @@ interface ToolBlockProps {
 	editDiff: string | null
 	isError: boolean
 	isComplete: boolean
+	expanded?: boolean
 }
 
 export function ToolBlock(props: ToolBlockProps): JSX.Element {
@@ -494,7 +496,7 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 				<EditDiff diffText={props.editDiff!} />
 			</Show>
 			<Show when={props.name !== "edit" || !props.editDiff}>
-				<ToolBody name={props.name} args={props.args} output={props.output} isPartial={!props.isComplete} />
+				<ToolBody name={props.name} args={props.args} output={props.output} isPartial={!props.isComplete} expanded={props.expanded} />
 			</Show>
 		</box>
 	)
