@@ -472,9 +472,10 @@ function convertMessages(messages: Message[], model: Model<"anthropic-messages">
 							text: sanitizeSurrogates(`<thinking>\n${block.thinking}\n</thinking>`),
 						});
 					} else {
+						// Don't sanitize thinking content - signature depends on exact bytes
 						blocks.push({
 							type: "thinking",
-							thinking: sanitizeSurrogates(block.thinking),
+							thinking: block.thinking,
 							signature: block.thinkingSignature,
 						});
 					}
