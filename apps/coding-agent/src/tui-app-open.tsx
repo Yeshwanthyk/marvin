@@ -6,16 +6,13 @@ import { TextareaRenderable, InputRenderable, ScrollBoxRenderable, type KeyEvent
 import { render, useTerminalDimensions, useKeyboard } from "@opentui/solid"
 import { createSignal, createEffect, createMemo, For, Show, Switch, Match, onCleanup, onMount, batch } from "solid-js"
 import {
-	copyToClipboard,
 	Divider,
 	Markdown,
 	MouseButton,
-	type Selection,
 	TextAttributes,
 	ThemeProvider,
 	ToastViewport,
 	useRenderer,
-	useSelectionHandler,
 	useTheme,
 	type ToastItem,
 	type RGBA,
@@ -358,16 +355,7 @@ function App(props: AppProps) {
 	let retryAbortController: AbortController | null = null
 	const [retryStatus, setRetryStatus] = createSignal<string | null>(null)
 
-	// Copy to clipboard when selection ends
-	let wasSelecting = false
-	useSelectionHandler((selection: Selection) => {
-		if (wasSelecting && !selection.isSelecting) {
-			// Selection just ended
-			const text = selection.getSelectedText()
-			if (text) copyToClipboard(text)
-		}
-		wasSelecting = selection.isSelecting
-	})
+
 
 	// Restore session on mount
 	onMount(() => {
@@ -1236,16 +1224,21 @@ function MainView(props: {
 
 		// OSC52 escape sequence for clipboard copy
 		const base64 = Buffer.from(text).toString("base64")
-		// OSC52 clipboard escape sequence
-		// For tmux, need to double-escape and wrap in DCS passthrough
+		// For tmux, need to wrap in DCS passthrough
 		let osc52: string
 		if (process.env["TMUX"]) {
-			// tmux: DCS tmux; ESC ESC ] 52 ; c ; base64 BEL ESC backslash
 			osc52 = `\x1bPtmux;\x1b\x1b]52;c;${base64}\x07\x1b\\`
 		} else {
 			osc52 = `\x1b]52;c;${base64}\x07`
 		}
 		process.stdout.write(osc52)
+
+		// Also use pbcopy as fallback on macOS
+		if (process.platform === "darwin") {
+			try {
+				spawnSync("pbcopy", { input: text, encoding: "utf-8" })
+			} catch {}
+		}
 
 		pushToast({ title: "Copied to clipboard", variant: "success" }, 1500)
 		renderer.clearSelection()
