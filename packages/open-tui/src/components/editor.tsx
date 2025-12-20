@@ -15,6 +15,7 @@ export interface EditorTheme {
 	text: RGBA
 	cursor: RGBA
 	placeholder: RGBA
+	background: RGBA
 }
 
 export interface EditorProps {
@@ -30,6 +31,10 @@ export interface EditorProps {
 	minHeight?: number
 	/** Maximum height in lines */
 	maxHeight?: number
+	/** Optional width constraint */
+	width?: number | "auto" | `${number}%`
+	/** Optional max width constraint */
+	maxWidth?: number | "auto" | `${number}%`
 	/** Theme overrides */
 	theme?: Partial<EditorTheme>
 	/** Called when content changes */
@@ -80,30 +85,20 @@ const defaultKeybindings = [
 
 /**
  * Editor component for multi-line text input
- *
- * @example
- * ```tsx
- * <Editor
- *   placeholder="Type a message..."
- *   onSubmit={(text) => sendMessage(text)}
- *   onChange={(text) => setDraft(text)}
- * />
- * ```
  */
 export function Editor(props: EditorProps) {
 	const { theme: globalTheme } = useTheme()
 	let textareaRef: TextareaRenderable | undefined
 
-	// Merge theme with defaults
 	const theme = (): EditorTheme => ({
 		border: props.theme?.border ?? globalTheme.border,
 		borderActive: props.theme?.borderActive ?? globalTheme.borderActive,
 		text: props.theme?.text ?? globalTheme.text,
 		cursor: props.theme?.cursor ?? globalTheme.text,
 		placeholder: props.theme?.placeholder ?? globalTheme.textMuted,
+		background: props.theme?.background ?? globalTheme.backgroundPanel,
 	})
 
-	// Create ref object
 	const editorRef: EditorRef = {
 		getText: () => textareaRef?.plainText ?? "",
 		setText: (text: string) => textareaRef?.setText(text),
@@ -113,28 +108,22 @@ export function Editor(props: EditorProps) {
 		getTextarea: () => textareaRef,
 	}
 
-	// Expose ref
 	createEffect(() => {
-		if (props.ref && textareaRef) {
-			props.ref(editorRef)
-		}
+		if (props.ref && textareaRef) props.ref(editorRef)
 	})
 
-	// Handle keyboard events
 	const handleKeyDown = (e: KeyEvent) => {
 		if (props.disabled) {
 			e.preventDefault()
 			return
 		}
 
-		// Handle escape
 		if (e.name === "escape") {
 			props.onEscape?.()
 			e.preventDefault()
 		}
 	}
 
-	// Handle submit
 	const handleSubmit = () => {
 		if (props.disabled) return
 		const text = textareaRef?.plainText?.trim() ?? ""
@@ -142,46 +131,55 @@ export function Editor(props: EditorProps) {
 		props.onSubmit?.(text)
 	}
 
-	// Handle content change
 	const handleContentChange = () => {
-		const text = textareaRef?.plainText ?? ""
-		props.onChange?.(text)
+		props.onChange?.(textareaRef?.plainText ?? "")
 	}
 
-	const borderColor = () => props.focused ? theme().borderActive : theme().border
+	const borderColor = () => (props.focused ? theme().borderActive : theme().border)
 
-	// Build textarea props without undefined values
 	const textareaProps: Record<string, unknown> = {
+		minHeight: props.minHeight ?? 1,
+		maxHeight: props.maxHeight ?? 10,
+		backgroundColor: theme().background,
+		focusedBackgroundColor: theme().background,
 		textColor: theme().text,
 		focusedTextColor: theme().text,
 		cursorColor: theme().cursor,
-		minHeight: props.minHeight ?? 1,
-		maxHeight: props.maxHeight ?? 10,
 		keyBindings: defaultKeybindings,
 		onKeyDown: handleKeyDown,
 		onSubmit: handleSubmit,
 		onContentChange: handleContentChange,
 	}
+	if (props.initialValue !== undefined) {
+		textareaProps["initialValue"] = props.initialValue
+	}
 	if (props.placeholder) {
 		textareaProps["placeholder"] = props.placeholder
 	}
+	if (props.focused !== undefined) {
+		textareaProps["focused"] = props.focused
+	}
+
+	const boxProps: Record<string, unknown> = {
+		flexDirection: "column",
+		border: true,
+		borderColor: borderColor(),
+		backgroundColor: theme().background,
+		paddingLeft: 1,
+		paddingRight: 1,
+	}
+	if (props.width !== undefined) boxProps["width"] = props.width
+	if (props.maxWidth !== undefined) boxProps["maxWidth"] = props.maxWidth
 
 	return (
-		<box flexDirection="column">
-			{/* Top border */}
-			<text fg={borderColor()}>{"─".repeat(80)}</text>
-
-			{/* Editor content */}
+		<box {...boxProps}>
 			<textarea
 				ref={(r: TextareaRenderable) => {
 					textareaRef = r
-					if (props.ref) props.ref(editorRef)
+					props.ref?.(editorRef)
 				}}
 				{...textareaProps}
 			/>
-
-			{/* Bottom border */}
-			<text fg={borderColor()}>{"─".repeat(80)}</text>
 		</box>
 	)
 }
@@ -204,22 +202,13 @@ export interface InputProps {
 	onEscape?: () => void
 	/** Theme overrides */
 	theme?: Partial<EditorTheme>
+	/** Optional width constraint */
+	width?: EditorProps["width"]
+	/** Optional max width constraint */
+	maxWidth?: EditorProps["maxWidth"]
 }
 
-/**
- * Single-line input component
- *
- * @example
- * ```tsx
- * <Input
- *   value={searchText()}
- *   placeholder="Search..."
- *   onChange={setSearchText}
- * />
- * ```
- */
 export function Input(props: InputProps) {
-	// Build props without undefined values
 	const editorProps: EditorProps = {
 		minHeight: 1,
 		maxHeight: 1,
@@ -231,6 +220,8 @@ export function Input(props: InputProps) {
 	if (props.onChange !== undefined) editorProps.onChange = props.onChange
 	if (props.onSubmit !== undefined) editorProps.onSubmit = props.onSubmit
 	if (props.onEscape !== undefined) editorProps.onEscape = props.onEscape
+	if (props.width !== undefined) editorProps.width = props.width
+	if (props.maxWidth !== undefined) editorProps.maxWidth = props.maxWidth
 
 	return <Editor {...editorProps} />
 }

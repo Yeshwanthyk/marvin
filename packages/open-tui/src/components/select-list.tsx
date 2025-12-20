@@ -2,8 +2,9 @@
  * SelectList component - wraps OpenTUI's SelectRenderable
  */
 
-import { createMemo, createSignal, For, Show, type JSX } from "solid-js"
-import { type RGBA, useTheme } from "../context/theme.js"
+import { TextAttributes } from "@opentui/core"
+import { createEffect, createMemo, createSignal, For, Show, type JSX } from "solid-js"
+import { useTheme, type RGBA } from "../context/theme.js"
 import { truncateToWidth, visibleWidth } from "../utils/text-width.js"
 
 export interface SelectItem {
@@ -13,7 +14,8 @@ export interface SelectItem {
 }
 
 export interface SelectListTheme {
-	selected: RGBA
+	selectedBg: RGBA
+	selectedFg: RGBA
 	text: RGBA
 	description: RGBA
 	scrollInfo: RGBA
@@ -39,6 +41,8 @@ export interface SelectListProps {
 	onCancel?: () => void
 	/** Available width for rendering */
 	width?: number
+	/** Ref callback to expose navigation helpers */
+	ref?: (ref: SelectListRef) => void
 }
 
 export interface SelectListRef {
@@ -50,59 +54,76 @@ export interface SelectListRef {
 	getSelectedIndex: () => number
 }
 
-/**
- * SelectList component for displaying a filterable list of options
- *
- * @example
- * ```tsx
- * <SelectList
- *   items={[{ value: 'a', label: 'Option A' }]}
- *   filter={searchText()}
- *   onSelect={(item) => console.log('Selected:', item)}
- * />
- * ```
- */
 export function SelectList(props: SelectListProps) {
 	const { theme: globalTheme } = useTheme()
 
-	// Internal state for uncontrolled mode
-	const [internalIndex] = createSignal(0)
+	const [internalIndex, setInternalIndex] = createSignal(0)
 
-	// Use controlled or uncontrolled index
-	// For controlled mode, pass selectedIndex prop
-	// For uncontrolled, manage state externally and pass selectedIndex
 	const selectedIndex = () => props.selectedIndex ?? internalIndex()
 
-	// Theme with defaults
 	const theme = createMemo((): SelectListTheme => ({
-		selected: props.theme?.selected ?? globalTheme.primary,
+		selectedBg: props.theme?.selectedBg ?? globalTheme.selectionBg,
+		selectedFg: props.theme?.selectedFg ?? globalTheme.selectionFg,
 		text: props.theme?.text ?? globalTheme.text,
 		description: props.theme?.description ?? globalTheme.textMuted,
 		scrollInfo: props.theme?.scrollInfo ?? globalTheme.textMuted,
 		noMatch: props.theme?.noMatch ?? globalTheme.textMuted,
 	}))
 
-	// Filter items based on filter prop
 	const filteredItems = createMemo(() => {
 		const filter = props.filter?.toLowerCase() ?? ""
 		if (!filter) return props.items
-		return props.items.filter((item) =>
-			item.value.toLowerCase().includes(filter) ||
-			item.label.toLowerCase().includes(filter)
-		)
+		return props.items.filter((item) => item.value.toLowerCase().includes(filter) || item.label.toLowerCase().includes(filter))
 	})
 
-	// Clamp selected index to valid range
 	const clampedIndex = createMemo(() => {
 		const items = filteredItems()
 		if (items.length === 0) return 0
 		return Math.max(0, Math.min(selectedIndex(), items.length - 1))
 	})
 
+	createEffect(() => {
+		if (props.selectedIndex !== undefined) return
+		setInternalIndex(clampedIndex())
+	})
+
+	createEffect(() => {
+		if (props.selectedIndex !== undefined) return
+		const items = filteredItems()
+		if (items.length === 0) return
+		props.onSelectionChange?.(items[clampedIndex()]!, clampedIndex())
+	})
+
+	const setSelection = (nextIndex: number) => {
+		const items = filteredItems()
+		if (items.length === 0) return
+		const next = Math.max(0, Math.min(nextIndex, items.length - 1))
+		if (props.selectedIndex === undefined) {
+			setInternalIndex(next)
+			return
+		}
+		props.onSelectionChange?.(items[next]!, next)
+	}
+
+	const ref: SelectListRef = {
+		moveUp: () => setSelection(clampedIndex() - 1),
+		moveDown: () => setSelection(clampedIndex() + 1),
+		select: () => {
+			const item = filteredItems()[clampedIndex()]
+			if (item) props.onSelect?.(item)
+		},
+		cancel: () => props.onCancel?.(),
+		getSelectedItem: () => filteredItems()[clampedIndex()],
+		getSelectedIndex: () => clampedIndex(),
+	}
+
+	createEffect(() => {
+		props.ref?.(ref)
+	})
+
 	const maxVisible = () => props.maxVisible ?? 5
 	const width = () => props.width ?? 80
 
-	// Calculate visible window
 	const visibleWindow = createMemo(() => {
 		const items = filteredItems()
 		const max = maxVisible()
@@ -114,11 +135,6 @@ export function SelectList(props: SelectListProps) {
 		return { startIndex, endIndex }
 	})
 
-	// Navigation functions - exported via SelectListKeys utilities
-	// Users can call these by handling keyboard events:
-	// if (SelectListKeys.isUp(key)) { /* update selectedIndex */ }
-
-	// No items message
 	if (filteredItems().length === 0) {
 		return (
 			<box>
@@ -137,15 +153,7 @@ export function SelectList(props: SelectListProps) {
 				{(item, localIndex) => {
 					const globalIndex = () => startIndex + localIndex()
 					const isSelected = () => globalIndex() === clampedIndex()
-
-					return (
-						<SelectListItem
-							item={item}
-							isSelected={isSelected()}
-							theme={theme()}
-							width={width()}
-						/>
-					)
+					return <SelectListItem item={item} isSelected={isSelected()} theme={theme()} width={width()} />
 				}}
 			</For>
 			<Show when={showScrollInfo}>
@@ -157,53 +165,40 @@ export function SelectList(props: SelectListProps) {
 	)
 }
 
-function SelectListItem(props: {
-	item: SelectItem
-	isSelected: boolean
-	theme: SelectListTheme
-	width: number
-}): JSX.Element {
-	const { item, isSelected, theme, width } = props
-	const prefix = isSelected ? "→ " : "  "
+function SelectListItem(props: { item: SelectItem; isSelected: boolean; theme: SelectListTheme; width: number }): JSX.Element {
+	const prefix = props.isSelected ? "→ " : "  "
 	const prefixWidth = 2
-	const displayValue = item.label || item.value
+	const value = props.item.label || props.item.value
 
-	// Calculate available width for content
-	const maxValueWidth = Math.min(30, width - prefixWidth - 4)
-	const truncatedValue = truncateToWidth(displayValue, maxValueWidth, "")
+	const labelWidth = Math.min(32, Math.max(12, props.width - prefixWidth - 10))
+	const label = truncateToWidth(value, labelWidth, "")
+	const labelPad = " ".repeat(Math.max(0, labelWidth - visibleWidth(label)))
 
-	// Calculate description if there's room
-	const showDescription = item.description && width > 40
-	let descriptionText = ""
-	if (showDescription) {
-		const spacing = " ".repeat(Math.max(1, 32 - visibleWidth(truncatedValue)))
-		const descStart = prefixWidth + visibleWidth(truncatedValue) + spacing.length
-		const remainingWidth = width - descStart - 2
-		if (remainingWidth > 10) {
-			descriptionText = spacing + truncateToWidth(item.description!, remainingWidth, "")
-		}
-	}
+	const showDescription = Boolean(props.item.description) && props.width > 50
+	const descWidth = showDescription ? Math.max(0, props.width - prefixWidth - labelWidth - 2) : 0
+	const desc = showDescription ? truncateToWidth(props.item.description!, descWidth, "") : ""
 
-	if (isSelected) {
+	const line = prefix + label + labelPad + (showDescription ? "  " + desc : "")
+	const pad = " ".repeat(Math.max(0, props.width - visibleWidth(line)))
+
+	if (props.isSelected) {
 		return (
-			<text fg={theme.selected}>
-				{prefix + truncatedValue}
-				{descriptionText}
+			<text fg={props.theme.selectedFg} bg={props.theme.selectedBg} attributes={TextAttributes.BOLD}>
+				{line + pad}
 			</text>
 		)
 	}
 
 	return (
 		<text>
-			<span style={{ fg: theme.text }}>{prefix + truncatedValue}</span>
-			<Show when={descriptionText}>
-				<span style={{ fg: theme.description }}>{descriptionText}</span>
+			<span style={{ fg: props.theme.text }}>{prefix + label + labelPad}</span>
+			<Show when={showDescription}>
+				<span style={{ fg: props.theme.description }}>{"  " + desc}</span>
 			</Show>
 		</text>
 	)
 }
 
-// Export utilities for keyboard handling
 export const SelectListKeys = {
 	isUp: (key: string) => key === "up" || key === "\x1b[A",
 	isDown: (key: string) => key === "down" || key === "\x1b[B",

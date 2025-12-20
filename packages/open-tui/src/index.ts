@@ -4,6 +4,8 @@
  * OpenTUI-based Terminal User Interface with SolidJS reactive rendering
  */
 
+import "./opentui-augmentations.js"
+
 // Re-export commonly used OpenTUI types and utilities
 export {
 	BoxRenderable,
@@ -40,7 +42,9 @@ export {
 } from "./context/terminal.js"
 // Context providers
 export {
+	createSyntaxStyle,
 	RGBA,
+	type SyntaxVariant,
 	type Theme,
 	type ThemeColors,
 	type ThemeMode,
@@ -83,3 +87,17 @@ export {
 	type SelectListTheme,
 } from "./components/select-list.js"
 export { Spacer, type SpacerProps } from "./components/spacer.js"
+export { Badge, type BadgeProps, type BadgeVariant } from "./components/badge.js"
+export { CodeBlock, type CodeBlockProps } from "./components/code-block.js"
+export { Dialog, type DialogProps } from "./components/dialog.js"
+export { Diff, type DiffProps, type DiffView, type DiffWrapMode } from "./components/diff.js"
+export { Divider, type DividerOrientation, type DividerProps } from "./components/divider.js"
+export { Panel, type PanelProps, type PanelVariant } from "./components/panel.js"
+export {
+	Toast,
+	ToastViewport,
+	type ToastItem,
+	type ToastVariant,
+	type ToastViewportPosition,
+	type ToastViewportProps,
+} from "./components/toast.js"

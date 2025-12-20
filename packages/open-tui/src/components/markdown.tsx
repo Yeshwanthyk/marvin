@@ -54,14 +54,14 @@ export function Markdown(props: MarkdownProps) {
 			text: props.theme?.text ?? theme.markdownText,
 			heading: props.theme?.heading ?? theme.markdownHeading,
 			link: props.theme?.link ?? theme.markdownLink,
-			linkUrl: props.theme?.linkUrl ?? theme.textMuted,
+			linkUrl: props.theme?.linkUrl ?? theme.markdownLinkUrl,
 			code: props.theme?.code ?? theme.markdownCode,
-			codeBlock: props.theme?.codeBlock ?? theme.markdownCode,
-			codeBlockBorder: props.theme?.codeBlockBorder ?? theme.textMuted,
+			codeBlock: props.theme?.codeBlock ?? theme.markdownCodeBlock,
+			codeBlockBorder: props.theme?.codeBlockBorder ?? theme.markdownCodeBlockBorder,
 			quote: props.theme?.quote ?? theme.markdownBlockQuote,
-			quoteBorder: props.theme?.quoteBorder ?? theme.textMuted,
-			hr: props.theme?.hr ?? theme.border,
-			listBullet: props.theme?.listBullet ?? theme.accent,
+			quoteBorder: props.theme?.quoteBorder ?? theme.markdownBlockQuoteBorder,
+			hr: props.theme?.hr ?? theme.markdownHr,
+			listBullet: props.theme?.listBullet ?? theme.markdownListBullet,
 		}
 		if (props.theme?.highlightCode) {
 			base.highlightCode = props.theme.highlightCode
