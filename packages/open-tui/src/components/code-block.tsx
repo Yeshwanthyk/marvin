@@ -1,9 +1,8 @@
 import type { CodeRenderable } from "@opentui/core"
-import { getTreeSitterClient, TextAttributes } from "@opentui/core"
+import { getTreeSitterClient } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { Show, createSignal, splitProps, type Accessor } from "solid-js"
 import { useTheme } from "../context/theme.js"
-import { Panel } from "./panel.js"
 
 export type CodeBlockProps = Omit<JSX.IntrinsicElements["box"], "children"> & {
 	content: string
@@ -31,11 +30,18 @@ export function CodeBlock(props: CodeBlockProps): JSX.Element {
 
 	const showLineNumbers = () => local.showLineNumbers ?? true
 
+	// Minimal: no border, subtle bg tint
 	return (
-		<Panel variant="element" borderColor={theme.borderSubtle} paddingX={1} paddingY={0} {...rest}>
+		<box
+			flexDirection="column"
+			backgroundColor={theme.backgroundElement}
+			paddingLeft={1}
+			paddingRight={1}
+			{...rest}
+		>
 			<Show when={local.title}>
 				<box flexDirection="row" alignItems="center" gap={1} paddingBottom={1}>
-					<text fg={theme.textMuted} attributes={TextAttributes.BOLD}>
+					<text fg={theme.textMuted}>
 						{local.title}
 					</text>
 				</box>
@@ -68,6 +74,6 @@ export function CodeBlock(props: CodeBlockProps): JSX.Element {
 					height="100%"
 				/>
 			</box>
-		</Panel>
+		</box>
 	)
 }
