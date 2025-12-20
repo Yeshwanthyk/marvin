@@ -1,5 +1,7 @@
 export interface ParsedArgs {
   headless: boolean;
+  /** Use OpenTUI (experimental) instead of legacy TUI */
+  open: boolean;
   prompt?: string;
   configDir?: string;
   configPath?: string;
@@ -16,6 +18,7 @@ export interface ParsedArgs {
 export const parseArgs = (argv: string[]): ParsedArgs => {
   const args: ParsedArgs = {
     headless: false,
+    open: false,
     prompt: undefined,
     configDir: undefined,
     configPath: undefined,
@@ -49,6 +52,10 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (a === "--headless") {
       args.headless = true;
+      continue;
+    }
+    if (a === "--open") {
+      args.open = true;
       continue;
     }
     if (a === "--config-dir") {

@@ -42,4 +42,14 @@ describe("coding-agent args", () => {
     const args4 = parseArgs(["--resume"]);
     expect(args4.resume).toBe(true);
   });
+
+  it("parses --open flag for OpenTUI", () => {
+    const args = parseArgs(["--open"]);
+    expect(args.open).toBe(true);
+    expect(args.headless).toBe(false);
+    
+    const args2 = parseArgs(["--open", "--provider", "anthropic"]);
+    expect(args2.open).toBe(true);
+    expect(args2.provider).toBe("anthropic");
+  });
 });
