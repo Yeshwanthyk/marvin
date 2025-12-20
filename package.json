@@ -18,5 +18,9 @@
   "devDependencies": {
     "@types/node": "^25.0.1",
     "typescript": "^5.5.4"
+  },
+  "overrides": {
+    "solid-js": "1.9.9",
+    "babel-preset-solid": "1.9.9"
   }
 }
