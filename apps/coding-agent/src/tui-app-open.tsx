@@ -15,19 +15,39 @@ import {
 	saveTokens,
 	clearTokens,
 } from "@marvin-agents/agent-core"
-import type { AgentEvent, ThinkingLevel } from "@marvin-agents/agent-core"
-import { getApiKey, type Model, type Api } from "@marvin-agents/ai"
+import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent-core"
+import { getApiKey, getModels, getProviders, type Model, type Api, type AssistantMessage, type Message } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
-import { loadAppConfig } from "./config.js"
+import { loadAppConfig, updateAppConfig } from "./config.js"
+import { SessionManager, type LoadedSession, type SessionDetails } from "./session-manager.js"
 import { colors } from "./tui/themes.js"
 import { ToolBlock as ToolBlockComponent, Thinking, getToolText, getEditDiffText } from "./tui-open-rendering.js"
-import { existsSync, readFileSync, watch, type FSWatcher } from "fs"
+import { existsSync, readFileSync, watch, appendFileSync, type FSWatcher } from "fs"
+
+// Debug logger
+const DEBUG = process.env.MARVIN_DEBUG === "1"
+const debugLog = (msg: string, data?: unknown) => {
+	if (!DEBUG) return
+	const line = `[${new Date().toISOString()}] ${msg}${data !== undefined ? ": " + JSON.stringify(data) : ""}\n`
+	try { appendFileSync("/tmp/marvin-debug.log", line) } catch {}
+}
 import { spawnSync } from "child_process"
 import { dirname, join } from "path"
 
+type KnownProvider = ReturnType<typeof getProviders>[number]
+
+// ----- Session Picker -----
+
+// Use legacy session picker for now - OpenTUI picker needs keyboard handling refactor
+import { selectSession as selectSessionLegacy } from "./tui/session-picker.js"
+
+async function selectSessionOpen(sessionManager: SessionManager): Promise<string | null> {
+	return selectSessionLegacy(sessionManager)
+}
+
 // ----- Types -----
 
-interface Message {
+interface UIMessage {
 	id: string
 	role: "user" | "assistant"
 	content: string
@@ -88,12 +108,29 @@ function getGitDiffStats(): { ins: number; del: number } | null {
 
 // ----- Main -----
 
+// Helper to resolve provider from string
+const resolveProvider = (raw: string): KnownProvider | undefined => {
+	const trimmed = raw.trim()
+	if (!trimmed) return undefined
+	const providers = getProviders()
+	return providers.includes(trimmed as KnownProvider) ? (trimmed as KnownProvider) : undefined
+}
+
+// Helper to resolve model for a provider
+const resolveModel = (provider: KnownProvider, raw: string): Model<Api> | undefined => {
+	const modelId = raw.trim()
+	if (!modelId) return undefined
+	return getModels(provider).find((m) => m.id === modelId) as Model<Api> | undefined
+}
+
 export const runTuiOpen = async (args?: {
 	configDir?: string
 	configPath?: string
 	provider?: string
 	model?: string
 	thinking?: ThinkingLevel
+	continueSession?: boolean
+	resumeSession?: boolean
 }) => {
 	const firstModelRaw = args?.model?.split(",")[0]?.trim()
 	let firstProvider = args?.provider
@@ -111,6 +148,26 @@ export const runTuiOpen = async (args?: {
 		model: firstModel,
 		thinking: args?.thinking,
 	})
+
+	// Session management
+	const sessionManager = new SessionManager(loaded.configDir)
+	let selectedSessionPath: string | null = null
+	let initialSession: LoadedSession | null = null
+
+	// Handle --resume: show picker before main TUI
+	if (args?.resumeSession) {
+		selectedSessionPath = await selectSessionOpen(sessionManager)
+		if (selectedSessionPath === null) {
+			process.stdout.write("No session selected\n")
+			return
+		}
+		initialSession = sessionManager.loadSession(selectedSessionPath)
+	}
+
+	// Handle --continue: load latest session
+	if (args?.continueSession && !initialSession) {
+		initialSession = sessionManager.loadLatest()
+	}
 
 	const getApiKeyForProvider = (provider: string): string | undefined => {
 		if (provider === "anthropic") {
@@ -137,13 +194,45 @@ export const runTuiOpen = async (args?: {
 		},
 	})
 
+	// Build model cycling list from comma-separated --model arg
+	type ModelEntry = { provider: KnownProvider; model: Model<Api> }
+	const cycleModels: ModelEntry[] = []
+	const modelIds = args?.model?.split(",").map((s) => s.trim()).filter(Boolean) || [loaded.modelId]
+
+	for (const id of modelIds) {
+		if (id.includes("/")) {
+			const [provStr, modelStr] = id.split("/")
+			const prov = resolveProvider(provStr!)
+			if (!prov) continue
+			const model = resolveModel(prov, modelStr!)
+			if (model) cycleModels.push({ provider: prov, model })
+		} else {
+			for (const prov of getProviders()) {
+				const model = resolveModel(prov as KnownProvider, id)
+				if (model) {
+					cycleModels.push({ provider: prov as KnownProvider, model })
+					break
+				}
+			}
+		}
+	}
+	if (cycleModels.length === 0) {
+		cycleModels.push({ provider: loaded.provider, model: loaded.model })
+	}
+
 	render(
 		() => (
 			<App
 				agent={agent}
+				sessionManager={sessionManager}
+				initialSession={initialSession}
 				modelId={loaded.modelId}
 				model={loaded.model}
+				provider={loaded.provider}
 				thinking={loaded.thinking}
+				cycleModels={cycleModels}
+				configDir={loaded.configDir}
+				configPath={loaded.configPath}
 			/>
 		),
 		{
@@ -185,11 +274,40 @@ function extractThinking(content: unknown[]): { summary: string; full: string } 
 
 // ----- App Component -----
 
-function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking: ThinkingLevel }) {
-	const { agent } = props
+interface AppProps {
+	agent: Agent
+	sessionManager: SessionManager
+	initialSession: LoadedSession | null
+	modelId: string
+	model: Model<Api>
+	provider: KnownProvider
+	thinking: ThinkingLevel
+	cycleModels: Array<{ provider: KnownProvider; model: Model<Api> }>
+	configDir: string
+	configPath: string
+}
+
+function App(props: AppProps) {
+	const { agent, sessionManager } = props
+
+	// Mutable state for provider/model/thinking (cycled via keybindings)
+	let currentProvider = props.provider
+	let currentModelId = props.modelId
+	let currentThinking = props.thinking
+	let cycleIndex = 0
+
+	// Session state
+	let sessionStarted = false
+
+	const ensureSession = () => {
+		if (!sessionStarted) {
+			sessionManager.startSession(currentProvider, currentModelId, currentThinking)
+			sessionStarted = true
+		}
+	}
 
 	// State
-	const [messages, setMessages] = createSignal<Message[]>([])
+	const [messages, setMessages] = createSignal<UIMessage[]>([])
 	const [toolBlocks, setToolBlocks] = createSignal<ToolBlock[]>([])
 	const [isResponding, setIsResponding] = createSignal(false)
 	const [activityState, setActivityState] = createSignal<ActivityState>("idle")
@@ -198,8 +316,80 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 	const [toolOutputExpanded, setToolOutputExpanded] = createSignal(false)
 	const [thinkingVisible, setThinkingVisible] = createSignal(true)
 
+	// Footer state (reactive for cycling)
+	const [displayModelId, setDisplayModelId] = createSignal(props.modelId)
+	const [displayThinking, setDisplayThinking] = createSignal(props.thinking)
+	const [displayContextWindow, setDisplayContextWindow] = createSignal(props.model.contextWindow)
+
 	// Usage tracking
 	const [contextTokens, setContextTokens] = createSignal(0)
+
+	// Queue state
+	const queuedMessages: string[] = []
+	const [queueCount, setQueueCount] = createSignal(0)
+
+	// Retry state
+	const retryConfig = { enabled: true, maxRetries: 3, baseDelayMs: 2000 }
+	const retryablePattern = /overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error/i
+	let retryAttempt = 0
+	let retryAbortController: AbortController | null = null
+	const [retryStatus, setRetryStatus] = createSignal<string | null>(null)
+
+	// Restore session on mount
+	onMount(() => {
+		if (props.initialSession) {
+			restoreSession(props.initialSession)
+		}
+	})
+
+	const restoreSession = (session: LoadedSession) => {
+		const { metadata, messages: sessionMessages } = session
+
+		// Update provider/model/thinking if different
+		const resolvedProvider = resolveProvider(metadata.provider)
+		if (resolvedProvider) {
+			const resolvedModel = resolveModel(resolvedProvider, metadata.modelId)
+			if (resolvedModel) {
+				currentProvider = resolvedProvider
+				currentModelId = resolvedModel.id
+				currentThinking = metadata.thinkingLevel
+				agent.setModel(resolvedModel)
+				agent.setThinkingLevel(metadata.thinkingLevel)
+				setDisplayModelId(resolvedModel.id)
+				setDisplayThinking(metadata.thinkingLevel)
+				setDisplayContextWindow(resolvedModel.contextWindow)
+			}
+		}
+
+		// Restore messages to agent
+		agent.replaceMessages(sessionMessages)
+
+		// Render conversation history
+		const uiMessages: UIMessage[] = []
+		for (const msg of sessionMessages) {
+			if (msg.role === "user") {
+				const text = typeof msg.content === "string" ? msg.content : extractText(msg.content as unknown[])
+				uiMessages.push({ id: crypto.randomUUID(), role: "user", content: text })
+			} else if (msg.role === "assistant") {
+				const text = extractText(msg.content as unknown[])
+				const thinking = extractThinking(msg.content as unknown[])
+				uiMessages.push({
+					id: crypto.randomUUID(),
+					role: "assistant",
+					content: text,
+					thinking: thinking || undefined,
+					isStreaming: false,
+					tools: [],
+				})
+			}
+		}
+		setMessages(uiMessages)
+
+		// Continue the existing session file
+		const sessionPath = sessionManager.listSessions().find((s) => s.id === metadata.id)?.path || ""
+		sessionManager.continueSession(sessionPath, metadata.id)
+		sessionStarted = true
+	}
 
 	// Subscribe to agent events
 	createEffect(() => {
@@ -218,22 +408,37 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 	let streamingMessageId: string | null = null
 
 	const handleAgentEvent = (event: AgentEvent) => {
-		if (event.type === "message_start" && event.message.role === "assistant") {
-			// Create streaming message entry immediately
-			streamingMessageId = crypto.randomUUID()
-			batch(() => {
-				setActivityState("streaming")
-				setMessages((prev) => [
-					...prev,
-					{
-						id: streamingMessageId!,
-						role: "assistant",
-						content: "",
-						isStreaming: true,
-						tools: [],
-					},
-				])
-			})
+		if (event.type === "message_start") {
+			// Handle queued user message being processed
+			if (event.message.role === "user") {
+				if (queuedMessages.length > 0) {
+					queuedMessages.shift()
+					setQueueCount(queuedMessages.length)
+					const text = typeof event.message.content === "string"
+						? event.message.content
+						: extractText(event.message.content as unknown[])
+					setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text }])
+					setActivityState("thinking")
+				}
+			}
+
+			// Create streaming assistant message
+			if (event.message.role === "assistant") {
+				streamingMessageId = crypto.randomUUID()
+				batch(() => {
+					setActivityState("streaming")
+					setMessages((prev) => [
+						...prev,
+						{
+							id: streamingMessageId!,
+							role: "assistant",
+							content: "",
+							isStreaming: true,
+							tools: [],
+						},
+					])
+				})
+			}
 		}
 
 		if (event.type === "message_update" && event.message.role === "assistant") {
@@ -277,6 +482,9 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 			)
 
 			streamingMessageId = null
+
+			// Save message to session
+			sessionManager.appendMessage(event.message as AppMessage)
 
 			// Update usage
 			const msg = event.message as { usage?: { input: number; output: number; cacheRead: number; cacheWrite?: number } }
@@ -352,17 +560,260 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 			}
 		}
 
-		if (event.type === "turn_end" || event.type === "agent_end") {
+		if (event.type === "turn_end") {
+			streamingMessageId = null
+		}
+
+		if (event.type === "agent_end") {
+			streamingMessageId = null
+
+			// Check for retryable error
+			const lastMsg = agent.state.messages[agent.state.messages.length - 1]
+			const errorMsg = lastMsg?.role === "assistant" && (lastMsg as AssistantMessage).errorMessage
+			const isRetryable = errorMsg && retryablePattern.test(errorMsg)
+
+			if (isRetryable && retryConfig.enabled && retryAttempt < retryConfig.maxRetries) {
+				retryAttempt++
+				const delay = retryConfig.baseDelayMs * Math.pow(2, retryAttempt - 1)
+				setRetryStatus(`Retrying (${retryAttempt}/${retryConfig.maxRetries}) in ${Math.round(delay / 1000)}s... (esc to cancel)`)
+
+				retryAbortController = new AbortController()
+				const signal = retryAbortController.signal
+
+				const sleep = (ms: number) =>
+					new Promise<void>((resolve, reject) => {
+						const timeout = setTimeout(resolve, ms)
+						signal.addEventListener("abort", () => {
+							clearTimeout(timeout)
+							reject(new Error("cancelled"))
+						})
+					})
+
+				sleep(delay)
+					.then(() => {
+						if (signal.aborted) return
+						setRetryStatus(null)
+						retryAbortController = null
+						// Remove last error message and retry
+						agent.replaceMessages(agent.state.messages.slice(0, -1))
+						setActivityState("thinking")
+						void agent.continue().catch((err) => {
+							setActivityState("idle")
+							setIsResponding(false)
+							setMessages((prev) => [
+								...prev,
+								{
+									id: crypto.randomUUID(),
+									role: "assistant",
+									content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+								},
+							])
+						})
+					})
+					.catch(() => {
+						// Retry cancelled
+						setIsResponding(false)
+						setActivityState("idle")
+					})
+				return
+			}
+
+			retryAttempt = 0
 			batch(() => {
 				setIsResponding(false)
 				setActivityState("idle")
-				streamingMessageId = null
 			})
 		}
 	}
 
-	const handleSubmit = async (text: string) => {
-		if (!text.trim() || isResponding()) return
+	// ----- Slash Command Handling -----
+	const thinkingLevels: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"]
+
+	const clearConversation = () => {
+		setMessages([])
+		setToolBlocks([])
+		setContextTokens(0)
+		agent.reset()
+	}
+
+	const exit = () => {
+		process.exit(0)
+	}
+
+	const handleSlashCommand = (line: string): boolean => {
+		if (line === "/exit" || line === "/quit") {
+			exit()
+			return true
+		}
+
+		if (line === "/clear") {
+			clearConversation()
+			return true
+		}
+
+		if (line === "/abort") {
+			handleAbort()
+			return true
+		}
+
+		if (line.startsWith("/thinking")) {
+			const next = line.slice("/thinking".length).trim() as ThinkingLevel
+			if (thinkingLevels.includes(next)) {
+				agent.setThinkingLevel(next)
+				currentThinking = next
+				setDisplayThinking(next)
+				void updateAppConfig({ configDir: props.configDir, configPath: props.configPath }, { thinking: next })
+				return true
+			}
+			return false
+		}
+
+		if (line.startsWith("/model")) {
+			const rest = line.slice("/model".length).trim()
+
+			if (!rest) {
+				// Show help message
+				setMessages((prev) => [
+					...prev,
+					{
+						id: crypto.randomUUID(),
+						role: "assistant",
+						content: "Usage: /model <provider> <modelId> (or /model <modelId>)",
+					},
+				])
+				return true
+			}
+
+			if (isResponding()) {
+				setMessages((prev) => [
+					...prev,
+					{
+						id: crypto.randomUUID(),
+						role: "assistant",
+						content: "Model cannot be changed while responding. Use /abort first.",
+					},
+				])
+				return true
+			}
+
+			const parts = rest.split(/\s+/)
+			if (parts.length === 1) {
+				// Try to find model in current provider
+				const modelId = parts[0]!
+				const model = resolveModel(currentProvider, modelId)
+				if (!model) {
+					const examples = getModels(currentProvider).slice(0, 5).map((m) => m.id).join(", ")
+					setMessages((prev) => [
+						...prev,
+						{
+							id: crypto.randomUUID(),
+							role: "assistant",
+							content: `Unknown model "${modelId}" for ${currentProvider}. Examples: ${examples}`,
+						},
+					])
+					return true
+				}
+
+				agent.setModel(model)
+				currentModelId = model.id
+				setDisplayModelId(model.id)
+				setDisplayContextWindow(model.contextWindow)
+				void updateAppConfig({ configDir: props.configDir, configPath: props.configPath }, { model: model.id })
+				return true
+			}
+
+			// provider modelId format
+			const [providerRaw, ...modelParts] = parts
+			const provider = resolveProvider(providerRaw!)
+			if (!provider) {
+				setMessages((prev) => [
+					...prev,
+					{
+						id: crypto.randomUUID(),
+						role: "assistant",
+						content: `Unknown provider "${providerRaw}". Known: ${getProviders().join(", ")}`,
+					},
+				])
+				return true
+			}
+
+			const modelId = modelParts.join(" ")
+			const model = resolveModel(provider, modelId)
+			if (!model) {
+				const examples = getModels(provider).slice(0, 5).map((m) => m.id).join(", ")
+				setMessages((prev) => [
+					...prev,
+					{
+						id: crypto.randomUUID(),
+						role: "assistant",
+						content: `Unknown model "${modelId}" for ${provider}. Examples: ${examples}`,
+					},
+				])
+				return true
+			}
+
+			agent.setModel(model)
+			currentProvider = provider
+			currentModelId = model.id
+			setDisplayModelId(model.id)
+			setDisplayContextWindow(model.contextWindow)
+			void updateAppConfig({ configDir: props.configDir, configPath: props.configPath }, { provider, model: model.id })
+			return true
+		}
+
+		// TODO: Implement /compact
+		if (line === "/compact" || line.startsWith("/compact ")) {
+			setMessages((prev) => [
+				...prev,
+				{
+					id: crypto.randomUUID(),
+					role: "assistant",
+					content: "/compact not yet implemented in OpenTUI",
+				},
+			])
+			return true
+		}
+
+		return false
+	}
+
+	const handleSubmit = async (text: string, editorClearFn?: () => void) => {
+		if (!text.trim()) return
+
+		// Try slash commands first
+		if (text.startsWith("/")) {
+			if (handleSlashCommand(text.trim())) {
+				editorClearFn?.()
+				return
+			}
+		}
+
+		// Queue if responding
+		if (isResponding()) {
+			queuedMessages.push(text)
+			setQueueCount(queuedMessages.length)
+			const queuedUserMessage: AppMessage = {
+				role: "user",
+				content: [{ type: "text", text }],
+				timestamp: Date.now(),
+			}
+			void agent.queueMessage(queuedUserMessage)
+			editorClearFn?.()
+			return
+		}
+
+		editorClearFn?.()
+
+		// Ensure session is started on first message
+		ensureSession()
+
+		// Create user message for session
+		const userMessage: AppMessage = {
+			role: "user",
+			content: [{ type: "text", text }],
+			timestamp: Date.now(),
+		}
+		sessionManager.appendMessage(userMessage)
 
 		batch(() => {
 			setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text }])
@@ -389,16 +840,63 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 		}
 	}
 
-	const handleAbort = () => {
+	const handleAbort = (): string | null => {
+		// Cancel retry if pending
+		if (retryAbortController) {
+			retryAbortController.abort()
+			retryAbortController = null
+			retryAttempt = 0
+			setRetryStatus(null)
+		}
+
 		agent.abort()
+		agent.clearMessageQueue()
+
+		// Return queued messages to restore to editor
+		let restore: string | null = null
+		if (queuedMessages.length > 0) {
+			restore = queuedMessages.join("\n")
+			queuedMessages.length = 0
+			setQueueCount(0)
+		}
+
 		batch(() => {
 			setIsResponding(false)
 			setActivityState("idle")
 		})
+
+		return restore
 	}
 
-	const toggleToolExpand = () => setToolOutputExpanded((v) => !v)
+	const toggleToolExpand = () => {
+		setToolOutputExpanded((v) => {
+			debugLog("toggleToolExpand", { from: v, to: !v })
+			return !v
+		})
+	}
 	const toggleThinking = () => setThinkingVisible((v) => !v)
+
+	// Ctrl+P model cycling
+	const cycleModel = () => {
+		if (props.cycleModels.length <= 1) return
+		cycleIndex = (cycleIndex + 1) % props.cycleModels.length
+		const entry = props.cycleModels[cycleIndex]!
+		currentProvider = entry.provider
+		currentModelId = entry.model.id
+		agent.setModel(entry.model)
+		setDisplayModelId(entry.model.id)
+		setDisplayContextWindow(entry.model.contextWindow)
+	}
+
+	// Shift+Tab thinking cycling
+	const cycleThinking = () => {
+		const idx = thinkingLevels.indexOf(currentThinking)
+		const nextIdx = (idx + 1) % thinkingLevels.length
+		const next = thinkingLevels[nextIdx]!
+		currentThinking = next
+		agent.setThinkingLevel(next)
+		setDisplayThinking(next)
+	}
 
 	return (
 		<ThemeProvider mode="dark">
@@ -409,14 +907,18 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 				activityState={activityState()}
 				toolOutputExpanded={toolOutputExpanded()}
 				thinkingVisible={thinkingVisible()}
-				modelId={props.modelId}
-				thinking={props.thinking}
+				modelId={displayModelId()}
+				thinking={displayThinking()}
 				contextTokens={contextTokens()}
-				contextWindow={props.model.contextWindow}
+				contextWindow={displayContextWindow()}
+				queueCount={queueCount()}
+				retryStatus={retryStatus()}
 				onSubmit={handleSubmit}
 				onAbort={handleAbort}
 				onToggleToolExpand={toggleToolExpand}
 				onToggleThinking={toggleThinking}
+				onCycleModel={cycleModel}
+				onCycleThinking={cycleThinking}
 			/>
 		</ThemeProvider>
 	)
@@ -425,7 +927,7 @@ function App(props: { agent: Agent; modelId: string; model: Model<Api>; thinking
 // ----- MainView Component -----
 
 function MainView(props: {
-	messages: Message[]
+	messages: UIMessage[]
 	toolBlocks: ToolBlock[]
 	isResponding: boolean
 	activityState: ActivityState
@@ -435,10 +937,14 @@ function MainView(props: {
 	thinking: ThinkingLevel
 	contextTokens: number
 	contextWindow: number
-	onSubmit: (text: string) => void
-	onAbort: () => void
+	queueCount: number
+	retryStatus: string | null
+	onSubmit: (text: string, clearFn?: () => void) => void
+	onAbort: () => string | null
 	onToggleToolExpand: () => void
 	onToggleThinking: () => void
+	onCycleModel: () => void
+	onCycleThinking: () => void
 }) {
 	const { theme } = useTheme()
 	let textareaRef: TextareaRenderable | undefined
@@ -504,17 +1010,27 @@ function MainView(props: {
 				props.onAbort()
 			} else if (now - lastCtrlC < 750) {
 				process.exit(0)
+			} else {
+				// Clear input on single Ctrl+C when idle
+				if (textareaRef) {
+					textareaRef.clear()
+				}
 			}
 			lastCtrlC = now
 			e.preventDefault()
 			return
 		}
 
-		// Escape - abort if responding
-		if (e.name === "escape" && props.isResponding) {
-			props.onAbort()
-			e.preventDefault()
-			return
+		// Escape - abort if responding (or cancel retry)
+		if (e.name === "escape") {
+			if (props.isResponding || props.retryStatus) {
+				const restore = props.onAbort()
+				if (restore && textareaRef) {
+					textareaRef.setText(restore)
+				}
+				e.preventDefault()
+				return
+			}
 		}
 
 		// Ctrl+O - toggle tool output expansion
@@ -527,6 +1043,20 @@ function MainView(props: {
 		// Ctrl+T - toggle thinking visibility
 		if (e.ctrl && e.name === "t") {
 			props.onToggleThinking()
+			e.preventDefault()
+			return
+		}
+
+		// Ctrl+P - cycle model
+		if (e.ctrl && e.name === "p") {
+			props.onCycleModel()
+			e.preventDefault()
+			return
+		}
+
+		// Shift+Tab - cycle thinking level
+		if (e.shift && e.name === "tab") {
+			props.onCycleThinking()
 			e.preventDefault()
 			return
 		}
@@ -664,6 +1194,7 @@ function MainView(props: {
 											editDiff={item.tool.editDiff || null}
 											isError={item.tool.isError}
 											isComplete={item.tool.isComplete}
+											expanded={props.toolOutputExpanded}
 										/>
 									</box>
 								)}
@@ -704,9 +1235,9 @@ function MainView(props: {
 					onKeyDown={handleKeyDown}
 					onSubmit={() => {
 						if (textareaRef) {
-							const text = textareaRef.plainText
-							props.onSubmit(text)
-							textareaRef.clear()
+							const ref = textareaRef
+							const text = ref.plainText
+							props.onSubmit(text, () => ref.clear())
 						}
 					}}
 				/>
@@ -732,9 +1263,17 @@ function MainView(props: {
 						<text fg={colors.dimmed}>/</text>
 						<text fg="#bf616a">-{gitStats()!.del}</text>
 					</Show>
+					<Show when={props.queueCount > 0}>
+						<text fg={colors.dimmed}>·</text>
+						<text fg="#ebcb8b">{props.queueCount}q</text>
+					</Show>
 				</box>
-				<Show when={getActivityData()}>
-					<text fg={getActivityData()!.color}>{getActivityData()!.text}</text>
+				<Show when={props.retryStatus} fallback={
+					<Show when={getActivityData()}>
+						<text fg={getActivityData()!.color}>{getActivityData()!.text}</text>
+					</Show>
+				}>
+					<text fg="#ebcb8b">{props.retryStatus}</text>
 				</Show>
 			</box>
 		</box>
