@@ -82,7 +82,7 @@ function toolTitle(name: string, args: any): string {
 export function Thinking(props: { summary: string }): JSX.Element {
 	const { theme } = useTheme()
 	return (
-		<text>
+		<text selectable={false}>
 			<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>thinking </span>
 			<span style={{ fg: theme.textMuted, attributes: TextAttributes.ITALIC }}>{props.summary}</span>
 		</text>
@@ -123,7 +123,7 @@ function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 	const title = toolTitle(ctx.name, ctx.args)
 
 	return (
-		<text>
+		<text selectable={false}>
 			<span style={{ fg: theme.primary, attributes: TextAttributes.BOLD }}>{ctx.name}</span>
 			<span style={{ fg: theme.textMuted }}> {title}</span>
 			<Show when={!ctx.isComplete}>
@@ -145,7 +145,7 @@ const registry: Record<string, ToolRenderer> = {
 			const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
 			const lines = ctx.output ? ctx.output.split("\n").length : null
 			return (
-				<text>
+				<text selectable={false}>
 					<span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>run</span>
 					<span style={{ fg: theme.textMuted }}> {cmd}</span>
 					<Show when={!ctx.isComplete}>
@@ -175,7 +175,7 @@ const registry: Record<string, ToolRenderer> = {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const lines = ctx.output ? replaceTabs(ctx.output).split("\n").length : null
 			return (
-				<text>
+				<text selectable={false}>
 					<span style={{ fg: theme.info, attributes: TextAttributes.BOLD }}>read</span>
 					<span style={{ fg: theme.textMuted }}> {path}</span>
 					<Show when={lines !== null}>
@@ -198,7 +198,7 @@ const registry: Record<string, ToolRenderer> = {
 			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			return (
-				<text>
+				<text selectable={false}>
 					<span style={{ fg: theme.warning, attributes: TextAttributes.BOLD }}>write</span>
 					<span style={{ fg: theme.textMuted }}> {path}</span>
 					<Show when={!ctx.isComplete}>
@@ -224,7 +224,7 @@ const registry: Record<string, ToolRenderer> = {
 			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			return (
-				<text>
+				<text selectable={false}>
 					<span style={{ fg: theme.secondary, attributes: TextAttributes.BOLD }}>edit</span>
 					<span style={{ fg: theme.textMuted }}> {path}</span>
 					<Show when={!ctx.isComplete}>
@@ -279,21 +279,21 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 	return (
 		<Show when={mode() === "inline"} fallback={
 			// Block layout
-			<box
-				flexDirection="column"
-				gap={0}
-				onMouseUp={(e: MouseEvent) => {
-					if (e.isSelecting) return
-					props.onToggleExpanded?.()
-				}}
-			>
-				<box flexDirection="row" gap={1}>
+			<box flexDirection="column" gap={0}>
+				<box
+					flexDirection="row"
+					gap={1}
+					onMouseUp={(e: MouseEvent) => {
+						if (e.isSelecting) return
+						props.onToggleExpanded?.()
+					}}
+				>
 					{header()}
 					<Show when={!props.expanded && props.isComplete}>
-						<text fg={theme.textMuted}>▾</text>
+						<text selectable={false} fg={theme.textMuted}>▾</text>
 					</Show>
 					<Show when={props.expanded && props.isComplete}>
-						<text fg={theme.textMuted}>▴</text>
+						<text selectable={false} fg={theme.textMuted}>▴</text>
 					</Show>
 				</box>
 				<Show when={body()}>
@@ -314,7 +314,7 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 			>
 				{header()}
 				<Show when={props.isComplete}>
-					<text fg={theme.textMuted}>▸</text>
+					<text selectable={false} fg={theme.textMuted}>▸</text>
 				</Show>
 			</box>
 		</Show>

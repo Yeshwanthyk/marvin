@@ -1,6 +1,6 @@
 # marvin-agent
 
-Modular AI agent framework built on composable packages.
+Modular AI coding agent framework built on composable packages.
 
 ## Architecture
 
@@ -12,8 +12,9 @@ marvin-agent/
 ├── packages/
 │   ├── ai/                     @marvin-agents/ai
 │   ├── agent/                  @marvin-agents/agent-core
-│   ├── tui/                    @marvin-agents/tui
-│   └── base-tools/             @marvin-agents/base-tools
+│   ├── base-tools/             @marvin-agents/base-tools
+│   ├── open-tui/               @marvin-agents/open-tui
+│   └── tui/                    @marvin-agents/tui
 │
 ├── docs/
 │   └── testing.md

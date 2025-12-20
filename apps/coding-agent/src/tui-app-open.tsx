@@ -1022,22 +1022,22 @@ function ThinkingBlockWrapper(props: {
 	const expanded = createMemo(() => props.isExpanded(props.id))
 	
 	return (
-		<box 
-			paddingLeft={1} 
-			flexDirection="column"
-			onMouseUp={(e: { isSelecting?: boolean }) => {
-				if (e.isSelecting) return
-				props.onToggle(props.id)
-			}}
-		>
-			<box flexDirection="row" gap={1}>
-				<text>
+		<box paddingLeft={1} flexDirection="column">
+			<box
+				flexDirection="row"
+				gap={1}
+				onMouseUp={(e: { isSelecting?: boolean }) => {
+					if (e.isSelecting) return
+					props.onToggle(props.id)
+				}}
+			>
+				<text selectable={false}>
 					<span style={{ fg: props.theme.textMuted, attributes: TextAttributes.ITALIC }}>thinking </span>
 					<span style={{ fg: props.theme.textMuted, attributes: TextAttributes.ITALIC }}>
 						{expanded() ? "" : props.summary}
 					</span>
 				</text>
-				<text fg={props.theme.textMuted}>{expanded() ? "▴" : "▸"}</text>
+				<text selectable={false} fg={props.theme.textMuted}>{expanded() ? "▴" : "▸"}</text>
 			</box>
 			<Show when={expanded()}>
 				<box paddingLeft={2} paddingTop={1}>
