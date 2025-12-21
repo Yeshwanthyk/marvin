@@ -49,10 +49,14 @@ export function createCodexFetch(options: CodexFetchOptions): (input: string | U
 			throw new Error("Could not extract account ID from token");
 		}
 
-		// Rewrite URL: api.openai.com/v1/responses → chatgpt.com/backend-api/codex/responses
+		// Rewrite URL:
+		// - api.openai.com/v1/responses → chatgpt.com/backend-api/codex/responses
+		// - chatgpt.com/backend-api/responses → chatgpt.com/backend-api/codex/responses
 		let url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 		if (url.includes("api.openai.com")) {
 			url = url.replace(/https:\/\/api\.openai\.com\/v1/, CODEX_BASE_URL);
+		}
+		if (url.startsWith(CODEX_BASE_URL) && url.includes("/responses") && !url.includes("/codex/responses")) {
 			url = url.replace("/responses", "/codex/responses");
 		}
 
@@ -89,13 +93,6 @@ export function createCodexFetch(options: CodexFetchOptions): (input: string | U
 			}
 		}
 
-		const response = await fetch(url, { ...init, headers });
-
-		if (!response.ok) {
-			const text = await response.text();
-			throw new Error(`Codex API error ${response.status}: ${text}`);
-		}
-
-		return response;
+		return fetch(url, { ...init, headers });
 	};
 }
