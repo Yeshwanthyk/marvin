@@ -23,7 +23,7 @@ export function startApp(rootComponent: () => JSX.Element, config: AppConfig = {
 		const { onExit, ...renderConfig } = config
 
 		render(rootComponent, {
-			targetFps: 60,
+			targetFps: 30,
 			exitOnCtrlC: false,
 			useKittyKeyboard: {},
 			...renderConfig,

@@ -424,10 +424,18 @@ function MainView(props: MainViewProps) {
 	})
 	onCleanup(() => { if (gitWatcher) gitWatcher.close(); if (spinnerInterval) clearInterval(spinnerInterval) })
 	createEffect(() => {
-		if (props.activityState !== "idle") { if (!spinnerInterval) spinnerInterval = setInterval(() => setSpinnerFrame((f) => (f + 1) % 8), 120) }
+		if (props.activityState !== "idle") { if (!spinnerInterval) spinnerInterval = setInterval(() => setSpinnerFrame((f) => (f + 1) % 8), 200) }
 		else { if (spinnerInterval) { clearInterval(spinnerInterval); spinnerInterval = null } }
 	})
-	createEffect(() => { props.messages.length; props.toolBlocks.length; props.isResponding; if (scrollRef) scrollRef.scrollBy(100_000) })
+	// Scroll only when message count increases (not on every reactive change)
+	let prevMsgCount = 0, prevToolCount = 0
+	createEffect(() => {
+		const msgCount = props.messages.length, toolCount = props.toolBlocks.length
+		if (msgCount > prevMsgCount || toolCount > prevToolCount) {
+			prevMsgCount = msgCount; prevToolCount = toolCount
+			if (scrollRef) scrollRef.scrollBy(100_000)
+		}
+	})
 
 	// Toasts & Clipboard
 	const renderer = useRenderer()

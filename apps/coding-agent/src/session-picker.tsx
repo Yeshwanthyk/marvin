@@ -115,7 +115,7 @@ export async function selectSession(sessionManager: SessionManager): Promise<str
 				</ThemeProvider>
 			),
 			{
-				targetFps: 60,
+				targetFps: 30,
 				exitOnCtrlC: false,
 			}
 		)
