@@ -132,3 +132,42 @@ export function extractToolCalls(content: unknown[]): ExtractedToolCall[] {
 	}
 	return toolCalls
 }
+
+/** Ordered content block for preserving API response order */
+export type OrderedBlock =
+	| { type: "thinking"; id: string; summary: string; full: string }
+	| { type: "text"; text: string }
+	| { type: "toolCall"; id: string; name: string; args: unknown }
+
+/**
+ * Extract content blocks in order, preserving interleaving of thinking, text, and tool calls.
+ * Each content type appears in the order it was received from the API.
+ */
+export function extractOrderedBlocks(content: unknown[]): OrderedBlock[] {
+	const blocks: OrderedBlock[] = []
+	let thinkingCounter = 0
+
+	for (const block of content) {
+		if (typeof block !== "object" || block === null) continue
+		const b = block as Record<string, unknown>
+
+		if (b.type === "thinking" && typeof b.thinking === "string") {
+			const full = b.thinking
+			const lines = full.trim().split("\n").filter((l) => l.trim().length > 20)
+			const summary = lines[0]?.trim().slice(0, 80) || full.trim().slice(0, 80)
+			const truncated = summary.length >= 80 ? summary + "..." : summary
+			blocks.push({
+				type: "thinking",
+				id: `thinking-${thinkingCounter++}`,
+				summary: truncated,
+				full,
+			})
+		} else if (b.type === "text" && typeof b.text === "string") {
+			blocks.push({ type: "text", text: b.text })
+		} else if (b.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string") {
+			blocks.push({ type: "toolCall", id: b.id, name: b.name, args: b.arguments ?? {} })
+		}
+	}
+
+	return blocks
+}

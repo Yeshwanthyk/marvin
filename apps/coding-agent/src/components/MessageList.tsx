@@ -87,26 +87,55 @@ export function buildContentItems(
 		if (msg.role === "user") {
 			items.push({ type: "user", content: msg.content })
 		} else if (msg.role === "assistant") {
-			// Thinking first
-			if (thinkingVisible && msg.thinking) {
-				items.push({
-					type: "thinking",
-					id: `thinking-${msg.id}`,
-					summary: msg.thinking.summary,
-					full: msg.thinking.full,
-					isStreaming: msg.isStreaming,
-				})
-			}
+			// Use contentBlocks if available (preserves interleaved order)
+			if (msg.contentBlocks && msg.contentBlocks.length > 0) {
+				for (const block of msg.contentBlocks) {
+					if (block.type === "thinking") {
+						if (thinkingVisible) {
+							items.push({
+								type: "thinking",
+								id: block.id,
+								summary: block.summary,
+								full: block.full,
+								isStreaming: msg.isStreaming,
+							})
+						}
+					} else if (block.type === "text") {
+						if (block.text) {
+							items.push({ type: "assistant", content: block.text, isStreaming: msg.isStreaming })
+						}
+					} else if (block.type === "tool") {
+						if (!renderedToolIds.has(block.tool.id)) {
+							items.push({ type: "tool", tool: block.tool })
+							renderedToolIds.add(block.tool.id)
+						}
+					}
+				}
+			} else {
+				// Fallback: legacy format without contentBlocks
+				if (thinkingVisible && msg.thinking) {
+					items.push({
+						type: "thinking",
+						id: `thinking-${msg.id}`,
+						summary: msg.thinking.summary,
+						full: msg.thinking.full,
+						isStreaming: msg.isStreaming,
+					})
+				}
 
-			// Tools from message
-			for (const tool of msg.tools || []) {
-				if (!renderedToolIds.has(tool.id)) {
-					items.push({ type: "tool", tool })
-					renderedToolIds.add(tool.id)
+				for (const tool of msg.tools || []) {
+					if (!renderedToolIds.has(tool.id)) {
+						items.push({ type: "tool", tool })
+						renderedToolIds.add(tool.id)
+					}
+				}
+
+				if (msg.content) {
+					items.push({ type: "assistant", content: msg.content, isStreaming: msg.isStreaming })
 				}
 			}
 
-			// For last message, insert orphan toolBlocks BEFORE text content
+			// For last message, include orphan toolBlocks from global state
 			if (isLastMessage) {
 				for (const tool of toolBlocks) {
 					if (!renderedToolIds.has(tool.id)) {
@@ -114,11 +143,6 @@ export function buildContentItems(
 						renderedToolIds.add(tool.id)
 					}
 				}
-			}
-
-			// Then text content
-			if (msg.content) {
-				items.push({ type: "assistant", content: msg.content, isStreaming: msg.isStreaming })
 			}
 		}
 	}

@@ -18,8 +18,8 @@ import { selectSession as selectSessionOpen } from "./session-picker.js"
 import { watch, type FSWatcher } from "fs"
 
 // Extracted modules
-import type { UIMessage, ToolBlock, ActivityState } from "./types.js"
-import { findGitHeadPath, getCurrentBranch, getGitDiffStats, extractText, extractThinking, extractToolCalls, copyToClipboard, getToolText, getEditDiffText } from "./utils.js"
+import type { UIMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
+import { findGitHeadPath, getCurrentBranch, getGitDiffStats, extractText, extractThinking, extractToolCalls, extractOrderedBlocks, copyToClipboard, getToolText, getEditDiffText } from "./utils.js"
 import { handleSlashCommand, resolveProvider, resolveModel, THINKING_LEVELS, type CommandContext } from "./commands.js"
 import { createAgentEventHandler, type EventHandlerContext } from "./agent-events.js"
 import { Footer } from "./components/Footer.js"
@@ -193,7 +193,23 @@ function App(props: AppProps) {
 						isComplete: true,
 					}
 				})
-				uiMessages.push({ id: crypto.randomUUID(), role: "assistant", content: text, thinking: thinking || undefined, isStreaming: false, tools })
+				// Build contentBlocks from ordered API content
+				const orderedBlocks = extractOrderedBlocks(msg.content as unknown[])
+				const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
+					if (block.type === "thinking") {
+						return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
+					} else if (block.type === "text") {
+						return { type: "text" as const, text: block.text }
+					} else {
+						// toolCall - find full tool from tools array
+						const tool = tools.find((t) => t.id === block.id)
+						return {
+							type: "tool" as const,
+							tool: tool || { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
+						}
+					}
+				})
+				uiMessages.push({ id: crypto.randomUUID(), role: "assistant", content: text, thinking: thinking || undefined, isStreaming: false, tools, contentBlocks })
 			}
 			// Skip toolResult messages - they're attached to assistant messages via toolResultMap
 		}
@@ -370,7 +386,7 @@ function MainView(props: MainViewProps) {
 	// Keyboard
 	const handleKeyDown = createKeyboardHandler({
 		showAutocomplete, autocompleteItems, setAutocompleteIndex, setShowAutocomplete, applyAutocomplete,
-		isResponding: props.isResponding, retryStatus: props.retryStatus,
+		isResponding: () => props.isResponding, retryStatus: () => props.retryStatus,
 		onAbort: props.onAbort, onToggleThinking: props.onToggleThinking, onCycleModel: props.onCycleModel, onCycleThinking: props.onCycleThinking,
 		toggleLastToolExpanded, copySelectionToClipboard,
 		clearEditor: () => textareaRef?.clear(), setEditorText: (t) => textareaRef?.setText(t), lastCtrlC,

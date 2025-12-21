@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { extractText, extractThinking } from "../src/utils.js"
+import { extractText, extractThinking, extractOrderedBlocks } from "../src/utils.js"
 
 describe("extractText", () => {
 	it("extracts text from content blocks", () => {
@@ -56,5 +56,67 @@ describe("extractThinking", () => {
 
 	it("handles empty array", () => {
 		expect(extractThinking([])).toBeNull()
+	})
+})
+
+describe("extractOrderedBlocks", () => {
+	it("preserves interleaved order of thinking, text, and tools", () => {
+		const content = [
+			{ type: "thinking", thinking: "First thought with enough text to create summary" },
+			{ type: "toolCall", id: "tool1", name: "bash", arguments: { command: "ls" } },
+			{ type: "text", text: "First text" },
+			{ type: "thinking", thinking: "Second thought with enough text to create summary" },
+			{ type: "toolCall", id: "tool2", name: "read", arguments: { path: "file.txt" } },
+			{ type: "text", text: "Second text" },
+		]
+		const blocks = extractOrderedBlocks(content)
+		expect(blocks.length).toBe(6)
+		expect(blocks[0].type).toBe("thinking")
+		expect(blocks[1].type).toBe("toolCall")
+		expect((blocks[1] as { type: "toolCall"; name: string }).name).toBe("bash")
+		expect(blocks[2].type).toBe("text")
+		expect((blocks[2] as { type: "text"; text: string }).text).toBe("First text")
+		expect(blocks[3].type).toBe("thinking")
+		expect(blocks[4].type).toBe("toolCall")
+		expect((blocks[4] as { type: "toolCall"; name: string }).name).toBe("read")
+		expect(blocks[5].type).toBe("text")
+	})
+
+	it("assigns unique ids to thinking blocks", () => {
+		const content = [
+			{ type: "thinking", thinking: "First thought" },
+			{ type: "thinking", thinking: "Second thought" },
+		]
+		const blocks = extractOrderedBlocks(content)
+		expect(blocks[0].type).toBe("thinking")
+		expect(blocks[1].type).toBe("thinking")
+		expect((blocks[0] as { type: "thinking"; id: string }).id).not.toBe((blocks[1] as { type: "thinking"; id: string }).id)
+	})
+
+	it("extracts tool call arguments", () => {
+		const content = [
+			{ type: "toolCall", id: "tc1", name: "bash", arguments: { command: "echo hello", timeout: 30 } },
+		]
+		const blocks = extractOrderedBlocks(content)
+		expect(blocks.length).toBe(1)
+		expect(blocks[0].type).toBe("toolCall")
+		const toolBlock = blocks[0] as { type: "toolCall"; id: string; name: string; args: unknown }
+		expect(toolBlock.id).toBe("tc1")
+		expect(toolBlock.name).toBe("bash")
+		expect(toolBlock.args).toEqual({ command: "echo hello", timeout: 30 })
+	})
+
+	it("handles empty array", () => {
+		expect(extractOrderedBlocks([])).toEqual([])
+	})
+
+	it("ignores unknown block types", () => {
+		const content = [
+			{ type: "unknown", data: "ignored" },
+			{ type: "text", text: "visible" },
+		]
+		const blocks = extractOrderedBlocks(content)
+		expect(blocks.length).toBe(1)
+		expect(blocks[0].type).toBe("text")
 	})
 })

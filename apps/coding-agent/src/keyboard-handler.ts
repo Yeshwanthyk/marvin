@@ -12,9 +12,9 @@ export interface KeyboardHandlerConfig {
 	setShowAutocomplete: (v: boolean) => void
 	applyAutocomplete: () => boolean
 
-	// Responding state
-	isResponding: boolean
-	retryStatus: string | null
+	// Responding state (getters for reactivity)
+	isResponding: () => boolean
+	retryStatus: () => string | null
 
 	// Actions
 	onAbort: () => string | null
@@ -75,7 +75,7 @@ export function createKeyboardHandler(config: KeyboardHandlerConfig): (e: KeyEve
 		// Ctrl+C - abort or exit
 		if (e.ctrl && e.name === "c") {
 			const now = Date.now()
-			if (config.isResponding) {
+			if (config.isResponding()) {
 				config.onAbort()
 			} else if (now - config.lastCtrlC.current < 750) {
 				process.exit(0)
@@ -88,7 +88,7 @@ export function createKeyboardHandler(config: KeyboardHandlerConfig): (e: KeyEve
 		}
 
 		// Escape - abort if responding
-		if (e.name === "escape" && (config.isResponding || config.retryStatus)) {
+		if (e.name === "escape" && (config.isResponding() || config.retryStatus())) {
 			const restore = config.onAbort()
 			if (restore) config.setEditorText(restore)
 			e.preventDefault()

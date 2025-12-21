@@ -17,7 +17,8 @@ bun test apps/coding-agent/tests  # specific package
 bun run marvin             # alias for coding-agent
 
 # Compile binary (run after changes to coding-agent)
-cd apps/coding-agent && bun build --compile src/index.ts --outfile ~/commands/marvin
+# NOTE: Must use build script - direct `bun build --compile` fails due to Solid JSX plugin requirement
+cd apps/coding-agent && bun run build
 ```
 
 ## Structure

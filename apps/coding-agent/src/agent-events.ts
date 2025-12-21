@@ -6,8 +6,8 @@ import { batch } from "solid-js"
 import type { AgentEvent, AppMessage } from "@marvin-agents/agent-core"
 import type { AssistantMessage } from "@marvin-agents/ai"
 import type { SessionManager } from "./session-manager.js"
-import type { UIMessage, ToolBlock, ActivityState } from "./types.js"
-import { extractText, extractThinking, getToolText, getEditDiffText } from "./utils.js"
+import type { UIMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
+import { extractText, extractThinking, extractOrderedBlocks, getToolText, getEditDiffText } from "./utils.js"
 
 export interface EventHandlerContext {
 	// State setters
@@ -200,11 +200,26 @@ function handleMessageUpdateImmediate(
 	const content = event.message.content as unknown[]
 	const text = extractText(content)
 	const thinking = extractThinking(content)
+	const orderedBlocks = extractOrderedBlocks(content)
+
+	// Convert ordered blocks to UIContentBlocks, preserving order
+	const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
+		if (block.type === "thinking") {
+			return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
+		} else if (block.type === "text") {
+			return { type: "text" as const, text: block.text }
+		} else {
+			// toolCall - create a stub tool block
+			return {
+				type: "tool" as const,
+				tool: { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
+			}
+		}
+	})
 
 	updateStreamingMessage(ctx, (msg) => {
 		const nextThinking = thinking || msg.thinking
-		if (msg.content === text && msg.thinking === nextThinking) return msg
-		return { ...msg, content: text, thinking: nextThinking }
+		return { ...msg, content: text, thinking: nextThinking, contentBlocks }
 	})
 
 	if (thinking && !text) ctx.setActivityState("thinking")
@@ -217,11 +232,26 @@ function handleMessageEnd(
 	const content = event.message.content as unknown[]
 	const text = extractText(content)
 	const thinking = extractThinking(content)
+	const orderedBlocks = extractOrderedBlocks(content)
+
+	// Convert ordered blocks to UIContentBlocks, preserving order
+	const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
+		if (block.type === "thinking") {
+			return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
+		} else if (block.type === "text") {
+			return { type: "text" as const, text: block.text }
+		} else {
+			// toolCall - create a stub tool block (will be updated by handleToolEnd)
+			return {
+				type: "tool" as const,
+				tool: { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
+			}
+		}
+	})
 
 	updateStreamingMessage(ctx, (msg) => {
 		const nextThinking = thinking || msg.thinking
-		if (msg.content === text && msg.thinking === nextThinking && msg.isStreaming === false) return msg
-		return { ...msg, content: text, thinking: nextThinking, isStreaming: false }
+		return { ...msg, content: text, thinking: nextThinking, contentBlocks, isStreaming: false }
 	})
 
 	ctx.streamingMessageId.current = null
@@ -235,6 +265,21 @@ function handleMessageEnd(
 		const tokens = msg.usage.input + msg.usage.output + msg.usage.cacheRead + (msg.usage.cacheWrite || 0)
 		ctx.setContextTokens(tokens)
 	}
+}
+
+/** Update a tool in both tools array and contentBlocks */
+function updateToolInContentBlocks(
+	contentBlocks: UIContentBlock[] | undefined,
+	toolId: string,
+	updater: (tool: ToolBlock) => ToolBlock
+): UIContentBlock[] | undefined {
+	if (!contentBlocks) return undefined
+	return contentBlocks.map((block) => {
+		if (block.type === "tool" && block.tool.id === toolId) {
+			return { ...block, tool: updater(block.tool) }
+		}
+		return block
+	})
 }
 
 function handleToolStart(
@@ -253,6 +298,8 @@ function handleToolStart(
 	updateStreamingMessage(ctx, (msg) => ({
 		...msg,
 		tools: [...(msg.tools || []), newTool],
+		// Update tool in contentBlocks if it exists there (as stub from message_end)
+		contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, () => newTool),
 	}))
 
 	ctx.setToolBlocks((prev) => [...prev, newTool])
@@ -269,10 +316,14 @@ function handleToolUpdate(
 				: t
 		)
 
+	const toolUpdater = (t: ToolBlock) =>
+		t.id === event.toolCallId ? { ...t, output: getToolText(event.partialResult) } : t
+
 	ctx.setToolBlocks(updateTool)
 	updateStreamingMessage(ctx, (msg) => ({
 		...msg,
 		tools: updateTool(msg.tools || []),
+		contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, toolUpdater),
 	}))
 }
 
@@ -293,10 +344,19 @@ function handleToolEnd(
 				: t
 		)
 
+	const toolUpdater = (t: ToolBlock): ToolBlock => ({
+		...t,
+		output: getToolText(event.result),
+		editDiff: getEditDiffText(event.result) || undefined,
+		isError: event.isError,
+		isComplete: true,
+	})
+
 	ctx.setToolBlocks(updateTool)
 	updateStreamingMessage(ctx, (msg) => ({
 		...msg,
 		tools: updateTool(msg.tools || []),
+		contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, toolUpdater),
 	}))
 }
 
