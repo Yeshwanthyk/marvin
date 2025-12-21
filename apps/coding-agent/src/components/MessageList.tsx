@@ -199,7 +199,10 @@ export function MessageList(props: MessageListProps) {
 						<Match when={item.type === "assistant" && item}>
 							{(assistantItem) => (
 								<box paddingLeft={1}>
-									<Markdown text={assistantItem().content} />
+									{/* Plain text while streaming (avoids O(n²) markdown re-lex), Markdown when complete */}
+									<Show when={assistantItem().isStreaming} fallback={<Markdown text={assistantItem().content} />}>
+										<text fg={theme.text}>{assistantItem().content}</text>
+									</Show>
 								</box>
 							)}
 						</Match>
