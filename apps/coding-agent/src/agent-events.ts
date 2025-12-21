@@ -4,10 +4,11 @@
 
 import { batch } from "solid-js"
 import type { AgentEvent, AppMessage } from "@marvin-agents/agent-core"
-import type { AssistantMessage } from "@marvin-agents/ai"
+import type { AssistantMessage, ToolResultMessage } from "@marvin-agents/ai"
 import type { SessionManager } from "./session-manager.js"
 import type { UIMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
 import { extractText, extractThinking, extractOrderedBlocks, getToolText, getEditDiffText } from "./utils.js"
+import type { HookRunner } from "./hooks/index.js"
 
 export interface EventHandlerContext {
 	// State setters
@@ -39,22 +40,34 @@ export interface EventHandlerContext {
 		replaceMessages: (messages: unknown[]) => void
 		continue: () => Promise<void>
 	}
+
+	// Hook runner for lifecycle events (optional for backwards compat)
+	hookRunner?: HookRunner
 }
 
 export type AgentEventHandler = ((event: AgentEvent) => void) & { dispose: () => void }
 
 const UPDATE_THROTTLE_MS = 32 // ~30fps for UI updates
+const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
 
 export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHandler {
 	let pendingUpdate: Extract<AgentEvent, { type: "message_update" }> | null = null
 	let updateTimeout: ReturnType<typeof setTimeout> | null = null
 	let disposed = false
+	let turnIndex = 0
+	
+	// Tool update throttling - track pending updates per tool
+	const pendingToolUpdates = new Map<string, Extract<AgentEvent, { type: "tool_execution_update" }>>()
+	let toolUpdateTimeout: ReturnType<typeof setTimeout> | null = null
 
 	const dispose = () => {
 		disposed = true
 		pendingUpdate = null
+		pendingToolUpdates.clear()
 		if (updateTimeout) clearTimeout(updateTimeout)
+		if (toolUpdateTimeout) clearTimeout(toolUpdateTimeout)
 		updateTimeout = null
+		toolUpdateTimeout = null
 	}
 
 	const flushPendingUpdate = () => {
@@ -72,9 +85,46 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 			flushPendingUpdate()
 		}, UPDATE_THROTTLE_MS)
 	}
+	
+	const flushToolUpdates = () => {
+		if (pendingToolUpdates.size === 0) return
+		for (const event of pendingToolUpdates.values()) {
+			handleToolUpdateImmediate(event, ctx)
+		}
+		pendingToolUpdates.clear()
+	}
+	
+	const scheduleToolUpdate = () => {
+		if (toolUpdateTimeout) return
+		toolUpdateTimeout = setTimeout(() => {
+			toolUpdateTimeout = null
+			if (disposed) return
+			flushToolUpdates()
+		}, TOOL_UPDATE_THROTTLE_MS)
+	}
 
 	const handler = ((event: AgentEvent) => {
 		if (disposed) return
+
+		// Emit hook events for agent lifecycle (fire-and-forget)
+		if (event.type === "agent_start") {
+			turnIndex = 0
+			void ctx.hookRunner?.emit({ type: "agent.start" })
+		}
+
+		if (event.type === "turn_start") {
+			void ctx.hookRunner?.emit({ type: "turn.start", turnIndex })
+		}
+
+		if (event.type === "turn_end") {
+			void ctx.hookRunner?.emit({
+				type: "turn.end",
+				turnIndex,
+				message: event.message,
+				toolResults: event.toolResults as ToolResultMessage[],
+			})
+			turnIndex++
+		}
 
 		if (event.type === "message_start") {
 			handleMessageStart(event, ctx)
@@ -100,10 +150,14 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		}
 
 		if (event.type === "tool_execution_update") {
-			handleToolUpdate(event, ctx)
+			// Throttle tool updates - coalesce per tool
+			pendingToolUpdates.set(event.toolCallId, event)
+			scheduleToolUpdate()
 		}
 
 		if (event.type === "tool_execution_end") {
+			// Clear any pending throttled update for this tool
+			pendingToolUpdates.delete(event.toolCallId)
 			handleToolEnd(event, ctx)
 		}
 
@@ -305,7 +359,7 @@ function handleToolStart(
 	ctx.setToolBlocks((prev) => [...prev, newTool])
 }
 
-function handleToolUpdate(
+function handleToolUpdateImmediate(
 	event: Extract<AgentEvent, { type: "tool_execution_update" }>,
 	ctx: EventHandlerContext
 ): void {
@@ -353,18 +407,37 @@ function handleToolEnd(
 	})
 
 	ctx.setToolBlocks(updateTool)
-	updateStreamingMessage(ctx, (msg) => ({
-		...msg,
-		tools: updateTool(msg.tools || []),
-		contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, toolUpdater),
-	}))
+
+	// Update message containing this tool - find by tool ID since streamingMessageId
+	// may be null if message_end fired before tool_execution_end
+	ctx.setMessages((prev) => {
+		const idx = prev.findIndex(
+			(m) =>
+				m.tools?.some((t) => t.id === event.toolCallId) ||
+				m.contentBlocks?.some((b) => b.type === "tool" && b.tool.id === event.toolCallId)
+		)
+		if (idx === -1) return prev
+
+		const msg = prev[idx]!
+		const updated = {
+			...msg,
+			tools: updateTool(msg.tools || []),
+			contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, toolUpdater),
+		}
+		const next = prev.slice()
+		next[idx] = updated
+		return next
+	})
 }
 
 function handleAgentEnd(
-	_event: Extract<AgentEvent, { type: "agent_end" }>,
+	event: Extract<AgentEvent, { type: "agent_end" }>,
 	ctx: EventHandlerContext
 ): void {
 	ctx.streamingMessageId.current = null
+
+	// Emit hook event
+	void ctx.hookRunner?.emit({ type: "agent.end", messages: event.messages })
 
 	// Check for retryable error
 	const lastMsg = ctx.agent.state.messages[ctx.agent.state.messages.length - 1] as AssistantMessage | undefined
