@@ -14,6 +14,8 @@ export interface FileSearchResult {
 	score: number;
 }
 
+type SearchItem = { path: string; isDirectory: boolean };
+
 /**
  * Fast file index using ripgrep for listing and fuzzysort for matching.
  * Respects .gitignore by default.
@@ -25,6 +27,8 @@ export class FileIndex {
 	private indexing = false;
 	private indexed = false;
 	private pendingCallbacks: Array<() => void> = [];
+	private searchItemsFilesOnly: SearchItem[] = [];
+	private searchItemsWithDirs: SearchItem[] = [];
 
 	constructor(options: FileIndexOptions) {
 		this.cwd = options.cwd;
@@ -50,7 +54,7 @@ export class FileIndex {
 		const dirs = new Set<string>();
 
 		try {
-			await new Promise<void>((resolve, reject) => {
+			await new Promise<void>((resolve) => {
 				const proc = spawn("rg", ["--files", "--follow", "--hidden", "--glob=!.git/*"], {
 					cwd: this.cwd,
 					stdio: ["ignore", "pipe", "ignore"],
@@ -79,7 +83,7 @@ export class FileIndex {
 					}
 				});
 
-				proc.on("close", (code) => {
+				proc.on("close", () => {
 					// Process remaining buffer
 					if (buffer) {
 						files.push(buffer);
@@ -95,7 +99,7 @@ export class FileIndex {
 					resolve();
 				});
 
-				proc.on("error", (err) => {
+				proc.on("error", () => {
 					// ripgrep not available, fail silently
 					resolve();
 				});
@@ -103,6 +107,11 @@ export class FileIndex {
 
 			this.files = files;
 			this.dirs = dirs;
+			this.searchItemsFilesOnly = files.map((f) => ({ path: f, isDirectory: false }));
+			this.searchItemsWithDirs = [
+				...this.searchItemsFilesOnly,
+				...Array.from(dirs, (dir) => ({ path: dir + "/", isDirectory: true })),
+			];
 			this.indexed = true;
 		} finally {
 			this.indexing = false;
@@ -131,19 +140,9 @@ export class FileIndex {
 			return [];
 		}
 
-		// Build search list
-		const items: Array<{ path: string; isDirectory: boolean }> = this.files.map((f) => ({
-			path: f,
-			isDirectory: false,
-		}));
+		const items = includeDirs ? this.searchItemsWithDirs : this.searchItemsFilesOnly;
 
-		if (includeDirs) {
-			for (const dir of this.dirs) {
-				items.push({ path: dir + "/", isDirectory: true });
-			}
-		}
-
-		// Empty query - return first N items sorted
+		// Empty query - return first N items
 		if (!query) {
 			return items.slice(0, limit).map((item) => ({
 				path: item.path,
