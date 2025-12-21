@@ -514,16 +514,35 @@ function MainView(props: MainViewProps) {
 					isToolExpanded={isToolExpanded} toggleToolExpanded={toggleToolExpanded} isThinkingExpanded={isThinkingExpanded} toggleThinkingExpanded={toggleThinkingExpanded} />
 			</scrollbox>
 			<Show when={showAutocomplete() && autocompleteItems().length > 0}>
-				<box flexDirection="column" border={["top"]} borderColor={theme.border} paddingLeft={2} maxHeight={8} flexShrink={0}>
+				<box flexDirection="column" borderColor={theme.border} maxHeight={10} flexShrink={0}>
 					<For each={autocompleteItems().filter(item => item && typeof item === "object")}>{(item, i) => {
 						const isSelected = createMemo(() => i() === autocompleteIndex())
 						const label = String(item.label ?? item.value ?? "")
 						const descRaw = item.description
+						// Truncate description from start to show relevant end (filename context)
+						const maxDescLen = Math.max(0, dimensions().width - label.length - 8)
 						const desc = typeof descRaw === "string" && descRaw && descRaw !== label
-							? (descRaw.length > 50 ? "…" + descRaw.slice(-49) : descRaw)
+							? (descRaw.length > maxDescLen ? "…" + descRaw.slice(-(maxDescLen - 1)) : descRaw)
 							: ""
-						return <text fg={isSelected() ? theme.primary : theme.text}>{(isSelected() ? "→ " : "  ") + label + (desc ? "  " + desc : "")}</text>
+						// Fixed-width label column for alignment
+						const labelCol = label.length < 24 ? label + " ".repeat(24 - label.length) : label.slice(0, 23) + "…"
+						// Reactive getters for selection-dependent values
+						const prefix = () => isSelected() ? " → " : "   "
+						const line = () => prefix() + labelCol + (desc ? " " + desc : "")
+						const pad = () => " ".repeat(Math.max(0, dimensions().width - line().length))
+						return (
+							<Show when={isSelected} fallback={
+								<text>
+									<span style={{ fg: theme.textMuted }}>{prefix()}</span>
+									<span style={{ fg: theme.text }}>{labelCol}</span>
+									<span style={{ fg: theme.textMuted }}>{desc ? " " + desc : ""}</span>
+								</text>
+							}>
+								<text fg={theme.selectionFg} bg={theme.selectionBg} attributes={1 /* BOLD */}>{line() + pad()}</text>
+							</Show>
+						)
 					}}</For>
+					<text fg={theme.textMuted}>{"   "}↑↓ navigate · Tab select · Esc cancel</text>
 				</box>
 			</Show>
 			<box border={["top"]} borderColor={theme.border} paddingTop={1} flexShrink={0}>
