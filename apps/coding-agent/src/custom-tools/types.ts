@@ -2,7 +2,40 @@
  * Custom tool types for user-defined tools.
  */
 
-import type { AgentTool } from "@marvin-agents/ai"
+import type { AgentTool, AgentToolResult } from "@marvin-agents/ai"
+import type { Theme } from "@marvin-agents/open-tui"
+import type { JSX } from "solid-js"
+
+/**
+ * Options passed to custom tool result renderers.
+ */
+export interface RenderResultOptions {
+	expanded: boolean
+	isPartial: boolean
+}
+
+/**
+ * Session lifecycle event types for custom tools.
+ */
+export type SessionEvent =
+	| { type: "session.start"; sessionId: string }
+	| { type: "session.resume"; sessionId: string }
+	| { type: "session.end"; sessionId: string }
+
+/**
+ * Extended AgentTool with optional UI hooks for first-class rendering.
+ * Uses `any` for TParams to avoid TypeBox version constraint issues.
+ */
+export interface CustomAgentTool<TDetails = any> extends AgentTool<any, TDetails> {
+	/** Custom header/call rendering */
+	renderCall?: (args: any, theme: Theme) => JSX.Element
+	/** Custom result rendering */
+	renderResult?: (result: AgentToolResult<TDetails>, opts: RenderResultOptions, theme: Theme) => JSX.Element
+	/** Session lifecycle hook */
+	onSession?: (ev: SessionEvent) => void | Promise<void>
+	/** Cleanup on app exit */
+	dispose?: () => void | Promise<void>
+}
 
 /**
  * Result from executing a command.
