@@ -140,11 +140,13 @@ export class FileIndex {
 			threshold: 0.2,
 		});
 
-		return results.map((r) => ({
-			path: r.obj.path,
-			isDirectory: r.obj.isDirectory,
-			score: r.score,
-		}));
+		return results
+			.filter((r) => r.obj?.path != null)
+			.map((r) => ({
+				path: r.obj.path,
+				isDirectory: r.obj.isDirectory,
+				score: r.score,
+			}));
 	}
 
 	get fileCount(): number {

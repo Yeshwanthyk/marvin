@@ -93,11 +93,15 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 						const name = "name" in cmd ? cmd.name : cmd.value; // Check if SlashCommand or AutocompleteItem
 						return name?.toLowerCase().startsWith(prefix.toLowerCase());
 					})
-					.map((cmd) => ({
-						value: "name" in cmd ? cmd.name : cmd.value,
-						label: "name" in cmd ? cmd.name : cmd.label,
-						...(cmd.description && { description: cmd.description }),
-					}));
+					.map((cmd) => {
+						const value = String("name" in cmd ? cmd.name : cmd.value ?? "");
+						const label = String("name" in cmd ? cmd.name : cmd.label ?? value);
+						return {
+							value,
+							label,
+							...(cmd.description && { description: String(cmd.description) }),
+						};
+					});
 
 				if (filtered.length === 0) return null;
 
@@ -123,8 +127,15 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 					return null;
 				}
 
+				// Ensure all items have valid string fields
+				const validatedItems = argumentSuggestions.map((item) => ({
+					value: String(item.value ?? ""),
+					label: String(item.label ?? item.value ?? ""),
+					...(item.description != null && { description: String(item.description) }),
+				}));
+
 				return {
-					items: argumentSuggestions,
+					items: validatedItems,
 					prefix: argumentText,
 				};
 			}
@@ -331,14 +342,14 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			const suggestions: AutocompleteItem[] = [];
 
 			for (const entry of entries) {
-				if (!entry.name.toLowerCase().startsWith(searchPrefix.toLowerCase())) {
+				if (!entry.name || !entry.name.toLowerCase().startsWith(searchPrefix.toLowerCase())) {
 					continue;
 				}
 
 				const isDirectory = entry.isDirectory();
 
 				let relativePath: string;
-				const name = entry.name;
+				const name = String(entry.name);
 
 				// Handle @ prefix path construction
 				if (isAtPrefix) {
@@ -416,16 +427,18 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 	private getFuzzyFileSuggestions(query: string): AutocompleteItem[] {
 		const results = this.fileIndex.search(query, { limit: 20, includeDirs: true });
 
-		return results.map(({ path: entryPath, isDirectory }) => {
-			const pathWithoutSlash = isDirectory ? entryPath.slice(0, -1) : entryPath;
-			const entryName = basename(pathWithoutSlash);
+		return results
+			.filter((r) => r.path != null) // Guard against malformed results
+			.map(({ path: entryPath, isDirectory }) => {
+				const pathWithoutSlash = isDirectory ? entryPath.slice(0, -1) : entryPath;
+				const entryName = basename(pathWithoutSlash);
 
-			return {
-				value: "@" + entryPath,
-				label: entryName + (isDirectory ? "/" : ""),
-				description: pathWithoutSlash,
-			};
-		});
+				return {
+					value: "@" + String(entryPath),
+					label: String(entryName) + (isDirectory ? "/" : ""),
+					description: String(pathWithoutSlash),
+				};
+			});
 	}
 
 	// Force file completion (called on Tab key) - always returns suggestions

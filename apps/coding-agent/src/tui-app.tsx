@@ -515,10 +515,14 @@ function MainView(props: MainViewProps) {
 			</scrollbox>
 			<Show when={showAutocomplete() && autocompleteItems().length > 0}>
 				<box flexDirection="column" border={["top"]} borderColor={theme.border} paddingLeft={2} maxHeight={8} flexShrink={0}>
-					<For each={autocompleteItems()}>{(item, i) => {
+					<For each={autocompleteItems().filter(item => item && typeof item === "object")}>{(item, i) => {
 						const isSelected = createMemo(() => i() === autocompleteIndex())
-						const desc = item.description && item.description !== item.label ? (item.description.length > 50 ? "…" + item.description.slice(-49) : item.description) : ""
-						return <text fg={isSelected() ? theme.primary : theme.text}>{isSelected() ? "→ " : "  "}{item.label}<text fg={theme.textMuted}>{desc ? `  ${desc}` : ""}</text></text>
+						const label = String(item.label ?? item.value ?? "")
+						const descRaw = item.description
+						const desc = typeof descRaw === "string" && descRaw && descRaw !== label
+							? (descRaw.length > 50 ? "…" + descRaw.slice(-49) : descRaw)
+							: ""
+						return <text fg={isSelected() ? theme.primary : theme.text}>{(isSelected() ? "→ " : "  ") + label + (desc ? "  " + desc : "")}</text>
 					}}</For>
 				</box>
 			</Show>
