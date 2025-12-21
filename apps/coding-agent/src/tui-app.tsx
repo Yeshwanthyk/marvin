@@ -21,6 +21,8 @@ import { watch, type FSWatcher } from "fs"
 import type { UIMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
 import { findGitHeadPath, getCurrentBranch, getGitDiffStats, extractText, extractThinking, extractToolCalls, extractOrderedBlocks, copyToClipboard, getToolText, getEditDiffText } from "./utils.js"
 import { handleSlashCommand, resolveProvider, resolveModel, THINKING_LEVELS, type CommandContext } from "./commands.js"
+import { loadCustomCommands, tryExpandCustomCommand, type CustomCommand } from "./custom-commands.js"
+import { slashCommands } from "./autocomplete-commands.js"
 import { createAgentEventHandler, type EventHandlerContext } from "./agent-events.js"
 import { Footer } from "./components/Footer.js"
 import { MessageList } from "./components/MessageList.js"
@@ -55,6 +57,9 @@ export const runTuiOpen = async (args?: {
 		model: firstModel,
 		thinking: args?.thinking,
 	})
+
+	// Load custom slash commands from ~/.config/marvin/commands/
+	const customCommands = loadCustomCommands(loaded.configDir)
 
 	const sessionManager = new SessionManager(loaded.configDir)
 	let initialSession: LoadedSession | null = null
@@ -110,7 +115,7 @@ export const runTuiOpen = async (args?: {
 		<App agent={agent} sessionManager={sessionManager} initialSession={initialSession}
 			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
-			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} />
+			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands} />
 	), { targetFps: 60, exitOnCtrlC: false, useKittyKeyboard: {} })
 }
 
@@ -122,6 +127,7 @@ interface AppProps {
 	cycleModels: Array<{ provider: KnownProvider; model: Model<Api> }>
 	configDir: string; configPath: string; codexTransport: CodexTransport
 	getApiKey: (provider: string) => string | undefined
+	customCommands: Map<string, CustomCommand>
 }
 
 function App(props: AppProps) {
@@ -242,12 +248,27 @@ function App(props: AppProps) {
 		setContextTokens, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode,
 	}
 
+	// Set of built-in command names for precedence check
+	const builtInCommandNames = new Set(slashCommands.map((c) => c.name))
+
 	const handleSubmit = async (text: string, editorClearFn?: () => void) => {
 		if (!text.trim()) return
+
+		// Handle slash commands
 		if (text.startsWith("/")) {
+			// Try built-in commands first
 			const result = handleSlashCommand(text.trim(), cmdCtx)
 			if (result instanceof Promise ? await result : result) { editorClearFn?.(); return }
+
+			// Try custom command expansion (built-ins already take precedence)
+			const expanded = tryExpandCustomCommand(text.trim(), builtInCommandNames, props.customCommands)
+			if (expanded !== null) {
+				// Submit expanded text as regular prompt (recursion-safe since expanded won't start with /)
+				editorClearFn?.()
+				return handleSubmit(expanded)
+			}
 		}
+
 		if (isResponding()) {
 			queuedMessages.push(text); setQueueCount(queuedMessages.length)
 			void agent.queueMessage({ role: "user", content: [{ type: "text", text }], timestamp: Date.now() })
@@ -286,7 +307,7 @@ function App(props: AppProps) {
 			<MainView messages={messages()} toolBlocks={toolBlocks()} isResponding={isResponding()} activityState={activityState()}
 				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
 				contextTokens={contextTokens()} contextWindow={displayContextWindow()} queueCount={queueCount()} retryStatus={retryStatus()}
-				diffWrapMode={diffWrapMode()} onSubmit={handleSubmit} onAbort={handleAbort}
+				diffWrapMode={diffWrapMode()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
 				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking} />
 		</ThemeProvider>
 	)
@@ -298,6 +319,7 @@ interface MainViewProps {
 	messages: UIMessage[]; toolBlocks: ToolBlock[]; isResponding: boolean; activityState: ActivityState
 	thinkingVisible: boolean; modelId: string; thinking: ThinkingLevel; provider: KnownProvider
 	contextTokens: number; contextWindow: number; queueCount: number; retryStatus: string | null; diffWrapMode: "word" | "none"
+	customCommands: Map<string, CustomCommand>
 	onSubmit: (text: string, clearFn?: () => void) => void; onAbort: () => string | null
 	onToggleThinking: () => void; onCycleModel: () => void; onCycleThinking: () => void
 }
@@ -310,7 +332,13 @@ function MainView(props: MainViewProps) {
 	const lastCtrlC = { current: 0 }
 
 	// Autocomplete
-	const autocompleteProvider = new CombinedAutocompleteProvider(createAutocompleteCommands(() => ({ currentProvider: props.provider })), process.cwd())
+	// Build autocomplete commands: built-ins + custom commands
+	const builtInAutocomplete = createAutocompleteCommands(() => ({ currentProvider: props.provider }))
+	const customAutocomplete = Array.from(props.customCommands.values()).map((cmd) => ({
+		name: cmd.name,
+		description: cmd.description,
+	}))
+	const autocompleteProvider = new CombinedAutocompleteProvider([...builtInAutocomplete, ...customAutocomplete], process.cwd())
 	const [autocompleteItems, setAutocompleteItems] = createSignal<AutocompleteItem[]>([])
 	const [autocompletePrefix, setAutocompletePrefix] = createSignal("")
 	const [autocompleteIndex, setAutocompleteIndex] = createSignal(0)
