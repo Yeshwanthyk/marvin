@@ -19,8 +19,7 @@
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {
-		"@marvin-agents/ai": "file:../ai",
-		"@marvin-agents/tui": "file:../tui"
+		"@marvin-agents/ai": "file:../ai"
 	},
 	"keywords": [
 		"ai",
