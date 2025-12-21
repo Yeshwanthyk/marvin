@@ -11,7 +11,7 @@ import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent
 import { getApiKey, getModels, getProviders, type AgentTool, type Model, type Api } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
 import { loadAppConfig } from "./config.js"
-import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/tui"
+import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/open-tui"
 import { createAutocompleteCommands } from "./autocomplete-commands.js"
 import { SessionManager, type LoadedSession } from "./session-manager.js"
 import { selectSession as selectSessionOpen } from "./session-picker.js"
@@ -94,6 +94,22 @@ export const runTuiOpen = async (args?: {
 	const allTools: AgentTool<any, any>[] = [...codingTools, ...customTools.map((t) => t.tool)]
 	const tools = wrapToolsWithHooks(allTools, hookRunner)
 
+	// Build tool metadata registry for custom rendering
+	const toolByName = new Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>()
+	for (const tool of codingTools) {
+		toolByName.set(tool.name, { label: tool.label, source: "builtin" })
+	}
+	for (const { tool, resolvedPath } of customTools) {
+		const customTool = tool as any
+		toolByName.set(tool.name, {
+			label: tool.label,
+			source: "custom",
+			sourcePath: resolvedPath,
+			renderCall: customTool.renderCall,
+			renderResult: customTool.renderResult,
+		})
+	}
+
 	const sessionManager = new SessionManager(loaded.configDir)
 	let initialSession: LoadedSession | null = null
 
@@ -152,7 +168,7 @@ export const runTuiOpen = async (args?: {
 			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
 			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
-			hookRunner={hookRunner} />
+			hookRunner={hookRunner} toolByName={toolByName} />
 	), { targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} })
 }
 
@@ -166,6 +182,7 @@ interface AppProps {
 	getApiKey: (provider: string) => string | undefined
 	customCommands: Map<string, CustomCommand>
 	hookRunner: HookRunner
+	toolByName: Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>
 }
 
 function App(props: AppProps) {
@@ -233,6 +250,7 @@ function App(props: AppProps) {
 				const toolCalls = extractToolCalls(msg.content as unknown[])
 				const tools: ToolBlock[] = toolCalls.map((tc) => {
 					const result = toolResultMap.get(tc.id)
+					const meta = props.toolByName.get(tc.name)
 					return {
 						id: tc.id,
 						name: tc.name,
@@ -241,6 +259,12 @@ function App(props: AppProps) {
 						editDiff: result?.editDiff || undefined,
 						isError: result?.isError ?? false,
 						isComplete: true,
+						// Reattach tool metadata for custom rendering on restored sessions
+						label: meta?.label,
+						source: meta?.source,
+						sourcePath: meta?.sourcePath,
+						renderCall: meta?.renderCall,
+						renderResult: meta?.renderResult,
 					}
 				})
 				// Build contentBlocks from ordered API content
@@ -276,6 +300,7 @@ function App(props: AppProps) {
 		queuedMessages, setQueueCount, sessionManager, streamingMessageId: streamingMessageIdRef,
 		retryConfig, retryablePattern, retryState, agent: agent as EventHandlerContext["agent"],
 		hookRunner: props.hookRunner,
+		toolByName: props.toolByName,
 	}
 	const handleAgentEvent = createAgentEventHandler(eventCtx)
 
