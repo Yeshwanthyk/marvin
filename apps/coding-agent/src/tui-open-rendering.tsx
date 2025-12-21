@@ -5,32 +5,15 @@
 import { CodeBlock, Diff, TextAttributes, useTheme, type MouseEvent } from "@marvin-agents/open-tui"
 import { Show, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
+import { getToolText, getEditDiffText } from "./utils.js"
+
+// Re-export for backwards compatibility
+export { getToolText, getEditDiffText }
 
 // Design tokens
 const badgeColor = "#A66E7A"  // dusty rose
 const badgeTextColor = "#ffffff"
 const toolSymbol = "◆"
-
-// Get text content from tool result
-export const getToolText = (result: unknown): string => {
-	if (!result || typeof result !== "object") return String(result)
-	const maybe = result as { content?: unknown }
-	const content = Array.isArray(maybe.content) ? maybe.content : []
-	const parts: string[] = []
-	for (const block of content) {
-		if (typeof block === "object" && block !== null && (block as any).type === "text") {
-			parts.push((block as any).text)
-		}
-	}
-	return parts.join("")
-}
-
-// Get diff text from tool result details (edit tool)
-export const getEditDiffText = (result: unknown): string | null => {
-	if (!result || typeof result !== "object") return null
-	const maybe = result as { details?: { diff?: string } }
-	return maybe.details?.diff || null
-}
 
 const shortenPath = (p: string): string => {
 	const home = process.env.HOME || process.env.USERPROFILE || ""
