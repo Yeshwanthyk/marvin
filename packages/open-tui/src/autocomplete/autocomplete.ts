@@ -1,0 +1,464 @@
+import { readdirSync } from "fs";
+import { homedir } from "os";
+import { basename, dirname, join } from "path";
+import { FileIndex } from "./file-index.js";
+
+export interface AutocompleteItem {
+	value: string;
+	label: string;
+	description?: string;
+}
+
+export interface SlashCommand {
+	name: string;
+	description?: string;
+	// Function to get argument completions for this command
+	// Returns null if no argument completion is available
+	getArgumentCompletions?(argumentPrefix: string): AutocompleteItem[] | null;
+}
+
+export interface AutocompleteProvider {
+	// Get autocomplete suggestions for current text/cursor position
+	// Returns null if no suggestions available
+	getSuggestions(
+		lines: string[],
+		cursorLine: number,
+		cursorCol: number,
+	): {
+		items: AutocompleteItem[];
+		prefix: string; // What we're matching against (e.g., "/" or "src/")
+	} | null;
+
+	// Apply the selected item
+	// Returns the new text and cursor position
+	applyCompletion(
+		lines: string[],
+		cursorLine: number,
+		cursorCol: number,
+		item: AutocompleteItem,
+		prefix: string,
+	): {
+		lines: string[];
+		cursorLine: number;
+		cursorCol: number;
+	};
+}
+
+// Combined provider that handles both slash commands and file paths
+export class CombinedAutocompleteProvider implements AutocompleteProvider {
+	private commands: (SlashCommand | AutocompleteItem)[];
+	private basePath: string;
+	private fileIndex: FileIndex;
+
+	constructor(
+		commands: (SlashCommand | AutocompleteItem)[] = [],
+		basePath: string = process.cwd(),
+	) {
+		this.commands = commands;
+		this.basePath = basePath;
+		this.fileIndex = new FileIndex({ cwd: basePath });
+	}
+
+	getSuggestions(
+		lines: string[],
+		cursorLine: number,
+		cursorCol: number,
+	): { items: AutocompleteItem[]; prefix: string } | null {
+		const currentLine = lines[cursorLine] || "";
+		const textBeforeCursor = currentLine.slice(0, cursorCol);
+
+		// Check for @ file reference (fuzzy search) - must be after a space or at start
+		const atMatch = textBeforeCursor.match(/(?:^|[\s])(@[^\s]*)$/);
+		if (atMatch) {
+			const prefix = atMatch[1] ?? "@"; // The @... part
+			const query = prefix.slice(1); // Remove the @
+			const suggestions = this.getFuzzyFileSuggestions(query);
+			if (suggestions.length === 0) return null;
+
+			return {
+				items: suggestions,
+				prefix: prefix,
+			};
+		}
+
+		// Check for slash commands
+		if (textBeforeCursor.startsWith("/")) {
+			const spaceIndex = textBeforeCursor.indexOf(" ");
+
+			if (spaceIndex === -1) {
+				// No space yet - complete command names
+				const prefix = textBeforeCursor.slice(1); // Remove the "/"
+				const filtered = this.commands
+					.filter((cmd) => {
+						const name = "name" in cmd ? cmd.name : cmd.value; // Check if SlashCommand or AutocompleteItem
+						return name?.toLowerCase().startsWith(prefix.toLowerCase());
+					})
+					.map((cmd) => ({
+						value: "name" in cmd ? cmd.name : cmd.value,
+						label: "name" in cmd ? cmd.name : cmd.label,
+						...(cmd.description && { description: cmd.description }),
+					}));
+
+				if (filtered.length === 0) return null;
+
+				return {
+					items: filtered,
+					prefix: textBeforeCursor,
+				};
+			} else {
+				// Space found - complete command arguments
+				const commandName = textBeforeCursor.slice(1, spaceIndex); // Command without "/"
+				const argumentText = textBeforeCursor.slice(spaceIndex + 1); // Text after space
+
+				const command = this.commands.find((cmd) => {
+					const name = "name" in cmd ? cmd.name : cmd.value;
+					return name === commandName;
+				});
+				if (!command || !("getArgumentCompletions" in command) || !command.getArgumentCompletions) {
+					return null; // No argument completion for this command
+				}
+
+				const argumentSuggestions = command.getArgumentCompletions(argumentText);
+				if (!argumentSuggestions || argumentSuggestions.length === 0) {
+					return null;
+				}
+
+				return {
+					items: argumentSuggestions,
+					prefix: argumentText,
+				};
+			}
+		}
+
+		// Check for file paths - triggered by Tab or if we detect a path pattern
+		const pathMatch = this.extractPathPrefix(textBeforeCursor, false);
+
+		if (pathMatch !== null) {
+			const suggestions = this.getFileSuggestions(pathMatch);
+			if (suggestions.length === 0) return null;
+
+			return {
+				items: suggestions,
+				prefix: pathMatch,
+			};
+		}
+
+		return null;
+	}
+
+	applyCompletion(
+		lines: string[],
+		cursorLine: number,
+		cursorCol: number,
+		item: AutocompleteItem,
+		prefix: string,
+	): { lines: string[]; cursorLine: number; cursorCol: number } {
+		const currentLine = lines[cursorLine] || "";
+		const beforePrefix = currentLine.slice(0, cursorCol - prefix.length);
+		const afterCursor = currentLine.slice(cursorCol);
+
+		// Check if we're completing a slash command (prefix starts with "/")
+		if (prefix.startsWith("/")) {
+			// This is a command name completion
+			const newLine = beforePrefix + "/" + item.value + " " + afterCursor;
+			const newLines = [...lines];
+			newLines[cursorLine] = newLine;
+
+			return {
+				lines: newLines,
+				cursorLine,
+				cursorCol: beforePrefix.length + item.value.length + 2, // +2 for "/" and space
+			};
+		}
+
+		// Check if we're completing a file attachment (prefix starts with "@")
+		if (prefix.startsWith("@")) {
+			// This is a file attachment completion
+			const newLine = beforePrefix + item.value + " " + afterCursor;
+			const newLines = [...lines];
+			newLines[cursorLine] = newLine;
+
+			return {
+				lines: newLines,
+				cursorLine,
+				cursorCol: beforePrefix.length + item.value.length + 1, // +1 for space
+			};
+		}
+
+		// Check if we're in a slash command context (beforePrefix contains "/command ")
+		const textBeforeCursor = currentLine.slice(0, cursorCol);
+		if (textBeforeCursor.includes("/") && textBeforeCursor.includes(" ")) {
+			// This is likely a command argument completion
+			const newLine = beforePrefix + item.value + afterCursor;
+			const newLines = [...lines];
+			newLines[cursorLine] = newLine;
+
+			return {
+				lines: newLines,
+				cursorLine,
+				cursorCol: beforePrefix.length + item.value.length,
+			};
+		}
+
+		// For file paths, complete the path
+		const newLine = beforePrefix + item.value + afterCursor;
+		const newLines = [...lines];
+		newLines[cursorLine] = newLine;
+
+		return {
+			lines: newLines,
+			cursorLine,
+			cursorCol: beforePrefix.length + item.value.length,
+		};
+	}
+
+	// Extract a path-like prefix from the text before cursor
+	private extractPathPrefix(text: string, forceExtract: boolean = false): string | null {
+		// Check for @ file attachment syntax first
+		const atMatch = text.match(/@([^\s]*)$/);
+		if (atMatch) {
+			return atMatch[0]; // Return the full @path pattern
+		}
+
+		// Simple approach: find the last whitespace/delimiter and extract the word after it
+		// This avoids catastrophic backtracking from nested quantifiers
+		const lastDelimiterIndex = Math.max(
+			text.lastIndexOf(" "),
+			text.lastIndexOf("\t"),
+			text.lastIndexOf('"'),
+			text.lastIndexOf("'"),
+			text.lastIndexOf("="),
+		);
+
+		const pathPrefix = lastDelimiterIndex === -1 ? text : text.slice(lastDelimiterIndex + 1);
+
+		// For forced extraction (Tab key), always return something
+		if (forceExtract) {
+			return pathPrefix;
+		}
+
+		// For natural triggers, return if it looks like a path, ends with /, starts with ~/, .
+		// Only return empty string if the text looks like it's starting a path context
+		if (pathPrefix.includes("/") || pathPrefix.startsWith(".") || pathPrefix.startsWith("~/")) {
+			return pathPrefix;
+		}
+
+		// Return empty string only at start of line (for Tab completion from scratch)
+		// Don't trigger on trailing space - that causes autocomplete to show after completing @file refs
+		if (pathPrefix === "" && text === "") {
+			return pathPrefix;
+		}
+
+		return null;
+	}
+
+	// Expand home directory (~/) to actual home path
+	private expandHomePath(path: string): string {
+		if (path.startsWith("~/")) {
+			const expandedPath = join(homedir(), path.slice(2));
+			// Preserve trailing slash if original path had one
+			return path.endsWith("/") && !expandedPath.endsWith("/") ? expandedPath + "/" : expandedPath;
+		} else if (path === "~") {
+			return homedir();
+		}
+		return path;
+	}
+
+	// Get file/directory suggestions for a given path prefix
+	private getFileSuggestions(prefix: string): AutocompleteItem[] {
+		try {
+			let searchDir: string;
+			let searchPrefix: string;
+			let expandedPrefix = prefix;
+			let isAtPrefix = false;
+
+			// Handle @ file attachment prefix
+			if (prefix.startsWith("@")) {
+				isAtPrefix = true;
+				expandedPrefix = prefix.slice(1); // Remove the @
+			}
+
+			// Handle home directory expansion
+			if (expandedPrefix.startsWith("~")) {
+				expandedPrefix = this.expandHomePath(expandedPrefix);
+			}
+
+			if (
+				expandedPrefix === "" ||
+				expandedPrefix === "./" ||
+				expandedPrefix === "../" ||
+				expandedPrefix === "~" ||
+				expandedPrefix === "~/" ||
+				expandedPrefix === "/" ||
+				prefix === "@"
+			) {
+				// Complete from specified position
+				if (prefix.startsWith("~") || expandedPrefix === "/") {
+					searchDir = expandedPrefix;
+				} else {
+					searchDir = join(this.basePath, expandedPrefix);
+				}
+				searchPrefix = "";
+			} else if (expandedPrefix.endsWith("/")) {
+				// If prefix ends with /, show contents of that directory
+				if (prefix.startsWith("~") || expandedPrefix.startsWith("/")) {
+					searchDir = expandedPrefix;
+				} else {
+					searchDir = join(this.basePath, expandedPrefix);
+				}
+				searchPrefix = "";
+			} else {
+				// Split into directory and file prefix
+				const dir = dirname(expandedPrefix);
+				const file = basename(expandedPrefix);
+				if (prefix.startsWith("~") || expandedPrefix.startsWith("/")) {
+					searchDir = dir;
+				} else {
+					searchDir = join(this.basePath, dir);
+				}
+				searchPrefix = file;
+			}
+
+			const entries = readdirSync(searchDir, { withFileTypes: true });
+			const suggestions: AutocompleteItem[] = [];
+
+			for (const entry of entries) {
+				if (!entry.name.toLowerCase().startsWith(searchPrefix.toLowerCase())) {
+					continue;
+				}
+
+				const isDirectory = entry.isDirectory();
+
+				let relativePath: string;
+				const name = entry.name;
+
+				// Handle @ prefix path construction
+				if (isAtPrefix) {
+					const pathWithoutAt = expandedPrefix;
+					if (pathWithoutAt.endsWith("/")) {
+						relativePath = "@" + pathWithoutAt + name;
+					} else if (pathWithoutAt.includes("/")) {
+						if (pathWithoutAt.startsWith("~/")) {
+							const homeRelativeDir = pathWithoutAt.slice(2); // Remove ~/
+							const dir = dirname(homeRelativeDir);
+							relativePath = "@~/" + (dir === "." ? name : join(dir, name));
+						} else {
+							relativePath = "@" + join(dirname(pathWithoutAt), name);
+						}
+					} else {
+						if (pathWithoutAt.startsWith("~")) {
+							relativePath = "@~/" + name;
+						} else {
+							relativePath = "@" + name;
+						}
+					}
+				} else if (prefix.endsWith("/")) {
+					// If prefix ends with /, append entry to the prefix
+					relativePath = prefix + name;
+				} else if (prefix.includes("/")) {
+					// Preserve ~/ format for home directory paths
+					if (prefix.startsWith("~/")) {
+						const homeRelativeDir = prefix.slice(2); // Remove ~/
+						const dir = dirname(homeRelativeDir);
+						relativePath = "~/" + (dir === "." ? name : join(dir, name));
+					} else if (prefix.startsWith("/")) {
+						// Absolute path - construct properly
+						const dir = dirname(prefix);
+						if (dir === "/") {
+							relativePath = "/" + name;
+						} else {
+							relativePath = dir + "/" + name;
+						}
+					} else {
+						relativePath = join(dirname(prefix), name);
+					}
+				} else {
+					// For standalone entries, preserve ~/ if original prefix was ~/
+					if (prefix.startsWith("~")) {
+						relativePath = "~/" + name;
+					} else {
+						relativePath = name;
+					}
+				}
+
+				suggestions.push({
+					value: isDirectory ? relativePath + "/" : relativePath,
+					label: name,
+					description: isDirectory ? "directory" : "file",
+				});
+			}
+
+			// Sort directories first, then alphabetically
+			suggestions.sort((a, b) => {
+				const aIsDir = a.description === "directory";
+				const bIsDir = b.description === "directory";
+				if (aIsDir && !bIsDir) return -1;
+				if (!aIsDir && bIsDir) return 1;
+				return a.label.localeCompare(b.label);
+			});
+
+			return suggestions;
+		} catch (e) {
+			// Directory doesn't exist or not accessible
+			return [];
+		}
+	}
+
+	// Fuzzy file search using ripgrep + fuzzysort (fast, respects .gitignore)
+	private getFuzzyFileSuggestions(query: string): AutocompleteItem[] {
+		const results = this.fileIndex.search(query, { limit: 20, includeDirs: true });
+
+		return results.map(({ path: entryPath, isDirectory }) => {
+			const pathWithoutSlash = isDirectory ? entryPath.slice(0, -1) : entryPath;
+			const entryName = basename(pathWithoutSlash);
+
+			return {
+				value: "@" + entryPath,
+				label: entryName + (isDirectory ? "/" : ""),
+				description: pathWithoutSlash,
+			};
+		});
+	}
+
+	// Force file completion (called on Tab key) - always returns suggestions
+	getForceFileSuggestions(
+		lines: string[],
+		cursorLine: number,
+		cursorCol: number,
+	): { items: AutocompleteItem[]; prefix: string } | null {
+		const currentLine = lines[cursorLine] || "";
+		const textBeforeCursor = currentLine.slice(0, cursorCol);
+
+		// Don't trigger if we're typing a slash command at the start of the line
+		if (textBeforeCursor.trim().startsWith("/") && !textBeforeCursor.trim().includes(" ")) {
+			return null;
+		}
+
+		// Force extract path prefix - this will always return something
+		const pathMatch = this.extractPathPrefix(textBeforeCursor, true);
+		if (pathMatch !== null) {
+			const suggestions = this.getFileSuggestions(pathMatch);
+			if (suggestions.length === 0) return null;
+
+			return {
+				items: suggestions,
+				prefix: pathMatch,
+			};
+		}
+
+		return null;
+	}
+
+	// Check if we should trigger file completion (called on Tab key)
+	shouldTriggerFileCompletion(lines: string[], cursorLine: number, cursorCol: number): boolean {
+		const currentLine = lines[cursorLine] || "";
+		const textBeforeCursor = currentLine.slice(0, cursorCol);
+
+		// Don't trigger if we're typing a slash command at the start of the line
+		if (textBeforeCursor.trim().startsWith("/") && !textBeforeCursor.trim().includes(" ")) {
+			return false;
+		}
+
+		return true;
+	}
+}

@@ -104,3 +104,14 @@ export {
 	type ToastViewportPosition,
 	type ToastViewportProps,
 } from "./components/toast.js"
+
+// Autocomplete support
+export {
+	type AutocompleteItem,
+	type AutocompleteProvider,
+	CombinedAutocompleteProvider,
+	FileIndex,
+	type FileIndexOptions,
+	type FileSearchResult,
+	type SlashCommand,
+} from "./autocomplete/index.js"

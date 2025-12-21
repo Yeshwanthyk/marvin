@@ -64,11 +64,13 @@ bun run coding-agent
 ```
 
 Features:
-- Interactive TUI mode with markdown rendering
+- Interactive TUI with markdown rendering, syntax highlighting
 - Headless mode for scripting (`--headless`)
 - Configurable provider/model (`--provider`, `--model`)
 - Thinking levels for reasoning models (`--thinking`)
 - Copy-on-select: selected text auto-copies to clipboard (OSC 52 + pbcopy fallback)
+- Expand/collapse tool blocks with inline diff previews
+- Custom slash commands, tools, and lifecycle hooks (see below)
 
 ## Usage
 
@@ -101,6 +103,72 @@ coding-agent
 ├── open-tui         # Terminal UI (SolidJS + OpenTUI)
 └── base-tools       # Tool implementations (depends on ai)
 ```
+
+## Extensibility
+
+All user extensions live in `~/.config/marvin/`.
+
+### Custom Slash Commands
+
+Drop `.md` files in `~/.config/marvin/commands/`:
+
+```markdown
+<!-- ~/.config/marvin/commands/review.md -->
+Review this code for bugs, security issues, and style:
+
+{{input}}
+```
+
+Use with `/review <code or file>`. Supports `{{input}}` placeholder (or appends input if missing).
+
+### Custom Tools
+
+Drop `.ts` files in `~/.config/marvin/tools/`:
+
+```typescript
+// ~/.config/marvin/tools/hello.ts
+import type { ToolFactory } from "@marvin-agents/coding-agent/custom-tools";
+
+const factory: ToolFactory = (api) => ({
+  name: "hello",
+  description: "Say hello",
+  parameters: { type: "object", properties: { name: { type: "string" } } },
+  async execute({ name }) {
+    return { content: [{ type: "text", text: `Hello, ${name}!` }] };
+  },
+});
+
+export default factory;
+```
+
+ToolAPI provides: `cwd` (working directory), `exec(cmd, args, opts)` (spawn subprocess).
+
+### Lifecycle Hooks
+
+Drop `.ts` files in `~/.config/marvin/hooks/`:
+
+```typescript
+// ~/.config/marvin/hooks/logger.ts
+import type { HookModule } from "@marvin-agents/coding-agent/hooks";
+
+const hook: HookModule = {
+  name: "logger",
+  events: {
+    "app.start": async ({ marvin }) => {
+      marvin.send("Session started at " + new Date().toISOString());
+    },
+    "tool.execute.before": async ({ tool, input }) => {
+      console.log(`[hook] ${tool.name} called`);
+    },
+  },
+};
+
+export default hook;
+```
+
+Available events: `app.start`, `session.new`, `session.load`, `session.clear`, `tool.execute.before`, `tool.execute.after`, `tool.execute.<name>.before`, `tool.execute.<name>.after`.
+
+Hooks can inject messages via `marvin.send()` and intercept tool execution.
 
 ## Environment Variables
 
