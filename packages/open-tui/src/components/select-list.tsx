@@ -143,59 +143,67 @@ export function SelectList(props: SelectListProps) {
 		)
 	}
 
-	const { startIndex, endIndex } = visibleWindow()
-	const items = filteredItems()
-	const showScrollInfo = startIndex > 0 || endIndex < items.length
+	// Derive reactive values from visibleWindow memo
+	const startIndex = () => visibleWindow().startIndex
+	const endIndex = () => visibleWindow().endIndex
+	const visibleItems = () => filteredItems().slice(startIndex(), endIndex())
+	const showScrollInfo = () => startIndex() > 0 || endIndex() < filteredItems().length
 
 	return (
 		<box flexDirection="column">
-			<For each={items.slice(startIndex, endIndex)}>
+			<For each={visibleItems()}>
 				{(item, localIndex) => {
-					const globalIndex = () => startIndex + localIndex()
+					const globalIndex = () => startIndex() + localIndex()
 					const isSelected = () => globalIndex() === clampedIndex()
-					return <SelectListItem item={item} isSelected={isSelected()} theme={theme()} width={width()} />
+					return <SelectListItem item={item} isSelected={isSelected} theme={theme} width={width} />
 				}}
 			</For>
-			<Show when={showScrollInfo}>
+			<Show when={showScrollInfo()}>
 				<text fg={theme().scrollInfo}>
-					{"  "}({clampedIndex() + 1}/{items.length})
+					{"  "}({clampedIndex() + 1}/{filteredItems().length})
 				</text>
 			</Show>
 		</box>
 	)
 }
 
-function SelectListItem(props: { item: SelectItem; isSelected: boolean; theme: SelectListTheme; width: number }): JSX.Element {
-	const prefix = props.isSelected ? "→ " : "  "
+function SelectListItem(props: {
+	item: SelectItem
+	isSelected: () => boolean
+	theme: () => SelectListTheme
+	width: () => number
+}): JSX.Element {
+	const prefix = () => (props.isSelected() ? "→ " : "  ")
 	const prefixWidth = 2
-	const value = props.item.label || props.item.value
+	const value = () => props.item.label || props.item.value
 
-	const labelWidth = Math.min(32, Math.max(12, props.width - prefixWidth - 10))
-	const label = truncateToWidth(value, labelWidth, "")
-	const labelPad = " ".repeat(Math.max(0, labelWidth - visibleWidth(label)))
+	const labelWidth = () => Math.min(32, Math.max(12, props.width() - prefixWidth - 10))
+	const label = () => truncateToWidth(value(), labelWidth(), "")
+	const labelPad = () => " ".repeat(Math.max(0, labelWidth() - visibleWidth(label())))
 
-	const showDescription = Boolean(props.item.description) && props.width > 50
-	const descWidth = showDescription ? Math.max(0, props.width - prefixWidth - labelWidth - 2) : 0
-	const desc = showDescription ? truncateToWidth(props.item.description!, descWidth, "") : ""
+	const showDescription = () => Boolean(props.item.description) && props.width() > 50
+	const descWidth = () => (showDescription() ? Math.max(0, props.width() - prefixWidth - labelWidth() - 2) : 0)
+	const desc = () => (showDescription() ? truncateToWidth(props.item.description!, descWidth(), "") : "")
 
-	const line = prefix + label + labelPad + (showDescription ? "  " + desc : "")
-	const pad = " ".repeat(Math.max(0, props.width - visibleWidth(line)))
-
-	if (props.isSelected) {
-		return (
-			<text fg={props.theme.selectedFg} bg={props.theme.selectedBg} attributes={TextAttributes.BOLD}>
-				{line + pad}
-			</text>
-		)
-	}
+	const line = () => prefix() + label() + labelPad() + (showDescription() ? "  " + desc() : "")
+	const pad = () => " ".repeat(Math.max(0, props.width() - visibleWidth(line())))
 
 	return (
-		<text>
-			<span style={{ fg: props.theme.text }}>{prefix + label + labelPad}</span>
-			<Show when={showDescription}>
-				<span style={{ fg: props.theme.description }}>{"  " + desc}</span>
-			</Show>
-		</text>
+		<Show
+			when={props.isSelected()}
+			fallback={
+				<text>
+					<span style={{ fg: props.theme().text }}>{prefix() + label() + labelPad()}</span>
+					<Show when={showDescription()}>
+						<span style={{ fg: props.theme().description }}>{"  " + desc()}</span>
+					</Show>
+				</text>
+			}
+		>
+			<text fg={props.theme().selectedFg} bg={props.theme().selectedBg} attributes={TextAttributes.BOLD}>
+				{line() + pad()}
+			</text>
+		</Show>
 	)
 }
 
