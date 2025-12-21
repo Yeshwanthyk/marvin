@@ -1,16 +1,90 @@
 import type { AgentTool } from "@marvin-agents/ai";
 import { Type } from "@sinclair/typebox";
-import * as Diff from "diff";
 import { constants } from "fs";
 import { access, readFile, writeFile } from "fs/promises";
 import { resolve as resolvePath } from "path";
 import { expandPath } from "./path-utils.js";
 
+/** Max lines for diff generation - beyond this, show truncated */
+const MAX_DIFF_LINES = 200;
+
 /**
- * Generate a unified diff (parsePatch compatible).
+ * Build a synthetic unified diff hunk from known replacement location.
+ * Avoids O(n*d) Myers diff by using the known edit position.
  */
-function generateDiffString(path: string, oldContent: string, newContent: string, contextLines = 4): string {
-	return Diff.createTwoFilesPatch(path, path, oldContent, newContent, "", "", { context: contextLines });
+function buildTargetedDiff(
+	path: string,
+	fullContent: string,
+	replaceIndex: number,
+	oldText: string,
+	newText: string,
+	contextLines = 3
+): string {
+	const lines = fullContent.split("\n");
+	
+	// Find line number where replacement starts
+	let charCount = 0;
+	let startLine = 0;
+	for (let i = 0; i < lines.length; i++) {
+		if (charCount + lines[i].length >= replaceIndex) {
+			startLine = i;
+			break;
+		}
+		charCount += lines[i].length + 1; // +1 for newline
+	}
+	
+	// Count lines in old/new text
+	const oldLines = oldText.split("\n");
+	const newLines = newText.split("\n");
+	
+	// Check if diff would be too large
+	const totalDiffLines = oldLines.length + newLines.length + contextLines * 2;
+	if (totalDiffLines > MAX_DIFF_LINES) {
+		// Return truncated summary diff
+		const header = `--- ${path}\n+++ ${path}\n`;
+		const summary = `@@ -${startLine + 1},${oldLines.length} +${startLine + 1},${newLines.length} @@\n`;
+		const truncateMsg = `\\ Diff truncated: ${oldLines.length} lines removed, ${newLines.length} lines added\n`;
+		
+		// Show first few and last few lines
+		const showLines = 5;
+		const oldPreview = oldLines.length <= showLines * 2
+			? oldLines.map(l => `-${l}`).join("\n")
+			: [...oldLines.slice(0, showLines).map(l => `-${l}`),
+			   `-... (${oldLines.length - showLines * 2} more lines)`,
+			   ...oldLines.slice(-showLines).map(l => `-${l}`)].join("\n");
+		const newPreview = newLines.length <= showLines * 2
+			? newLines.map(l => `+${l}`).join("\n")
+			: [...newLines.slice(0, showLines).map(l => `+${l}`),
+			   `+... (${newLines.length - showLines * 2} more lines)`,
+			   ...newLines.slice(-showLines).map(l => `+${l}`)].join("\n");
+		
+		return header + summary + truncateMsg + oldPreview + "\n" + newPreview;
+	}
+	
+	// Build context before
+	const ctxStart = Math.max(0, startLine - contextLines);
+	const beforeCtx = lines.slice(ctxStart, startLine).map(l => ` ${l}`);
+	
+	// Build removed/added lines
+	const removed = oldLines.map(l => `-${l}`);
+	const added = newLines.map(l => `+${l}`);
+	
+	// Build context after
+	const endLine = startLine + oldLines.length;
+	const ctxEnd = Math.min(lines.length, endLine + contextLines);
+	const afterCtx = lines.slice(endLine, ctxEnd).map(l => ` ${l}`);
+	
+	// Build unified diff header
+	const oldStart = ctxStart + 1;
+	const oldCount = beforeCtx.length + oldLines.length + afterCtx.length;
+	const newStart = ctxStart + 1;
+	const newCount = beforeCtx.length + newLines.length + afterCtx.length;
+	
+	const header = `--- ${path}\n+++ ${path}\n`;
+	const hunkHeader = `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@\n`;
+	const body = [...beforeCtx, ...removed, ...added, ...afterCtx].join("\n");
+	
+	return header + hunkHeader + body;
 }
 
 const editSchema = Type.Object({
@@ -135,7 +209,7 @@ export const editTool: AgentTool<typeof editSchema> = {
 								text: `Successfully replaced text in ${path}. Changed ${oldText.length} characters to ${newText.length} characters.`,
 							},
 						],
-						details: { diff: generateDiffString(path, content, newContent) },
+						details: { diff: buildTargetedDiff(path, content, index, oldText, newText) },
 					});
 				} catch (error: any) {
 					if (signal) {

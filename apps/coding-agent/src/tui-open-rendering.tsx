@@ -48,6 +48,17 @@ function truncateLines(text: string, maxLines: number): { text: string; truncate
 	}
 }
 
+/** Extract +/- line counts from unified diff */
+function getDiffStats(diffText: string): { added: number; removed: number } {
+	let added = 0
+	let removed = 0
+	for (const line of diffText.split("\n")) {
+		if (line.startsWith("+") && !line.startsWith("+++")) added++
+		else if (line.startsWith("-") && !line.startsWith("---")) removed++
+	}
+	return { added, removed }
+}
+
 
 
 function toolTitle(name: string, args: any): string {
@@ -226,10 +237,19 @@ const registry: Record<string, ToolRenderer> = {
 		renderHeader: (ctx) => {
 			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
+			// Count diff stats for collapsed summary
+			const diffStats = ctx.editDiff ? getDiffStats(ctx.editDiff) : null
 			const suffix = (
 				<>
 					<Show when={!ctx.isComplete}>
 						<span style={{ fg: theme.textMuted }}> …</span>
+					</Show>
+					<Show when={ctx.isComplete && diffStats}>
+						<span style={{ fg: theme.textMuted }}> (</span>
+						<span style={{ fg: "#98c379" }}>+{diffStats!.added}</span>
+						<span style={{ fg: theme.textMuted }}>/</span>
+						<span style={{ fg: "#e06c75" }}>-{diffStats!.removed}</span>
+						<span style={{ fg: theme.textMuted }}>)</span>
 					</Show>
 					<Show when={ctx.isError}>
 						<span style={{ fg: theme.error }}> error</span>
@@ -240,8 +260,16 @@ const registry: Record<string, ToolRenderer> = {
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
+			// Only render diff body when expanded
+			if (!ctx.expanded) return null
 			if (ctx.editDiff) {
 				const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
+				// Size gate: if diff too large, render as plain text
+				const diffLines = ctx.editDiff.split("\n").length
+				if (diffLines > 150) {
+					const truncated = truncateHeadTail(ctx.editDiff, 60, 40)
+					return <CodeBlock content={truncated.text} filetype="diff" showLineNumbers={false} wrapMode="none" />
+				}
 				return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode={ctx.diffWrapMode} />
 			}
 			if (!ctx.output && !ctx.isComplete) return <text fg={theme.textMuted}>editing…</text>
