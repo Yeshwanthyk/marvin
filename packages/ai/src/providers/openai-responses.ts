@@ -367,8 +367,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 		} catch (error) {
 			for (const block of output.content) delete (block as any).index;
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage =
-				error instanceof Error ? error.message : JSON.stringify(error);
+			output.errorMessage = formatErrorMessage(error);
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}
@@ -376,6 +375,32 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 
 	return stream;
 };
+
+function formatErrorMessage(error: unknown): string {
+	if (error instanceof Error) {
+		const anyErr = error as any;
+		const cause = anyErr?.cause;
+		if (cause instanceof Error && cause.message && cause.message !== error.message) {
+			return `${error.message} (cause: ${cause.message})`;
+		}
+		if (typeof cause === "string" && cause && cause !== error.message) {
+			return `${error.message} (cause: ${cause})`;
+		}
+		if (cause && typeof cause === "object" && typeof (cause as any).message === "string") {
+			const causeMessage = (cause as any).message;
+			if (causeMessage && causeMessage !== error.message) {
+				return `${error.message} (cause: ${causeMessage})`;
+			}
+		}
+		return error.message;
+	}
+
+	try {
+		return JSON.stringify(error);
+	} catch {
+		return String(error);
+	}
+}
 
 function createClient(
 	model: Model<"openai-responses">,
