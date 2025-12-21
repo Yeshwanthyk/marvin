@@ -2,7 +2,7 @@
  * OpenTUI-based session picker
  */
 
-import { render, useTerminalDimensions } from "@opentui/solid"
+import { render, useTerminalDimensions, useKeyboard } from "@opentui/solid"
 import { createSignal, onMount } from "solid-js"
 import { SelectList, ThemeProvider, useTheme, type SelectItem, type SelectListRef } from "@marvin-agents/open-tui"
 import type { SessionManager } from "./session-manager.js"
@@ -30,7 +30,7 @@ function SessionPickerApp(props: SessionPickerProps) {
 		description: formatMeta(s.timestamp, s.messageCount, s.modelId),
 	}))
 
-	const handleKeyDown = (e: { name: string; ctrl?: boolean }) => {
+	useKeyboard((e: { name: string; ctrl?: boolean }) => {
 		if (e.name === "up" || (e.ctrl && e.name === "p")) {
 			listRef?.moveUp()
 		} else if (e.name === "down" || (e.ctrl && e.name === "n")) {
@@ -40,14 +40,13 @@ function SessionPickerApp(props: SessionPickerProps) {
 		} else if (e.name === "escape" || (e.ctrl && e.name === "c")) {
 			props.onCancel()
 		}
-	}
+	})
 
 	return (
 		<box
 			flexDirection="column"
 			width={dimensions().width}
 			height={dimensions().height}
-			onKeyDown={handleKeyDown}
 		>
 			<text fg={theme.textMuted}>Resume Session</text>
 			<box height={1} />
@@ -117,6 +116,7 @@ export async function selectSession(sessionManager: SessionManager): Promise<str
 			{
 				targetFps: 30,
 				exitOnCtrlC: false,
+				useKittyKeyboard: {},
 			}
 		)
 	})
