@@ -16,6 +16,10 @@ marvin-agent/
 │   ├── open-tui/               @marvin-agents/open-tui
 │   └── tui/                    @marvin-agents/tui
 │
+├── examples/
+│   ├── hooks/                  Lifecycle hooks
+│   └── tools/subagent/         Subagent tool + agent definitions
+│
 ├── docs/
 │   └── testing.md
 │
@@ -145,30 +149,16 @@ ToolAPI provides: `cwd` (working directory), `exec(cmd, args, opts)` (spawn subp
 
 ### Lifecycle Hooks
 
-Drop `.ts` files in `~/.config/marvin/hooks/`:
+Drop `.ts` files in `~/.config/marvin/hooks/`. See [`examples/hooks/`](examples/hooks/) for ready-to-use hooks.
 
-```typescript
-// ~/.config/marvin/hooks/logger.ts
-import type { HookModule } from "@marvin-agents/coding-agent/hooks";
-
-const hook: HookModule = {
-  name: "logger",
-  events: {
-    "app.start": async ({ marvin }) => {
-      marvin.send("Session started at " + new Date().toISOString());
-    },
-    "tool.execute.before": async ({ tool, input }) => {
-      console.log(`[hook] ${tool.name} called`);
-    },
-  },
-};
-
-export default hook;
+```bash
+# Install an example hook
+cp examples/hooks/git-context.ts ~/.config/marvin/hooks/
 ```
 
 Available events: `app.start`, `session.new`, `session.load`, `session.clear`, `tool.execute.before`, `tool.execute.after`, `tool.execute.<name>.before`, `tool.execute.<name>.after`.
 
-Hooks can inject messages via `marvin.send()` and intercept tool execution.
+Hooks can inject messages via `marvin.send()` and run commands via `ctx.exec()`.
 
 ## Environment Variables
 
