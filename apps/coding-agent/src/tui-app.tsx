@@ -8,7 +8,7 @@ import { createSignal, createEffect, createMemo, For, Show, onCleanup, onMount, 
 import { ThemeProvider, ToastViewport, useRenderer, useTheme, type ToastItem } from "@marvin-agents/open-tui"
 import { Agent, ProviderTransport, RouterTransport, CodexTransport, loadTokens, saveTokens, clearTokens } from "@marvin-agents/agent-core"
 import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent-core"
-import { getApiKey, getModels, getProviders, type Model, type Api } from "@marvin-agents/ai"
+import { getApiKey, getModels, getProviders, type AgentTool, type Model, type Api } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
 import { loadAppConfig } from "./config.js"
 import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/tui"
@@ -19,7 +19,7 @@ import { watch, type FSWatcher } from "fs"
 
 // Extracted modules
 import type { UIMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
-import { findGitHeadPath, getCurrentBranch, getGitDiffStats, extractText, extractThinking, extractToolCalls, extractOrderedBlocks, copyToClipboard, getToolText, getEditDiffText } from "./utils.js"
+import { findGitHeadPath, getCurrentBranch, extractText, extractThinking, extractToolCalls, extractOrderedBlocks, copyToClipboard, getToolText, getEditDiffText } from "./utils.js"
 import { handleSlashCommand, resolveProvider, resolveModel, THINKING_LEVELS, type CommandContext } from "./commands.js"
 import { loadCustomCommands, tryExpandCustomCommand, type CustomCommand } from "./custom-commands.js"
 import { slashCommands } from "./autocomplete-commands.js"
@@ -27,6 +27,8 @@ import { createAgentEventHandler, type EventHandlerContext } from "./agent-event
 import { Footer } from "./components/Footer.js"
 import { MessageList } from "./components/MessageList.js"
 import { createKeyboardHandler, type KeyboardHandlerConfig } from "./keyboard-handler.js"
+import { loadHooks, HookRunner, wrapToolsWithHooks, type HookError } from "./hooks/index.js"
+import { loadCustomTools, getToolNames } from "./custom-tools/index.js"
 
 type KnownProvider = ReturnType<typeof getProviders>[number]
 
@@ -61,6 +63,37 @@ export const runTuiOpen = async (args?: {
 	// Load custom slash commands from ~/.config/marvin/commands/
 	const customCommands = loadCustomCommands(loaded.configDir)
 
+	// Load hooks from ~/.config/marvin/hooks/
+	const cwd = process.cwd()
+	const { hooks, errors: hookErrors } = await loadHooks(loaded.configDir)
+	const hookRunner = new HookRunner(hooks, cwd, loaded.configDir)
+
+	// Report hook load errors to stderr (non-fatal)
+	for (const { path, error } of hookErrors) {
+		process.stderr.write(`Hook load error: ${path}: ${error}\n`)
+	}
+
+	// Subscribe to hook runtime errors
+	hookRunner.onError((err: HookError) => {
+		process.stderr.write(`Hook error [${err.event}] ${err.hookPath}: ${err.error}\n`)
+	})
+
+	// Load custom tools from ~/.config/marvin/tools/
+	const { tools: customTools, errors: toolErrors } = await loadCustomTools(
+		loaded.configDir,
+		cwd,
+		getToolNames(codingTools),
+	)
+
+	// Report tool load errors to stderr (non-fatal)
+	for (const { path, error } of toolErrors) {
+		process.stderr.write(`Tool load error: ${path}: ${error}\n`)
+	}
+
+	// Combine built-in and custom tools, then wrap with hooks for interception
+	const allTools: AgentTool<any, any>[] = [...codingTools, ...customTools.map((t) => t.tool)]
+	const tools = wrapToolsWithHooks(allTools, hookRunner)
+
 	const sessionManager = new SessionManager(loaded.configDir)
 	let initialSession: LoadedSession | null = null
 
@@ -88,8 +121,11 @@ export const runTuiOpen = async (args?: {
 	const transport = new RouterTransport({ provider: providerTransport, codex: codexTransport })
 	const agent = new Agent({
 		transport,
-		initialState: { systemPrompt: loaded.systemPrompt, model: loaded.model, thinkingLevel: loaded.thinking, tools: codingTools },
+		initialState: { systemPrompt: loaded.systemPrompt, model: loaded.model, thinkingLevel: loaded.thinking, tools },
 	})
+
+	// Emit app.start hook event
+	await hookRunner.emit({ type: "app.start" })
 
 	type ModelEntry = { provider: KnownProvider; model: Model<Api> }
 	const cycleModels: ModelEntry[] = []
@@ -115,8 +151,9 @@ export const runTuiOpen = async (args?: {
 		<App agent={agent} sessionManager={sessionManager} initialSession={initialSession}
 			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
-			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands} />
-	), { targetFps: 60, exitOnCtrlC: false, useKittyKeyboard: {} })
+			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
+			hookRunner={hookRunner} />
+	), { targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} })
 }
 
 // ----- App Component -----
@@ -128,6 +165,7 @@ interface AppProps {
 	configDir: string; configPath: string; codexTransport: CodexTransport
 	getApiKey: (provider: string) => string | undefined
 	customCommands: Map<string, CustomCommand>
+	hookRunner: HookRunner
 }
 
 function App(props: AppProps) {
@@ -135,7 +173,13 @@ function App(props: AppProps) {
 	let currentProvider = props.provider, currentModelId = props.modelId, currentThinking = props.thinking
 	let cycleIndex = 0, sessionStarted = false
 
-	const ensureSession = () => { if (!sessionStarted) { sessionManager.startSession(currentProvider, currentModelId, currentThinking); sessionStarted = true } }
+	const ensureSession = () => {
+		if (!sessionStarted) {
+			sessionManager.startSession(currentProvider, currentModelId, currentThinking)
+			sessionStarted = true
+			void props.hookRunner.emit({ type: "session.start", sessionId: sessionManager.sessionId })
+		}
+	}
 
 	const [messages, setMessages] = createSignal<UIMessage[]>([])
 	const [toolBlocks, setToolBlocks] = createSignal<ToolBlock[]>([])
@@ -222,6 +266,7 @@ function App(props: AppProps) {
 		setMessages(uiMessages)
 		const sessionPath = sessionManager.listSessions().find((s) => s.id === metadata.id)?.path || ""
 		sessionManager.continueSession(sessionPath, metadata.id); sessionStarted = true
+		void props.hookRunner.emit({ type: "session.resume", sessionId: metadata.id })
 	}
 
 	const eventCtx: EventHandlerContext = {
@@ -230,6 +275,7 @@ function App(props: AppProps) {
 		setActivityState, setIsResponding, setContextTokens, setRetryStatus,
 		queuedMessages, setQueueCount, sessionManager, streamingMessageId: streamingMessageIdRef,
 		retryConfig, retryablePattern, retryState, agent: agent as EventHandlerContext["agent"],
+		hookRunner: props.hookRunner,
 	}
 	const handleAgentEvent = createAgentEventHandler(eventCtx)
 
@@ -246,6 +292,7 @@ function App(props: AppProps) {
 		isResponding, setIsResponding, setActivityState,
 		setMessages: setMessages as CommandContext["setMessages"], setToolBlocks: setToolBlocks as CommandContext["setToolBlocks"],
 		setContextTokens, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode,
+		hookRunner: props.hookRunner,
 	}
 
 	// Set of built-in command names for precedence check
@@ -280,6 +327,9 @@ function App(props: AppProps) {
 		try { await agent.prompt(text) }
 		catch (err) { batch(() => { setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: `Error: ${err instanceof Error ? err.message : String(err)}` }]); setIsResponding(false); setActivityState("idle") }) }
 	}
+
+	// Connect hook send() to handleSubmit
+	props.hookRunner.setSendHandler((text) => void handleSubmit(text))
 
 	const handleAbort = (): string | null => {
 		if (retryState.abortController) { retryState.abortController.abort(); retryState.abortController = null; retryState.attempt = 0; setRetryStatus(null) }
@@ -363,20 +413,18 @@ function MainView(props: MainViewProps) {
 		textareaRef.setText(result.lines.join("\n")); setShowAutocomplete(false); setAutocompleteItems([]); return true
 	}
 
-	// Git & Spinner
+	// Git branch & Spinner
 	const [branch, setBranch] = createSignal<string | null>(getCurrentBranch())
-	const [gitStats, setGitStats] = createSignal<{ ins: number; del: number } | null>(null)
 	const [spinnerFrame, setSpinnerFrame] = createSignal(0)
-	let gitWatcher: FSWatcher | null = null, gitStatsInterval: ReturnType<typeof setInterval> | null = null, spinnerInterval: ReturnType<typeof setInterval> | null = null
+	let gitWatcher: FSWatcher | null = null, spinnerInterval: ReturnType<typeof setInterval> | null = null
 
 	onMount(() => {
 		textareaRef?.focus()
 		const gitHeadPath = findGitHeadPath(); if (gitHeadPath) try { gitWatcher = watch(gitHeadPath, () => setBranch(getCurrentBranch())) } catch {}
-		setGitStats(getGitDiffStats()); gitStatsInterval = setInterval(() => setGitStats(getGitDiffStats()), 2000)
 	})
-	onCleanup(() => { if (gitWatcher) gitWatcher.close(); if (gitStatsInterval) clearInterval(gitStatsInterval); if (spinnerInterval) clearInterval(spinnerInterval) })
+	onCleanup(() => { if (gitWatcher) gitWatcher.close(); if (spinnerInterval) clearInterval(spinnerInterval) })
 	createEffect(() => {
-		if (props.activityState !== "idle") { if (!spinnerInterval) spinnerInterval = setInterval(() => setSpinnerFrame((f) => (f + 1) % 8), 80) }
+		if (props.activityState !== "idle") { if (!spinnerInterval) spinnerInterval = setInterval(() => setSpinnerFrame((f) => (f + 1) % 8), 120) }
 		else { if (spinnerInterval) { clearInterval(spinnerInterval); spinnerInterval = null } }
 	})
 	createEffect(() => { props.messages.length; props.toolBlocks.length; props.isResponding; if (scrollRef) scrollRef.scrollBy(100_000) })
@@ -446,7 +494,7 @@ function MainView(props: MainViewProps) {
 					onSubmit={() => { if (textareaRef) { const ref = textareaRef; props.onSubmit(ref.plainText, () => ref.clear()) } }} />
 			</box>
 			<Footer modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
-				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} gitStats={gitStats()} spinnerFrame={spinnerFrame()} />
+				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} spinnerFrame={spinnerFrame()} />
 			<ToastViewport toasts={toasts()} />
 		</box>
 	)
