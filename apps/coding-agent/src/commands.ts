@@ -48,6 +48,9 @@ export interface CommandContext {
 
 	// Diff wrap mode
 	setDiffWrapMode: (updater: (prev: "word" | "none") => "word" | "none") => void
+
+	// Hook runner for lifecycle events (optional for backwards compat)
+	hookRunner?: import("./hooks/index.js").HookRunner
 }
 
 // Helper to resolve provider from string
@@ -86,6 +89,7 @@ function handleClear(ctx: CommandContext): boolean {
 	ctx.setToolBlocks(() => [])
 	ctx.setContextTokens(0)
 	ctx.agent.reset()
+	void ctx.hookRunner?.emit({ type: "session.clear", sessionId: null })
 	return true
 }
 
