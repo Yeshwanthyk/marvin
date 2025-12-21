@@ -122,22 +122,22 @@ Map from `packages/agent/src/types.ts` + session events from app:
 - Others: best-effort; bounded timeout (e.g. 2–5s) and errors reported once.
 
 ### Implementation steps
-1. Add hook types: `apps/coding-agent/src/hooks/types.ts` (event map + context + result types).
-2. Add loader: `apps/coding-agent/src/hooks/loader.ts`:
+1. [x] Add hook types: `apps/coding-agent/src/hooks/types.ts` (event map + context + result types).
+2. [x] Add loader: `apps/coding-agent/src/hooks/loader.ts`:
    - discover `*.ts` in `configDir/hooks` (and optionally `./.marvin/hooks` later).
    - load with `import(pathToFileURL(...))` under Bun.
    - constrain runtime imports: hooks should be self-contained; allow `import type` only (document this).
-3. Add runner: `apps/coding-agent/src/hooks/runner.ts`:
+3. [x] Add runner: `apps/coding-agent/src/hooks/runner.ts`:
    - register handlers; emit w/ timeout; error aggregation.
-4. Tool interception: `apps/coding-agent/src/hooks/tool-wrapper.ts`:
+4. [x] Tool interception: `apps/coding-agent/src/hooks/tool-wrapper.ts`:
    - wrap `AgentTool.execute` (same technique as pi-mono).
-5. Wire in both modes:
+5. [x] Wire in both modes:
    - TUI: `apps/coding-agent/src/tui-app.tsx` create runner, wrap tools before constructing `Agent`.
    - Headless: `apps/coding-agent/src/headless.ts` same.
 
 ### Verification
-- Unit tests: loader discovery; tool blocking; tool result rewrite.
-- Manual: hook that blocks `bash` unless command matches allowlist.
+- [x] Unit tests: loader discovery; tool blocking; tool result rewrite.
+- [ ] Manual: hook that blocks `bash` unless command matches allowlist.
 
 ---
 
@@ -162,13 +162,13 @@ Provide a small `ToolAPI` passed to factories:
 - Hooks from Plan 2 automatically see these tools (wrapping occurs after tool load).
 
 ### Implementation steps
-1. Implement loader `apps/coding-agent/src/custom-tools/loader.ts` (modeled after pi-mono but simpler; no jiti/alias).
-2. Update app wiring (TUI + headless) to include loaded tools.
-3. Add a docs snippet + sample tool skeleton.
+1. [x] Implement loader `apps/coding-agent/src/custom-tools/loader.ts` (modeled after pi-mono but simpler; no jiti/alias).
+2. [x] Update app wiring (TUI + headless) to include loaded tools.
+3. [x] Add a docs snippet + sample tool skeleton.
 
 ### Verification
-- Unit test: conflicts, multi-tool export.
-- Manual: tool that calls `git status` and returns text.
+- [x] Unit test: conflicts, multi-tool export.
+- [x] Manual: subagent tool spawning marvin subprocess, delegating to agents.
 
 ---
 
