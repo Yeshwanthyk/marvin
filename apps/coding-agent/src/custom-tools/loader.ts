@@ -1,0 +1,219 @@
+/**
+ * Custom tool loader - discovers and loads TypeScript tool modules.
+ *
+ * Tools are loaded from ~/.config/marvin/tools/*.ts (non-recursive).
+ * Uses Bun's native import() which handles TypeScript directly.
+ */
+
+import { spawn } from "node:child_process"
+import { existsSync, readdirSync } from "node:fs"
+import { join, resolve } from "node:path"
+import { pathToFileURL } from "node:url"
+import type { AgentTool } from "@marvin-agents/ai"
+import type {
+	CustomToolFactory,
+	CustomToolsLoadResult,
+	ExecOptions,
+	ExecResult,
+	LoadedCustomTool,
+	ToolAPI,
+} from "./types.js"
+
+/**
+ * Execute a command and return stdout/stderr/code.
+ * Supports cancellation via AbortSignal and timeout.
+ */
+async function execCommand(command: string, args: string[], cwd: string, options?: ExecOptions): Promise<ExecResult> {
+	return new Promise((resolve) => {
+		const proc = spawn(command, args, {
+			cwd,
+			shell: false,
+			stdio: ["ignore", "pipe", "pipe"],
+		})
+
+		let stdout = ""
+		let stderr = ""
+		let killed = false
+		let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+		const killProcess = () => {
+			if (!killed) {
+				killed = true
+				proc.kill("SIGTERM")
+				// Force kill after 5s if SIGTERM doesn't work
+				setTimeout(() => {
+					if (!proc.killed) {
+						proc.kill("SIGKILL")
+					}
+				}, 5000)
+			}
+		}
+
+		// Handle abort signal
+		if (options?.signal) {
+			if (options.signal.aborted) {
+				killProcess()
+			} else {
+				options.signal.addEventListener("abort", killProcess, { once: true })
+			}
+		}
+
+		// Handle timeout
+		if (options?.timeout && options.timeout > 0) {
+			timeoutId = setTimeout(killProcess, options.timeout)
+		}
+
+		proc.stdout.on("data", (data) => {
+			stdout += data.toString()
+		})
+
+		proc.stderr.on("data", (data) => {
+			stderr += data.toString()
+		})
+
+		proc.on("close", (code) => {
+			if (timeoutId) clearTimeout(timeoutId)
+			if (options?.signal) {
+				options.signal.removeEventListener("abort", killProcess)
+			}
+			resolve({
+				stdout,
+				stderr,
+				code: code ?? 0,
+				killed,
+			})
+		})
+
+		proc.on("error", (err) => {
+			if (timeoutId) clearTimeout(timeoutId)
+			if (options?.signal) {
+				options.signal.removeEventListener("abort", killProcess)
+			}
+			resolve({
+				stdout,
+				stderr: stderr || err.message,
+				code: 1,
+				killed,
+			})
+		})
+	})
+}
+
+/**
+ * Load a single tool module.
+ */
+async function loadTool(
+	toolPath: string,
+	cwd: string,
+	api: ToolAPI,
+): Promise<{ tools: LoadedCustomTool[] | null; error: string | null }> {
+	const resolvedPath = resolve(toolPath)
+
+	try {
+		// Use file URL for import - Bun handles TS natively
+		const fileUrl = pathToFileURL(resolvedPath).href
+		const module = await import(fileUrl)
+		const factory = module.default as CustomToolFactory
+
+		if (typeof factory !== "function") {
+			return { tools: null, error: "Tool must export a default function" }
+		}
+
+		// Call factory with API
+		const result = await factory(api)
+
+		// Handle single tool or array of tools
+		const toolsArray = Array.isArray(result) ? result : [result]
+
+		const loadedTools: LoadedCustomTool[] = toolsArray.map((tool) => ({
+			path: toolPath,
+			resolvedPath,
+			tool,
+		}))
+
+		return { tools: loadedTools, error: null }
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err)
+		return { tools: null, error: `Failed to load tool: ${message}` }
+	}
+}
+
+/**
+ * Discover tool files from a directory.
+ * Returns all .ts files in the directory (non-recursive).
+ */
+function discoverToolsInDir(dir: string): string[] {
+	if (!existsSync(dir)) {
+		return []
+	}
+
+	try {
+		const entries = readdirSync(dir, { withFileTypes: true })
+		return entries
+			.filter((e) => (e.isFile() || e.isSymbolicLink()) && e.name.endsWith(".ts"))
+			.map((e) => join(dir, e.name))
+	} catch {
+		return []
+	}
+}
+
+/**
+ * Discover and load tools from the config directory.
+ * Loads from ~/.config/marvin/tools/*.ts
+ *
+ * @param configDir - Base config directory (e.g., ~/.config/marvin)
+ * @param cwd - Current working directory for tool execution
+ * @param builtInToolNames - Names of built-in tools to check for conflicts
+ */
+export async function loadCustomTools(
+	configDir: string,
+	cwd: string,
+	builtInToolNames: string[],
+): Promise<CustomToolsLoadResult> {
+	const tools: LoadedCustomTool[] = []
+	const errors: Array<{ path: string; error: string }> = []
+	const seenNames = new Set<string>(builtInToolNames)
+
+	// Shared API object - all tools get the same instance
+	const api: ToolAPI = {
+		cwd,
+		exec: (command: string, args: string[], options?: ExecOptions) => execCommand(command, args, cwd, options),
+	}
+
+	const toolsDir = join(configDir, "tools")
+	const paths = discoverToolsInDir(toolsDir)
+
+	for (const toolPath of paths) {
+		const { tools: loadedTools, error } = await loadTool(toolPath, cwd, api)
+
+		if (error) {
+			errors.push({ path: toolPath, error })
+			continue
+		}
+
+		if (loadedTools) {
+			for (const loadedTool of loadedTools) {
+				// Check for name conflicts
+				if (seenNames.has(loadedTool.tool.name)) {
+					errors.push({
+						path: toolPath,
+						error: `Tool name "${loadedTool.tool.name}" conflicts with existing tool`,
+					})
+					continue
+				}
+
+				seenNames.add(loadedTool.tool.name)
+				tools.push(loadedTool)
+			}
+		}
+	}
+
+	return { tools, errors }
+}
+
+/**
+ * Get built-in tool names from an array of tools.
+ */
+export function getToolNames(tools: AgentTool<any, any>[]): string[] {
+	return tools.map((t) => t.name)
+}
