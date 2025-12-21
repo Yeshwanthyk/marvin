@@ -28,6 +28,13 @@ function ToolBlockWrapper(props: {
 			expanded={expanded()}
 			diffWrapMode={props.diffWrapMode}
 			onToggleExpanded={() => props.onToggle(props.tool.id)}
+			// Custom tool metadata for first-class rendering
+			label={props.tool.label}
+			source={props.tool.source}
+			sourcePath={props.tool.sourcePath}
+			result={props.tool.result}
+			renderCall={props.tool.renderCall}
+			renderResult={props.tool.renderResult}
 		/>
 	)
 }
@@ -72,23 +79,35 @@ function ThinkingBlockWrapper(props: {
 
 // ----- Content Items Builder -----
 
-// Cache key for memoization
-let cachedKey = ""
-let cachedItems: ContentItem[] = []
+// Per-item cache: reuse ContentItem objects when data unchanged
+// Key format: "type:id" or "type:msgId:blockIdx"
+const itemCache = new Map<string, ContentItem>()
+let lastMessageCount = 0
+
+/** Get or create a cached ContentItem, preserving object identity when data matches */
+function getCachedItem<T extends ContentItem>(
+	key: string,
+	current: T,
+	isEqual: (a: T, b: T) => boolean
+): T {
+	const cached = itemCache.get(key) as T | undefined
+	if (cached && cached.type === current.type && isEqual(cached, current)) {
+		return cached
+	}
+	itemCache.set(key, current)
+	return current
+}
 
 export function buildContentItems(
 	messages: UIMessage[],
 	toolBlocks: ToolBlock[],
 	thinkingVisible: boolean
 ): ContentItem[] {
-	// Build a cache key from message IDs, streaming states, and tool completion states
-	const keyParts = [
-		thinkingVisible ? "t" : "f",
-		messages.map(m => `${m.id}:${m.isStreaming ? 1 : 0}:${m.content?.length || 0}`).join(","),
-		toolBlocks.map(t => `${t.id}:${t.isComplete ? 1 : 0}`).join(","),
-	]
-	const key = keyParts.join("|")
-	if (key === cachedKey) return cachedItems
+	// Prune stale cache entries when message count decreases (e.g., clear)
+	if (messages.length < lastMessageCount) {
+		itemCache.clear()
+	}
+	lastMessageCount = messages.length
 
 	const items: ContentItem[] = []
 	const renderedToolIds = new Set<string>()
@@ -98,28 +117,54 @@ export function buildContentItems(
 		const isLastMessage = i === messages.length - 1
 
 		if (msg.role === "user") {
-			items.push({ type: "user", content: msg.content })
+			const item: ContentItem = { type: "user", content: msg.content }
+			items.push(
+				getCachedItem(`user:${msg.id}`, item, (a, b) => a.content === b.content)
+			)
 		} else if (msg.role === "assistant") {
 			// Use contentBlocks if available (preserves interleaved order)
 			if (msg.contentBlocks && msg.contentBlocks.length > 0) {
-				for (const block of msg.contentBlocks) {
+				for (let blockIdx = 0; blockIdx < msg.contentBlocks.length; blockIdx++) {
+					const block = msg.contentBlocks[blockIdx]
 					if (block.type === "thinking") {
 						if (thinkingVisible) {
-							items.push({
+							const item: ContentItem = {
 								type: "thinking",
 								id: block.id,
 								summary: block.summary,
 								full: block.full,
 								isStreaming: msg.isStreaming,
-							})
+							}
+							items.push(
+								getCachedItem(`thinking:${msg.id}:${block.id}`, item, (a, b) =>
+									a.type === "thinking" && b.type === "thinking" &&
+									a.full === b.full && a.isStreaming === b.isStreaming
+								)
+							)
 						}
 					} else if (block.type === "text") {
 						if (block.text) {
-							items.push({ type: "assistant", content: block.text, isStreaming: msg.isStreaming })
+							const item: ContentItem = { type: "assistant", content: block.text, isStreaming: msg.isStreaming }
+							// For streaming text, use content length in key to allow updates
+							// but still cache when length stabilizes
+							const contentKey = msg.isStreaming ? block.text.length : "final"
+							items.push(
+								getCachedItem(`text:${msg.id}:${blockIdx}:${contentKey}`, item, (a, b) =>
+									a.type === "assistant" && b.type === "assistant" &&
+									a.content === b.content && a.isStreaming === b.isStreaming
+								)
+							)
 						}
 					} else if (block.type === "tool") {
 						if (!renderedToolIds.has(block.tool.id)) {
-							items.push({ type: "tool", tool: block.tool })
+							const item: ContentItem = { type: "tool", tool: block.tool }
+							items.push(
+								getCachedItem(`tool:${block.tool.id}:${block.tool.isComplete}`, item, (a, b) =>
+									a.type === "tool" && b.type === "tool" &&
+									a.tool.id === b.tool.id && a.tool.isComplete === b.tool.isComplete &&
+									a.tool.output === b.tool.output
+								)
+							)
 							renderedToolIds.add(block.tool.id)
 						}
 					}
@@ -127,24 +172,44 @@ export function buildContentItems(
 			} else {
 				// Fallback: legacy format without contentBlocks
 				if (thinkingVisible && msg.thinking) {
-					items.push({
+					const item: ContentItem = {
 						type: "thinking",
 						id: `thinking-${msg.id}`,
 						summary: msg.thinking.summary,
 						full: msg.thinking.full,
 						isStreaming: msg.isStreaming,
-					})
+					}
+					items.push(
+						getCachedItem(`thinking:${msg.id}`, item, (a, b) =>
+							a.type === "thinking" && b.type === "thinking" &&
+							a.full === b.full && a.isStreaming === b.isStreaming
+						)
+					)
 				}
 
 				for (const tool of msg.tools || []) {
 					if (!renderedToolIds.has(tool.id)) {
-						items.push({ type: "tool", tool })
+						const item: ContentItem = { type: "tool", tool }
+						items.push(
+							getCachedItem(`tool:${tool.id}:${tool.isComplete}`, item, (a, b) =>
+								a.type === "tool" && b.type === "tool" &&
+								a.tool.id === b.tool.id && a.tool.isComplete === b.tool.isComplete &&
+								a.tool.output === b.tool.output
+							)
+						)
 						renderedToolIds.add(tool.id)
 					}
 				}
 
 				if (msg.content) {
-					items.push({ type: "assistant", content: msg.content, isStreaming: msg.isStreaming })
+					const item: ContentItem = { type: "assistant", content: msg.content, isStreaming: msg.isStreaming }
+					const contentKey = msg.isStreaming ? msg.content.length : "final"
+					items.push(
+						getCachedItem(`text:${msg.id}:${contentKey}`, item, (a, b) =>
+							a.type === "assistant" && b.type === "assistant" &&
+							a.content === b.content && a.isStreaming === b.isStreaming
+						)
+					)
 				}
 			}
 
@@ -152,7 +217,14 @@ export function buildContentItems(
 			if (isLastMessage) {
 				for (const tool of toolBlocks) {
 					if (!renderedToolIds.has(tool.id)) {
-						items.push({ type: "tool", tool })
+						const item: ContentItem = { type: "tool", tool }
+						items.push(
+							getCachedItem(`tool:${tool.id}:${tool.isComplete}`, item, (a, b) =>
+								a.type === "tool" && b.type === "tool" &&
+								a.tool.id === b.tool.id && a.tool.isComplete === b.tool.isComplete &&
+								a.tool.output === b.tool.output
+							)
+						)
 						renderedToolIds.add(tool.id)
 					}
 				}
@@ -160,8 +232,6 @@ export function buildContentItems(
 		}
 	}
 
-	cachedKey = key
-	cachedItems = items
 	return items
 }
 

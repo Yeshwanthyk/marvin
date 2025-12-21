@@ -2,7 +2,7 @@
  * OpenTUI-native rendering components for tool output.
  */
 
-import { CodeBlock, Diff, TextAttributes, useTheme, type MouseEvent } from "@marvin-agents/open-tui"
+import { CodeBlock, Diff, TextAttributes, useTheme, parseColor, type MouseEvent, type Theme } from "@marvin-agents/open-tui"
 import { Show, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
 import { getToolText, getEditDiffText } from "./utils.js"
@@ -19,6 +19,31 @@ const shortenPath = (p: string): string => {
 	const home = process.env.HOME || process.env.USERPROFILE || ""
 	if (home && p.startsWith(home)) return "~" + p.slice(home.length)
 	return p
+}
+
+// Simple diff preview with manual line coloring (tree-sitter lacks diff grammar)
+const diffAddedColor = parseColor("#98c379")
+const diffRemovedColor = parseColor("#e06c75")
+const diffHunkColor = parseColor("#61afef")
+
+function DiffPreview(props: { text: string }): JSX.Element {
+	const { theme } = useTheme()
+
+	const coloredLines = () => props.text.split("\n").map((line, i) => {
+		let fg = theme.text
+		if (line.startsWith("+") && !line.startsWith("+++")) fg = diffAddedColor
+		else if (line.startsWith("-") && !line.startsWith("---")) fg = diffRemovedColor
+		else if (line.startsWith("@@")) fg = diffHunkColor
+		return { line, fg, key: i }
+	})
+
+	return (
+		<box flexDirection="column" backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+			{coloredLines().map(({ line, fg, key }) => (
+				<text fg={fg}>{line}</text>
+			))}
+		</box>
+	)
 }
 
 
@@ -97,6 +122,13 @@ export interface ToolBlockProps {
 	expanded?: boolean
 	onToggleExpanded?: () => void
 	diffWrapMode?: "word" | "none"
+	// Custom tool metadata
+	label?: string
+	source?: "builtin" | "custom"
+	sourcePath?: string
+	result?: { content: any[]; details: any }
+	renderCall?: (args: any, theme: Theme) => JSX.Element
+	renderResult?: (result: any, opts: { expanded: boolean; isPartial: boolean }, theme: Theme) => JSX.Element
 }
 
 type ToolRenderMode = "inline" | "block"
@@ -267,13 +299,13 @@ const registry: Record<string, ToolRenderer> = {
 				if (ctx.expanded) {
 					if (diffLines > 150) {
 						const truncated = truncateHeadTail(ctx.editDiff, 60, 40)
-						return <CodeBlock content={truncated.text} filetype="diff" showLineNumbers={false} wrapMode="none" />
+						return <DiffPreview text={truncated.text} />
 					}
 					return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode={ctx.diffWrapMode} />
 				} else {
-					// Collapsed: show compact diff preview (first 10 lines)
+					// Collapsed: simple colored preview (Diff component fails on truncated hunks)
 					const truncated = truncateLines(ctx.editDiff, 10)
-					return <Diff diffText={truncated.text} filetype={filetype} wrapMode={ctx.diffWrapMode} />
+					return <DiffPreview text={truncated.text} />
 				}
 			}
 			if (!ctx.output && !ctx.isComplete) return <text fg={theme.textMuted}>editing…</text>
@@ -308,23 +340,42 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 		},
 	}
 
+	// Custom tool rendering: prefer tool-provided renderers, fallback to registry
+	const tryCustomRenderCall = (): JSX.Element | null => {
+		if (!props.renderCall) return null
+		try {
+			return props.renderCall(props.args, theme)
+		} catch {
+			return null // Fallback to default on error
+		}
+	}
+
+	const tryCustomRenderResult = (): JSX.Element | null => {
+		if (!props.renderResult || !props.result) return null
+		try {
+			return props.renderResult(props.result, { expanded: props.expanded ?? false, isPartial: !props.isComplete }, theme)
+		} catch {
+			return null // Fallback to default on error
+		}
+	}
+
 	// Use functions to ensure reactivity
 	const mode = () => renderer.mode(ctx)
-	const header = () => renderer.renderHeader?.(ctx) ?? defaultHeader(ctx)
-	const body = () => renderer.renderBody?.(ctx)
+	const header = () => tryCustomRenderCall() ?? renderer.renderHeader?.(ctx) ?? defaultHeader(ctx)
+	const body = () => tryCustomRenderResult() ?? renderer.renderBody?.(ctx)
 
 	return (
 		<Show when={mode() === "inline"} fallback={
-			// Block layout
-			<box flexDirection="column" gap={0}>
-				<box
-					flexDirection="row"
-					gap={1}
-					onMouseUp={(e: MouseEvent) => {
-						if (e.isSelecting) return
-						props.onToggleExpanded?.()
-					}}
-				>
+			// Block layout - entire block is clickable to toggle
+			<box
+				flexDirection="column"
+				gap={0}
+				onMouseUp={(e: MouseEvent) => {
+					if (e.isSelecting) return
+					props.onToggleExpanded?.()
+				}}
+			>
+				<box flexDirection="row" gap={1}>
 					{header()}
 					<Show when={!props.expanded && props.isComplete}>
 						<text selectable={false} fg={theme.textMuted}>▾</text>

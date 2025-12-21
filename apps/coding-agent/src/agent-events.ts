@@ -4,11 +4,23 @@
 
 import { batch } from "solid-js"
 import type { AgentEvent, AppMessage } from "@marvin-agents/agent-core"
-import type { AssistantMessage, ToolResultMessage } from "@marvin-agents/ai"
+import type { AgentToolResult, AssistantMessage, ToolResultMessage } from "@marvin-agents/ai"
+import type { Theme } from "@marvin-agents/open-tui"
+import type { JSX } from "solid-js"
 import type { SessionManager } from "./session-manager.js"
 import type { UIMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
 import { extractText, extractThinking, extractOrderedBlocks, getToolText, getEditDiffText } from "./utils.js"
 import type { HookRunner } from "./hooks/index.js"
+import type { RenderResultOptions } from "./custom-tools/types.js"
+
+/** Tool metadata for UI rendering */
+export interface ToolMeta {
+	label: string
+	source: "builtin" | "custom"
+	sourcePath?: string
+	renderCall?: (args: any, theme: Theme) => JSX.Element
+	renderResult?: (result: AgentToolResult<any>, opts: RenderResultOptions, theme: Theme) => JSX.Element
+}
 
 export interface EventHandlerContext {
 	// State setters
@@ -43,18 +55,80 @@ export interface EventHandlerContext {
 
 	// Hook runner for lifecycle events (optional for backwards compat)
 	hookRunner?: HookRunner
+
+	// Tool metadata registry for custom tool rendering
+	toolByName?: Map<string, ToolMeta>
 }
 
 export type AgentEventHandler = ((event: AgentEvent) => void) & { dispose: () => void }
 
-const UPDATE_THROTTLE_MS = 32 // ~30fps for UI updates
+const UPDATE_THROTTLE_MS = 80 // ~12fps during streaming (reduced from 32ms)
 const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
+
+/** Incremental extraction cache - avoids re-parsing entire content array each update */
+interface ExtractionCache {
+	// Track processed content length for incremental updates
+	lastContentLength: number
+	// Accumulated extracted values
+	text: string
+	thinking: { summary: string; full: string } | null
+	orderedBlocks: ReturnType<typeof extractOrderedBlocks>
+	// For thinking block ID generation
+	thinkingCounter: number
+}
+
+function createExtractionCache(): ExtractionCache {
+	return { lastContentLength: 0, text: "", thinking: null, orderedBlocks: [], thinkingCounter: 0 }
+}
+
+/** Incrementally extract new content blocks, appending to cached results */
+function extractIncremental(content: unknown[], cache: ExtractionCache): ExtractionCache {
+	const len = content.length
+	if (len === cache.lastContentLength) return cache // No change
+
+	// Process only new blocks
+	let text = cache.text
+	let thinking = cache.thinking
+	const orderedBlocks = cache.orderedBlocks.slice() // Clone for mutation
+	let thinkingCounter = cache.thinkingCounter
+
+	for (let i = cache.lastContentLength; i < len; i++) {
+		const block = content[i]
+		if (typeof block !== "object" || block === null) continue
+		const b = block as Record<string, unknown>
+
+		if (b.type === "text" && typeof b.text === "string") {
+			text += b.text
+			// Merge with last text block or add new
+			const lastBlock = orderedBlocks[orderedBlocks.length - 1]
+			if (lastBlock?.type === "text") {
+				(lastBlock as { type: "text"; text: string }).text += b.text
+			} else {
+				orderedBlocks.push({ type: "text", text: b.text })
+			}
+		} else if (b.type === "thinking" && typeof b.thinking === "string") {
+			const full = b.thinking
+			const lines = full.trim().split("\n").filter((l) => l.trim().length > 20)
+			const summary = lines[0]?.trim().slice(0, 80) || full.trim().slice(0, 80)
+			const truncated = summary.length >= 80 ? summary + "..." : summary
+			thinking = { summary: truncated, full }
+			orderedBlocks.push({ type: "thinking", id: `thinking-${thinkingCounter++}`, summary: truncated, full })
+		} else if (b.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string") {
+			orderedBlocks.push({ type: "toolCall", id: b.id, name: b.name, args: b.arguments ?? {} })
+		}
+	}
+
+	return { lastContentLength: len, text, thinking, orderedBlocks, thinkingCounter }
+}
 
 export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHandler {
 	let pendingUpdate: Extract<AgentEvent, { type: "message_update" }> | null = null
 	let updateTimeout: ReturnType<typeof setTimeout> | null = null
 	let disposed = false
 	let turnIndex = 0
+	
+	// Incremental extraction cache - reset on new message
+	let extractionCache = createExtractionCache()
 	
 	// Tool update throttling - track pending updates per tool
 	const pendingToolUpdates = new Map<string, Extract<AgentEvent, { type: "tool_execution_update" }>>()
@@ -64,17 +138,48 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		disposed = true
 		pendingUpdate = null
 		pendingToolUpdates.clear()
+		extractionCache = createExtractionCache()
 		if (updateTimeout) clearTimeout(updateTimeout)
 		if (toolUpdateTimeout) clearTimeout(toolUpdateTimeout)
 		updateTimeout = null
 		toolUpdateTimeout = null
 	}
 
+	// Inline update handler - accesses extractionCache from closure
+	const handleMessageUpdate = (ev: Extract<AgentEvent, { type: "message_update" }>) => {
+		const content = ev.message.content as unknown[]
+		
+		// Use incremental extraction - only processes new blocks
+		extractionCache = extractIncremental(content, extractionCache)
+		const { text, thinking, orderedBlocks } = extractionCache
+
+		// Convert ordered blocks to UIContentBlocks
+		const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
+			if (block.type === "thinking") {
+				return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
+			} else if (block.type === "text") {
+				return { type: "text" as const, text: block.text }
+			} else {
+				return {
+					type: "tool" as const,
+					tool: { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
+				}
+			}
+		})
+
+		updateStreamingMessage(ctx, (msg) => {
+			const nextThinking = thinking || msg.thinking
+			return { ...msg, content: text, thinking: nextThinking, contentBlocks }
+		})
+
+		if (thinking && !text) ctx.setActivityState("thinking")
+	}
+	
 	const flushPendingUpdate = () => {
 		if (!pendingUpdate) return
 		const event = pendingUpdate
 		pendingUpdate = null
-		handleMessageUpdateImmediate(event, ctx)
+		handleMessageUpdate(event)
 	}
 
 	const scheduleUpdate = () => {
@@ -109,6 +214,7 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		// Emit hook events for agent lifecycle (fire-and-forget)
 		if (event.type === "agent_start") {
 			turnIndex = 0
+			extractionCache = createExtractionCache() // Reset for new agent run
 			void ctx.hookRunner?.emit({ type: "agent.start" })
 		}
 
@@ -127,7 +233,7 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		}
 
 		if (event.type === "message_start") {
-			handleMessageStart(event, ctx)
+			handleMessageStart(event, ctx, { current: extractionCache, set: (c) => { extractionCache = c } })
 		}
 
 		if (event.type === "message_update" && event.message.role === "assistant") {
@@ -206,7 +312,8 @@ function updateStreamingMessage(ctx: EventHandlerContext, updater: (msg: UIMessa
 
 function handleMessageStart(
 	event: Extract<AgentEvent, { type: "message_start" }>,
-	ctx: EventHandlerContext
+	ctx: EventHandlerContext,
+	cache: { current: ExtractionCache; set: (c: ExtractionCache) => void }
 ): void {
 	// Handle queued user message being processed
 	if (event.message.role === "user") {
@@ -230,6 +337,7 @@ function handleMessageStart(
 	// Create streaming assistant message
 	if (event.message.role === "assistant") {
 		ctx.streamingMessageId.current = crypto.randomUUID()
+		cache.current = createExtractionCache() // Reset cache for new message
 		batch(() => {
 			ctx.setActivityState("streaming")
 			ctx.setMessages((prev) => [
@@ -245,38 +353,6 @@ function handleMessageStart(
 			])
 		})
 	}
-}
-
-function handleMessageUpdateImmediate(
-	event: Extract<AgentEvent, { type: "message_update" }>,
-	ctx: EventHandlerContext
-): void {
-	const content = event.message.content as unknown[]
-	const text = extractText(content)
-	const thinking = extractThinking(content)
-	const orderedBlocks = extractOrderedBlocks(content)
-
-	// Convert ordered blocks to UIContentBlocks, preserving order
-	const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
-		if (block.type === "thinking") {
-			return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
-		} else if (block.type === "text") {
-			return { type: "text" as const, text: block.text }
-		} else {
-			// toolCall - create a stub tool block
-			return {
-				type: "tool" as const,
-				tool: { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
-			}
-		}
-	})
-
-	updateStreamingMessage(ctx, (msg) => {
-		const nextThinking = thinking || msg.thinking
-		return { ...msg, content: text, thinking: nextThinking, contentBlocks }
-	})
-
-	if (thinking && !text) ctx.setActivityState("thinking")
 }
 
 function handleMessageEnd(
@@ -341,12 +417,22 @@ function handleToolStart(
 	ctx: EventHandlerContext
 ): void {
 	ctx.setActivityState("tool")
+
+	// Attach tool metadata from registry if available
+	const meta = ctx.toolByName?.get(event.toolName)
+
 	const newTool: ToolBlock = {
 		id: event.toolCallId,
 		name: event.toolName,
 		args: event.args,
 		isError: false,
 		isComplete: false,
+		// Attach metadata for custom rendering
+		label: meta?.label,
+		source: meta?.source,
+		sourcePath: meta?.sourcePath,
+		renderCall: meta?.renderCall,
+		renderResult: meta?.renderResult,
 	}
 
 	updateStreamingMessage(ctx, (msg) => ({
@@ -366,12 +452,14 @@ function handleToolUpdateImmediate(
 	const updateTool = (tools: ToolBlock[]) =>
 		tools.map((t) =>
 			t.id === event.toolCallId
-				? { ...t, output: getToolText(event.partialResult) }
+				? { ...t, output: getToolText(event.partialResult), result: event.partialResult }
 				: t
 		)
 
 	const toolUpdater = (t: ToolBlock) =>
-		t.id === event.toolCallId ? { ...t, output: getToolText(event.partialResult) } : t
+		t.id === event.toolCallId
+			? { ...t, output: getToolText(event.partialResult), result: event.partialResult }
+			: t
 
 	ctx.setToolBlocks(updateTool)
 	updateStreamingMessage(ctx, (msg) => ({
@@ -394,6 +482,7 @@ function handleToolEnd(
 						editDiff: getEditDiffText(event.result) || undefined,
 						isError: event.isError,
 						isComplete: true,
+						result: event.result,
 					}
 				: t
 		)
@@ -404,6 +493,7 @@ function handleToolEnd(
 		editDiff: getEditDiffText(event.result) || undefined,
 		isError: event.isError,
 		isComplete: true,
+		result: event.result,
 	})
 
 	ctx.setToolBlocks(updateTool)

@@ -92,8 +92,8 @@ describe("createAgentEventHandler", () => {
 				},
 			} as AgentEvent)
 
-			// Wait for throttled update (32ms throttle + buffer)
-			await new Promise((r) => setTimeout(r, 50))
+			// Wait for throttled update (80ms throttle + buffer)
+			await new Promise((r) => setTimeout(r, 100))
 			expect(ctx.setMessages).toHaveBeenCalled()
 		})
 
@@ -110,8 +110,8 @@ describe("createAgentEventHandler", () => {
 				},
 			} as AgentEvent)
 
-			// Wait for throttled update (32ms throttle + buffer)
-			await new Promise((r) => setTimeout(r, 50))
+			// Wait for throttled update (80ms throttle + buffer)
+			await new Promise((r) => setTimeout(r, 100))
 			expect(ctx.setActivityState).toHaveBeenCalledWith("thinking")
 		})
 	})

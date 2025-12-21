@@ -22,6 +22,11 @@ export interface UIMessage {
 	timestamp?: number
 }
 
+import type { AgentToolResult } from "@marvin-agents/ai"
+import type { Theme } from "@marvin-agents/open-tui"
+import type { JSX } from "solid-js"
+import type { RenderResultOptions } from "./custom-tools/types.js"
+
 export interface ToolBlock {
 	id: string
 	name: string
@@ -30,6 +35,13 @@ export interface ToolBlock {
 	editDiff?: string
 	isError: boolean
 	isComplete: boolean
+	// Custom tool metadata
+	label?: string
+	source?: "builtin" | "custom"
+	sourcePath?: string
+	result?: AgentToolResult<any>
+	renderCall?: (args: any, theme: Theme) => JSX.Element
+	renderResult?: (result: AgentToolResult<any>, opts: RenderResultOptions, theme: Theme) => JSX.Element
 }
 
 export type ActivityState = "idle" | "thinking" | "streaming" | "tool"
