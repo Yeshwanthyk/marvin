@@ -11,6 +11,7 @@ const MAX_DIFF_LINES = 200;
 /**
  * Build a synthetic unified diff hunk from known replacement location.
  * Avoids O(n*d) Myers diff by using the known edit position.
+ * Handles intra-line edits correctly by computing affected line ranges.
  */
 function buildTargetedDiff(
 	path: string,
@@ -22,41 +23,62 @@ function buildTargetedDiff(
 ): string {
 	const lines = fullContent.split("\n");
 	
-	// Find line number where replacement starts
+	// Find line/col where replacement starts
 	let charCount = 0;
 	let startLine = 0;
+	let startCol = 0;
 	for (let i = 0; i < lines.length; i++) {
-		if (charCount + lines[i].length >= replaceIndex) {
+		const lineLen = lines[i].length;
+		if (charCount + lineLen >= replaceIndex) {
 			startLine = i;
+			startCol = replaceIndex - charCount;
 			break;
 		}
-		charCount += lines[i].length + 1; // +1 for newline
+		charCount += lineLen + 1; // +1 for newline
 	}
 	
-	// Count lines in old/new text
-	const oldLines = oldText.split("\n");
-	const newLines = newText.split("\n");
+	// Find line where replacement ends
+	const endIndex = replaceIndex + oldText.length;
+	let endLine = startLine;
+	let endCol = startCol + oldText.length;
+	charCount = 0;
+	for (let i = 0; i < lines.length; i++) {
+		const lineLen = lines[i].length;
+		if (charCount + lineLen >= endIndex) {
+			endLine = i;
+			endCol = endIndex - charCount;
+			break;
+		}
+		charCount += lineLen + 1;
+	}
+	
+	// Extract the actual affected old lines (full lines from file)
+	const affectedOldLines = lines.slice(startLine, endLine + 1);
+	
+	// Build the new lines by splicing replacement into affected range
+	const prefix = affectedOldLines[0].substring(0, startCol);
+	const suffix = affectedOldLines[affectedOldLines.length - 1].substring(endCol);
+	const replaced = prefix + newText + suffix;
+	const affectedNewLines = replaced.split("\n");
 	
 	// Check if diff would be too large
-	const totalDiffLines = oldLines.length + newLines.length + contextLines * 2;
+	const totalDiffLines = affectedOldLines.length + affectedNewLines.length + contextLines * 2;
 	if (totalDiffLines > MAX_DIFF_LINES) {
-		// Return truncated summary diff
 		const header = `--- ${path}\n+++ ${path}\n`;
-		const summary = `@@ -${startLine + 1},${oldLines.length} +${startLine + 1},${newLines.length} @@\n`;
-		const truncateMsg = `\\ Diff truncated: ${oldLines.length} lines removed, ${newLines.length} lines added\n`;
+		const summary = `@@ -${startLine + 1},${affectedOldLines.length} +${startLine + 1},${affectedNewLines.length} @@\n`;
+		const truncateMsg = `\\ Diff truncated: ${affectedOldLines.length} lines → ${affectedNewLines.length} lines\n`;
 		
-		// Show first few and last few lines
 		const showLines = 5;
-		const oldPreview = oldLines.length <= showLines * 2
-			? oldLines.map(l => `-${l}`).join("\n")
-			: [...oldLines.slice(0, showLines).map(l => `-${l}`),
-			   `-... (${oldLines.length - showLines * 2} more lines)`,
-			   ...oldLines.slice(-showLines).map(l => `-${l}`)].join("\n");
-		const newPreview = newLines.length <= showLines * 2
-			? newLines.map(l => `+${l}`).join("\n")
-			: [...newLines.slice(0, showLines).map(l => `+${l}`),
-			   `+... (${newLines.length - showLines * 2} more lines)`,
-			   ...newLines.slice(-showLines).map(l => `+${l}`)].join("\n");
+		const oldPreview = affectedOldLines.length <= showLines * 2
+			? affectedOldLines.map(l => `-${l}`).join("\n")
+			: [...affectedOldLines.slice(0, showLines).map(l => `-${l}`),
+			   `-... (${affectedOldLines.length - showLines * 2} more lines)`,
+			   ...affectedOldLines.slice(-showLines).map(l => `-${l}`)].join("\n");
+		const newPreview = affectedNewLines.length <= showLines * 2
+			? affectedNewLines.map(l => `+${l}`).join("\n")
+			: [...affectedNewLines.slice(0, showLines).map(l => `+${l}`),
+			   `+... (${affectedNewLines.length - showLines * 2} more lines)`,
+			   ...affectedNewLines.slice(-showLines).map(l => `+${l}`)].join("\n");
 		
 		return header + summary + truncateMsg + oldPreview + "\n" + newPreview;
 	}
@@ -65,20 +87,20 @@ function buildTargetedDiff(
 	const ctxStart = Math.max(0, startLine - contextLines);
 	const beforeCtx = lines.slice(ctxStart, startLine).map(l => ` ${l}`);
 	
-	// Build removed/added lines
-	const removed = oldLines.map(l => `-${l}`);
-	const added = newLines.map(l => `+${l}`);
+	// Build removed/added lines (full affected lines)
+	const removed = affectedOldLines.map(l => `-${l}`);
+	const added = affectedNewLines.map(l => `+${l}`);
 	
 	// Build context after
-	const endLine = startLine + oldLines.length;
-	const ctxEnd = Math.min(lines.length, endLine + contextLines);
-	const afterCtx = lines.slice(endLine, ctxEnd).map(l => ` ${l}`);
+	const afterStart = endLine + 1;
+	const ctxEnd = Math.min(lines.length, afterStart + contextLines);
+	const afterCtx = lines.slice(afterStart, ctxEnd).map(l => ` ${l}`);
 	
 	// Build unified diff header
 	const oldStart = ctxStart + 1;
-	const oldCount = beforeCtx.length + oldLines.length + afterCtx.length;
+	const oldCount = beforeCtx.length + affectedOldLines.length + afterCtx.length;
 	const newStart = ctxStart + 1;
-	const newCount = beforeCtx.length + newLines.length + afterCtx.length;
+	const newCount = beforeCtx.length + affectedNewLines.length + afterCtx.length;
 	
 	const header = `--- ${path}\n+++ ${path}\n`;
 	const hunkHeader = `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@\n`;
@@ -160,14 +182,16 @@ export const editTool: AgentTool<typeof editSchema> = {
 						return;
 					}
 
-					const occurrences = content.split(oldText).length - 1;
-					if (occurrences > 1) {
+						// Check uniqueness with indexOf (avoids split allocation explosion)
+					const firstIndex = content.indexOf(oldText);
+					const secondIndex = content.indexOf(oldText, firstIndex + 1);
+					if (secondIndex !== -1) {
 						if (signal) {
 							signal.removeEventListener("abort", onAbort);
 						}
 						reject(
 							new Error(
-								`Found ${occurrences} occurrences of the text in ${path}. The text must be unique. Please provide more context to make it unique.`,
+								`Found multiple occurrences of the text in ${path}. The text must be unique. Please provide more context to make it unique.`,
 							),
 						);
 						return;
