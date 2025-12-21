@@ -267,21 +267,29 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 	// Get file/directory suggestions for a given path prefix
 	private getFileSuggestions(prefix: string): AutocompleteItem[] {
 		try {
-			let searchDir: string;
-			let searchPrefix: string;
 			let expandedPrefix = prefix;
 			let isAtPrefix = false;
 
 			// Handle @ file attachment prefix
 			if (prefix.startsWith("@")) {
 				isAtPrefix = true;
-				expandedPrefix = prefix.slice(1); // Remove the @
+				expandedPrefix = prefix.slice(1);
 			}
 
 			// Handle home directory expansion
 			if (expandedPrefix.startsWith("~")) {
 				expandedPrefix = this.expandHomePath(expandedPrefix);
 			}
+
+			// For relative paths, use index-backed fuzzy search (respects .gitignore)
+			const isAbsoluteOrHome = expandedPrefix.startsWith("/") || prefix.startsWith("~");
+			if (!isAbsoluteOrHome) {
+				return this.getFuzzyFileSuggestions(expandedPrefix);
+			}
+
+			// Fall through to readdirSync for absolute/home paths
+			let searchDir: string;
+			let searchPrefix: string;
 
 			if (
 				expandedPrefix === "" ||

@@ -433,9 +433,13 @@ function MainView(props: MainViewProps) {
 		if (!showAutocomplete() || !textareaRef) return false
 		const items = autocompleteItems(), idx = autocompleteIndex()
 		if (idx < 0 || idx >= items.length) return false
-		const text = textareaRef.plainText, lines = text.split("\n"), cursorLine = lines.length - 1
-		const result = autocompleteProvider.applyCompletion(lines, cursorLine, lines[cursorLine]?.length ?? 0, items[idx]!, autocompletePrefix())
-		textareaRef.setText(result.lines.join("\n")); setShowAutocomplete(false); setAutocompleteItems([]); return true
+		const cursor = textareaRef.logicalCursor
+		const text = textareaRef.plainText, lines = text.split("\n")
+		const result = autocompleteProvider.applyCompletion(lines, cursor.row, cursor.col, items[idx]!, autocompletePrefix())
+		textareaRef.replaceText(result.lines.join("\n"))
+		textareaRef.editBuffer.setCursorToLineCol(result.cursorLine, result.cursorCol)
+		setShowAutocomplete(false); setAutocompleteItems([])
+		return true
 	}
 
 	// Git branch & Spinner
@@ -513,7 +517,8 @@ function MainView(props: MainViewProps) {
 				<box flexDirection="column" border={["top"]} borderColor={theme.border} paddingLeft={2} maxHeight={8} flexShrink={0}>
 					<For each={autocompleteItems()}>{(item, i) => {
 						const isSelected = createMemo(() => i() === autocompleteIndex())
-						return <text fg={isSelected() ? theme.primary : theme.text}>{isSelected() ? "→ " : "  "}{item.label}{item.description ? `  ${item.description}` : ""}</text>
+						const desc = item.description && item.description !== item.label ? (item.description.length > 50 ? "…" + item.description.slice(-49) : item.description) : ""
+						return <text fg={isSelected() ? theme.primary : theme.text}>{isSelected() ? "→ " : "  "}{item.label}<text fg={theme.textMuted}>{desc ? `  ${desc}` : ""}</text></text>
 					}}</For>
 				</box>
 			</Show>
@@ -523,7 +528,7 @@ function MainView(props: MainViewProps) {
 						{ name: "backspace", action: "backspace" as const }, { name: "delete", action: "delete" as const }, { name: "a", ctrl: true, action: "line-home" as const }, { name: "e", ctrl: true, action: "line-end" as const },
 						{ name: "k", ctrl: true, action: "delete-to-line-end" as const }, { name: "u", ctrl: true, action: "delete-to-line-start" as const }, { name: "w", ctrl: true, action: "delete-word-backward" as const }]}
 					onKeyDown={handleKeyDown}
-					onContentChange={() => { if (textareaRef) { const text = textareaRef.plainText; if (!text.startsWith("/") && !text.includes("@")) { setShowAutocomplete(false); return }; const lines = text.split("\n"); updateAutocomplete(text, lines.length - 1, lines[lines.length - 1]?.length ?? 0) } }}
+					onContentChange={() => { if (textareaRef) { const text = textareaRef.plainText; if (!text.startsWith("/") && !text.includes("@")) { setShowAutocomplete(false); return }; const cursor = textareaRef.logicalCursor; updateAutocomplete(text, cursor.row, cursor.col) } }}
 					onSubmit={() => { if (textareaRef) { const ref = textareaRef; props.onSubmit(ref.plainText, () => ref.clear()) } }} />
 			</box>
 			<Footer modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
