@@ -389,7 +389,8 @@ function handleMessageEnd(
 	// Save message to session
 	ctx.sessionManager.appendMessage(event.message as AppMessage)
 
-	// Update usage
+	// Update usage - total context includes input + output + cache
+	// Output is included because it becomes part of input history for next request
 	const msg = event.message as { usage?: { input: number; output: number; cacheRead: number; cacheWrite?: number } }
 	if (msg.usage) {
 		const tokens = msg.usage.input + msg.usage.output + msg.usage.cacheRead + (msg.usage.cacheWrite || 0)
