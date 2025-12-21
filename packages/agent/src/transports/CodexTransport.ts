@@ -4,6 +4,7 @@ import {
 	agentLoop,
 	agentLoopContinue,
 	type Message,
+	type Model,
 	type UserMessage,
 } from "@marvin-agents/ai";
 import type { AgentRunConfig, AgentTransport } from "./types.js";
@@ -43,6 +44,29 @@ export class CodexTransport implements AgentTransport {
 	/** Get the custom fetch for direct API calls (compaction, etc.) */
 	getFetch(): FetchFn {
 		return this.customFetch;
+	}
+
+	/**
+	 * Build a correctly-shaped OpenAI Responses config for one-off calls (e.g. /compact).
+	 * Mirrors the model/option overrides used in `run()`.
+	 */
+	async getDirectCallConfig(baseModel: Model<any>) {
+		const { compat: _compat, ...rest } = baseModel as Model<any>;
+		const model: Model<"openai-responses"> = {
+			...(rest as Omit<Model<any>, "compat">),
+			baseUrl: "https://api.openai.com/v1",
+			provider: "openai" as const,
+			api: "openai-responses" as const,
+		};
+
+		const instructions = await this.getInstructions();
+
+		return {
+			model,
+			apiKey: "codex-oauth" as const,
+			fetch: this.customFetch,
+			instructions,
+		};
 	}
 
 	private async getInstructions(): Promise<string> {

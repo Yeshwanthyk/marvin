@@ -60,15 +60,20 @@ export async function handleCompact(opts: CompactOptions): Promise<CompactResult
     },
   ];
 
-  // Generate summary - use codex fetch for OAuth, regular API key otherwise
-  const isCodex = currentProvider === 'codex';
+  // Generate summary - Codex needs model overrides + instructions (like normal agent turns)
+  const isCodex = currentProvider === 'codex' || model.provider === 'codex';
+
+  const direct = isCodex ? await codexTransport.getDirectCallConfig(model) : null;
+  const callModel = direct?.model ?? model;
+
   const response = await completeSimple(
-    model,
+    callModel,
     { messages: summarizationMessages },
     {
       maxTokens: 8192,
-      apiKey: isCodex ? 'codex-oauth' : getApiKey(currentProvider),
-      fetch: isCodex ? codexTransport.getFetch() : undefined,
+      apiKey: direct?.apiKey ?? getApiKey(callModel.provider),
+      fetch: direct?.fetch,
+      instructions: direct?.instructions,
     },
   );
 
