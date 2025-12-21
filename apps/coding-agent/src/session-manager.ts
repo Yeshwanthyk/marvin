@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFile } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import type { AppMessage, ThinkingLevel } from '@marvin-agents/agent-core';
@@ -95,7 +95,7 @@ export class SessionManager {
   }
 
   /**
-   * Append a message to the current session
+   * Append a message to the current session (async, non-blocking)
    */
   appendMessage(message: AppMessage): void {
     if (!this.currentSessionPath) return;
@@ -106,7 +106,10 @@ export class SessionManager {
       message,
     };
 
-    appendFileSync(this.currentSessionPath, JSON.stringify(entry) + '\n');
+    // Fire-and-forget async write - errors logged but don't block UI
+    appendFile(this.currentSessionPath, JSON.stringify(entry) + '\n', (err) => {
+      if (err) console.error('Session write error:', err.message);
+    });
   }
 
   /**

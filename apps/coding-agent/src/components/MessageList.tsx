@@ -72,11 +72,24 @@ function ThinkingBlockWrapper(props: {
 
 // ----- Content Items Builder -----
 
+// Cache key for memoization
+let cachedKey = ""
+let cachedItems: ContentItem[] = []
+
 export function buildContentItems(
 	messages: UIMessage[],
 	toolBlocks: ToolBlock[],
 	thinkingVisible: boolean
 ): ContentItem[] {
+	// Build a cache key from message IDs, streaming states, and tool completion states
+	const keyParts = [
+		thinkingVisible ? "t" : "f",
+		messages.map(m => `${m.id}:${m.isStreaming ? 1 : 0}:${m.content?.length || 0}`).join(","),
+		toolBlocks.map(t => `${t.id}:${t.isComplete ? 1 : 0}`).join(","),
+	]
+	const key = keyParts.join("|")
+	if (key === cachedKey) return cachedItems
+
 	const items: ContentItem[] = []
 	const renderedToolIds = new Set<string>()
 
@@ -147,6 +160,8 @@ export function buildContentItems(
 		}
 	}
 
+	cachedKey = key
+	cachedItems = items
 	return items
 }
 
