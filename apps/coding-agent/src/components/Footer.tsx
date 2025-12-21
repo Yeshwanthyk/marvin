@@ -16,7 +16,6 @@ export interface FooterProps {
 	queueCount: number
 	activityState: ActivityState
 	retryStatus: string | null
-	gitStats: { ins: number; del: number } | null
 	spinnerFrame: number
 }
 
@@ -59,10 +58,6 @@ export function Footer(props: FooterProps) {
 		}
 	})
 
-	const showGitStats = createMemo(() => {
-		return props.gitStats && (props.gitStats.ins > 0 || props.gitStats.del > 0)
-	})
-
 	return (
 		<box flexDirection="row" justifyContent="space-between" paddingLeft={1} paddingRight={1} flexShrink={0} minHeight={1}>
 			<box flexDirection="row" gap={1}>
@@ -76,12 +71,6 @@ export function Footer(props: FooterProps) {
 				<Show when={contextPct()}>
 					<text fg={theme.textMuted}>·</text>
 					<text fg={contextPct()!.color}>{contextPct()!.text}</text>
-				</Show>
-				<Show when={showGitStats()}>
-					<text fg={theme.textMuted}>·</text>
-					<text fg={theme.success}>+{props.gitStats!.ins}</text>
-					<text fg={theme.textMuted}>/</text>
-					<text fg={theme.error}>-{props.gitStats!.del}</text>
 				</Show>
 				<Show when={props.queueCount > 0}>
 					<text fg={theme.textMuted}>·</text>

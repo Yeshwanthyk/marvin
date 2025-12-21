@@ -31,18 +31,7 @@ export function getCurrentBranch(startDir?: string): string | null {
 	}
 }
 
-export function getGitDiffStats(cwd: string = process.cwd()): { ins: number; del: number } | null {
-	try {
-		const result = spawnSync("git", ["diff", "--shortstat"], { cwd, encoding: "utf8" })
-		const output = (result.stdout || "").trim()
-		if (!output) return { ins: 0, del: 0 }
-		const ins = output.match(/(\d+) insertions?/)?.[1] ?? "0"
-		const del = output.match(/(\d+) deletions?/)?.[1] ?? "0"
-		return { ins: +ins, del: +del }
-	} catch {
-		return null
-	}
-}
+
 
 // ----- Clipboard -----
 

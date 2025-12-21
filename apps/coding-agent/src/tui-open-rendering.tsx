@@ -260,20 +260,26 @@ const registry: Record<string, ToolRenderer> = {
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
-			// Only render diff body when expanded
-			if (!ctx.expanded) return null
 			if (ctx.editDiff) {
 				const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
-				// Size gate: if diff too large, render as plain text
 				const diffLines = ctx.editDiff.split("\n").length
-				if (diffLines > 150) {
-					const truncated = truncateHeadTail(ctx.editDiff, 60, 40)
-					return <CodeBlock content={truncated.text} filetype="diff" showLineNumbers={false} wrapMode="none" />
+				// Show full diff when expanded, truncated preview when collapsed
+				if (ctx.expanded) {
+					if (diffLines > 150) {
+						const truncated = truncateHeadTail(ctx.editDiff, 60, 40)
+						return <CodeBlock content={truncated.text} filetype="diff" showLineNumbers={false} wrapMode="none" />
+					}
+					return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode={ctx.diffWrapMode} />
+				} else {
+					// Collapsed: show compact diff preview (first 10 lines)
+					const truncated = truncateLines(ctx.editDiff, 10)
+					return <Diff diffText={truncated.text} filetype={filetype} wrapMode={ctx.diffWrapMode} />
 				}
-				return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode={ctx.diffWrapMode} />
 			}
 			if (!ctx.output && !ctx.isComplete) return <text fg={theme.textMuted}>editing…</text>
-			return <text fg={ctx.isError ? theme.error : theme.text}>{ctx.output ?? ""}</text>
+			// When expanded, show full output; otherwise show truncated
+			if (ctx.expanded) return <text fg={ctx.isError ? theme.error : theme.text}>{ctx.output ?? ""}</text>
+			return null
 		},
 	},
 }
