@@ -67,6 +67,7 @@ export interface LoadedAppConfig {
   agentsConfig: AgentsConfig;
   configDir: string;
   configPath: string;
+  lsp: { enabled: boolean; autoInstall: boolean };
 }
 
 const isThinkingLevel = (value: unknown): value is ThinkingLevel =>
@@ -171,6 +172,16 @@ export const loadAppConfig = async (options?: {
     ? `${basePrompt}\n\n${agentsConfig.combined}`
     : basePrompt;
 
+  // LSP settings - enabled by default with auto-install
+  const lspRaw = rawObj.lsp;
+  const lsp =
+    lspRaw === false
+      ? { enabled: false, autoInstall: false }
+      : {
+          enabled: typeof (lspRaw as any)?.enabled === 'boolean' ? (lspRaw as any).enabled : true,
+          autoInstall: typeof (lspRaw as any)?.autoInstall === 'boolean' ? (lspRaw as any).autoInstall : true,
+        };
+
   return {
     provider,
     modelId: model.id,
@@ -181,6 +192,7 @@ export const loadAppConfig = async (options?: {
     agentsConfig,
     configDir,
     configPath,
+    lsp,
   };
 };
 
