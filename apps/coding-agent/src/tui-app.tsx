@@ -10,7 +10,7 @@ import { Agent, ProviderTransport, RouterTransport, CodexTransport, loadTokens, 
 import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent-core"
 import { getApiKey, getModels, getProviders, type AgentTool, type Model, type Api } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
-import { createLspManager, wrapToolsWithLspDiagnostics } from "@marvin-agents/lsp"
+import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
 import { loadAppConfig, updateAppConfig } from "./config.js"
 import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/open-tui"
 import { createAutocompleteCommands } from "./autocomplete-commands.js"
@@ -175,7 +175,7 @@ export const runTuiOpen = async (args?: {
 			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking} theme={loaded.theme}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
 			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
-			hookRunner={hookRunner} toolByName={toolByName} />
+			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} />
 	), { targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} })
 }
 
@@ -190,6 +190,7 @@ interface AppProps {
 	customCommands: Map<string, CustomCommand>
 	hookRunner: HookRunner
 	toolByName: Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>
+	lsp: LspManager
 }
 
 function App(props: AppProps) {
@@ -407,7 +408,7 @@ function App(props: AppProps) {
 				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
 				contextTokens={contextTokens()} contextWindow={displayContextWindow()} queueCount={queueCount()} retryStatus={retryStatus()}
 				diffWrapMode={diffWrapMode()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
-				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking} />
+				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking} lsp={props.lsp} />
 		</ThemeProvider>
 	)
 }
@@ -421,6 +422,7 @@ interface MainViewProps {
 	customCommands: Map<string, CustomCommand>
 	onSubmit: (text: string, clearFn?: () => void) => void; onAbort: () => string | null
 	onToggleThinking: () => void; onCycleModel: () => void; onCycleThinking: () => void
+	lsp: LspManager
 }
 
 function MainView(props: MainViewProps) {
@@ -627,7 +629,7 @@ function MainView(props: MainViewProps) {
 					onSubmit={() => { if (textareaRef) { const ref = textareaRef; props.onSubmit(ref.plainText, () => ref.clear()) } }} />
 			</box>
 			<Footer modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
-				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} spinnerFrame={spinnerFrame()} />
+				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
 			<ToastViewport toasts={toasts()} />
 		</box>
 	)
