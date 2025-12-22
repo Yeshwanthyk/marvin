@@ -83,8 +83,10 @@ export function Footer(props: FooterProps) {
   })
 
   // LSP status: show active servers and diagnostic counts
-  // Re-evaluated on each render (driven by spinnerFrame during activity)
+  // Track spinnerFrame (ticks during activity) + activityState (catches idle transition)
   const lspStatus = createMemo(() => {
+    void props.spinnerFrame
+    void props.activityState
     const servers = props.lsp.activeServers()
     if (servers.length === 0) return null
 
