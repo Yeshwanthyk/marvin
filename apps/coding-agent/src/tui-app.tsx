@@ -10,6 +10,7 @@ import { Agent, ProviderTransport, RouterTransport, CodexTransport, loadTokens, 
 import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent-core"
 import { getApiKey, getModels, getProviders, type AgentTool, type Model, type Api } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
+import { createLspManager, wrapToolsWithLspDiagnostics } from "@marvin-agents/lsp"
 import { loadAppConfig, updateAppConfig } from "./config.js"
 import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/open-tui"
 import { createAutocompleteCommands } from "./autocomplete-commands.js"
@@ -92,7 +93,13 @@ export const runTuiOpen = async (args?: {
 
 	// Combine built-in and custom tools, then wrap with hooks for interception
 	const allTools: AgentTool<any, any>[] = [...codingTools, ...customTools.map((t) => t.tool)]
-	const tools = wrapToolsWithHooks(allTools, hookRunner)
+	const lsp = createLspManager({
+		cwd,
+		configDir: loaded.configDir,
+		enabled: loaded.lsp.enabled,
+		autoInstall: loaded.lsp.autoInstall,
+	})
+	const tools = wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunner), lsp, { cwd })
 
 	// Build tool metadata registry for custom rendering
 	const toolByName = new Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>()

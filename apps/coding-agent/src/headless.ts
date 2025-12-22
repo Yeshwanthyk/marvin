@@ -1,6 +1,7 @@
 import { Agent, ProviderTransport, RouterTransport, CodexTransport, loadTokens, saveTokens, clearTokens } from '@marvin-agents/agent-core';
 import { getApiKey, type AgentTool, type Message, type TextContent } from '@marvin-agents/ai';
 import { codingTools } from '@marvin-agents/base-tools';
+import { createLspManager, wrapToolsWithLspDiagnostics } from '@marvin-agents/lsp';
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
 import { loadAppConfig } from './config.js';
 import { loadHooks, HookRunner, wrapToolsWithHooks, type HookError } from './hooks/index.js';
@@ -108,7 +109,13 @@ export const runHeadless = async (args: {
 
   // Combine built-in and custom tools, then wrap with hooks for interception
   const allTools: AgentTool<any, any>[] = [...codingTools, ...customTools.map((t) => t.tool)];
-  const tools = wrapToolsWithHooks(allTools, hookRunner);
+  const lsp = createLspManager({
+    cwd,
+    configDir: loaded.configDir,
+    enabled: loaded.lsp.enabled,
+    autoInstall: loaded.lsp.autoInstall,
+  });
+  const tools = wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunner), lsp, { cwd });
 
   const agent = new Agent({
     transport,
@@ -165,5 +172,7 @@ export const runHeadless = async (args: {
       }) + '\n'
     );
     process.exitCode = 1;
+  } finally {
+    await lsp.shutdown().catch(() => {});
   }
 };
