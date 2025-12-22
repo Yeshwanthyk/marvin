@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import path from "node:path"
 import type { Diagnostic } from "vscode-languageserver-types"
-import type { LspManager, LspManagerOptions, LspSpawnSpec } from "./types.js"
+import type { LspManager, LspManagerOptions, LspSpawnSpec, LspServerStatus, LspDiagnosticCounts, LspServerId } from "./types.js"
 import { serversForFile, languageIdForFile } from "./registry.js"
 import { isWithinDir } from "./path.js"
 import { ensureSpawnSpec } from "./install.js"
@@ -123,11 +123,33 @@ export function createLspManager(options: LspManagerOptions): LspManager {
     await Promise.all(all.map((c) => c.shutdown().catch(() => {})))
   }
 
+  function activeServers(): LspServerStatus[] {
+    const result: LspServerStatus[] = []
+    for (const [key, client] of clients.entries()) {
+      result.push({ serverId: client.serverId as LspServerId, root: client.root })
+    }
+    return result
+  }
+
+  function diagnosticCounts(): LspDiagnosticCounts {
+    let errors = 0
+    let warnings = 0
+    for (const client of clients.values()) {
+      for (const ds of client.diagnostics.values()) {
+        for (const d of ds) {
+          if (d.severity === 1) errors++
+          else if (d.severity === 2) warnings++
+        }
+      }
+    }
+    return { errors, warnings }
+  }
+
   // Ensure cleanup on exit
   const exitHandler = () => { void shutdown() }
   process.once("exit", exitHandler)
   process.once("SIGINT", exitHandler)
   process.once("SIGTERM", exitHandler)
 
-  return { touchFile, diagnostics, shutdown }
+  return { touchFile, diagnostics, shutdown, activeServers, diagnosticCounts }
 }

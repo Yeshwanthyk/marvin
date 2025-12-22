@@ -1,3 +1,3 @@
 export { createLspManager } from "./manager.js"
 export { wrapToolsWithLspDiagnostics } from "./tool-wrapper.js"
-export type { LspManager, LspManagerOptions, LspDiagnosticCaps } from "./types.js"
+export type { LspManager, LspManagerOptions, LspDiagnosticCaps, LspServerId, LspServerStatus, LspDiagnosticCounts } from "./types.js"

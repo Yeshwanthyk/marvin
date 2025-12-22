@@ -16,10 +16,26 @@ export type LspManagerOptions = {
   caps?: Partial<LspDiagnosticCaps>
 }
 
+/** Counts of errors and warnings across all files */
+export type LspDiagnosticCounts = {
+  errors: number
+  warnings: number
+}
+
+/** Status of an active LSP server */
+export type LspServerStatus = {
+  serverId: LspServerId
+  root: string
+}
+
 export interface LspManager {
   touchFile(filePath: string, opts: { waitForDiagnostics: boolean; signal?: AbortSignal }): Promise<void>
   diagnostics(): Promise<Record<string, Diagnostic[]>>
   shutdown(): Promise<void>
+  /** Get list of currently active LSP servers */
+  activeServers(): LspServerStatus[]
+  /** Get current diagnostic counts (errors + warnings) */
+  diagnosticCounts(): LspDiagnosticCounts
 }
 
 export type LspSpawnSpec = {
