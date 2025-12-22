@@ -583,7 +583,7 @@ function MainView(props: MainViewProps) {
 		<box flexDirection="column" width={dimensions().width} height={dimensions().height}
 			onMouseUp={() => { const sel = renderer.getSelection(); if (sel && sel.getSelectedText()) copySelectionToClipboard() }}>
 			<text fg={theme.textMuted}>marvin</text>
-			<scrollbox ref={(r: ScrollBoxRenderable) => { scrollRef = r }} flexGrow={1} flexShrink={1}>
+			<scrollbox ref={(r: ScrollBoxRenderable) => { scrollRef = r }} flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
 				<MessageList messages={props.messages} toolBlocks={props.toolBlocks} thinkingVisible={props.thinkingVisible} diffWrapMode={props.diffWrapMode}
 					isToolExpanded={isToolExpanded} toggleToolExpanded={toggleToolExpanded} isThinkingExpanded={isThinkingExpanded} toggleThinkingExpanded={toggleThinkingExpanded} />
 			</scrollbox>
