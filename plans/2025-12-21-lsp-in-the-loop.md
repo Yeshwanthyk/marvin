@@ -86,7 +86,7 @@ const tools = wrapToolsWithLspDiagnostics(
 ## Phase 1: Add `@marvin-agents/lsp` workspace package
 
 ### Prerequisites
-- [ ] Repo builds clean
+- [x] Repo builds clean
 
 ### Changes
 
@@ -199,7 +199,7 @@ export type { LspManager, LspManagerOptions, LspDiagnosticCaps } from "./types.j
 ```
 
 ### Success Criteria
-- [ ] `bun run typecheck` compiles `packages/lsp`
+- [x] `bun run typecheck` compiles `packages/lsp`
 
 ### Rollback
 ```bash
@@ -212,8 +212,8 @@ rm -rf packages/lsp
 ## Phase 2: Implement LSP core (registry, install, client, manager)
 
 ### Prerequisites
-- [ ] Phase 1 complete
-- [ ] `bun install` succeeds
+- [x] Phase 1 complete
+- [x] `bun install` succeeds
 
 ### Changes
 
@@ -905,13 +905,13 @@ export function createLspManager(options: LspManagerOptions): LspManager {
 ```
 
 ### Edge Cases to Handle
-- [ ] File outside `cwd` → skip diagnostics
-- [ ] Broken server → cooldown avoids respawn loops
-- [ ] Multiple tool calls quickly → singleflight prevents repeated spawns
+- [x] File outside `cwd` → skip diagnostics
+- [x] Broken server → cooldown avoids respawn loops
+- [x] Multiple tool calls quickly → singleflight prevents repeated spawns
 
 ### Success Criteria
-- [ ] `packages/lsp` compiles
-- [ ] Manager can spawn fake client and collect diagnostics (see tests)
+- [x] `packages/lsp` compiles
+- [x] Manager can spawn fake client and collect diagnostics (see tests)
 
 ### Rollback
 ```bash
@@ -923,7 +923,7 @@ git checkout HEAD -- packages/lsp
 ## Phase 3: Diagnostic summarization + tool wrapper
 
 ### Prerequisites
-- [ ] Phase 2 compiles
+- [x] Phase 2 compiles
 
 ### Changes
 
@@ -1065,8 +1065,8 @@ export function wrapToolsWithLspDiagnostics(
 ```
 
 ### Edge Cases to Handle
-- [ ] Preserve `edit` tool `details.diff` exactly (UI relies on it)
-- [ ] Never emit huge diagnostics blocks
+- [x] Preserve `edit` tool `details.diff` exactly (UI relies on it)
+- [x] Never emit huge diagnostics blocks
 
 ### Rollback
 ```bash
@@ -1078,7 +1078,7 @@ git checkout HEAD -- packages/lsp/src/diagnostics.ts packages/lsp/src/tool-wrapp
 ## Phase 4: Wire into Marvin (TUI + headless)
 
 ### Prerequisites
-- [ ] `@marvin-agents/lsp` compiles
+- [x] `@marvin-agents/lsp` compiles
 
 ### Changes
 
@@ -1196,7 +1196,7 @@ const tools = wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunne
 ```
 
 ### Success Criteria
-- [ ] Both headless + TUI append diagnostics after `write`/`edit`
+- [x] Both headless + TUI append diagnostics after `write`/`edit`
 
 ### Rollback
 ```bash
@@ -1208,7 +1208,7 @@ git checkout HEAD -- apps/coding-agent/src/config.ts apps/coding-agent/src/headl
 ## Phase 5: Tests
 
 ### Prerequisites
-- [ ] Core code compiles
+- [x] Core code compiles
 
 ### Unit tests
 **File**: `packages/lsp/tests/diagnostics.test.ts` (new)
