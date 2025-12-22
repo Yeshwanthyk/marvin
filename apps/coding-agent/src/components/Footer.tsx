@@ -113,7 +113,7 @@ export function Footer(props: FooterProps) {
           <text>
             <span style={{ fg: contextBar()!.color }}>{contextBar()!.filledBar}</span>
             <span style={{ fg: theme.textMuted }}>{contextBar()!.emptyBar}</span>
-            <span style={{ fg: theme.textMuted }}>{` ${contextBar()!.pct}`}</span>
+            <span style={{ fg: theme.textMuted }}>{`  ${contextBar()!.pct}%`}</span>
           </text>
         </Show>
         <Show when={queueIndicator()}>
