@@ -25,15 +25,28 @@ export function Footer(props: FooterProps) {
 	const projectBranch = createMemo(() => {
 		const cwd = process.cwd()
 		const project = cwd.split("/").pop() || cwd
-		return project + (props.branch ? ` (${props.branch})` : "")
+		return project + (props.branch ? ` ⎇${props.branch}` : "")
 	})
 
-	const contextPct = createMemo(() => {
+	const shortModel = createMemo(() => {
+		// claude-opus-4-5 → opus-4-5
+		return props.modelId.replace(/^claude-/, "")
+	})
+
+	const contextBar = createMemo(() => {
 		if (props.contextWindow <= 0 || props.contextTokens <= 0) return null
 		const pct = (props.contextTokens / props.contextWindow) * 100
 		const pctStr = pct < 10 ? pct.toFixed(1) : Math.round(pct).toString()
 		const color = pct > 90 ? theme.error : pct > 70 ? theme.warning : theme.textMuted
-		return { text: `${pctStr}%`, color }
+		// 5 segments, each = 20% - round for visual accuracy
+		const filled = Math.min(5, Math.round(pct / 20))
+		const bar = "▰".repeat(filled) + "▱".repeat(5 - filled)
+		return { bar, pct: pctStr, color }
+	})
+
+	const queueIndicator = createMemo(() => {
+		if (props.queueCount <= 0) return null
+		return "▸".repeat(props.queueCount)
 	})
 
 	const activityData = createMemo(() => {
@@ -63,18 +76,17 @@ export function Footer(props: FooterProps) {
 			<box flexDirection="row" gap={1}>
 				<text fg={theme.textMuted}>{projectBranch()}</text>
 				<text fg={theme.textMuted}>·</text>
-				<text fg={theme.text}>{props.modelId}</text>
+				<text fg={theme.text}>{shortModel()}</text>
 				<Show when={props.thinking !== "off"}>
-					<text fg={theme.textMuted}>·</text>
 					<text fg={theme.textMuted}>{props.thinking}</text>
 				</Show>
-				<Show when={contextPct()}>
+				<Show when={contextBar()}>
 					<text fg={theme.textMuted}>·</text>
-					<text fg={contextPct()!.color}>{contextPct()!.text}</text>
+					<text fg={contextBar()!.color}>{`${contextBar()!.bar} ${contextBar()!.pct}`}</text>
 				</Show>
-				<Show when={props.queueCount > 0}>
+				<Show when={queueIndicator()}>
 					<text fg={theme.textMuted}>·</text>
-					<text fg={theme.warning}>{props.queueCount}q</text>
+					<text fg={theme.warning}>{queueIndicator()}</text>
 				</Show>
 			</box>
 			<Show when={props.retryStatus} fallback={
