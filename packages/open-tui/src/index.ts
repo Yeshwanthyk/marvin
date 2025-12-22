@@ -44,6 +44,7 @@ export {
 } from "./context/terminal.js"
 // Context providers
 export {
+	BUILTIN_THEMES,
 	createSyntaxStyle,
 	RGBA,
 	type SyntaxVariant,

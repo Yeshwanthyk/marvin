@@ -11,6 +11,15 @@ import type { UIMessage, ActivityState } from "./types.js"
 import { handleCompact as doCompact } from "./compact-handler.js"
 import { updateAppConfig } from "./config.js"
 
+// Available theme names (must match BUILTIN_THEMES in @marvin-agents/open-tui)
+const THEME_NAMES = [
+	"marvin", "aura", "ayu", "catppuccin", "catppuccin-macchiato", "cobalt2",
+	"dracula", "everforest", "flexoki", "github", "gruvbox", "kanagawa", "lucent-orng",
+	"material", "matrix", "mercury", "monokai", "nightowl", "nord", "one-dark", "opencode",
+	"orng", "palenight", "rosepine", "solarized", "synthwave84", "tokyonight", "vercel",
+	"vesper", "zenburn",
+]
+
 type KnownProvider = ReturnType<typeof getProviders>[number]
 
 export const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"]
@@ -48,6 +57,9 @@ export interface CommandContext {
 
 	// Diff wrap mode
 	setDiffWrapMode: (updater: (prev: "word" | "none") => "word" | "none") => void
+
+	// Theme
+	setTheme?: (name: string) => void
 
 	// Hook runner for lifecycle events (optional for backwards compat)
 	hookRunner?: import("./hooks/index.js").HookRunner
@@ -109,6 +121,28 @@ function handleThinking(args: string, ctx: CommandContext): boolean {
 
 function handleDiffwrap(ctx: CommandContext): boolean {
 	ctx.setDiffWrapMode((prev) => (prev === "word" ? "none" : "word"))
+	return true
+}
+
+function handleTheme(args: string, ctx: CommandContext): boolean {
+	const themeName = args.trim()
+
+	if (!themeName) {
+		// List available themes
+		addSystemMessage(ctx, `Available themes: ${THEME_NAMES.join(", ")}`)
+		return true
+	}
+
+	// Validate theme name
+	if (!THEME_NAMES.includes(themeName)) {
+		addSystemMessage(ctx, `Unknown theme "${themeName}". Available: ${THEME_NAMES.join(", ")}`)
+		return true
+	}
+
+	// Set theme via callback
+	if (ctx.setTheme) {
+		ctx.setTheme(themeName)
+	}
 	return true
 }
 
@@ -243,6 +277,11 @@ export function handleSlashCommand(line: string, ctx: CommandContext): boolean |
 
 	if (trimmed === "/diffwrap") {
 		return handleDiffwrap(ctx)
+	}
+
+	if (trimmed === "/theme" || trimmed.startsWith("/theme ")) {
+		const args = trimmed.startsWith("/theme ") ? trimmed.slice("/theme ".length) : ""
+		return handleTheme(args, ctx)
 	}
 
 	if (trimmed.startsWith("/model")) {

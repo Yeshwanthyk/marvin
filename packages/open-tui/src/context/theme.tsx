@@ -3,10 +3,85 @@
  */
 
 import type { ColorInput } from "@opentui/core"
-import { parseColor, type RGBA, SyntaxStyle } from "@opentui/core"
+import { parseColor, RGBA, SyntaxStyle } from "@opentui/core"
 import type { Accessor, Context, JSX, ParentProps } from "solid-js"
-import { createContext, createMemo, useContext } from "solid-js"
+import { createContext, createEffect, createMemo, useContext } from "solid-js"
 import { createStore } from "solid-js/store"
+
+// Theme JSON imports
+import aura from "../themes/aura.json"
+import ayu from "../themes/ayu.json"
+import catppuccin from "../themes/catppuccin.json"
+import catppuccinMacchiato from "../themes/catppuccin-macchiato.json"
+import cobalt2 from "../themes/cobalt2.json"
+import dracula from "../themes/dracula.json"
+import everforest from "../themes/everforest.json"
+import flexoki from "../themes/flexoki.json"
+import github from "../themes/github.json"
+import gruvbox from "../themes/gruvbox.json"
+import kanagawa from "../themes/kanagawa.json"
+import lucentOrng from "../themes/lucent-orng.json"
+import material from "../themes/material.json"
+import matrix from "../themes/matrix.json"
+import mercury from "../themes/mercury.json"
+import monokai from "../themes/monokai.json"
+import nightowl from "../themes/nightowl.json"
+import nord from "../themes/nord.json"
+import onedark from "../themes/one-dark.json"
+import opencode from "../themes/opencode.json"
+import orng from "../themes/orng.json"
+import palenight from "../themes/palenight.json"
+import rosepine from "../themes/rosepine.json"
+import solarized from "../themes/solarized.json"
+import synthwave84 from "../themes/synthwave84.json"
+import tokyonight from "../themes/tokyonight.json"
+import vercel from "../themes/vercel.json"
+import vesper from "../themes/vesper.json"
+import zenburn from "../themes/zenburn.json"
+
+// Theme JSON types (from opencode)
+type HexColor = `#${string}`
+type RefName = string
+type Variant = { dark: HexColor | RefName; light: HexColor | RefName }
+type ColorValue = HexColor | RefName | Variant | RGBA
+
+interface ThemeJson {
+	$schema?: string
+	defs?: Record<string, HexColor | RefName>
+	theme: Record<string, ColorValue>
+}
+
+export const BUILTIN_THEMES: Record<string, ThemeJson> = {
+	aura: aura as ThemeJson,
+	ayu: ayu as ThemeJson,
+	catppuccin: catppuccin as ThemeJson,
+	"catppuccin-macchiato": catppuccinMacchiato as ThemeJson,
+	cobalt2: cobalt2 as ThemeJson,
+	dracula: dracula as ThemeJson,
+	everforest: everforest as ThemeJson,
+	flexoki: flexoki as ThemeJson,
+	github: github as ThemeJson,
+	gruvbox: gruvbox as ThemeJson,
+	kanagawa: kanagawa as ThemeJson,
+	"lucent-orng": lucentOrng as ThemeJson,
+	material: material as ThemeJson,
+	matrix: matrix as ThemeJson,
+	mercury: mercury as ThemeJson,
+	monokai: monokai as ThemeJson,
+	nightowl: nightowl as ThemeJson,
+	nord: nord as ThemeJson,
+	"one-dark": onedark as ThemeJson,
+	opencode: opencode as ThemeJson,
+	orng: orng as ThemeJson,
+	palenight: palenight as ThemeJson,
+	rosepine: rosepine as ThemeJson,
+	solarized: solarized as ThemeJson,
+	synthwave84: synthwave84 as ThemeJson,
+	tokyonight: tokyonight as ThemeJson,
+	vercel: vercel as ThemeJson,
+	vesper: vesper as ThemeJson,
+	zenburn: zenburn as ThemeJson,
+}
 
 /**
  * Theme color definitions
@@ -226,6 +301,126 @@ const defaultLightTheme: Theme = {
 
 export type ThemeMode = "dark" | "light"
 
+/**
+ * Resolve a ThemeJson to concrete RGBA colors for a given mode
+ */
+function resolveThemeJson(themeJson: ThemeJson, mode: ThemeMode): Partial<Record<string, RGBA>> {
+	const defs = themeJson.defs ?? {}
+
+	function resolveColor(c: ColorValue): RGBA {
+		if (c instanceof RGBA) return c
+		if (typeof c === "string") {
+			if (c === "transparent" || c === "none") return parseColor("transparent")
+			if (c.startsWith("#")) return parseColor(c)
+			// Reference to defs
+			if (defs[c] != null) return resolveColor(defs[c] as ColorValue)
+			// Reference to another theme key
+			if (themeJson.theme[c] !== undefined) return resolveColor(themeJson.theme[c] as ColorValue)
+			// Unknown reference - return magenta as debug indicator
+			console.warn(`Unknown color reference: ${c}`)
+			return parseColor("#ff00ff")
+		}
+		// Variant object { dark: ..., light: ... }
+		if (typeof c === "object" && c !== null && "dark" in c && "light" in c) {
+			return resolveColor(c[mode] as ColorValue)
+		}
+		// Unknown - return magenta
+		return parseColor("#ff00ff")
+	}
+
+	const resolved: Partial<Record<string, RGBA>> = {}
+	for (const [key, value] of Object.entries(themeJson.theme)) {
+		if (key === "$schema") continue
+		resolved[key] = resolveColor(value as ColorValue)
+	}
+	return resolved
+}
+
+/**
+ * Map resolved opencode theme colors to marvin ThemeColors with fallbacks
+ */
+function mapToThemeColors(resolved: Partial<Record<string, RGBA>>, mode: ThemeMode): Theme {
+	const base = mode === "dark" ? defaultDarkTheme : defaultLightTheme
+
+	// Helper to get color with fallback
+	const get = (key: string, ...fallbacks: string[]): RGBA => {
+		if (resolved[key]) return resolved[key]!
+		for (const fb of fallbacks) {
+			if (resolved[fb]) return resolved[fb]!
+		}
+		return base[key as keyof Theme] ?? base.text
+	}
+
+	return {
+		primary: get("primary"),
+		secondary: get("secondary"),
+		accent: get("accent"),
+		error: get("error"),
+		warning: get("warning"),
+		success: get("success"),
+		info: get("info"),
+
+		text: get("text"),
+		textMuted: get("textMuted"),
+
+		background: get("background"),
+		backgroundPanel: get("backgroundPanel"),
+		backgroundElement: get("backgroundElement"),
+		backgroundMenu: get("backgroundMenu", "backgroundElement"),
+
+		border: get("border"),
+		borderSubtle: get("borderSubtle"),
+		borderActive: get("borderActive"),
+
+		selectionBg: get("selectionBg", "backgroundElement"),
+		selectionFg: get("selectionFg", "text"),
+
+		// Diff colors - map from opencode names
+		diffAdded: get("diffAdded"),
+		diffRemoved: get("diffRemoved"),
+		diffContext: get("diffContext"),
+		diffAddedBg: get("diffAddedBg"),
+		diffRemovedBg: get("diffRemovedBg"),
+		diffContextBg: get("diffContextBg"),
+		diffLineNumberFg: get("diffLineNumber", "textMuted"),
+		diffLineNumberBg: get("diffLineNumberBg", "background"),
+		diffAddedLineNumberBg: get("diffAddedLineNumberBg", "diffAddedBg"),
+		diffRemovedLineNumberBg: get("diffRemovedLineNumberBg", "diffRemovedBg"),
+		diffAddedSign: get("diffAddedSign", "diffAdded"),
+		diffRemovedSign: get("diffRemovedSign", "diffRemoved"),
+		diffHighlightAddedBg: get("diffHighlightAddedBg", "diffAddedBg"),
+		diffHighlightRemovedBg: get("diffHighlightRemovedBg", "diffRemovedBg"),
+
+		// Markdown colors
+		markdownText: get("markdownText", "text"),
+		markdownHeading: get("markdownHeading", "primary"),
+		markdownLink: get("markdownLink", "accent"),
+		markdownLinkUrl: get("markdownLinkUrl", "markdownLinkText", "textMuted"),
+		markdownCode: get("markdownCode", "success"),
+		markdownCodeBlock: get("markdownCodeBlock", "text"),
+		markdownCodeBlockBorder: get("markdownCodeBlockBorder", "border"),
+		markdownBlockQuote: get("markdownBlockQuote", "textMuted"),
+		markdownBlockQuoteBorder: get("markdownBlockQuoteBorder", "border"),
+		markdownHr: get("markdownHorizontalRule", "border"),
+		markdownListBullet: get("markdownListBullet", "markdownListItem", "accent"),
+
+		// Syntax colors
+		syntaxComment: get("syntaxComment"),
+		syntaxString: get("syntaxString"),
+		syntaxKeyword: get("syntaxKeyword"),
+		syntaxFunction: get("syntaxFunction"),
+		syntaxVariable: get("syntaxVariable"),
+		syntaxType: get("syntaxType"),
+		syntaxNumber: get("syntaxNumber"),
+		syntaxConstant: get("syntaxConstant", "syntaxNumber"),
+		syntaxOperator: get("syntaxOperator"),
+		syntaxPunctuation: get("syntaxPunctuation"),
+		syntaxProperty: get("syntaxProperty", "syntaxVariable"),
+		syntaxTag: get("syntaxTag", "syntaxKeyword"),
+		syntaxAttribute: get("syntaxAttribute", "syntaxProperty"),
+	}
+}
+
 export type SyntaxVariant = "normal" | "subtle"
 
 export function createSyntaxStyle(theme: Theme, variant: SyntaxVariant = "normal"): SyntaxStyle {
@@ -253,6 +448,10 @@ interface ThemeContextValue {
 	setMode: (mode: ThemeMode) => void
 	syntaxStyle: SyntaxStyle
 	subtleSyntaxStyle: SyntaxStyle
+	// Named theme support
+	themeName: Accessor<string>
+	setTheme: (name: string) => void
+	availableThemes: () => string[]
 }
 
 const ThemeContext: Context<ThemeContextValue | undefined> = createContext<ThemeContextValue>()
@@ -260,31 +459,53 @@ const ThemeContext: Context<ThemeContextValue | undefined> = createContext<Theme
 export interface ThemeProviderProps extends ParentProps {
 	/** Initial theme mode */
 	mode?: ThemeMode
-	/** Custom theme overrides */
+	/** Initial theme name (default: "marvin") */
+	themeName?: string
+	/** Custom theme overrides (applied on top of named theme) */
 	customTheme?: Partial<Theme>
+	/** Callback when theme changes (for persistence) */
+	onThemeChange?: (name: string) => void
 }
 
 export function ThemeProvider(props: ThemeProviderProps): JSX.Element {
 	const [store, setStore] = createStore({
 		mode: props.mode ?? "dark",
+		themeName: props.themeName ?? "marvin",
 	})
 
-	const baseTheme = (): Theme => (store.mode === "dark" ? defaultDarkTheme : defaultLightTheme)
+	// Sync themeName prop changes to store (for external control)
+	createEffect(() => {
+		if (props.themeName !== undefined && props.themeName !== store.themeName) {
+			setStore("themeName", props.themeName)
+		}
+	})
 
-	const theme = createMemo((): Theme => ({
-		...baseTheme(),
-		...props.customTheme,
-	}))
+	const resolvedTheme = createMemo((): Theme => {
+		const name = store.themeName
+		const mode = store.mode
+
+		// "marvin" is the built-in default
+		if (name === "marvin" || !BUILTIN_THEMES[name]) {
+			const base = mode === "dark" ? defaultDarkTheme : defaultLightTheme
+			return { ...base, ...props.customTheme }
+		}
+
+		// Resolve named theme
+		const themeJson = BUILTIN_THEMES[name]
+		const resolved = resolveThemeJson(themeJson, mode)
+		const mapped = mapToThemeColors(resolved, mode)
+		return { ...mapped, ...props.customTheme }
+	})
 
 	// Use createMemo for syntax styles - they'll recompute when theme changes
-	const syntaxStyle = createMemo(() => createSyntaxStyle(theme(), "normal"))
-	const subtleSyntaxStyle = createMemo(() => createSyntaxStyle(theme(), "subtle"))
+	const syntaxStyle = createMemo(() => createSyntaxStyle(resolvedTheme(), "normal"))
+	const subtleSyntaxStyle = createMemo(() => createSyntaxStyle(resolvedTheme(), "subtle"))
 
 	// Note: SyntaxStyle cleanup is handled internally by opentui when memos recompute
 
 	const value: ThemeContextValue = {
 		get theme(): Theme {
-			return theme()
+			return resolvedTheme()
 		},
 		mode: (): ThemeMode => store.mode,
 		setMode: (mode: ThemeMode): void => {
@@ -296,6 +517,12 @@ export function ThemeProvider(props: ThemeProviderProps): JSX.Element {
 		get subtleSyntaxStyle(): SyntaxStyle {
 			return subtleSyntaxStyle()
 		},
+		themeName: (): string => store.themeName,
+		setTheme: (name: string): void => {
+			setStore("themeName", name)
+			props.onThemeChange?.(name)
+		},
+		availableThemes: (): string[] => ["marvin", ...Object.keys(BUILTIN_THEMES)],
 	}
 
 	return <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>

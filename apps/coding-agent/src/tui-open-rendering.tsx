@@ -11,8 +11,6 @@ import { getToolText, getEditDiffText } from "./utils.js"
 export { getToolText, getEditDiffText }
 
 // Design tokens
-const badgeColor = "#A66E7A"  // dusty rose
-const badgeTextColor = "#ffffff"
 const toolSymbol = "◆"
 
 const shortenPath = (p: string): string => {
@@ -166,10 +164,11 @@ function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 	return <ToolHeader label={ctx.name.toUpperCase()} detail={title} suffix={suffix} />
 }
 
-// Badge component - dusty rose background, white text, uppercase
+// Badge component - accent background, contrasting text, uppercase
 function Badge(props: { label: string }): JSX.Element {
+	const { theme } = useTheme()
 	return (
-		<span style={{ bg: badgeColor, fg: badgeTextColor, attributes: TextAttributes.BOLD }}> {props.label} </span>
+		<span style={{ bg: theme.accent, fg: theme.background, attributes: TextAttributes.BOLD }}> {props.label} </span>
 	)
 }
 
@@ -178,7 +177,7 @@ function ToolHeader(props: { label: string; detail?: string; suffix?: JSX.Elemen
 	const { theme } = useTheme()
 	return (
 		<text selectable={false}>
-			<span style={{ fg: badgeColor }}>{toolSymbol}</span>
+			<span style={{ fg: theme.accent }}>{toolSymbol}</span>
 			{" "}
 			<Badge label={props.label} />
 			<Show when={props.detail}>

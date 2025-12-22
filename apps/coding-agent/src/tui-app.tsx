@@ -10,7 +10,7 @@ import { Agent, ProviderTransport, RouterTransport, CodexTransport, loadTokens, 
 import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent-core"
 import { getApiKey, getModels, getProviders, type AgentTool, type Model, type Api } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
-import { loadAppConfig } from "./config.js"
+import { loadAppConfig, updateAppConfig } from "./config.js"
 import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/open-tui"
 import { createAutocompleteCommands } from "./autocomplete-commands.js"
 import { SessionManager, type LoadedSession } from "./session-manager.js"
@@ -165,7 +165,7 @@ export const runTuiOpen = async (args?: {
 
 	render(() => (
 		<App agent={agent} sessionManager={sessionManager} initialSession={initialSession}
-			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking}
+			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking} theme={loaded.theme}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
 			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
 			hookRunner={hookRunner} toolByName={toolByName} />
@@ -176,7 +176,7 @@ export const runTuiOpen = async (args?: {
 
 interface AppProps {
 	agent: Agent; sessionManager: SessionManager; initialSession: LoadedSession | null
-	modelId: string; model: Model<Api>; provider: KnownProvider; thinking: ThinkingLevel
+	modelId: string; model: Model<Api>; provider: KnownProvider; thinking: ThinkingLevel; theme: string
 	cycleModels: Array<{ provider: KnownProvider; model: Model<Api> }>
 	configDir: string; configPath: string; codexTransport: CodexTransport
 	getApiKey: (provider: string) => string | undefined
@@ -188,6 +188,7 @@ interface AppProps {
 function App(props: AppProps) {
 	const { agent, sessionManager } = props
 	let currentProvider = props.provider, currentModelId = props.modelId, currentThinking = props.thinking
+	const [currentTheme, setCurrentTheme] = createSignal(props.theme)
 	let cycleIndex = 0, sessionStarted = false
 
 	const ensureSession = () => {
@@ -309,6 +310,11 @@ function App(props: AppProps) {
 		onCleanup(() => { unsubscribe(); handleAgentEvent.dispose() })
 	})
 
+	const handleThemeChange = (name: string) => {
+		setCurrentTheme(name)
+		void updateAppConfig({ configDir: props.configDir }, { theme: name })
+	}
+
 	const cmdCtx: CommandContext = {
 		agent, sessionManager, configDir: props.configDir, configPath: props.configPath,
 		codexTransport: props.codexTransport, getApiKey: props.getApiKey,
@@ -317,6 +323,7 @@ function App(props: AppProps) {
 		isResponding, setIsResponding, setActivityState,
 		setMessages: setMessages as CommandContext["setMessages"], setToolBlocks: setToolBlocks as CommandContext["setToolBlocks"],
 		setContextTokens, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode,
+		setTheme: handleThemeChange,
 		hookRunner: props.hookRunner,
 	}
 
@@ -378,7 +385,7 @@ function App(props: AppProps) {
 	}
 
 	return (
-		<ThemeProvider mode="dark">
+		<ThemeProvider mode="dark" themeName={currentTheme()} onThemeChange={handleThemeChange}>
 			<MainView messages={messages()} toolBlocks={toolBlocks()} isResponding={isResponding()} activityState={activityState()}
 				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
 				contextTokens={contextTokens()} contextWindow={displayContextWindow()} queueCount={queueCount()} retryStatus={retryStatus()}
@@ -422,7 +429,8 @@ function MainView(props: MainViewProps) {
 	const updateAutocomplete = (text: string, cursorLine: number, cursorCol: number) => {
 		const result = autocompleteProvider.getSuggestions(text.split("\n"), cursorLine, cursorCol)
 		if (result && result.items.length > 0) {
-			const prevPrefix = autocompletePrefix(), newItems = result.items.slice(0, 10)
+			// Show up to 30 items (covers all themes; files naturally limited by results)
+			const prevPrefix = autocompletePrefix(), newItems = result.items.slice(0, 30)
 			setAutocompleteItems(newItems); setAutocompletePrefix(result.prefix)
 			if (result.prefix !== prevPrefix) setAutocompleteIndex(0); else setAutocompleteIndex((i) => Math.min(i, newItems.length - 1))
 			setShowAutocomplete(true)
@@ -436,7 +444,13 @@ function MainView(props: MainViewProps) {
 		const cursor = textareaRef.logicalCursor
 		const text = textareaRef.plainText, lines = text.split("\n")
 		const result = autocompleteProvider.applyCompletion(lines, cursor.row, cursor.col, items[idx]!, autocompletePrefix())
-		textareaRef.replaceText(result.lines.join("\n"))
+		const newText = result.lines.join("\n")
+		// If completion wouldn't change text, close autocomplete but return false to allow Enter to pass through
+		if (newText === text) {
+			setShowAutocomplete(false); setAutocompleteItems([])
+			return false
+		}
+		textareaRef.replaceText(newText)
 		textareaRef.editBuffer.setCursorToLineCol(result.cursorLine, result.cursorCol)
 		setShowAutocomplete(false); setAutocompleteItems([])
 		return true
@@ -514,7 +528,7 @@ function MainView(props: MainViewProps) {
 					isToolExpanded={isToolExpanded} toggleToolExpanded={toggleToolExpanded} isThinkingExpanded={isThinkingExpanded} toggleThinkingExpanded={toggleThinkingExpanded} />
 			</scrollbox>
 			<Show when={showAutocomplete() && autocompleteItems().length > 0}>
-				<box flexDirection="column" borderColor={theme.border} maxHeight={10} flexShrink={0}>
+				<box flexDirection="column" borderColor={theme.border} maxHeight={15} flexShrink={0}>
 					<For each={autocompleteItems().filter(item => item && typeof item === "object")}>{(item, i) => {
 						const isSelected = createMemo(() => i() === autocompleteIndex())
 						const label = String(item.label ?? item.value ?? "")

@@ -62,6 +62,7 @@ export interface LoadedAppConfig {
   modelId: string;
   model: Model<Api>;
   thinking: ThinkingLevel;
+  theme: string;
   systemPrompt: string;
   agentsConfig: AgentsConfig;
   configDir: string;
@@ -152,6 +153,10 @@ export const loadAppConfig = async (options?: {
   const thinkingRaw = options?.thinking ?? rawObj.thinking;
   const thinking: ThinkingLevel = isThinkingLevel(thinkingRaw) ? thinkingRaw : 'off';
 
+  // Theme - default to "marvin"
+  const themeRaw = rawObj.theme;
+  const theme = typeof themeRaw === 'string' && themeRaw.trim() ? themeRaw.trim() : 'marvin';
+
   // Load AGENTS.md from global (~/.config/marvin/agents.md, ~/.codex/agents.md, ~/.claude/CLAUDE.md)
   // and project level (./AGENTS.md, ./CLAUDE.md)
   const agentsConfig = await loadAgentsConfig();
@@ -171,6 +176,7 @@ export const loadAppConfig = async (options?: {
     modelId: model.id,
     model,
     thinking,
+    theme,
     systemPrompt,
     agentsConfig,
     configDir,
@@ -185,7 +191,7 @@ const writeConfigFile = async (p: string, value: Record<string, unknown>): Promi
 
 export const updateAppConfig = async (
   options: { configDir?: string; configPath?: string },
-  patch: { provider?: string; model?: string; thinking?: ThinkingLevel; systemPrompt?: string }
+  patch: { provider?: string; model?: string; thinking?: ThinkingLevel; theme?: string; systemPrompt?: string }
 ): Promise<void> => {
   const configDir = options.configDir ?? resolveConfigDir();
   const configPath = options.configPath ?? path.join(configDir, 'config.json');
@@ -197,6 +203,7 @@ export const updateAppConfig = async (
   if (patch.provider) next.provider = patch.provider;
   if (patch.model) next.model = patch.model;
   if (patch.thinking) next.thinking = patch.thinking;
+  if (patch.theme) next.theme = patch.theme;
   if (patch.systemPrompt) next.systemPrompt = patch.systemPrompt;
 
   await writeConfigFile(configPath, next);
