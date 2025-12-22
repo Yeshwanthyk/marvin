@@ -389,12 +389,11 @@ function handleMessageEnd(
 	// Save message to session
 	ctx.sessionManager.appendMessage(event.message as AppMessage)
 
-	// Update usage - total context includes input + output + cache
-	// Output is included because it becomes part of input history for next request
-	const msg = event.message as { usage?: { input: number; output: number; cacheRead: number; cacheWrite?: number } }
+	// Update usage - context window budget includes input + output for the full request
+	// totalTokens is already computed by providers as: (uncached_input + cacheRead + cacheWrite) + output
+	const msg = event.message as { usage?: { totalTokens: number } }
 	if (msg.usage) {
-		const tokens = msg.usage.input + msg.usage.output + msg.usage.cacheRead + (msg.usage.cacheWrite || 0)
-		ctx.setContextTokens(tokens)
+		ctx.setContextTokens(msg.usage.totalTokens)
 	}
 }
 
