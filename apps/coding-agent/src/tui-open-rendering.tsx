@@ -11,7 +11,7 @@ import { getToolText, getEditDiffText } from "./utils.js"
 export { getToolText, getEditDiffText }
 
 // Design tokens
-const toolSymbol = "◆"
+const toolSymbol = "›"
 
 const shortenPath = (p: string): string => {
 	const home = process.env.HOME || process.env.USERPROFILE || ""
@@ -150,7 +150,7 @@ interface ToolRenderer {
 
 function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 	const title = toolTitle(ctx.name, ctx.args)
-	const suffix = !ctx.isComplete ? "◌" : ctx.isError ? "error" : ""
+	const suffix = !ctx.isComplete ? "◌" : ctx.isError ? "✕" : ""
 	return <ToolHeader label={ctx.name} detail={title} suffix={suffix} />
 }
 
@@ -199,7 +199,7 @@ const registry: Record<string, ToolRenderer> = {
 			const lines = ctx.output ? ctx.output.split("\n").length : null
 			let suffix = ""
 			if (!ctx.isComplete) suffix = "◌"
-			else if (ctx.isError) suffix = "error"
+			else if (ctx.isError) suffix = "✕"
 			else if (lines !== null) suffix = String(lines)
 			return <ToolHeader label="bash" detail={cmd} suffix={suffix} />
 		},
@@ -254,7 +254,7 @@ const registry: Record<string, ToolRenderer> = {
 			const diffStats = ctx.editDiff ? getDiffStats(ctx.editDiff) : null
 			let suffix = ""
 			if (!ctx.isComplete) suffix = "◌"
-			else if (ctx.isError) suffix = "error"
+			else if (ctx.isError) suffix = "✕"
 			else if (diffStats) suffix = `+${diffStats.added}/-${diffStats.removed}`
 			return <ToolHeader label="edit" detail={path} suffix={suffix} />
 		},
