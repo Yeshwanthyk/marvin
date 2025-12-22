@@ -150,7 +150,7 @@ interface ToolRenderer {
 
 function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 	const title = toolTitle(ctx.name, ctx.args)
-	const suffix = !ctx.isComplete ? "…" : ctx.isError ? "error" : ""
+	const suffix = !ctx.isComplete ? "◌" : ctx.isError ? "error" : ""
 	return <ToolHeader label={ctx.name} detail={title} suffix={suffix} />
 }
 
@@ -198,7 +198,7 @@ const registry: Record<string, ToolRenderer> = {
 			const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
 			const lines = ctx.output ? ctx.output.split("\n").length : null
 			let suffix = ""
-			if (!ctx.isComplete) suffix = "…"
+			if (!ctx.isComplete) suffix = "◌"
 			else if (ctx.isError) suffix = "error"
 			else if (lines !== null) suffix = String(lines)
 			return <ToolHeader label="bash" detail={cmd} suffix={suffix} />
@@ -216,7 +216,7 @@ const registry: Record<string, ToolRenderer> = {
 		renderHeader: (ctx) => {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const lines = ctx.output ? replaceTabs(ctx.output).split("\n").length : null
-			const suffix = lines !== null ? String(lines) : "…"
+			const suffix = lines !== null ? String(lines) : "◌"
 			return <ToolHeader label="read" detail={path} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
@@ -233,7 +233,7 @@ const registry: Record<string, ToolRenderer> = {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const content = String(ctx.args?.content || "")
 			const lines = content ? content.split("\n").length : null
-			const suffix = !ctx.isComplete ? "…" : lines !== null ? String(lines) : ""
+			const suffix = !ctx.isComplete ? "◌" : lines !== null ? String(lines) : ""
 			return <ToolHeader label="write" detail={path} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
@@ -253,7 +253,7 @@ const registry: Record<string, ToolRenderer> = {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const diffStats = ctx.editDiff ? getDiffStats(ctx.editDiff) : null
 			let suffix = ""
-			if (!ctx.isComplete) suffix = "…"
+			if (!ctx.isComplete) suffix = "◌"
 			else if (ctx.isError) suffix = "error"
 			else if (diffStats) suffix = `+${diffStats.added}/-${diffStats.removed}`
 			return <ToolHeader label="edit" detail={path} suffix={suffix} />

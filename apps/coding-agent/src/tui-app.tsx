@@ -582,7 +582,6 @@ function MainView(props: MainViewProps) {
 	return (
 		<box flexDirection="column" width={dimensions().width} height={dimensions().height}
 			onMouseUp={() => { const sel = renderer.getSelection(); if (sel && sel.getSelectedText()) copySelectionToClipboard() }}>
-			<text fg={theme.textMuted}>marvin</text>
 			<scrollbox ref={(r: ScrollBoxRenderable) => { scrollRef = r }} flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
 				<MessageList messages={props.messages} toolBlocks={props.toolBlocks} thinkingVisible={props.thinkingVisible} diffWrapMode={props.diffWrapMode}
 					isToolExpanded={isToolExpanded} toggleToolExpanded={toggleToolExpanded} isThinkingExpanded={isThinkingExpanded} toggleThinkingExpanded={toggleThinkingExpanded} />
@@ -600,20 +599,12 @@ function MainView(props: MainViewProps) {
 							: ""
 						// Fixed-width label column for alignment
 						const labelCol = label.length < 24 ? label + " ".repeat(24 - label.length) : label.slice(0, 23) + "…"
-						// Reactive getters for selection-dependent values
-						const prefix = () => isSelected() ? " → " : "   "
-						const line = () => prefix() + labelCol + (desc ? " " + desc : "")
-						const pad = () => " ".repeat(Math.max(0, dimensions().width - line().length))
 						return (
-							<Show when={isSelected} fallback={
-								<text>
-									<span style={{ fg: theme.textMuted }}>{prefix()}</span>
-									<span style={{ fg: theme.text }}>{labelCol}</span>
-									<span style={{ fg: theme.textMuted }}>{desc ? " " + desc : ""}</span>
-								</text>
-							}>
-								<text fg={theme.selectionFg} bg={theme.selectionBg} attributes={1 /* BOLD */}>{line() + pad()}</text>
-							</Show>
+							<text>
+								<span style={{ fg: isSelected() ? theme.accent : theme.textMuted }}>{isSelected() ? " ▸ " : "   "}</span>
+								<span style={{ fg: isSelected() ? theme.text : theme.textMuted }}>{labelCol}</span>
+								<span style={{ fg: theme.textMuted }}>{desc ? " " + desc : ""}</span>
+							</text>
 						)
 					}}</For>
 					<text fg={theme.textMuted}>{"   "}↑↓ navigate · Tab select · Esc cancel</text>

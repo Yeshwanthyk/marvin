@@ -287,7 +287,7 @@ export function MessageList(props: MessageListProps) {
 								<box paddingLeft={1}>
 									{/* Plain text while streaming (avoids O(n²) markdown re-lex), Markdown when complete */}
 									<Show when={assistantItem().isStreaming} fallback={<Markdown text={assistantItem().content} />}>
-										<text fg={theme.text}>{assistantItem().content}</text>
+										<text fg={theme.text}>{assistantItem().content}<span style={{ fg: theme.textMuted }}>▁</span></text>
 									</Show>
 								</box>
 							)}
