@@ -149,41 +149,43 @@ interface ToolRenderer {
 }
 
 function defaultHeader(ctx: ToolRenderContext): JSX.Element {
-	const { theme } = useTheme()
 	const title = toolTitle(ctx.name, ctx.args)
-	const suffix = (
-		<>
-			<Show when={!ctx.isComplete}>
-				<span style={{ fg: theme.textMuted }}> …</span>
-			</Show>
-			<Show when={ctx.isError}>
-				<span style={{ fg: theme.error }}> error</span>
-			</Show>
-		</>
-	)
-	return <ToolHeader label={ctx.name.toUpperCase()} detail={title} suffix={suffix} />
+	const suffix = !ctx.isComplete ? "…" : ctx.isError ? "error" : ""
+	return <ToolHeader label={ctx.name} detail={title} suffix={suffix} />
 }
 
-// Badge component - accent background, contrasting text, uppercase
-function Badge(props: { label: string }): JSX.Element {
-	const { theme } = useTheme()
-	return (
-		<span style={{ bg: theme.accent, fg: theme.background, attributes: TextAttributes.BOLD }}> {props.label} </span>
-	)
+// Dot leader fill for alignment
+function dotFill(width: number): string {
+	return width > 0 ? " " + "·".repeat(width) + " " : " "
 }
 
-// Tool header with symbol and badge
-function ToolHeader(props: { label: string; detail?: string; suffix?: JSX.Element }): JSX.Element {
+// Tool header with symbol, label, detail, and right-aligned suffix
+// Format: ◆ label detail ···················· suffix ▸
+function ToolHeader(props: { label: string; detail?: string; suffix?: string; maxWidth?: number }): JSX.Element {
 	const { theme } = useTheme()
+	const maxW = props.maxWidth ?? 72
+	
+	const contentWidth = () => {
+		const labelW = props.label.length + 2 // "◆ " + label
+		const detailW = props.detail ? props.detail.length + 1 : 0
+		const suffixW = props.suffix ? props.suffix.length + 2 : 0 // suffix + " ▸"
+		return labelW + detailW + suffixW
+	}
+	
+	const dots = () => dotFill(Math.max(0, maxW - contentWidth()))
+	
 	return (
 		<text selectable={false}>
 			<span style={{ fg: theme.accent }}>{toolSymbol}</span>
 			{" "}
-			<Badge label={props.label} />
+			<span style={{ fg: theme.accent }}>{props.label}</span>
 			<Show when={props.detail}>
 				<span style={{ fg: theme.text }}> {props.detail}</span>
 			</Show>
-			{props.suffix}
+			<span style={{ fg: theme.textMuted }}>{dots()}</span>
+			<Show when={props.suffix}>
+				<span style={{ fg: theme.textMuted }}>{props.suffix}</span>
+			</Show>
 		</text>
 	)
 }
@@ -193,23 +195,13 @@ const registry: Record<string, ToolRenderer> = {
 		// Inline when collapsed (just command), block when expanded (show output)
 		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
 		renderHeader: (ctx) => {
-			const { theme } = useTheme()
 			const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
 			const lines = ctx.output ? ctx.output.split("\n").length : null
-			const suffix = (
-				<>
-					<Show when={!ctx.isComplete}>
-						<span style={{ fg: theme.textMuted }}> …</span>
-					</Show>
-					<Show when={ctx.isComplete && lines !== null}>
-						<span style={{ fg: theme.textMuted }}> ({lines})</span>
-					</Show>
-					<Show when={ctx.isError}>
-						<span style={{ fg: theme.error }}> error</span>
-					</Show>
-				</>
-			)
-			return <ToolHeader label="BASH" detail={cmd} suffix={suffix} />
+			let suffix = ""
+			if (!ctx.isComplete) suffix = "…"
+			else if (ctx.isError) suffix = "error"
+			else if (lines !== null) suffix = String(lines)
+			return <ToolHeader label="bash" detail={cmd} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -222,15 +214,10 @@ const registry: Record<string, ToolRenderer> = {
 	read: {
 		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
 		renderHeader: (ctx) => {
-			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const lines = ctx.output ? replaceTabs(ctx.output).split("\n").length : null
-			const suffix = (
-				<Show when={lines !== null}>
-					<span style={{ fg: theme.textMuted }}> ({lines})</span>
-				</Show>
-			)
-			return <ToolHeader label="READ" detail={path} suffix={suffix} />
+			const suffix = lines !== null ? String(lines) : "…"
+			return <ToolHeader label="read" detail={path} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -243,14 +230,11 @@ const registry: Record<string, ToolRenderer> = {
 	write: {
 		mode: () => "block",
 		renderHeader: (ctx) => {
-			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
-			const suffix = (
-				<Show when={!ctx.isComplete}>
-					<span style={{ fg: theme.textMuted }}> …</span>
-				</Show>
-			)
-			return <ToolHeader label="WRITE" detail={path} suffix={suffix} />
+			const content = String(ctx.args?.content || "")
+			const lines = content ? content.split("\n").length : null
+			const suffix = !ctx.isComplete ? "…" : lines !== null ? String(lines) : ""
+			return <ToolHeader label="write" detail={path} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -264,53 +248,31 @@ const registry: Record<string, ToolRenderer> = {
 		},
 	},
 	edit: {
-		mode: () => "block",
+		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
 		renderHeader: (ctx) => {
-			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
-			// Count diff stats for collapsed summary
 			const diffStats = ctx.editDiff ? getDiffStats(ctx.editDiff) : null
-			const suffix = (
-				<>
-					<Show when={!ctx.isComplete}>
-						<span style={{ fg: theme.textMuted }}> …</span>
-					</Show>
-					<Show when={ctx.isComplete && diffStats}>
-						<span style={{ fg: theme.textMuted }}> (</span>
-						<span style={{ fg: "#98c379" }}>+{diffStats!.added}</span>
-						<span style={{ fg: theme.textMuted }}>/</span>
-						<span style={{ fg: "#e06c75" }}>-{diffStats!.removed}</span>
-						<span style={{ fg: theme.textMuted }}>)</span>
-					</Show>
-					<Show when={ctx.isError}>
-						<span style={{ fg: theme.error }}> error</span>
-					</Show>
-				</>
-			)
-			return <ToolHeader label="EDIT" detail={path} suffix={suffix} />
+			let suffix = ""
+			if (!ctx.isComplete) suffix = "…"
+			else if (ctx.isError) suffix = "error"
+			else if (diffStats) suffix = `+${diffStats.added}/-${diffStats.removed}`
+			return <ToolHeader label="edit" detail={path} suffix={suffix} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
+			// Only show body when expanded
+			if (!ctx.expanded) return null
 			if (ctx.editDiff) {
 				const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
 				const diffLines = ctx.editDiff.split("\n").length
-				// Show full diff when expanded, truncated preview when collapsed
-				if (ctx.expanded) {
-					if (diffLines > 150) {
-						const truncated = truncateHeadTail(ctx.editDiff, 60, 40)
-						return <DiffPreview text={truncated.text} />
-					}
-					return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode={ctx.diffWrapMode} />
-				} else {
-					// Collapsed: simple colored preview (Diff component fails on truncated hunks)
-					const truncated = truncateLines(ctx.editDiff, 10)
+				if (diffLines > 150) {
+					const truncated = truncateHeadTail(ctx.editDiff, 60, 40)
 					return <DiffPreview text={truncated.text} />
 				}
+				return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode={ctx.diffWrapMode} />
 			}
 			if (!ctx.output && !ctx.isComplete) return <text fg={theme.textMuted}>editing…</text>
-			// When expanded, show full output; otherwise show truncated
-			if (ctx.expanded) return <text fg={ctx.isError ? theme.error : theme.text}>{ctx.output ?? ""}</text>
-			return null
+			return <text fg={ctx.isError ? theme.error : theme.text}>{ctx.output ?? ""}</text>
 		},
 	},
 }

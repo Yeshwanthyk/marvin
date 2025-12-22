@@ -61,8 +61,9 @@ function ThinkingBlockWrapper(props: {
 					props.onToggle(props.id)
 				}}
 			>
+				<text selectable={false} fg={theme.textMuted}>◦</text>
 				<text selectable={false} fg={theme.textMuted} attributes={TextAttributes.ITALIC}>
-					thinking {expanded() ? "" : props.summary}
+					{expanded() ? "" : props.summary}
 				</text>
 				<text selectable={false} fg={theme.textMuted}>{expanded() ? "▴" : "▸"}</text>
 			</box>
