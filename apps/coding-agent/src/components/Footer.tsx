@@ -47,11 +47,12 @@ export function Footer(props: FooterProps) {
     if (props.contextWindow <= 0 || props.contextTokens <= 0) return null
     const pct = (props.contextTokens / props.contextWindow) * 100
     const pctStr = pct < 10 ? pct.toFixed(1) : Math.round(pct).toString()
-    const color = pct > 90 ? theme.error : pct > 70 ? theme.warning : theme.textMuted
+    const color = pct > 90 ? theme.error : pct > 70 ? theme.warning : theme.success
     // 5 segments, each = 20% - round for visual accuracy
     const filled = Math.min(5, Math.round(pct / 20))
-    const bar = "▰".repeat(filled) + "▱".repeat(5 - filled)
-    return { bar, pct: pctStr, color }
+    const filledBar = "▰".repeat(filled)
+    const emptyBar = "▱".repeat(5 - filled)
+    return { filledBar, emptyBar, pct: pctStr, color }
   })
 
   const queueIndicator = createMemo(() => {
@@ -109,7 +110,11 @@ export function Footer(props: FooterProps) {
         </Show>
         <Show when={contextBar()}>
           <text fg={theme.textMuted}>·</text>
-          <text fg={contextBar()!.color}>{`${contextBar()!.bar}  ${contextBar()!.pct}`}</text>
+          <text>
+            <span style={{ fg: contextBar()!.color }}>{contextBar()!.filledBar}</span>
+            <span style={{ fg: theme.textMuted }}>{contextBar()!.emptyBar}</span>
+            <span style={{ fg: theme.textMuted }}>{` ${contextBar()!.pct}`}</span>
+          </text>
         </Show>
         <Show when={queueIndicator()}>
           <text fg={theme.textMuted}>·</text>
