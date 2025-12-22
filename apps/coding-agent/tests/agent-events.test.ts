@@ -127,7 +127,7 @@ describe("createAgentEventHandler", () => {
 				message: {
 					role: "assistant",
 					content: [{ type: "text", text: "done" }],
-					usage: { input: 100, output: 50, cacheRead: 10 },
+					usage: { input: 100, output: 50, cacheRead: 10, totalTokens: 160 },
 				},
 			} as AgentEvent)
 

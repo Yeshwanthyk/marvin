@@ -231,6 +231,15 @@ function App(props: AppProps) {
 			}
 		}
 		agent.replaceMessages(sessionMessages)
+
+		// Rehydrate context tokens from last assistant message's usage
+		for (let i = sessionMessages.length - 1; i >= 0; i--) {
+			const msg = sessionMessages[i] as { role: string; usage?: { totalTokens?: number } }
+			if (msg.role === "assistant" && msg.usage?.totalTokens) {
+				setContextTokens(msg.usage.totalTokens)
+				break
+			}
+		}
 		// Build a map of toolCallId -> toolResult for matching
 		const toolResultMap = new Map<string, { output: string; editDiff: string | null; isError: boolean }>()
 		for (const msg of sessionMessages) {
@@ -373,6 +382,7 @@ function App(props: AppProps) {
 
 	const cycleModel = () => {
 		if (props.cycleModels.length <= 1) return
+		if (isResponding()) return // Prevent mid-stream model switch
 		cycleIndex = (cycleIndex + 1) % props.cycleModels.length
 		const entry = props.cycleModels[cycleIndex]!
 		currentProvider = entry.provider; currentModelId = entry.model.id
@@ -500,6 +510,47 @@ function MainView(props: MainViewProps) {
 		const text = sel.getSelectedText(); if (!text || text.length === 0) return
 		copyToClipboard(text); pushToast({ title: "Copied to clipboard", variant: "success" }, 1500); renderer.clearSelection()
 	}
+
+	// Model switch detector - warn on downshifts
+	let prevContextWindow = props.contextWindow
+	createEffect(() => {
+		const newWindow = props.contextWindow
+		const oldWindow = prevContextWindow
+		prevContextWindow = newWindow
+
+		// Only warn on downshift (switching to smaller context window)
+		if (oldWindow <= 0 || newWindow >= oldWindow) return
+
+		const tokens = props.contextTokens
+		if (tokens <= 0) return // No usage data yet
+
+		const usagePct = (tokens / newWindow) * 100
+		const remaining = newWindow - tokens
+		const formatK = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+
+		if (usagePct > 100) {
+			// Overflow - critical
+			pushToast({
+				title: `Context overflow: ${formatK(tokens)}/${formatK(newWindow)} (${Math.round(usagePct)}%)`,
+				message: "Run /compact before continuing",
+				variant: "error",
+			}, 5000)
+		} else if (usagePct > 85) {
+			// Warning threshold
+			pushToast({
+				title: `Context near limit: ${formatK(tokens)}/${formatK(newWindow)} (${Math.round(usagePct)}%)`,
+				message: `${formatK(remaining)} remaining`,
+				variant: "warning",
+			}, 4000)
+		} else {
+			// Info - context window changed
+			pushToast({
+				title: `Context window: ${formatK(oldWindow)} → ${formatK(newWindow)}`,
+				message: `${Math.round(usagePct)}% used`,
+				variant: "info",
+			}, 3000)
+		}
+	})
 
 	// Expansion state
 	const [expandedToolIds, setExpandedToolIds] = createSignal<Set<string>>(new Set())
