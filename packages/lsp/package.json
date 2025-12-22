@@ -1,0 +1,16 @@
+{
+  "name": "@marvin-agents/lsp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "@marvin-agents/ai": "file:../ai",
+    "vscode-jsonrpc": "^8.2.1",
+    "vscode-languageserver-types": "^3.17.5"
+  }
+}
