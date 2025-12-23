@@ -396,8 +396,9 @@ function handleMessageEnd(
 
 	// Update usage - context window budget includes input + output for the full request
 	// totalTokens is already computed by providers as: (uncached_input + cacheRead + cacheWrite) + output
-	const msg = event.message as { usage?: { totalTokens: number } }
-	if (msg.usage) {
+	// Only update if totalTokens > 0 to avoid clearing bar on aborted responses
+	const msg = event.message as { usage?: { totalTokens?: number } }
+	if (msg.usage?.totalTokens) {
 		ctx.setContextTokens(msg.usage.totalTokens)
 	}
 }
