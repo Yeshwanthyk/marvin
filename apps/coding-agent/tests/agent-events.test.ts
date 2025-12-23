@@ -23,6 +23,7 @@ function createMockContext(overrides: Partial<EventHandlerContext> = {}): EventH
 		setContextTokens: mock(() => {}),
 		setRetryStatus: mock(() => {}),
 		setTurnCount: mock(() => {}),
+		setLspIterationCount: mock(() => {}),
 
 		queuedMessages: [],
 		setQueueCount: mock(() => {}),
