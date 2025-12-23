@@ -1,25 +1,26 @@
 /**
- * Tool logger hook - logs tool executions to stderr
- * 
- * Install: cp examples/hooks/tool-logger.ts ~/.config/marvin/hooks/
+ * Tool logger hook - logs tool executions to stderr.
+ *
+ * Install:
+ *   cp examples/hooks/tool-logger.ts ~/.config/marvin/hooks/
  */
 
-import type { HookModule } from "@marvin-agents/coding-agent/hooks"
+import type { HookFactory } from "@marvin-agents/coding-agent/hooks"
 
-const hook: HookModule = {
-	name: "tool-logger",
-	events: {
-		"tool.execute.before": async ({ tool, input }) => {
-			console.error(`[tool] ${tool.name} starting`)
-		},
-		"tool.execute.after": async ({ tool, output }) => {
-			console.error(`[tool] ${tool.name} complete`)
-		},
-		// Tool-specific hooks
-		"tool.execute.bash.before": async ({ input }) => {
-			console.error(`[bash] ${input.command?.split("\n")[0]}`)
-		},
-	},
+const hook: HookFactory = (marvin) => {
+	marvin.on("tool.execute.before", (ev) => {
+		if (ev.toolName === "bash") {
+			const cmd = typeof ev.input?.command === "string" ? ev.input.command : ""
+			console.error(`[tool] bash start: ${cmd.split("\n")[0] || "(empty)"}`)
+			return
+		}
+
+		console.error(`[tool] ${ev.toolName} start`)
+	})
+
+	marvin.on("tool.execute.after", (ev) => {
+		console.error(`[tool] ${ev.toolName} ${ev.isError ? "error" : "ok"}`)
+	})
 }
 
 export default hook
