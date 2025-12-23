@@ -25,7 +25,8 @@ bun run marvin
 - **Headless mode**: Scriptable via `--headless "prompt"` for automation
 - **Session persistence**: Auto-saves conversations, resume with session picker
 - **Thinking levels**: Configurable reasoning depth for supported models (`--thinking low|medium|high`)
-- **LSP integration**: TypeScript diagnostics after file modifications (auto-installs language servers)
+- **LSP in-loop**: Real-time diagnostics after file modifications—agent sees TypeScript errors immediately and can self-correct
+- **Subagents**: Delegate tasks to specialized agents with isolated contexts (parallel, chained, or single execution)
 - **Extensibility**: Drop-in custom slash commands, tools, and lifecycle hooks
 
 ## Architecture
@@ -213,6 +214,70 @@ export default hook;
 - `tool.execute.before` — Before tool runs (can block)
 - `tool.execute.after` — After tool runs (can modify result)
 
+### Subagents
+
+Delegate tasks to specialized agents with isolated context windows. Install from examples:
+
+```bash
+cp examples/tools/subagent/index.ts ~/.config/marvin/tools/subagent.ts
+cp examples/tools/subagent/agents/*.md ~/.config/marvin/agents/
+```
+
+**Modes:**
+
+| Mode | Usage | Description |
+|------|-------|-------------|
+| Single | `{ agent, task }` | One agent, one task |
+| Parallel | `{ tasks: [...] }` | Up to 8 agents concurrently |
+| Chain | `{ chain: [...] }` | Sequential, `{previous}` passes output |
+
+**Included agents:** scout (recon), planner, reviewer, debugger, tester, documenter, security, explainer
+
+**Example workflows:**
+```
+# Parallel recon
+Use subagent parallel: scout finds auth code, scout finds database code
+
+# Chained review
+Chain: scout → planner → reviewer
+```
+
+Create custom agents in `~/.config/marvin/agents/`:
+
+```markdown
+---
+name: my-agent
+description: One-line description
+tools: read, bash, grep
+model: claude-sonnet-4-5
+---
+
+System prompt for the agent.
+```
+
+### Review Pipeline
+
+Three-phase code review with subagent chaining:
+
+1. **review-explain** — Quick triage, file ordering, summaries
+2. **review-deep** — Line-by-line analysis with severity markers (🔴🟡💡✅)
+3. **review-verify** — False positive reduction, verification
+
+Install the review command and agents:
+```bash
+cp ~/.config/marvin/commands/review.md  # orchestrates the pipeline
+# Agents: review-explain.md, review-deep.md, review-verify.md
+```
+
+Usage:
+```
+/review              # Review HEAD~1
+/review HEAD~3       # Last 3 commits
+/review main..HEAD   # Branch diff
+```
+
+**Export to HTML** (with `/review-export`): Generates a standalone document with scroll-synced context pane and inline diff annotations using `@pierre/diffs`.
+
 ## Configuration
 
 `~/.config/marvin/config.json`:
@@ -230,14 +295,15 @@ export default hook;
 }
 ```
 
-### LSP Configuration
+### LSP In-Loop
 
-The LSP system provides real-time TypeScript diagnostics after file modifications:
+The LSP system creates a feedback loop: after every `write` or `edit`, diagnostics are injected into the tool result so the agent sees errors immediately.
 
-- **enabled**: Toggle LSP integration (default: `true`)
-- **autoInstall**: Auto-install `typescript-language-server` if missing (default: `true`)
+```
+Agent writes code → LSP analyzes → Errors injected → Agent self-corrects
+```
 
-Diagnostics are injected into `write` and `edit` tool results, helping the agent catch errors immediately.
+Footer shows live server status and diagnostic counts. Auto-installs `typescript-language-server` if missing.
 
 ## Environment Variables
 
