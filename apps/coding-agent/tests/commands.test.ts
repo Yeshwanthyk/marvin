@@ -165,4 +165,29 @@ describe("handleSlashCommand", () => {
 			expect(ctx.setMessages).toHaveBeenCalled()
 		})
 	})
+
+	describe("/theme", () => {
+		it("lists themes when no args", () => {
+			const ctx = createMockContext()
+			const ok = handleSlashCommand("/theme", ctx)
+			expect(ok).toBe(true)
+			expect(ctx.setMessages).toHaveBeenCalled()
+		})
+
+		it("sets theme when valid", () => {
+			const setTheme = mock(() => {})
+			const ctx = createMockContext({ setTheme })
+			const ok = handleSlashCommand("/theme aura", ctx)
+			expect(ok).toBe(true)
+			expect(setTheme).toHaveBeenCalledWith("aura")
+		})
+
+		it("rejects unknown theme", () => {
+			const setTheme = mock(() => {})
+			const ctx = createMockContext({ setTheme })
+			const ok = handleSlashCommand("/theme not-a-theme", ctx)
+			expect(ok).toBe(true)
+			expect(setTheme).not.toHaveBeenCalled()
+		})
+	})
 })
