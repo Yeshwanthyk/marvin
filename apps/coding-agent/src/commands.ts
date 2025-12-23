@@ -10,15 +10,7 @@ import type { SessionManager } from "./session-manager.js"
 import type { UIMessage, ActivityState } from "./types.js"
 import { handleCompact as doCompact } from "./compact-handler.js"
 import { updateAppConfig } from "./config.js"
-
-// Available theme names (must match BUILTIN_THEMES in @marvin-agents/open-tui)
-const THEME_NAMES = [
-	"marvin", "aura", "ayu", "catppuccin", "catppuccin-macchiato", "cobalt2",
-	"dracula", "everforest", "flexoki", "github", "gruvbox", "kanagawa", "lucent-orng",
-	"material", "matrix", "mercury", "monokai", "nightowl", "nord", "one-dark", "opencode",
-	"orng", "palenight", "rosepine", "solarized", "synthwave84", "tokyonight", "vercel",
-	"vesper", "zenburn",
-]
+import { THEME_NAMES } from "./theme-names.js"
 
 type KnownProvider = ReturnType<typeof getProviders>[number]
 

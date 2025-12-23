@@ -1,5 +1,6 @@
 import { getModels, getProviders } from '@marvin-agents/ai';
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
+import { THEME_NAMES } from "./theme-names.js";
 
 type KnownProvider = ReturnType<typeof getProviders>[number];
 
@@ -30,12 +31,7 @@ export const slashCommands: SlashCommand[] = [
     description: 'Set theme: /theme <name> (or /theme to list)',
     getArgumentCompletions: (argumentText: string) => {
       const prefix = argumentText.trim().toLowerCase();
-      const themes = ['marvin', 'aura', 'ayu', 'catppuccin', 'catppuccin-macchiato', 'cobalt2',
-        'dracula', 'everforest', 'flexoki', 'github', 'gruvbox', 'kanagawa', 'lucent-orng',
-        'material', 'matrix', 'mercury', 'monokai', 'nightowl', 'nord', 'one-dark', 'opencode',
-        'orng', 'palenight', 'rosepine', 'solarized', 'synthwave84', 'tokyonight', 'vercel',
-        'vesper', 'zenburn'];
-      return themes
+      return THEME_NAMES
         .filter((t) => t.startsWith(prefix))
         .map((t) => ({ value: t, label: t }));
     },
