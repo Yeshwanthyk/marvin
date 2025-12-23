@@ -6,6 +6,7 @@ import { CodeBlock, Diff, TextAttributes, useTheme, parseColor, type MouseEvent,
 import { Show, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
 import { getToolText, getEditDiffText } from "./utils.js"
+import { getAgentDelegationArgs, getAgentDelegationUi, type AgentDelegationArgs, type AgentDelegationUi, type DelegationStatus } from "./tool-ui-contracts.js"
 
 // Re-export for backwards compatibility
 export { getToolText, getEditDiffText }
@@ -49,7 +50,124 @@ function DiffPreview(props: { text: string }): JSX.Element {
 	)
 }
 
+const delegationOkColor = diffAddedColor
 
+function firstLine(s: string): string {
+	return s.split("\n")[0] || ""
+}
+
+function truncate(s: string, max: number): string {
+	if (s.length <= max) return s
+	return s.slice(0, Math.max(0, max - 1)) + "…"
+}
+
+function delegationSymbol(status: DelegationStatus | "unknown"): string {
+	switch (status) {
+		case "running":
+			return "◌"
+		case "pending":
+			return "○"
+		case "ok":
+			return "✓"
+		case "error":
+			return "✕"
+		default:
+			return "·"
+	}
+}
+
+function delegationColor(theme: Theme, status: DelegationStatus | "unknown"): ReturnType<typeof parseColor> {
+	if (status === "error") return theme.error
+	if (status === "ok") return delegationOkColor
+	if (status === "running") return theme.accent
+	return theme.textMuted
+}
+
+function formatDelegationSuffix(ui: AgentDelegationUi): string {
+	const ok = ui.items.filter((i) => i.status === "ok").length
+	const err = ui.items.filter((i) => i.status === "error").length
+	const total = ui.items.length
+	if (err > 0) return `${ok} ok · ${err} err / ${total}`
+	return `${ok} ok / ${total}`
+}
+
+function AgentDelegationView(props: {
+	args: AgentDelegationArgs | null
+	ui: AgentDelegationUi | null
+	expanded: boolean
+}): JSX.Element {
+	const { theme } = useTheme()
+	const maxItems = () => props.expanded ? 50 : 8
+
+	const rows = () => {
+		if (props.ui) {
+			return props.ui.items.slice(0, maxItems()).map((item) => ({
+				id: item.id,
+				agent: item.agent,
+				task: item.task,
+				status: item.status as DelegationStatus | "unknown",
+				preview: item.preview,
+				active: props.ui?.activeId === item.id,
+			}))
+		}
+		if (props.args?.chain?.length) {
+			return props.args.chain.slice(0, maxItems()).map((item, idx) => ({
+				id: String(idx + 1),
+				agent: item.agent,
+				task: item.task,
+				status: "unknown" as const,
+				preview: undefined,
+				active: false,
+			}))
+		}
+		if (props.args?.tasks?.length) {
+			return props.args.tasks.slice(0, maxItems()).map((item, idx) => ({
+				id: String(idx + 1),
+				agent: item.agent,
+				task: item.task,
+				status: "unknown" as const,
+				preview: undefined,
+				active: false,
+			}))
+		}
+		if (props.args?.agent && props.args?.task) {
+			return [{
+				id: "1",
+				agent: props.args.agent,
+				task: props.args.task,
+				status: "unknown" as const,
+				preview: undefined,
+				active: false,
+			}]
+		}
+		return []
+	}
+
+	return (
+		<box flexDirection="column" backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+			{rows().map((row) => (
+				<box flexDirection="column" gap={0}>
+					<box flexDirection="row" gap={1}>
+						<text selectable={false} fg={delegationColor(theme, row.status)}>{delegationSymbol(row.status)}</text>
+						<text fg={row.active ? theme.accent : theme.text}>{truncate(row.agent, 24)}</text>
+						<text fg={theme.textMuted}>{truncate(firstLine(row.task), 80)}</text>
+					</box>
+					<Show when={props.expanded && row.preview}>
+						<box paddingLeft={2}>
+							<text fg={theme.textMuted}>{truncate(firstLine(String(row.preview)), 120)}</text>
+						</box>
+					</Show>
+				</box>
+			))}
+			<Show when={props.ui && props.ui.items.length > maxItems()}>
+				<text fg={theme.textMuted}>… {props.ui!.items.length - maxItems()} more …</text>
+			</Show>
+			<Show when={!props.ui && ((props.args?.chain?.length ?? 0) > maxItems() || (props.args?.tasks?.length ?? 0) > maxItems())}>
+				<text fg={theme.textMuted}>… more …</text>
+			</Show>
+		</box>
+	)
+}
 
 function truncateHeadTail(text: string, headCount: number, tailCount: number): { text: string; truncated: boolean; omitted: number } {
 	const lines = replaceTabs(text).split("\n")
@@ -101,15 +219,13 @@ function toolTitle(name: string, args: any): string {
 			return shortenPath(String(args?.path || args?.file_path || "…"))
 		case "edit":
 			return shortenPath(String(args?.path || args?.file_path || "…"))
-		case "subagent": {
-			// Show mode and agent info
-			if (args?.chain?.length > 0) return `chain (${args.chain.length} steps)`
-			if (args?.tasks?.length > 0) return `parallel (${args.tasks.length} tasks)`
-			if (args?.agent) return args.agent
+		default: {
+			const delegation = getAgentDelegationArgs(args)
+			if (delegation?.chain?.length) return `chain (${delegation.chain.length} steps)`
+			if (delegation?.tasks?.length) return `parallel (${delegation.tasks.length} tasks)`
+			if (delegation?.agent) return delegation.agent
 			return ""
 		}
-		default:
-			return ""
 	}
 }
 
@@ -148,6 +264,7 @@ interface ToolRenderContext {
 	args: any
 	output: string | null
 	editDiff: string | null
+	result: ToolBlockProps["result"] | null
 	isError: boolean
 	isComplete: boolean
 	expanded: boolean
@@ -162,7 +279,9 @@ interface ToolRenderer {
 
 function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 	const title = toolTitle(ctx.name, ctx.args)
-	return <ToolHeader label={ctx.name} detail={title} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
+	const delegationUi = getAgentDelegationUi(ctx.result?.details)
+	const suffix = delegationUi ? formatDelegationSuffix(delegationUi) : undefined
+	return <ToolHeader label={ctx.name} detail={title} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 }
 
 // Tool header: symbol label detail · suffix
@@ -297,6 +416,7 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 		args: props.args,
 		output: props.output,
 		editDiff: props.editDiff,
+		result: props.result ?? null,
 		isError: props.isError,
 		isComplete: props.isComplete,
 		get expanded() { return props.expanded ?? false },
@@ -306,6 +426,13 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 	const renderer = registry[props.name] ?? {
 		mode: () => "block",
 		renderBody: (innerCtx) => {
+			const delegationUi = getAgentDelegationUi(innerCtx.result?.details)
+			const delegationArgs = getAgentDelegationArgs(innerCtx.args)
+
+			if (delegationUi || delegationArgs) {
+				return <AgentDelegationView args={delegationArgs} ui={delegationUi} expanded={innerCtx.expanded} />
+			}
+
 			const out = innerCtx.output ? innerCtx.output : JSON.stringify(innerCtx.args ?? {}, null, 2)
 			const rendered = innerCtx.expanded ? replaceTabs(out) : truncateLines(out, 20).text
 			return <CodeBlock content={rendered} filetype="text" title="output" showLineNumbers={false} />

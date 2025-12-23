@@ -24,11 +24,18 @@ export function prettyDiagnostic(d: Diagnostic): string {
   return `${sev} [${line}:${col}] ${d.message}`
 }
 
+export type DiagnosticSummary = {
+  fileText?: string
+  projectText?: string
+  fileCounts: { errors: number; warnings: number }
+  projectCounts: { errors: number; warnings: number }
+}
+
 export function summarizeDiagnostics(input: {
   diagnosticsByFile: Record<string, Diagnostic[]>
   filePath: string
   caps?: Partial<LspDiagnosticCaps>
-}): { fileText?: string; projectText?: string } {
+}): DiagnosticSummary {
   const caps: LspDiagnosticCaps = { ...DEFAULT_CAPS, ...(input.caps ?? {}) }
 
   const byFile = input.diagnosticsByFile
@@ -39,7 +46,13 @@ export function summarizeDiagnostics(input: {
     .filter((d) => d.severity === 1 || d.severity === 2)
     .sort((a, b) => prioritize(a) - prioritize(b))
 
+  const countDiagnostics = (ds: Diagnostic[]) => ({
+    errors: ds.filter((d) => d.severity === 1).length,
+    warnings: ds.filter((d) => d.severity === 2).length,
+  })
+
   const targetFiltered = filter(target)
+  const fileCounts = countDiagnostics(targetFiltered)
 
   let linesBudget = caps.maxTotalLines
 
@@ -80,5 +93,15 @@ export function summarizeDiagnostics(input: {
 
   const projectText = projectBlocks.length ? "\n" + projectBlocks.join("\n") : undefined
 
-  return { fileText, projectText }
+  // Count project diagnostics
+  let projectErrors = 0
+  let projectWarnings = 0
+  for (const [p, ds] of Object.entries(byFile)) {
+    if (p === input.filePath) continue
+    const counts = countDiagnostics(filter(ds))
+    projectErrors += counts.errors
+    projectWarnings += counts.warnings
+  }
+
+  return { fileText, projectText, fileCounts, projectCounts: { errors: projectErrors, warnings: projectWarnings } }
 }

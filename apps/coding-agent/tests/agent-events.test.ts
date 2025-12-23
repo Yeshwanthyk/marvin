@@ -22,6 +22,7 @@ function createMockContext(overrides: Partial<EventHandlerContext> = {}): EventH
 		setIsResponding: mock(() => {}),
 		setContextTokens: mock(() => {}),
 		setRetryStatus: mock(() => {}),
+		setTurnCount: mock(() => {}),
 
 		queuedMessages: [],
 		setQueueCount: mock(() => {}),
@@ -55,7 +56,7 @@ describe("createAgentEventHandler", () => {
 			handler({
 				type: "message_start",
 				message: { role: "assistant", content: [] },
-			} as AgentEvent)
+			} as unknown as AgentEvent)
 
 			expect(ctx.streamingMessageId.current).not.toBeNull()
 			expect(ctx.setMessages).toHaveBeenCalled()
@@ -70,7 +71,7 @@ describe("createAgentEventHandler", () => {
 			handler({
 				type: "message_start",
 				message: { role: "user", content: [{ type: "text", text: "test message" }] },
-			} as AgentEvent)
+			} as unknown as AgentEvent)
 
 			expect(ctx.queuedMessages.length).toBe(0)
 			expect(ctx.setQueueCount).toHaveBeenCalledWith(0)
@@ -90,7 +91,7 @@ describe("createAgentEventHandler", () => {
 					role: "assistant",
 					content: [{ type: "text", text: "hello world" }],
 				},
-			} as AgentEvent)
+			} as unknown as AgentEvent)
 
 			// Wait for throttled update (80ms throttle + buffer)
 			await new Promise((r) => setTimeout(r, 100))
@@ -108,7 +109,7 @@ describe("createAgentEventHandler", () => {
 					role: "assistant",
 					content: [{ type: "thinking", thinking: "considering the problem carefully and thoroughly" }],
 				},
-			} as AgentEvent)
+			} as unknown as AgentEvent)
 
 			// Wait for throttled update (80ms throttle + buffer)
 			await new Promise((r) => setTimeout(r, 100))
@@ -129,7 +130,7 @@ describe("createAgentEventHandler", () => {
 					content: [{ type: "text", text: "done" }],
 					usage: { input: 100, output: 50, cacheRead: 10, totalTokens: 160 },
 				},
-			} as AgentEvent)
+			} as unknown as AgentEvent)
 
 			expect(ctx.streamingMessageId.current).toBeNull()
 			expect(ctx.sessionManager.appendMessage).toHaveBeenCalled()
@@ -148,7 +149,7 @@ describe("createAgentEventHandler", () => {
 				toolCallId: "tool-1",
 				toolName: "bash",
 				args: { command: "ls" },
-			} as AgentEvent)
+			} as unknown as AgentEvent)
 
 			expect(ctx.setActivityState).toHaveBeenCalledWith("tool")
 			expect(ctx.setToolBlocks).toHaveBeenCalled()
@@ -166,9 +167,55 @@ describe("createAgentEventHandler", () => {
 				toolCallId: "tool-1",
 				result: { content: [{ type: "text", text: "output" }] },
 				isError: false,
-			} as AgentEvent)
+			} as unknown as AgentEvent)
 
 			expect(ctx.setToolBlocks).toHaveBeenCalled()
+		})
+	})
+
+	describe("tool_execution_update", () => {
+		it("increments updateSeq even when output is empty", async () => {
+			const toolBlocks: any[] = []
+			const ctx = createMockContext({
+				streamingMessageId: { current: "test-id" },
+				setToolBlocks: mock((updater) => {
+					const result = updater(toolBlocks as any)
+					toolBlocks.length = 0
+					toolBlocks.push(...result)
+				}),
+			})
+			const handler = createAgentEventHandler(ctx)
+
+			handler({
+				type: "tool_execution_start",
+				toolCallId: "tool-1",
+				toolName: "custom",
+				args: {},
+			} as unknown as AgentEvent)
+
+			handler({
+				type: "tool_execution_update",
+				toolCallId: "tool-1",
+				toolName: "custom",
+				args: {},
+				partialResult: { content: [], details: { ui: { kind: "agent_delegation", mode: "single", items: [] } } },
+			} as unknown as AgentEvent)
+
+			await new Promise((r) => setTimeout(r, 80))
+
+			handler({
+				type: "tool_execution_update",
+				toolCallId: "tool-1",
+				toolName: "custom",
+				args: {},
+				partialResult: { content: [], details: { ui: { kind: "agent_delegation", mode: "single", items: [] } } },
+			} as unknown as AgentEvent)
+
+			await new Promise((r) => setTimeout(r, 80))
+
+			expect(toolBlocks.length).toBe(1)
+			expect(toolBlocks[0].id).toBe("tool-1")
+			expect(toolBlocks[0].updateSeq).toBe(2)
 		})
 	})
 
@@ -177,7 +224,7 @@ describe("createAgentEventHandler", () => {
 			const ctx = createMockContext()
 			const handler = createAgentEventHandler(ctx)
 
-			handler({ type: "agent_end" } as AgentEvent)
+			handler({ type: "agent_end" } as unknown as AgentEvent)
 
 			expect(ctx.setIsResponding).toHaveBeenCalledWith(false)
 			expect(ctx.setActivityState).toHaveBeenCalledWith("idle")
@@ -188,7 +235,7 @@ describe("createAgentEventHandler", () => {
 			ctx.retryState.attempt = 2
 			const handler = createAgentEventHandler(ctx)
 
-			handler({ type: "agent_end" } as AgentEvent)
+			handler({ type: "agent_end" } as unknown as AgentEvent)
 
 			expect(ctx.retryState.attempt).toBe(0)
 		})

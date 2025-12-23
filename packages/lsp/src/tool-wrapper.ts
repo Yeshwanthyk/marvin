@@ -3,10 +3,23 @@ import path from "node:path"
 import type { LspManager, LspDiagnosticCaps } from "./types.js"
 import { summarizeDiagnostics } from "./diagnostics.js"
 
+export type LspDiagnosticsInjectedInfo = {
+  filePath: string
+  errors: number
+  warnings: number
+}
+
+export type WrapToolsOptions = {
+  cwd: string
+  caps?: Partial<LspDiagnosticCaps>
+  /** Called when LSP diagnostics are injected into a tool result */
+  onDiagnosticsInjected?: (info: LspDiagnosticsInjectedInfo) => void
+}
+
 export function wrapToolsWithLspDiagnostics(
   tools: AgentTool<any, any>[],
   lsp: LspManager,
-  opts: { cwd: string; caps?: Partial<LspDiagnosticCaps> }
+  opts: WrapToolsOptions
 ): AgentTool<any, any>[] {
   return tools.map((tool) => {
     if (tool.name !== "write" && tool.name !== "edit") return tool
@@ -28,6 +41,13 @@ export function wrapToolsWithLspDiagnostics(
         const extra = [summary.fileText, summary.projectText].filter(Boolean).join("\n")
 
         if (!extra) return result
+
+        // Notify callback that diagnostics were injected
+        opts.onDiagnosticsInjected?.({
+          filePath: absPath,
+          errors: summary.fileCounts.errors + summary.projectCounts.errors,
+          warnings: summary.fileCounts.warnings + summary.projectCounts.warnings,
+        })
 
         return {
           content: [...result.content, { type: "text", text: extra }],

@@ -99,7 +99,13 @@ export const runTuiOpen = async (args?: {
 		enabled: loaded.lsp.enabled,
 		autoInstall: loaded.lsp.autoInstall,
 	})
-	const tools = wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunner), lsp, { cwd })
+
+	// LSP iteration tracking - ref populated by App component
+	const lspIterationRef = { increment: () => {} }
+	const tools = wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunner), lsp, {
+		cwd,
+		onDiagnosticsInjected: () => lspIterationRef.increment(),
+	})
 
 	// Build tool metadata registry for custom rendering
 	const toolByName = new Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>()
@@ -175,7 +181,7 @@ export const runTuiOpen = async (args?: {
 			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking} theme={loaded.theme}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
 			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
-			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} />
+			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} lspIterationRef={lspIterationRef} />
 	), { targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} })
 }
 
@@ -191,6 +197,8 @@ interface AppProps {
 	hookRunner: HookRunner
 	toolByName: Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>
 	lsp: LspManager
+	/** Ref for LSP iteration tracking - App sets the callback */
+	lspIterationRef: { increment: () => void }
 }
 
 function App(props: AppProps) {
@@ -218,6 +226,12 @@ function App(props: AppProps) {
 	const [displayContextWindow, setDisplayContextWindow] = createSignal(props.model.contextWindow)
 	const [contextTokens, setContextTokens] = createSignal(0)
 	const [retryStatus, setRetryStatus] = createSignal<string | null>(null)
+	const [turnCount, setTurnCount] = createSignal(0)
+	const [lspIterationCount, setLspIterationCount] = createSignal(0)
+
+	// Wire up LSP iteration ref to state
+	props.lspIterationRef.increment = () => setLspIterationCount((c) => c + 1)
+
 	const queuedMessages: string[] = []
 	const [queueCount, setQueueCount] = createSignal(0)
 	const retryConfig = { enabled: true, maxRetries: 3, baseDelayMs: 2000 }
@@ -314,7 +328,7 @@ function App(props: AppProps) {
 	const eventCtx: EventHandlerContext = {
 		setMessages: setMessages as (updater: (prev: UIMessage[]) => UIMessage[]) => void,
 		setToolBlocks: setToolBlocks as (updater: (prev: ToolBlock[]) => ToolBlock[]) => void,
-		setActivityState, setIsResponding, setContextTokens, setRetryStatus,
+		setActivityState, setIsResponding, setContextTokens, setRetryStatus, setTurnCount, setLspIterationCount,
 		queuedMessages, setQueueCount, sessionManager, streamingMessageId: streamingMessageIdRef,
 		retryConfig, retryablePattern, retryState, agent: agent as EventHandlerContext["agent"],
 		hookRunner: props.hookRunner,
@@ -332,6 +346,9 @@ function App(props: AppProps) {
 		void updateAppConfig({ configDir: props.configDir }, { theme: name })
 	}
 
+	// Ref for exit handler - populated by MainView once renderer is available
+	const exitHandlerRef = { current: () => process.exit(0) }
+
 	const cmdCtx: CommandContext = {
 		agent, sessionManager, configDir: props.configDir, configPath: props.configPath,
 		codexTransport: props.codexTransport, getApiKey: props.getApiKey,
@@ -341,6 +358,7 @@ function App(props: AppProps) {
 		setMessages: setMessages as CommandContext["setMessages"], setToolBlocks: setToolBlocks as CommandContext["setToolBlocks"],
 		setContextTokens, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode,
 		setTheme: handleThemeChange,
+		onExit: () => exitHandlerRef.current(),
 		hookRunner: props.hookRunner,
 	}
 
@@ -406,9 +424,9 @@ function App(props: AppProps) {
 		<ThemeProvider mode="dark" themeName={currentTheme()} onThemeChange={handleThemeChange}>
 			<MainView messages={messages()} toolBlocks={toolBlocks()} isResponding={isResponding()} activityState={activityState()}
 				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
-				contextTokens={contextTokens()} contextWindow={displayContextWindow()} queueCount={queueCount()} retryStatus={retryStatus()}
+				contextTokens={contextTokens()} contextWindow={displayContextWindow()} queueCount={queueCount()} retryStatus={retryStatus()} turnCount={turnCount()} lspIterationCount={lspIterationCount()}
 				diffWrapMode={diffWrapMode()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
-				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking} lsp={props.lsp} />
+				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking} exitHandlerRef={exitHandlerRef} lsp={props.lsp} />
 		</ThemeProvider>
 	)
 }
@@ -418,10 +436,11 @@ function App(props: AppProps) {
 interface MainViewProps {
 	messages: UIMessage[]; toolBlocks: ToolBlock[]; isResponding: boolean; activityState: ActivityState
 	thinkingVisible: boolean; modelId: string; thinking: ThinkingLevel; provider: KnownProvider
-	contextTokens: number; contextWindow: number; queueCount: number; retryStatus: string | null; diffWrapMode: "word" | "none"
+	contextTokens: number; contextWindow: number; queueCount: number; retryStatus: string | null; turnCount: number; lspIterationCount: number; diffWrapMode: "word" | "none"
 	customCommands: Map<string, CustomCommand>
 	onSubmit: (text: string, clearFn?: () => void) => void; onAbort: () => string | null
 	onToggleThinking: () => void; onCycleModel: () => void; onCycleThinking: () => void
+	exitHandlerRef: { current: () => void }
 	lsp: LspManager
 }
 
@@ -502,9 +521,14 @@ function MainView(props: MainViewProps) {
 	// Exit handler - cleans up renderer before exit
 	const renderer = useRenderer()
 	const exitApp = () => {
-		renderer.destroy()
-		process.exit(0)
+		try {
+			renderer.destroy()
+		} finally {
+			process.exit(0)
+		}
 	}
+	// Register exit handler with parent so commands can use it
+	props.exitHandlerRef.current = exitApp
 
 	// Toasts & Clipboard
 	const [toasts, setToasts] = createSignal<ToastItem[]>([])
@@ -626,17 +650,11 @@ function MainView(props: MainViewProps) {
 					onContentChange={() => { if (textareaRef) { const text = textareaRef.plainText; if (!text.startsWith("/") && !text.includes("@")) { setShowAutocomplete(false); return }; const cursor = textareaRef.logicalCursor; updateAutocomplete(text, cursor.row, cursor.col) } }}
 					onSubmit={() => {
 						if (!textareaRef) return
-						const text = textareaRef.plainText.trim()
-						// Intercept exit commands to ensure proper cleanup
-						if (text === "/exit" || text === "/quit") {
-							exitApp()
-							return
-						}
 						props.onSubmit(textareaRef.plainText, () => textareaRef?.clear())
 					}} />
 			</box>
 			<Footer modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
-				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
+				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} turnCount={props.turnCount} lspIterationCount={props.lspIterationCount} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
 			<ToastViewport toasts={toasts()} />
 		</box>
 	)

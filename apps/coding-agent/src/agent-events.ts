@@ -30,6 +30,8 @@ export interface EventHandlerContext {
 	setIsResponding: (v: boolean) => void
 	setContextTokens: (v: number) => void
 	setRetryStatus: (v: string | null) => void
+	setTurnCount: (v: number) => void
+	setLspIterationCount: (v: number) => void
 
 	// Queue management
 	queuedMessages: string[]
@@ -214,11 +216,14 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		// Emit hook events for agent lifecycle (fire-and-forget)
 		if (event.type === "agent_start") {
 			turnIndex = 0
+			ctx.setTurnCount(0) // Reset turn count for new agent run
+			ctx.setLspIterationCount(0) // Reset LSP iteration count for new agent run
 			extractionCache = createExtractionCache() // Reset for new agent run
 			void ctx.hookRunner?.emit({ type: "agent.start" })
 		}
 
 		if (event.type === "turn_start") {
+			ctx.setTurnCount(turnIndex + 1) // Update UI with current turn (1-indexed for display)
 			void ctx.hookRunner?.emit({ type: "turn.start", turnIndex })
 		}
 
@@ -425,6 +430,7 @@ function handleToolStart(
 		id: event.toolCallId,
 		name: event.toolName,
 		args: event.args,
+		updateSeq: 0,
 		isError: false,
 		isComplete: false,
 		// Attach metadata for custom rendering
@@ -449,22 +455,24 @@ function handleToolUpdateImmediate(
 	event: Extract<AgentEvent, { type: "tool_execution_update" }>,
 	ctx: EventHandlerContext
 ): void {
-	const updateTool = (tools: ToolBlock[]) =>
-		tools.map((t) =>
-			t.id === event.toolCallId
-				? { ...t, output: getToolText(event.partialResult), result: event.partialResult }
+	const makeToolUpdater = (toolCallId: string, partialResult: typeof event.partialResult) =>
+		(t: ToolBlock) =>
+			t.id === toolCallId
+				? {
+						...t,
+						updateSeq: (t.updateSeq ?? 0) + 1,
+						output: getToolText(partialResult),
+						result: partialResult,
+					}
 				: t
-		)
 
-	const toolUpdater = (t: ToolBlock) =>
-		t.id === event.toolCallId
-			? { ...t, output: getToolText(event.partialResult), result: event.partialResult }
-			: t
+	const toolUpdater = makeToolUpdater(event.toolCallId, event.partialResult)
+	const updateTools = (tools: ToolBlock[]) => tools.map(toolUpdater)
 
-	ctx.setToolBlocks(updateTool)
+	ctx.setToolBlocks(updateTools)
 	updateStreamingMessage(ctx, (msg) => ({
 		...msg,
-		tools: updateTool(msg.tools || []),
+		tools: updateTools(msg.tools || []),
 		contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, toolUpdater),
 	}))
 }
@@ -588,5 +596,6 @@ function handleAgentEnd(
 	batch(() => {
 		ctx.setIsResponding(false)
 		ctx.setActivityState("idle")
+		ctx.setTurnCount(0) // Reset turn count when agent completes
 	})
 }

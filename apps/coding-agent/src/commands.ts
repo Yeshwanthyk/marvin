@@ -61,6 +61,9 @@ export interface CommandContext {
 	// Theme
 	setTheme?: (name: string) => void
 
+	// Exit handler - performs cleanup before exit (optional for backwards compat)
+	onExit?: () => void
+
 	// Hook runner for lifecycle events (optional for backwards compat)
 	hookRunner?: import("./hooks/index.js").HookRunner
 }
@@ -92,8 +95,13 @@ function addSystemMessage(ctx: CommandContext, content: string): void {
 
 // ----- Individual Command Handlers -----
 
-function handleExit(): boolean {
-	process.exit(0)
+function handleExit(ctx: CommandContext): boolean {
+	if (ctx.onExit) {
+		ctx.onExit()
+	} else {
+		process.exit(0)
+	}
+	return true // Won't reach here if onExit calls process.exit
 }
 
 function handleClear(ctx: CommandContext): boolean {
@@ -263,7 +271,7 @@ export function handleSlashCommand(line: string, ctx: CommandContext): boolean |
 	const trimmed = line.trim()
 
 	if (trimmed === "/exit" || trimmed === "/quit") {
-		return handleExit()
+		return handleExit(ctx)
 	}
 
 	if (trimmed === "/clear") {

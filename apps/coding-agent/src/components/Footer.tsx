@@ -25,6 +25,8 @@ export interface FooterProps {
   queueCount: number
   activityState: ActivityState
   retryStatus: string | null
+  turnCount: number
+  lspIterationCount: number
   spinnerFrame: number
   lsp: LspManager
 }
@@ -142,6 +144,9 @@ export function Footer(props: FooterProps) {
               <span style={{ fg: theme.textMuted }}>)</span>
             </text>
           </Show>
+        </Show>
+        <Show when={props.lspIterationCount > 0}>
+          <text fg={theme.accent}>⟳{props.lspIterationCount}</text>
         </Show>
       </box>
       <Show when={props.retryStatus} fallback={

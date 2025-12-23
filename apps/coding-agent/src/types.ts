@@ -31,6 +31,8 @@ export interface ToolBlock {
 	id: string
 	name: string
 	args: unknown
+	/** Monotonic counter to invalidate UI caches on tool updates */
+	updateSeq?: number
 	output?: string
 	editDiff?: string
 	isError: boolean

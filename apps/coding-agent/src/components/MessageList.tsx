@@ -163,7 +163,8 @@ export function buildContentItems(
 								getCachedItem(`tool:${block.tool.id}:${block.tool.isComplete}`, item, (a, b) =>
 									a.type === "tool" && b.type === "tool" &&
 									a.tool.id === b.tool.id && a.tool.isComplete === b.tool.isComplete &&
-									a.tool.output === b.tool.output
+									a.tool.output === b.tool.output &&
+									(a.tool.updateSeq ?? 0) === (b.tool.updateSeq ?? 0)
 								)
 							)
 							renderedToolIds.add(block.tool.id)
@@ -195,7 +196,8 @@ export function buildContentItems(
 							getCachedItem(`tool:${tool.id}:${tool.isComplete}`, item, (a, b) =>
 								a.type === "tool" && b.type === "tool" &&
 								a.tool.id === b.tool.id && a.tool.isComplete === b.tool.isComplete &&
-								a.tool.output === b.tool.output
+								a.tool.output === b.tool.output &&
+								(a.tool.updateSeq ?? 0) === (b.tool.updateSeq ?? 0)
 							)
 						)
 						renderedToolIds.add(tool.id)
@@ -223,7 +225,8 @@ export function buildContentItems(
 							getCachedItem(`tool:${tool.id}:${tool.isComplete}`, item, (a, b) =>
 								a.type === "tool" && b.type === "tool" &&
 								a.tool.id === b.tool.id && a.tool.isComplete === b.tool.isComplete &&
-								a.tool.output === b.tool.output
+								a.tool.output === b.tool.output &&
+								(a.tool.updateSeq ?? 0) === (b.tool.updateSeq ?? 0)
 							)
 						)
 						renderedToolIds.add(tool.id)
