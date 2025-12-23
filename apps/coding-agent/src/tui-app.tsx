@@ -499,8 +499,14 @@ function MainView(props: MainViewProps) {
 		}
 	})
 
-	// Toasts & Clipboard
+	// Exit handler - cleans up renderer before exit
 	const renderer = useRenderer()
+	const exitApp = () => {
+		renderer.destroy()
+		process.exit(0)
+	}
+
+	// Toasts & Clipboard
 	const [toasts, setToasts] = createSignal<ToastItem[]>([])
 	const toastTimeouts = new Set<ReturnType<typeof setTimeout>>()
 	onCleanup(() => { for (const t of toastTimeouts) clearTimeout(t); toastTimeouts.clear() })
@@ -577,6 +583,7 @@ function MainView(props: MainViewProps) {
 		onAbort: props.onAbort, onToggleThinking: props.onToggleThinking, onCycleModel: props.onCycleModel, onCycleThinking: props.onCycleThinking,
 		toggleLastToolExpanded, copySelectionToClipboard,
 		clearEditor: () => textareaRef?.clear(), setEditorText: (t) => textareaRef?.setText(t), lastCtrlC,
+		onExit: exitApp,
 	})
 
 	return (
@@ -617,7 +624,16 @@ function MainView(props: MainViewProps) {
 						{ name: "k", ctrl: true, action: "delete-to-line-end" as const }, { name: "u", ctrl: true, action: "delete-to-line-start" as const }, { name: "w", ctrl: true, action: "delete-word-backward" as const }]}
 					onKeyDown={handleKeyDown}
 					onContentChange={() => { if (textareaRef) { const text = textareaRef.plainText; if (!text.startsWith("/") && !text.includes("@")) { setShowAutocomplete(false); return }; const cursor = textareaRef.logicalCursor; updateAutocomplete(text, cursor.row, cursor.col) } }}
-					onSubmit={() => { if (textareaRef) { const ref = textareaRef; props.onSubmit(ref.plainText, () => ref.clear()) } }} />
+					onSubmit={() => {
+						if (!textareaRef) return
+						const text = textareaRef.plainText.trim()
+						// Intercept exit commands to ensure proper cleanup
+						if (text === "/exit" || text === "/quit") {
+							exitApp()
+							return
+						}
+						props.onSubmit(textareaRef.plainText, () => textareaRef?.clear())
+					}} />
 			</box>
 			<Footer modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
 				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} spinnerFrame={spinnerFrame()} lsp={props.lsp} />

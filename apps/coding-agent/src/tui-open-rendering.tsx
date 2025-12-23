@@ -10,8 +10,13 @@ import { getToolText, getEditDiffText } from "./utils.js"
 // Re-export for backwards compatibility
 export { getToolText, getEditDiffText }
 
-// Design tokens
-const toolSymbol = "›"
+// Design tokens - state-based symbols
+const symbols = {
+	running: "◌",
+	complete: "○",
+	expanded: "●",
+	error: "✕",
+}
 
 const shortenPath = (p: string): string => {
 	const home = process.env.HOME || process.env.USERPROFILE || ""
@@ -96,8 +101,15 @@ function toolTitle(name: string, args: any): string {
 			return shortenPath(String(args?.path || args?.file_path || "…"))
 		case "edit":
 			return shortenPath(String(args?.path || args?.file_path || "…"))
+		case "subagent": {
+			// Show mode and agent info
+			if (args?.chain?.length > 0) return `chain (${args.chain.length} steps)`
+			if (args?.tasks?.length > 0) return `parallel (${args.tasks.length} tasks)`
+			if (args?.agent) return args.agent
+			return ""
+		}
 		default:
-			return name
+			return ""
 	}
 }
 
@@ -150,41 +162,46 @@ interface ToolRenderer {
 
 function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 	const title = toolTitle(ctx.name, ctx.args)
-	const suffix = !ctx.isComplete ? "◌" : ctx.isError ? "✕" : ""
-	return <ToolHeader label={ctx.name} detail={title} suffix={suffix} />
+	return <ToolHeader label={ctx.name} detail={title} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 }
 
-// Dot leader fill for alignment
-function dotFill(width: number): string {
-	return width > 0 ? " " + "·".repeat(width) + " " : " "
+// Tool header: symbol label detail · suffix
+// Symbol shows state: ◌ running, ○ complete, ● expanded, ✕ error
+interface ToolHeaderProps {
+	label: string
+	detail?: string
+	suffix?: string
+	isComplete: boolean
+	isError: boolean
+	expanded: boolean
 }
 
-// Tool header with symbol, label, detail, and right-aligned suffix
-// Format: ◆ label detail ···················· suffix ▸
-function ToolHeader(props: { label: string; detail?: string; suffix?: string; maxWidth?: number }): JSX.Element {
+function ToolHeader(props: ToolHeaderProps): JSX.Element {
 	const { theme } = useTheme()
-	const maxW = props.maxWidth ?? 72
 	
-	const contentWidth = () => {
-		const labelW = props.label.length + 2 // "◆ " + label
-		const detailW = props.detail ? props.detail.length + 1 : 0
-		const suffixW = props.suffix ? props.suffix.length + 2 : 0 // suffix + " ▸"
-		return labelW + detailW + suffixW
+	const symbol = () => {
+		if (!props.isComplete) return symbols.running
+		if (props.isError) return symbols.error
+		if (props.expanded) return symbols.expanded
+		return symbols.complete
 	}
 	
-	const dots = () => dotFill(Math.max(0, maxW - contentWidth()))
+	const symbolColor = () => {
+		if (props.isError) return theme.error
+		if (!props.isComplete) return theme.textMuted
+		return theme.accent
+	}
 	
 	return (
 		<text selectable={false}>
-			<span style={{ fg: theme.accent }}>{toolSymbol}</span>
+			<span style={{ fg: symbolColor() }}>{symbol()}</span>
 			{" "}
 			<span style={{ fg: theme.accent }}>{props.label}</span>
 			<Show when={props.detail}>
 				<span style={{ fg: theme.text }}> {props.detail}</span>
 			</Show>
-			<span style={{ fg: theme.textMuted }}>{dots()}</span>
 			<Show when={props.suffix}>
-				<span style={{ fg: theme.textMuted }}>{props.suffix}</span>
+				<span style={{ fg: theme.textMuted }}> · {props.suffix}</span>
 			</Show>
 		</text>
 	)
@@ -197,11 +214,8 @@ const registry: Record<string, ToolRenderer> = {
 		renderHeader: (ctx) => {
 			const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
 			const lines = ctx.output ? ctx.output.split("\n").length : null
-			let suffix = ""
-			if (!ctx.isComplete) suffix = "◌"
-			else if (ctx.isError) suffix = "✕"
-			else if (lines !== null) suffix = String(lines)
-			return <ToolHeader label="bash" detail={cmd} suffix={suffix} />
+			const suffix = ctx.isComplete && !ctx.isError && lines !== null ? String(lines) : undefined
+			return <ToolHeader label="bash" detail={cmd} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -216,8 +230,8 @@ const registry: Record<string, ToolRenderer> = {
 		renderHeader: (ctx) => {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const lines = ctx.output ? replaceTabs(ctx.output).split("\n").length : null
-			const suffix = lines !== null ? String(lines) : "◌"
-			return <ToolHeader label="read" detail={path} suffix={suffix} />
+			const suffix = ctx.isComplete && lines !== null ? String(lines) : undefined
+			return <ToolHeader label="read" detail={path} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -233,8 +247,8 @@ const registry: Record<string, ToolRenderer> = {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const content = String(ctx.args?.content || "")
 			const lines = content ? content.split("\n").length : null
-			const suffix = !ctx.isComplete ? "◌" : lines !== null ? String(lines) : ""
-			return <ToolHeader label="write" detail={path} suffix={suffix} />
+			const suffix = ctx.isComplete && lines !== null ? String(lines) : undefined
+			return <ToolHeader label="write" detail={path} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -252,11 +266,8 @@ const registry: Record<string, ToolRenderer> = {
 		renderHeader: (ctx) => {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const diffStats = ctx.editDiff ? getDiffStats(ctx.editDiff) : null
-			let suffix = ""
-			if (!ctx.isComplete) suffix = "◌"
-			else if (ctx.isError) suffix = "✕"
-			else if (diffStats) suffix = `+${diffStats.added}/-${diffStats.removed}`
-			return <ToolHeader label="edit" detail={path} suffix={suffix} />
+			const suffix = ctx.isComplete && !ctx.isError && diffStats ? `+${diffStats.added}/-${diffStats.removed}` : undefined
+			return <ToolHeader label="edit" detail={path} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -336,35 +347,24 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 					props.onToggleExpanded?.()
 				}}
 			>
-				<box flexDirection="row" gap={1}>
-					{header()}
-					<Show when={!props.expanded && props.isComplete}>
-						<text selectable={false} fg={theme.textMuted}>▾</text>
-					</Show>
-					<Show when={props.expanded && props.isComplete}>
-						<text selectable={false} fg={theme.textMuted}>▴</text>
-					</Show>
-				</box>
+				{header()}
 				<Show when={body()}>
-					<box paddingLeft={0} paddingTop={1}>
+					<box paddingLeft={2} paddingTop={1}>
 						{body()}
 					</box>
 				</Show>
 			</box>
 		}>
-			{/* Inline layout */}
+			{/* Inline layout - clickable to expand */}
 			<box
 				flexDirection="row"
-				gap={1}
+				gap={0}
 				onMouseUp={(e: MouseEvent) => {
 					if (e.isSelecting) return
 					props.onToggleExpanded?.()
 				}}
 			>
 				{header()}
-				<Show when={props.isComplete}>
-					<text selectable={false} fg={theme.textMuted}>▸</text>
-				</Show>
 			</box>
 		</Show>
 	)

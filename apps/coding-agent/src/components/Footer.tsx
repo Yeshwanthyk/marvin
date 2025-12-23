@@ -63,7 +63,7 @@ export function Footer(props: FooterProps) {
   const activityData = createMemo(() => {
     if (props.activityState === "idle") return null
     const spinners = ["·", "•", "·", "•"]
-    const spinner = spinners[props.spinnerFrame]
+    const spinner = spinners[props.spinnerFrame % spinners.length]
     const labels: Record<ActivityState, string> = {
       thinking: "thinking",
       streaming: "streaming",

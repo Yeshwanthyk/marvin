@@ -30,6 +30,9 @@ export interface KeyboardHandlerConfig {
 
 	// Ctrl+C timing
 	lastCtrlC: { current: number }
+
+	// Exit handler (must be called for proper cleanup)
+	onExit: () => void
 }
 
 export function createKeyboardHandler(config: KeyboardHandlerConfig): (e: KeyEvent) => void {
@@ -78,7 +81,7 @@ export function createKeyboardHandler(config: KeyboardHandlerConfig): (e: KeyEve
 			if (config.isResponding()) {
 				config.onAbort()
 			} else if (now - config.lastCtrlC.current < 750) {
-				process.exit(0)
+				config.onExit()
 			} else {
 				config.clearEditor()
 			}
