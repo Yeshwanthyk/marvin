@@ -267,8 +267,8 @@ export function MessageList(props: MessageListProps) {
 						<Match when={item.type === "user" && item}>
 							{(userItem) => (
 								<box paddingLeft={1}>
-									<text fg={theme.text}>
-										<span style={{ fg: theme.textMuted }}>{"› "}</span>
+									<text fg={theme.primary}>
+										<span>{"§ "}</span>
 										{userItem().content}
 									</text>
 								</box>
