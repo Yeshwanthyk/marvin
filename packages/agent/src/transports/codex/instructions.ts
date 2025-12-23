@@ -1,15 +1,36 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+import { join } from "path";
 
 const CACHE_DIR = join(process.env.HOME || "", ".marvin", "cache");
-const CACHE_FILE = join(CACHE_DIR, "codex-instructions.md");
-const CACHE_META_FILE = join(CACHE_DIR, "codex-instructions-meta.json");
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 interface CacheMetadata {
 	etag: string | null;
 	tag: string;
 	lastChecked: number;
+}
+
+type ModelFamily = "gpt-5.2-codex" | "gpt-5.2";
+
+const PROMPT_FILES: Record<ModelFamily, string> = {
+	"gpt-5.2-codex": "gpt-5.2-codex_prompt.md",
+	"gpt-5.2": "gpt_5_2_prompt.md",
+};
+
+function getModelFamily(model: string): ModelFamily {
+	const normalized = model.toLowerCase();
+	// Check specific first
+	if (normalized.includes("gpt-5.2-codex") || normalized.includes("gpt 5.2 codex")) {
+		return "gpt-5.2-codex";
+	}
+	return "gpt-5.2";
+}
+
+function getCacheFiles(family: ModelFamily) {
+	return {
+		cache: join(CACHE_DIR, `codex-instructions-${family}.md`),
+		meta: join(CACHE_DIR, `codex-instructions-${family}-meta.json`),
+	};
 }
 
 /**
@@ -24,9 +45,13 @@ async function getLatestReleaseTag(): Promise<string> {
 
 /**
  * Fetch Codex instructions from GitHub with ETag-based caching
- * Uses gpt-5.1-codex-max_prompt.md (used for gpt-5.2)
+ * Selects prompt file based on model family
  */
-export async function getCodexInstructions(): Promise<string> {
+export async function getCodexInstructions(model: string): Promise<string> {
+	const family = getModelFamily(model);
+	const promptFile = PROMPT_FILES[family];
+	const { cache: CACHE_FILE, meta: CACHE_META_FILE } = getCacheFiles(family);
+
 	try {
 		// Check cache TTL
 		if (existsSync(CACHE_META_FILE) && existsSync(CACHE_FILE)) {
@@ -38,7 +63,7 @@ export async function getCodexInstructions(): Promise<string> {
 
 		// Get latest release tag
 		const tag = await getLatestReleaseTag();
-		const url = `https://raw.githubusercontent.com/openai/codex/${tag}/codex-rs/core/gpt-5.1-codex-max_prompt.md`;
+		const url = `https://raw.githubusercontent.com/openai/codex/${tag}/codex-rs/core/${promptFile}`;
 
 		// Check if we have cached version with same tag
 		if (existsSync(CACHE_META_FILE) && existsSync(CACHE_FILE)) {

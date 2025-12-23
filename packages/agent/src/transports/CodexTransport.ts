@@ -30,7 +30,7 @@ type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Re
 export class CodexTransport implements AgentTransport {
 	private options: CodexTransportOptions;
 	private customFetch: FetchFn;
-	private cachedInstructions: string | null = null;
+	private instructionsCache: Record<string, string> = {};
 
 	constructor(options: CodexTransportOptions) {
 		this.options = options;
@@ -59,7 +59,7 @@ export class CodexTransport implements AgentTransport {
 			api: "openai-responses" as const,
 		};
 
-		const instructions = await this.getInstructions();
+		const instructions = await this.getInstructions(baseModel.id);
 
 		return {
 			model,
@@ -69,11 +69,13 @@ export class CodexTransport implements AgentTransport {
 		};
 	}
 
-	private async getInstructions(): Promise<string> {
-		if (!this.cachedInstructions) {
-			this.cachedInstructions = await getCodexInstructions();
+	private async getInstructions(modelId: string): Promise<string> {
+		// Cache per model family (codex vs general)
+		const cacheKey = modelId.toLowerCase().includes("codex") ? "codex" : "general";
+		if (!this.instructionsCache[cacheKey]) {
+			this.instructionsCache[cacheKey] = await getCodexInstructions(modelId);
 		}
-		return this.cachedInstructions;
+		return this.instructionsCache[cacheKey];
 	}
 
 	private buildContext(messages: Message[], cfg: AgentRunConfig): AgentContext {
@@ -94,7 +96,7 @@ export class CodexTransport implements AgentTransport {
 			api: "openai-responses" as const,
 		};
 
-		const instructions = await this.getInstructions();
+		const instructions = await this.getInstructions(cfg.model.id);
 
 		return {
 			model,

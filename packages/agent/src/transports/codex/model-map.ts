@@ -1,10 +1,21 @@
-/** All gpt-5.2 variants map to same API model */
+/** Model variants map to API model IDs */
 export const MODEL_MAP: Record<string, string> = {
+	// GPT-5.2 Codex (newest, supports xhigh, does NOT support "none")
+	"gpt-5.2-codex": "gpt-5.2-codex",
+	"gpt-5.2-codex-xhigh": "gpt-5.2-codex",
+	"gpt-5.2-codex-high": "gpt-5.2-codex",
+	"gpt-5.2-codex-medium": "gpt-5.2-codex",
+	"gpt-5.2-codex-low": "gpt-5.2-codex",
+
+	// GPT-5.2 general (supports xhigh and "none")
 	"gpt-5.2": "gpt-5.2",
 	"gpt-5.2-xhigh": "gpt-5.2",
 	"gpt-5.2-high": "gpt-5.2",
 	"gpt-5.2-medium": "gpt-5.2",
 	"gpt-5.2-low": "gpt-5.2",
+
+	// GPT-5.2 Mini
+	"gpt-5.2-mini": "gpt-5.2-mini",
 };
 
 export function normalizeModel(model: string): string {
