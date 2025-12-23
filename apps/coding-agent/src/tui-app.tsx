@@ -4,15 +4,14 @@
 
 import { TextareaRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { render, useTerminalDimensions } from "@opentui/solid"
-import { createSignal, createEffect, createMemo, For, Show, onCleanup, onMount, batch } from "solid-js"
-import { ThemeProvider, ToastViewport, useRenderer, useTheme, type ToastItem } from "@marvin-agents/open-tui"
+import { createSignal, createEffect, Show, onCleanup, onMount, batch } from "solid-js"
+import { CombinedAutocompleteProvider, SelectList, ThemeProvider, ToastViewport, useRenderer, useTheme, type AutocompleteItem, type SelectItem, type ToastItem } from "@marvin-agents/open-tui"
 import { Agent, ProviderTransport, RouterTransport, CodexTransport, loadTokens, saveTokens, clearTokens } from "@marvin-agents/agent-core"
 import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent-core"
 import { getApiKey, getModels, getProviders, type AgentTool, type Model, type Api } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
 import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
 import { loadAppConfig, updateAppConfig } from "./config.js"
-import { CombinedAutocompleteProvider, type AutocompleteItem } from "@marvin-agents/open-tui"
 import { createAutocompleteCommands } from "./autocomplete-commands.js"
 import { SessionManager, type LoadedSession } from "./session-manager.js"
 import { selectSession as selectSessionOpen } from "./session-picker.js"
@@ -463,9 +462,19 @@ function MainView(props: MainViewProps) {
 	const [autocompletePrefix, setAutocompletePrefix] = createSignal("")
 	const [autocompleteIndex, setAutocompleteIndex] = createSignal(0)
 	const [showAutocomplete, setShowAutocomplete] = createSignal(false)
+	let suppressNextAutocompleteUpdate = false
 
 	const updateAutocomplete = (text: string, cursorLine: number, cursorCol: number) => {
-		const result = autocompleteProvider.getSuggestions(text.split("\n"), cursorLine, cursorCol)
+		const lines = text.split("\n")
+		const currentLine = lines[cursorLine] ?? ""
+		const beforeCursor = currentLine.slice(0, cursorCol)
+
+		if (beforeCursor.trim() === "") {
+			setShowAutocomplete(false); setAutocompleteItems([])
+			return
+		}
+
+		const result = autocompleteProvider.getSuggestions(lines, cursorLine, cursorCol)
 		if (result && result.items.length > 0) {
 			// Show up to 30 items (covers all themes; files naturally limited by results)
 			const prevPrefix = autocompletePrefix(), newItems = result.items.slice(0, 30)
@@ -488,6 +497,7 @@ function MainView(props: MainViewProps) {
 			setShowAutocomplete(false); setAutocompleteItems([])
 			return false
 		}
+		suppressNextAutocompleteUpdate = true
 		textareaRef.replaceText(newText)
 		textareaRef.editBuffer.setCursorToLineCol(result.cursorLine, result.cursorCol)
 		setShowAutocomplete(false); setAutocompleteItems([])
@@ -619,25 +629,16 @@ function MainView(props: MainViewProps) {
 			</scrollbox>
 			<Show when={showAutocomplete() && autocompleteItems().length > 0}>
 				<box flexDirection="column" borderColor={theme.border} maxHeight={15} flexShrink={0}>
-					<For each={autocompleteItems().filter(item => item && typeof item === "object")}>{(item, i) => {
-						const isSelected = createMemo(() => i() === autocompleteIndex())
-						const label = String(item.label ?? item.value ?? "")
-						const descRaw = item.description
-						// Truncate description from start to show relevant end (filename context)
-						const maxDescLen = Math.max(0, dimensions().width - label.length - 8)
-						const desc = typeof descRaw === "string" && descRaw && descRaw !== label
-							? (descRaw.length > maxDescLen ? "…" + descRaw.slice(-(maxDescLen - 1)) : descRaw)
-							: ""
-						// Fixed-width label column for alignment
-						const labelCol = label.length < 24 ? label + " ".repeat(24 - label.length) : label.slice(0, 23) + "…"
-						return (
-							<text>
-								<span style={{ fg: isSelected() ? theme.accent : theme.textMuted }}>{isSelected() ? " ▸ " : "   "}</span>
-								<span style={{ fg: isSelected() ? theme.text : theme.textMuted }}>{labelCol}</span>
-								<span style={{ fg: theme.textMuted }}>{desc ? " " + desc : ""}</span>
-							</text>
-						)
-					}}</For>
+					<SelectList
+						items={autocompleteItems().map((item): SelectItem => ({
+							value: item.value,
+							label: item.label,
+							description: item.description,
+						}))}
+						selectedIndex={autocompleteIndex()}
+						maxVisible={12}
+						width={Math.max(10, dimensions().width - 2)}
+					/>
 					<text fg={theme.textMuted}>{"   "}↑↓ navigate · Tab select · Esc cancel</text>
 				</box>
 			</Show>
@@ -647,7 +648,16 @@ function MainView(props: MainViewProps) {
 						{ name: "backspace", action: "backspace" as const }, { name: "delete", action: "delete" as const }, { name: "a", ctrl: true, action: "line-home" as const }, { name: "e", ctrl: true, action: "line-end" as const },
 						{ name: "k", ctrl: true, action: "delete-to-line-end" as const }, { name: "u", ctrl: true, action: "delete-to-line-start" as const }, { name: "w", ctrl: true, action: "delete-word-backward" as const }]}
 					onKeyDown={handleKeyDown}
-					onContentChange={() => { if (textareaRef) { const text = textareaRef.plainText; if (!text.startsWith("/") && !text.includes("@")) { setShowAutocomplete(false); return }; const cursor = textareaRef.logicalCursor; updateAutocomplete(text, cursor.row, cursor.col) } }}
+					onContentChange={() => {
+						if (!textareaRef) return
+						if (suppressNextAutocompleteUpdate) {
+							suppressNextAutocompleteUpdate = false
+							return
+						}
+						const text = textareaRef.plainText
+						const cursor = textareaRef.logicalCursor
+						updateAutocomplete(text, cursor.row, cursor.col)
+					}}
 					onSubmit={() => {
 						if (!textareaRef) return
 						props.onSubmit(textareaRef.plainText, () => textareaRef?.clear())
