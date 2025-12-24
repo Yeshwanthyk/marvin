@@ -2,6 +2,19 @@
 
 Terminal-native coding agent. Multi-provider, extensible tooling, LSP integration.
 
+## Philosophy
+
+Deliberate, thoughtful control over the coding process.
+
+Instead of blindly relying on black-box agents (Claude Code, Codex) and hoping they do the right thing at the right time, marvin is built around explicit orchestration: invoking subagents when *you* decide, adding custom tools, triggering hooks at precise moments. Foot on the accelerator, not mashing it.
+
+The goal is building good software — not just generating code fast.
+
+### Inspirations
+
+- [pi](https://shittycodingagent.ai/) — AI agent toolkit by badlogic. Unified LLM API, TUI/web UI, Slack bot, vLLM pods. Much of marvin's architecture remixes ideas from here.
+- [opencode](https://opencode.ai/) — Terminal-native coding agent in Go. Clean architecture, good defaults.
+
 ## Install
 
 ```bash
@@ -36,6 +49,7 @@ marvin -r                           # Pick session to resume
 - **LSP**: Auto-spawns language servers, injects diagnostics into tool results
 - **Sessions**: Per-cwd persistence, resume with `-c` or `-r`
 - **Thinking**: Configurable reasoning depth (off → xhigh)
+- **Precision Diffs**: Terminal-native diff viewing with OpenTUI for precise layout control
 - **Extensibility**: Custom tools, commands, and lifecycle hooks
 
 ## Architecture
