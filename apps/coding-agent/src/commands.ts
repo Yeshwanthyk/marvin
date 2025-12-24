@@ -41,6 +41,7 @@ export interface CommandContext {
 	setMessages: (updater: (prev: UIMessage[]) => UIMessage[]) => void
 	setToolBlocks: (updater: (prev: unknown[]) => unknown[]) => void
 	setContextTokens: (v: number) => void
+	setCacheStats: (v: { cacheRead: number; input: number } | null) => void
 
 	// Display state
 	setDisplayModelId: (id: string) => void
@@ -100,6 +101,7 @@ function handleClear(ctx: CommandContext): boolean {
 	ctx.setMessages(() => [])
 	ctx.setToolBlocks(() => [])
 	ctx.setContextTokens(0)
+	ctx.setCacheStats(null)
 	ctx.agent.reset()
 	void ctx.hookRunner?.emit({ type: "session.clear", sessionId: null })
 	return true
@@ -221,7 +223,7 @@ async function handleCompactCmd(args: string, ctx: CommandContext): Promise<bool
 
 	const customInstructions = args.trim() || undefined
 
-	ctx.setActivityState("thinking")
+	ctx.setActivityState("compacting")
 	ctx.setIsResponding(true)
 
 	try {
@@ -247,6 +249,7 @@ async function handleCompactCmd(args: string, ctx: CommandContext): Promise<bool
 		])
 		ctx.setToolBlocks(() => [])
 		ctx.setContextTokens(0)
+		ctx.setCacheStats(null)
 	} catch (err) {
 		addSystemMessage(ctx, `Compact failed: ${err instanceof Error ? err.message : String(err)}`)
 	} finally {

@@ -29,6 +29,7 @@ export interface EventHandlerContext {
 	setActivityState: (s: ActivityState) => void
 	setIsResponding: (v: boolean) => void
 	setContextTokens: (v: number) => void
+	setCacheStats: (v: { cacheRead: number; input: number } | null) => void
 	setRetryStatus: (v: string | null) => void
 	setTurnCount: (v: number) => void
 	setLspIterationCount: (v: number) => void
@@ -397,9 +398,13 @@ function handleMessageEnd(
 	// Update usage - context window budget includes input + output for the full request
 	// totalTokens is already computed by providers as: (uncached_input + cacheRead + cacheWrite) + output
 	// Only update if totalTokens > 0 to avoid clearing bar on aborted responses
-	const msg = event.message as { usage?: { totalTokens?: number } }
+	const msg = event.message as { usage?: { totalTokens?: number; cacheRead?: number; input?: number } }
 	if (msg.usage?.totalTokens) {
 		ctx.setContextTokens(msg.usage.totalTokens)
+	}
+	// Update cache stats for efficiency indicator
+	if (msg.usage && typeof msg.usage.cacheRead === "number" && typeof msg.usage.input === "number") {
+		ctx.setCacheStats({ cacheRead: msg.usage.cacheRead, input: msg.usage.input })
 	}
 }
 

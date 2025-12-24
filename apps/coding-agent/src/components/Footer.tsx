@@ -22,10 +22,10 @@ export interface FooterProps {
   branch: string | null
   contextTokens: number
   contextWindow: number
+  cacheStats: { cacheRead: number; input: number } | null
   queueCount: number
   activityState: ActivityState
   retryStatus: string | null
-  turnCount: number
   lspIterationCount: number
   spinnerFrame: number
   lsp: LspManager
@@ -70,18 +70,33 @@ export function Footer(props: FooterProps) {
       thinking: "thinking",
       streaming: "streaming",
       tool: "running",
+      compacting: "compacting",
       idle: "",
     }
     const stateColors: Record<ActivityState, typeof theme.text> = {
       thinking: theme.secondary,
       streaming: theme.info,
       tool: theme.warning,
+      compacting: theme.warning,
       idle: theme.textMuted,
     }
     return {
       text: `${spinner} ${labels[props.activityState]}`,
       color: stateColors[props.activityState],
     }
+  })
+
+  // Cache efficiency indicator - show ⚡ when cache is effective (>50% hit rate)
+  const cacheIndicator = createMemo(() => {
+    const stats = props.cacheStats
+    if (!stats || stats.input === 0) return null
+    // cacheRead / (cacheRead + uncached input) = hit rate
+    // input in usage is uncached input tokens only
+    const total = stats.cacheRead + stats.input
+    if (total === 0) return null
+    const hitRate = stats.cacheRead / total
+    if (hitRate < 0.5) return null
+    return { hitRate, display: "⚡" }
   })
 
   // LSP status: show active servers and diagnostic counts
@@ -147,6 +162,9 @@ export function Footer(props: FooterProps) {
         </Show>
         <Show when={props.lspIterationCount > 0}>
           <text fg={theme.accent}>⟳{props.lspIterationCount}</text>
+        </Show>
+        <Show when={cacheIndicator()}>
+          <text fg={theme.success}>{cacheIndicator()!.display}</text>
         </Show>
       </box>
       <Show when={props.retryStatus} fallback={

@@ -224,6 +224,7 @@ function App(props: AppProps) {
 	const [displayThinking, setDisplayThinking] = createSignal(props.thinking)
 	const [displayContextWindow, setDisplayContextWindow] = createSignal(props.model.contextWindow)
 	const [contextTokens, setContextTokens] = createSignal(0)
+	const [cacheStats, setCacheStats] = createSignal<{ cacheRead: number; input: number } | null>(null)
 	const [retryStatus, setRetryStatus] = createSignal<string | null>(null)
 	const [turnCount, setTurnCount] = createSignal(0)
 	const [lspIterationCount, setLspIterationCount] = createSignal(0)
@@ -327,7 +328,7 @@ function App(props: AppProps) {
 	const eventCtx: EventHandlerContext = {
 		setMessages: setMessages as (updater: (prev: UIMessage[]) => UIMessage[]) => void,
 		setToolBlocks: setToolBlocks as (updater: (prev: ToolBlock[]) => ToolBlock[]) => void,
-		setActivityState, setIsResponding, setContextTokens, setRetryStatus, setTurnCount, setLspIterationCount,
+		setActivityState, setIsResponding, setContextTokens, setCacheStats, setRetryStatus, setTurnCount, setLspIterationCount,
 		queuedMessages, setQueueCount, sessionManager, streamingMessageId: streamingMessageIdRef,
 		retryConfig, retryablePattern, retryState, agent: agent as EventHandlerContext["agent"],
 		hookRunner: props.hookRunner,
@@ -350,12 +351,13 @@ function App(props: AppProps) {
 
 	const cmdCtx: CommandContext = {
 		agent, sessionManager, configDir: props.configDir, configPath: props.configPath,
+		cwd: process.cwd(),
 		codexTransport: props.codexTransport, getApiKey: props.getApiKey,
 		get currentProvider() { return currentProvider }, get currentModelId() { return currentModelId }, get currentThinking() { return currentThinking },
 		setCurrentProvider: (p) => { currentProvider = p }, setCurrentModelId: (id) => { currentModelId = id }, setCurrentThinking: (t) => { currentThinking = t },
 		isResponding, setIsResponding, setActivityState,
 		setMessages: setMessages as CommandContext["setMessages"], setToolBlocks: setToolBlocks as CommandContext["setToolBlocks"],
-		setContextTokens, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode,
+		setContextTokens, setCacheStats, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode,
 		setTheme: handleThemeChange,
 		onExit: () => exitHandlerRef.current(),
 		hookRunner: props.hookRunner,
@@ -423,7 +425,7 @@ function App(props: AppProps) {
 		<ThemeProvider mode="dark" themeName={currentTheme()} onThemeChange={handleThemeChange}>
 			<MainView messages={messages()} toolBlocks={toolBlocks()} isResponding={isResponding()} activityState={activityState()}
 				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
-				contextTokens={contextTokens()} contextWindow={displayContextWindow()} queueCount={queueCount()} retryStatus={retryStatus()} turnCount={turnCount()} lspIterationCount={lspIterationCount()}
+				contextTokens={contextTokens()} contextWindow={displayContextWindow()} cacheStats={cacheStats()} queueCount={queueCount()} retryStatus={retryStatus()} turnCount={turnCount()} lspIterationCount={lspIterationCount()}
 				diffWrapMode={diffWrapMode()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
 				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking} exitHandlerRef={exitHandlerRef} lsp={props.lsp} />
 		</ThemeProvider>
@@ -435,7 +437,7 @@ function App(props: AppProps) {
 interface MainViewProps {
 	messages: UIMessage[]; toolBlocks: ToolBlock[]; isResponding: boolean; activityState: ActivityState
 	thinkingVisible: boolean; modelId: string; thinking: ThinkingLevel; provider: KnownProvider
-	contextTokens: number; contextWindow: number; queueCount: number; retryStatus: string | null; turnCount: number; lspIterationCount: number; diffWrapMode: "word" | "none"
+	contextTokens: number; contextWindow: number; cacheStats: { cacheRead: number; input: number } | null; queueCount: number; retryStatus: string | null; turnCount: number; lspIterationCount: number; diffWrapMode: "word" | "none"
 	customCommands: Map<string, CustomCommand>
 	onSubmit: (text: string, clearFn?: () => void) => void; onAbort: () => string | null
 	onToggleThinking: () => void; onCycleModel: () => void; onCycleThinking: () => void
@@ -664,7 +666,7 @@ function MainView(props: MainViewProps) {
 					}} />
 			</box>
 			<Footer modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
-				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} turnCount={props.turnCount} lspIterationCount={props.lspIterationCount} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
+				cacheStats={props.cacheStats} queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} lspIterationCount={props.lspIterationCount} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
 			<ToastViewport toasts={toasts()} />
 		</box>
 	)

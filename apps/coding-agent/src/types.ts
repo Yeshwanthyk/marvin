@@ -46,7 +46,7 @@ export interface ToolBlock {
 	renderResult?: (result: AgentToolResult<any>, opts: RenderResultOptions, theme: Theme) => JSX.Element
 }
 
-export type ActivityState = "idle" | "thinking" | "streaming" | "tool"
+export type ActivityState = "idle" | "thinking" | "streaming" | "tool" | "compacting"
 
 export type ContentItem =
 	| { type: "user"; content: string }

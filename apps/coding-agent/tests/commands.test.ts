@@ -69,6 +69,7 @@ function createMockContext(overrides: Partial<CommandContext> = {}): CommandCont
 			toolBlocks.push(...result)
 		}),
 		setContextTokens: mock(() => {}),
+		setCacheStats: mock(() => {}),
 
 		setDisplayModelId: mock(() => {}),
 		setDisplayThinking: mock(() => {}),
