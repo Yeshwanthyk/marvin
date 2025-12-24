@@ -3,9 +3,12 @@
  * 
  * Supports Kitty and iTerm2 image protocols with automatic detection.
  * Falls back to text placeholder when images aren't supported.
+ * 
+ * Note: Image escape sequences are written directly to stdout, bypassing
+ * OpenTUI's text buffer (which doesn't properly handle OSC sequences).
  */
 
-import { createMemo, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
 import { type RGBA, useTheme } from "../context/theme.js"
 
 // Terminal image protocol types
@@ -65,12 +68,14 @@ export function detectCapabilities(): TerminalCapabilities {
 	const termProgram = env["TERM_PROGRAM"]?.toLowerCase() || ""
 	const term = env["TERM"]?.toLowerCase() || ""
 	const colorTerm = env["COLORTERM"]?.toLowerCase() || ""
+	const termInfo = env["TERMINFO"]?.toLowerCase() || ""
 
 	// Kitty protocol support
 	if (env["KITTY_WINDOW_ID"] || termProgram === "kitty") {
 		return { images: "kitty", trueColor: true }
 	}
-	if (termProgram === "ghostty" || term.includes("ghostty")) {
+	// Ghostty - check TERM_PROGRAM or TERMINFO (for tmux passthrough)
+	if (termProgram === "ghostty" || term.includes("ghostty") || termInfo.includes("ghostty")) {
 		return { images: "kitty", trueColor: true }
 	}
 	if (env["WEZTERM_PANE"] || termProgram === "wezterm") {
@@ -246,6 +251,27 @@ function imageFallback(mimeType: string, dimensions?: ImageDimensions, filename?
 	return `[Image: ${parts.join(" ")}]`
 }
 
+// Track rendered images to avoid duplicate writes
+const renderedImages = new Set<string>()
+
+/**
+ * Write image escape sequence directly to stdout
+ * This bypasses OpenTUI's text buffer which doesn't handle OSC sequences properly
+ */
+function writeImageToStdout(sequence: string, rows: number, imageId: string): void {
+	// Avoid duplicate writes for the same image
+	if (renderedImages.has(imageId)) return
+	renderedImages.add(imageId)
+
+	// Move cursor up to the start of the reserved space, output image, then restore position
+	// The box component reserves `rows` lines, so we move up (rows-1) to position at start
+	const moveUp = rows > 1 ? `\x1b[${rows - 1}A` : ""
+	const moveDown = rows > 1 ? `\x1b[${rows - 1}B` : ""
+
+	// Write: move up, image sequence, move down (to restore cursor position)
+	process.stdout.write(moveUp + sequence + moveDown)
+}
+
 /**
  * Image component for rendering inline images in the terminal
  *
@@ -262,6 +288,9 @@ export function Image(props: ImageProps) {
 	const { theme } = useTheme()
 	const caps = getCapabilities()
 	const fallbackColor = () => props.fallbackColor ?? theme.textMuted
+
+	// Generate unique ID for this image instance
+	const [imageId] = createSignal(`img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
 
 	// Get or detect dimensions
 	const dimensions = createMemo(() => {
@@ -293,18 +322,30 @@ export function Image(props: ImageProps) {
 		return { type: "fallback" as const, text: imageFallback(props.mimeType, dimensions(), props.filename) }
 	})
 
+	// Write image directly to stdout when component renders
+	createEffect(() => {
+		const result = renderResult()
+		if (result.type === "image") {
+			// Small delay to ensure the box has been rendered and positioned
+			setTimeout(() => {
+				writeImageToStdout(result.sequence, result.rows, imageId())
+			}, 50)
+		}
+	})
+
+	// Cleanup: remove from rendered set when component unmounts
+	onCleanup(() => {
+		renderedImages.delete(imageId())
+	})
+
 	return (
 		<Show
 			when={renderResult().type === "image"}
 			fallback={<text fg={fallbackColor()}>{(renderResult() as { type: "fallback"; text: string }).text}</text>}
 		>
-			{/* 
-				For image rendering, we output the escape sequence directly.
-				The rows are used to reserve space in the terminal.
-				OpenTUI's text buffer should handle the escape sequences.
-			*/}
+			{/* Reserve vertical space for the image - content is written directly to stdout */}
 			<box height={(renderResult() as { type: "image"; rows: number }).rows}>
-				<text>{(renderResult() as { type: "image"; sequence: string }).sequence}</text>
+				<text fg={theme.textMuted}>{`[Image: ${props.mimeType}]`}</text>
 			</box>
 		</Show>
 	)
