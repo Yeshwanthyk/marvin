@@ -2,7 +2,7 @@
  * OpenTUI-native rendering components for tool output.
  */
 
-import { CodeBlock, Diff, TextAttributes, useTheme, parseColor, type MouseEvent, type Theme } from "@marvin-agents/open-tui"
+import { CodeBlock, Diff, Image, TextAttributes, useTheme, parseColor, type MouseEvent, type Theme } from "@marvin-agents/open-tui"
 import { Show, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
 import { getToolText, getEditDiffText } from "./utils.js"
@@ -354,12 +354,32 @@ const registry: Record<string, ToolRenderer> = {
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
-			if (!ctx.output) return <text fg={theme.textMuted}>reading…</text>
-			const rendered = ctx.expanded ? replaceTabs(ctx.output) : truncateLines(ctx.output, 20).text
+			const imageBlocks = (ctx.result?.content ?? []).filter(
+				(block) =>
+					typeof block === "object" &&
+					block !== null &&
+					(block as { type?: string }).type === "image" &&
+					typeof (block as { data?: string }).data === "string" &&
+					typeof (block as { mimeType?: string }).mimeType === "string",
+			) as Array<{ data: string; mimeType: string }>
+
+			if (!ctx.output && imageBlocks.length === 0) return <text fg={theme.textMuted}>reading…</text>
+			const rendered = ctx.output ? (ctx.expanded ? replaceTabs(ctx.output) : truncateLines(ctx.output, 20).text) : ""
 			const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
-			return <CodeBlock content={rendered} filetype={filetype} title="preview" />
+			const preview = rendered ? <CodeBlock content={rendered} filetype={filetype} title="preview" /> : null
+			if (imageBlocks.length === 0) return preview ?? <text fg={theme.textMuted}>no preview</text>
+
+			return (
+				<box flexDirection="column" gap={1}>
+					{preview}
+					{imageBlocks.map((img) => (
+						<Image data={img.data} mimeType={img.mimeType} maxWidth={60} />
+					))}
+				</box>
+			)
 		},
 	},
+
 	write: {
 		mode: () => "block",
 		renderHeader: (ctx) => {
