@@ -3,6 +3,7 @@
  */
 
 import { batch } from "solid-js"
+import { profile } from "./profiler.js"
 import type { AgentEvent, AppMessage } from "@marvin-agents/agent-core"
 import type { AgentToolResult, AssistantMessage, ToolResultMessage } from "@marvin-agents/ai"
 import type { Theme } from "@marvin-agents/open-tui"
@@ -66,7 +67,15 @@ export interface EventHandlerContext {
 export type AgentEventHandler = ((event: AgentEvent) => void) & { dispose: () => void }
 
 const UPDATE_THROTTLE_MS = 80 // ~12fps during streaming (reduced from 32ms)
+const UPDATE_THROTTLE_SLOW_MS = 120
+const UPDATE_THROTTLE_SLOWEST_MS = 160
 const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
+
+function computeUpdateThrottleMs(textLength: number): number {
+	if (textLength > 12000) return UPDATE_THROTTLE_SLOWEST_MS
+	if (textLength > 6000) return UPDATE_THROTTLE_SLOW_MS
+	return UPDATE_THROTTLE_MS
+}
 
 /** Incremental extraction cache - avoids re-parsing entire content array each update */
 interface ExtractionCache {
@@ -149,34 +158,36 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 	}
 
 	// Inline update handler - accesses extractionCache from closure
-	const handleMessageUpdate = (ev: Extract<AgentEvent, { type: "message_update" }>) => {
-		const content = ev.message.content as unknown[]
-		
-		// Use incremental extraction - only processes new blocks
-		extractionCache = extractIncremental(content, extractionCache)
-		const { text, thinking, orderedBlocks } = extractionCache
+	const handleMessageUpdate = (ev: Extract<AgentEvent, { type: "message_update" }>) =>
+		profile("stream_message_update", () => {
+			const content = ev.message.content as unknown[]
 
-		// Convert ordered blocks to UIContentBlocks
-		const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
-			if (block.type === "thinking") {
-				return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
-			} else if (block.type === "text") {
-				return { type: "text" as const, text: block.text }
-			} else {
-				return {
-					type: "tool" as const,
-					tool: { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
+			// Use incremental extraction - only processes new blocks
+			extractionCache = extractIncremental(content, extractionCache)
+			const { text, thinking, orderedBlocks } = extractionCache
+			updateThrottleMs = computeUpdateThrottleMs(text.length)
+
+			// Convert ordered blocks to UIContentBlocks
+			const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
+				if (block.type === "thinking") {
+					return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
+				} else if (block.type === "text") {
+					return { type: "text" as const, text: block.text }
+				} else {
+					return {
+						type: "tool" as const,
+						tool: { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
+					}
 				}
-			}
-		})
+			})
 
-		updateStreamingMessage(ctx, (msg) => {
-			const nextThinking = thinking || msg.thinking
-			return { ...msg, content: text, thinking: nextThinking, contentBlocks }
-		})
+			updateStreamingMessage(ctx, (msg) => {
+				const nextThinking = thinking || msg.thinking
+				return { ...msg, content: text, thinking: nextThinking, contentBlocks }
+			})
 
-		if (thinking && !text) ctx.setActivityState("thinking")
-	}
+			if (thinking && !text) ctx.setActivityState("thinking")
+		})
 	
 	const flushPendingUpdate = () => {
 		if (!pendingUpdate) return
@@ -185,13 +196,15 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		handleMessageUpdate(event)
 	}
 
+	let updateThrottleMs = UPDATE_THROTTLE_MS
+
 	const scheduleUpdate = () => {
 		if (updateTimeout) return
 		updateTimeout = setTimeout(() => {
 			updateTimeout = null
 			if (disposed) return
 			flushPendingUpdate()
-		}, UPDATE_THROTTLE_MS)
+		}, updateThrottleMs)
 	}
 	
 	const flushToolUpdates = () => {
@@ -475,12 +488,14 @@ function handleToolUpdateImmediate(
 	const toolUpdater = makeToolUpdater(event.toolCallId, event.partialResult)
 	const updateTools = (tools: ToolBlock[]) => tools.map(toolUpdater)
 
-	ctx.setToolBlocks(updateTools)
-	updateStreamingMessage(ctx, (msg) => ({
-		...msg,
-		tools: updateTools(msg.tools || []),
-		contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, toolUpdater),
-	}))
+	batch(() => {
+		ctx.setToolBlocks(updateTools)
+		updateStreamingMessage(ctx, (msg) => ({
+			...msg,
+			tools: updateTools(msg.tools || []),
+			contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, toolUpdater),
+		}))
+	})
 }
 
 function handleToolEnd(

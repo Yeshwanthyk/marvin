@@ -5,6 +5,7 @@
 import { For, Show, Switch, Match, createMemo } from "solid-js"
 import { Markdown, TextAttributes, useTheme } from "@marvin-agents/open-tui"
 import type { UIMessage, ToolBlock, ContentItem } from "../types.js"
+import { profile } from "../profiler.js"
 import { ToolBlock as ToolBlockComponent } from "../tui-open-rendering.js"
 
 // ----- Tool Block Wrapper -----
@@ -78,6 +79,13 @@ function ThinkingBlockWrapper(props: {
 	)
 }
 
+const STREAMING_TAIL_CHARS = 4000
+
+function tailStreamingText(text: string): string {
+	if (text.length <= STREAMING_TAIL_CHARS) return text
+	return "..." + text.slice(-STREAMING_TAIL_CHARS)
+}
+
 // ----- Content Items Builder -----
 
 // Per-item cache: reuse ContentItem objects when data unchanged
@@ -148,7 +156,7 @@ export function buildContentItems(
 							const item: ContentItem = { type: "assistant", content: block.text, isStreaming: msg.isStreaming }
 							// For streaming text, use content length in key to allow updates
 							// but still cache when length stabilizes
-							const contentKey = msg.isStreaming ? block.text.length : "final"
+							const contentKey = msg.isStreaming ? "streaming" : "final"
 							items.push(
 								getCachedItem(`text:${msg.id}:${blockIdx}:${contentKey}`, item, (a, b) =>
 									a.type === "assistant" && b.type === "assistant" &&
@@ -206,7 +214,7 @@ export function buildContentItems(
 
 				if (msg.content) {
 					const item: ContentItem = { type: "assistant", content: msg.content, isStreaming: msg.isStreaming }
-					const contentKey = msg.isStreaming ? msg.content.length : "final"
+					const contentKey = msg.isStreaming ? "streaming" : "final"
 					items.push(
 						getCachedItem(`text:${msg.id}:${contentKey}`, item, (a, b) =>
 							a.type === "assistant" && b.type === "assistant" &&
@@ -256,7 +264,9 @@ export function MessageList(props: MessageListProps) {
 	const { theme } = useTheme()
 
 	const contentItems = createMemo(() =>
-		buildContentItems(props.messages, props.toolBlocks, props.thinkingVisible)
+		profile("build_content_items", () =>
+			buildContentItems(props.messages, props.toolBlocks, props.thinkingVisible)
+		)
 	)
 
 	return (
@@ -290,7 +300,7 @@ export function MessageList(props: MessageListProps) {
 								<box paddingLeft={1}>
 									{/* Plain text while streaming (avoids O(n²) markdown re-lex), Markdown when complete */}
 									<Show when={assistantItem().isStreaming} fallback={<Markdown text={assistantItem().content} />}>
-										<text fg={theme.text}>{assistantItem().content}<span style={{ fg: theme.textMuted }}>▁</span></text>
+										<text fg={theme.text}>{tailStreamingText(assistantItem().content)}<span style={{ fg: theme.textMuted }}>▁</span></text>
 									</Show>
 								</box>
 							)}
