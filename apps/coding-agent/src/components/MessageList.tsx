@@ -78,13 +78,6 @@ function ThinkingBlockWrapper(props: {
 	)
 }
 
-const STREAMING_TAIL_CHARS = 4000
-
-function tailStreamingText(text: string): string {
-	if (text.length <= STREAMING_TAIL_CHARS) return text
-	return "..." + text.slice(-STREAMING_TAIL_CHARS)
-}
-
 // ----- Content Items Builder -----
 
 // Per-item cache: reuse ContentItem objects when data unchanged
