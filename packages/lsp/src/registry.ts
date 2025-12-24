@@ -30,6 +30,14 @@ export async function detectRootByMarkers(filePath: string, cwd: string, markers
 }
 
 export const SERVERS: LspServerDefinition[] = [
+  // JS/TS: biome takes priority if configured
+  {
+    id: "biome",
+    extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json"],
+    rootMarkers: ["biome.json", "biome.jsonc"],
+    priority: 20,
+    detectRoot: (filePath, cwd) => detectRootByMarkers(filePath, cwd, ["biome.json", "biome.jsonc"]),
+  },
   {
     id: "typescript",
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
@@ -54,6 +62,21 @@ export const SERVERS: LspServerDefinition[] = [
       "yarn.lock",
       "package-lock.json",
     ]),
+  },
+  // Python: ty > ruff > basedpyright
+  {
+    id: "ty",
+    extensions: [".py", ".pyi"],
+    rootMarkers: ["ty.toml"],
+    priority: 20,
+    detectRoot: (filePath, cwd) => detectRootByMarkers(filePath, cwd, ["ty.toml", "pyproject.toml"]),
+  },
+  {
+    id: "ruff",
+    extensions: [".py", ".pyi"],
+    rootMarkers: ["ruff.toml"],
+    priority: 15,
+    detectRoot: (filePath, cwd) => detectRootByMarkers(filePath, cwd, ["ruff.toml", "pyproject.toml"]),
   },
   {
     id: "basedpyright",

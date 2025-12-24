@@ -11,7 +11,10 @@ import type { ActivityState } from "../types.js"
 /** Short display labels for LSP servers */
 const LSP_LABELS: Record<LspServerId, string> = {
   typescript: "TS",
+  biome: "BIO",
   basedpyright: "PY",
+  ruff: "RUFF",
+  ty: "TY",
   gopls: "GO",
   "rust-analyzer": "RS",
 }

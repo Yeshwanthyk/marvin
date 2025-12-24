@@ -1,6 +1,6 @@
 import type { Diagnostic } from "vscode-languageserver-types"
 
-export type LspServerId = "typescript" | "basedpyright" | "gopls" | "rust-analyzer"
+export type LspServerId = "typescript" | "biome" | "basedpyright" | "ruff" | "ty" | "gopls" | "rust-analyzer"
 
 export type LspDiagnosticCaps = {
   maxDiagnosticsPerFile: number

@@ -1,8 +1,91 @@
 import path from "node:path"
-import { mkdir, readFile, writeFile } from "node:fs/promises"
-import { spawn } from "node:child_process"
+import { mkdir, readFile, writeFile, chmod, stat, rename, rm } from "node:fs/promises"
+import { spawn, execSync } from "node:child_process"
+import { createGunzip } from "node:zlib"
+import { pipeline } from "node:stream/promises"
+import { createWriteStream } from "node:fs"
+import { Readable } from "node:stream"
 import { fileExists } from "./path.js"
 import type { LspServerId, LspSpawnSpec } from "./types.js"
+
+const STALE_DAYS = 7
+const MS_PER_DAY = 86400000
+const checkedStale = new Set<string>() // only check once per session
+
+type GHAsset = { name: string; browser_download_url: string }
+type GHRelease = { tag_name: string; assets: GHAsset[] }
+
+async function isStale(filePath: string): Promise<boolean> {
+  try {
+    const s = await stat(filePath)
+    return Date.now() - s.mtimeMs > STALE_DAYS * MS_PER_DAY
+  } catch {
+    return true
+  }
+}
+
+async function downloadGitHubRelease(
+  repo: string,
+  assetMatch: (name: string) => boolean,
+  destPath: string,
+  opts?: { signal?: AbortSignal; extractBin?: string }
+): Promise<boolean> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, { signal: opts?.signal })
+    if (!res.ok) return false
+    const release = await res.json() as GHRelease
+    const asset = release.assets.find((a) => assetMatch(a.name))
+    if (!asset) return false
+
+    const dlRes = await fetch(asset.browser_download_url, { signal: opts?.signal })
+    if (!dlRes.ok || !dlRes.body) return false
+
+    const destDir = path.dirname(destPath)
+    await mkdir(destDir, { recursive: true })
+
+    const tmpPath = destPath + ".tmp"
+    const isTarGz = asset.name.endsWith(".tar.gz")
+    const isGz = !isTarGz && asset.name.endsWith(".gz")
+
+    if (isTarGz) {
+      // Download tar.gz, extract specific binary
+      const tarPath = path.join(destDir, asset.name)
+      const out = createWriteStream(tarPath)
+      await pipeline(Readable.fromWeb(dlRes.body as any), out)
+      
+      const binName = opts?.extractBin ?? path.basename(destPath)
+      const extractDir = path.join(destDir, "_extract_" + Date.now())
+      await mkdir(extractDir, { recursive: true })
+      execSync(`tar -xzf "${tarPath}" -C "${extractDir}"`, { stdio: "ignore" })
+      
+      // Find the binary (might be in root or subdirectory)
+      const findBin = execSync(`find "${extractDir}" -name "${binName}" -type f`, { encoding: "utf8" }).trim()
+      if (findBin) {
+        await chmod(findBin, 0o755)
+        await rename(findBin, destPath)
+      }
+      await rm(extractDir, { recursive: true, force: true })
+      await rm(tarPath, { force: true })
+    } else if (isGz) {
+      const gunzip = createGunzip()
+      const out = createWriteStream(tmpPath)
+      await pipeline(Readable.fromWeb(dlRes.body as any), gunzip, out)
+      await chmod(tmpPath, 0o755)
+      await rename(tmpPath, destPath)
+    } else {
+      // Plain binary
+      const out = createWriteStream(tmpPath)
+      await pipeline(Readable.fromWeb(dlRes.body as any), out)
+      await chmod(tmpPath, 0o755)
+      await rename(tmpPath, destPath)
+    }
+
+    await chmod(destPath, 0o755)
+    return true
+  } catch {
+    return false
+  }
+}
 
 type RunResult = { code: number; stdout: string; stderr: string }
 
@@ -169,22 +252,144 @@ export async function ensureSpawnSpec(serverId: LspServerId, opts: { configDir: 
     }
 
     case "rust-analyzer": {
-      const ra = await which("rust-analyzer")
-      if (ra) return { serverId, command: ra, args: [], env: { ...process.env } }
-
-      const rustup = await which("rustup")
-      if (!rustup) return undefined
-
-      // Try stable component name, then preview name
       const env = { ...process.env }
-      const ok1 = await run(rustup, ["component", "add", "rust-analyzer"], opts.root, env, opts.signal)
-      if (ok1.code !== 0) {
-        await run(rustup, ["component", "add", "rust-analyzer-preview"], opts.root, env, opts.signal)
+      const localBin = path.join(binDir, "rust-analyzer")
+
+      const arch = process.arch === "arm64" ? "aarch64" : "x86_64"
+      const platform = process.platform === "darwin" ? "apple-darwin"
+        : process.platform === "linux" ? "unknown-linux-gnu"
+        : null
+
+      const download = () => platform ? downloadGitHubRelease(
+        "rust-lang/rust-analyzer",
+        (name) => name.startsWith(`rust-analyzer-${arch}-${platform}`) && name.endsWith(".gz"),
+        localBin,
+        { signal: opts.signal }
+      ) : Promise.resolve(false)
+
+      // 1. Use cached binary, update in background if stale (check once per session)
+      if (await fileExists(localBin)) {
+        if (!checkedStale.has(localBin)) {
+          checkedStale.add(localBin)
+          if (await isStale(localBin)) {
+            download() // fire and forget
+          }
+        }
+        return { serverId, command: localBin, args: [], env }
       }
 
-      const ra2 = await which("rust-analyzer")
-      if (!ra2) return undefined
-      return { serverId, command: ra2, args: [], env }
+      // 2. Download (first run)
+      if (await download()) {
+        return { serverId, command: localBin, args: [], env }
+      }
+
+      // 3. Fall back to system PATH
+      const raPath = await which("rust-analyzer")
+      if (raPath) return { serverId, command: raPath, args: [], env }
+
+      return undefined
+    }
+
+    case "biome": {
+      const env = { ...process.env }
+      const localBin = path.join(binDir, "biome")
+
+      const arch = process.arch === "arm64" ? "arm64" : "x64"
+      const platform = process.platform === "darwin" ? "darwin"
+        : process.platform === "linux" ? "linux"
+        : null
+
+      const download = () => platform ? downloadGitHubRelease(
+        "biomejs/biome",
+        (name) => name === `biome-${platform}-${arch}`,
+        localBin,
+        { signal: opts.signal }
+      ) : Promise.resolve(false)
+
+      if (await fileExists(localBin)) {
+        if (!checkedStale.has(localBin)) {
+          checkedStale.add(localBin)
+          if (await isStale(localBin)) download()
+        }
+        return { serverId, command: localBin, args: ["lsp-proxy"], env }
+      }
+
+      if (await download()) {
+        return { serverId, command: localBin, args: ["lsp-proxy"], env }
+      }
+
+      const biomePath = await which("biome")
+      if (biomePath) return { serverId, command: biomePath, args: ["lsp-proxy"], env }
+
+      return undefined
+    }
+
+    case "ruff": {
+      const env = { ...process.env }
+      const localBin = path.join(binDir, "ruff")
+
+      const arch = process.arch === "arm64" ? "aarch64" : "x86_64"
+      const platform = process.platform === "darwin" ? "apple-darwin"
+        : process.platform === "linux" ? "unknown-linux-gnu"
+        : null
+
+      const download = () => platform ? downloadGitHubRelease(
+        "astral-sh/ruff",
+        (name) => name === `ruff-${arch}-${platform}.tar.gz`,
+        localBin,
+        { signal: opts.signal, extractBin: "ruff" }
+      ) : Promise.resolve(false)
+
+      if (await fileExists(localBin)) {
+        if (!checkedStale.has(localBin)) {
+          checkedStale.add(localBin)
+          if (await isStale(localBin)) download()
+        }
+        return { serverId, command: localBin, args: ["server"], env }
+      }
+
+      if (await download()) {
+        return { serverId, command: localBin, args: ["server"], env }
+      }
+
+      const ruffPath = await which("ruff")
+      if (ruffPath) return { serverId, command: ruffPath, args: ["server"], env }
+
+      return undefined
+    }
+
+    case "ty": {
+      const env = { ...process.env }
+      const localBin = path.join(binDir, "ty")
+
+      const arch = process.arch === "arm64" ? "aarch64" : "x86_64"
+      const platform = process.platform === "darwin" ? "apple-darwin"
+        : process.platform === "linux" ? "unknown-linux-gnu"
+        : null
+
+      const download = () => platform ? downloadGitHubRelease(
+        "astral-sh/ty",
+        (name) => name === `ty-${arch}-${platform}.tar.gz`,
+        localBin,
+        { signal: opts.signal, extractBin: "ty" }
+      ) : Promise.resolve(false)
+
+      if (await fileExists(localBin)) {
+        if (!checkedStale.has(localBin)) {
+          checkedStale.add(localBin)
+          if (await isStale(localBin)) download()
+        }
+        return { serverId, command: localBin, args: ["server"], env }
+      }
+
+      if (await download()) {
+        return { serverId, command: localBin, args: ["server"], env }
+      }
+
+      const tyPath = await which("ty")
+      if (tyPath) return { serverId, command: tyPath, args: ["server"], env }
+
+      return undefined
     }
   }
 }
