@@ -37,11 +37,19 @@ bun run test
 ```
 Manual: embed with `cwd` pointing at a different repo and confirm `read`/`bash` operate in that repo.
 
+## Dependencies
+
+**Required before SDK can be published to npm:**
+- [ ] Complete `plans/2025-01-11-publish-marvin-packages.md` — publishes `@marvin-agents/ai`, `agent-core`, `base-tools`, `lsp`
+- [ ] SDK package can then either:
+  - Use `file:` deps for local dev (like other packages), join the publish set
+  - Or use published npm versions directly
+
 ## Out of Scope
 - Hooks UI / permission gating.
 - SDK auto-loading hooks/tools from `~/.config/marvin`.
 - Remote/HTTP server architecture.
-- Public npm publishing (covered as addendum only).
+- ~~Public npm publishing (covered as addendum only).~~ → See `plans/2025-01-11-publish-marvin-packages.md`
 
 ## Error Handling Strategy
 - `createMarvinAgent()` throws on invalid config/provider/model.
@@ -913,21 +921,14 @@ git checkout HEAD -- apps/coding-agent/src/headless.ts
 
 # Addendum: Path to a Public `@marvin-agents/sdk`
 
-## Current publish blockers
-- `@marvin-agents/base-tools` + `@marvin-agents/lsp` are `private: true` (`packages/base-tools/package.json:4`, `packages/lsp/package.json:4`).
-- `@marvin-agents/agent-core` + `@marvin-agents/ai` ship `dist` but entrypoints still reference `src` (`packages/agent/package.json:6-11`, `packages/ai/package.json:6-11`).
-- No release tooling in repo (no changesets/lerna).
-
-## Minimal publishing steps
-1. Decide publish set: `ai`, `agent-core`, `base-tools`, `lsp` (optional), `sdk`.
-2. For each publishable package:
-   - Add build pipeline (`tsconfig.build.json` + `build` + `prepublishOnly`) consistent with `packages/agent`/`packages/ai`.
-   - Point entrypoints at `dist`:
-     - `main: "dist/index.js"`
-     - `types: "dist/index.d.ts"`
-     - Add `exports` map if desired.
-   - Ensure `files` includes `dist/**` + README.
-   - Remove `private: true`.
-3. Replace workspace `file:` deps with semver ranges so npm consumers resolve correctly.
-4. Add a publish script (minimal): build all, then `npm publish -w packages/...`.
-5. Verify with `npm pack` and a clean Node project import test.
+> **This addendum has been superseded by a detailed implementation plan.**
+> 
+> See: **`plans/2025-01-11-publish-marvin-packages.md`**
+> 
+> That plan covers:
+> - Build infrastructure for all packages
+> - Changesets for version management  
+> - Publish script with `file:` → semver transformation
+> - Step-by-step first publish process
+>
+> Complete that plan first, then SDK can join the publish set.
