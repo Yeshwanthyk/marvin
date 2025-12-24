@@ -44,6 +44,7 @@ function createMockContext(overrides: Partial<CommandContext> = {}): CommandCont
 		sessionManager: {} as any,
 		configDir: "/tmp",
 		configPath: "/tmp/config.json",
+		cwd: "/tmp",
 		codexTransport: {} as any,
 		getApiKey: () => "test-key",
 

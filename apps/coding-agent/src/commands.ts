@@ -11,6 +11,7 @@ import type { UIMessage, ActivityState } from "./types.js"
 import { handleCompact as doCompact } from "./compact-handler.js"
 import { updateAppConfig } from "./config.js"
 import { THEME_NAMES } from "./theme-names.js"
+import { listSnapshots, createSafetySnapshot, restoreSnapshot } from "./rewind.js"
 
 type KnownProvider = ReturnType<typeof getProviders>[number]
 
@@ -21,6 +22,7 @@ export interface CommandContext {
 	sessionManager: SessionManager
 	configDir: string
 	configPath: string
+	cwd: string
 	codexTransport: CodexTransport
 	getApiKey: (provider: string) => string | undefined
 
@@ -260,6 +262,45 @@ async function handleCompactCmd(args: string, ctx: CommandContext): Promise<bool
 	return true
 }
 
+async function handleRewindCmd(ctx: CommandContext): Promise<boolean> {
+	if (ctx.isResponding()) {
+		addSystemMessage(ctx, "Cannot rewind while responding. Use /abort first.")
+		return true
+	}
+
+	try {
+		const snapshots = await listSnapshots(ctx.cwd)
+		if (snapshots.length === 0) {
+			addSystemMessage(ctx, "No snapshots found. Enable the snapshot hook to use /rewind.")
+			return true
+		}
+
+		// Fetch file changes for each snapshot (limit to 20 most recent)
+		const { getChangedFiles } = await import("./rewind.js")
+		const items = await Promise.all(
+			snapshots.slice(0, 20).map(async (s) => ({
+				ref: s.ref,
+				label: s.label,
+				timestamp: s.timestamp,
+				changes: await getChangedFiles(ctx.cwd, s.ref),
+			}))
+		)
+
+		// Dynamic import to avoid loading JSX at module init time
+		const { selectRewind } = await import("./rewind-picker.js")
+		const selected = await selectRewind(items)
+		if (!selected) return true
+
+		await createSafetySnapshot(ctx.cwd)
+		await restoreSnapshot(ctx.cwd, selected)
+		addSystemMessage(ctx, `Rewound to ${selected.replace("refs/marvin-checkpoints/", "")}.`)
+		return true
+	} catch (err) {
+		addSystemMessage(ctx, `Rewind failed: ${err instanceof Error ? err.message : String(err)}`)
+		return true
+	}
+}
+
 // ----- Main Dispatcher -----
 
 export function handleSlashCommand(line: string, ctx: CommandContext): boolean | Promise<boolean> {
@@ -295,6 +336,10 @@ export function handleSlashCommand(line: string, ctx: CommandContext): boolean |
 	if (trimmed === "/compact" || trimmed.startsWith("/compact ")) {
 		const args = trimmed.startsWith("/compact ") ? trimmed.slice("/compact ".length) : ""
 		return handleCompactCmd(args, ctx)
+	}
+
+	if (trimmed === "/rewind") {
+		return handleRewindCmd(ctx)
 	}
 
 	return false
