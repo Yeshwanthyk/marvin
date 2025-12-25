@@ -432,6 +432,14 @@ async function generateModels() {
 		opus45.cost.cacheWrite = 6.25;
 	}
 
+	// Fix glm-4.7-free: doesn't support developer role (returns "Incorrect role information")
+	// The paid alpha-glm-4.7 supports it, but the free tier doesn't
+	for (const model of allModels) {
+		if (model.provider === "opencode" && model.id === "glm-4.7-free") {
+			model.compat = { supportsDeveloperRole: false };
+		}
+	}
+
 	// Add missing gpt models
 	if (
 		!allModels.some(
