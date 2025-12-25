@@ -5,6 +5,8 @@ import { dirname } from "path";
 export interface FileIndexOptions {
 	cwd: string;
 	lazy?: boolean;
+	/** Time in ms before index is considered stale (default: 30000) */
+	staleTime?: number;
 }
 
 export interface FileSearchResult {
@@ -27,11 +29,14 @@ export class FileIndex {
 	private pendingCallbacks: Array<() => void> = [];
 	private searchItemsFilesOnly: SearchItem[] = [];
 	private searchItemsWithDirs: SearchItem[] = [];
+	private lastRefreshTime = 0;
+	private staleTime: number;
 
 	constructor(options: FileIndexOptions) {
 		this.cwd = options.cwd;
+		this.staleTime = options.staleTime ?? 5_000; // Default 5s - short for quick file visibility
 		if (!options.lazy) {
-			this.refresh();
+			this.refresh().catch(() => {/* ignore */});
 		}
 	}
 
@@ -102,6 +107,7 @@ export class FileIndex {
 				...Array.from(dirs, (dir) => ({ path: dir + "/", isDirectory: true })),
 			];
 			this.indexed = true;
+			this.lastRefreshTime = Date.now();
 		} finally {
 			this.indexing = false;
 			for (const cb of this.pendingCallbacks) {
@@ -116,8 +122,13 @@ export class FileIndex {
 		const includeDirs = options?.includeDirs ?? true;
 
 		if (!this.indexed && !this.indexing) {
-			this.refresh();
+			this.refresh().catch(() => {/* ignore */});
 			return [];
+		}
+
+		// Trigger background refresh if stale (doesn't block current search)
+		if (this.indexed && !this.indexing && Date.now() - this.lastRefreshTime > this.staleTime) {
+			this.refresh().catch(() => {/* ignore */});
 		}
 
 		if (!this.indexed) {

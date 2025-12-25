@@ -482,4 +482,9 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 
 		return true;
 	}
+
+	/** Refresh the file index (call after files are created/deleted) */
+	refreshFileIndex(): void {
+		this.fileIndex.refresh().catch(() => {/* ignore */});
+	}
 }
