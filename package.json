@@ -14,7 +14,7 @@
     "apps/*"
   ],
   "dependencies": {
-    "@sinclair/typebox": "^0.32.33"
+    "@sinclair/typebox": "0.34.45"
   },
   "devDependencies": {
     "@types/node": "^25.0.1",
