@@ -8,6 +8,43 @@ import { createMemo, For, Show, type JSX } from "solid-js"
 import { type RGBA, useTheme } from "../context/theme.js"
 import { visibleWidth } from "../utils/text-width.js"
 
+/**
+ * Post-process tokens to fix ordered list numbering when lists are split by code blocks.
+ * Marked.js breaks list continuity when non-list content appears between items.
+ * This adds a _listStartOffset property to ordered lists to continue numbering.
+ */
+function mergeOrderedLists(tokens: Token[]): Token[] {
+	const result: Token[] = []
+	let inListContext = false
+	let runningCount = 0
+
+	for (const token of tokens) {
+		if (token.type === "list" && (token as Tokens.List).ordered) {
+			const list = token as Tokens.List
+			if (inListContext) {
+				// Continue numbering from previous list
+				result.push({ ...list, _listStartOffset: runningCount } as Token)
+				runningCount += list.items.length
+			} else {
+				// Start new list context
+				inListContext = true
+				runningCount = list.items.length
+				result.push(token)
+			}
+		} else if (inListContext && (token.type === "code" || token.type === "space")) {
+			// Code blocks and spaces don't break list context
+			result.push(token)
+		} else {
+			// Non-list, non-code content breaks list context
+			inListContext = false
+			runningCount = 0
+			result.push(token)
+		}
+	}
+
+	return result
+}
+
 export interface MarkdownTheme {
 	text: RGBA
 	heading: RGBA
@@ -73,7 +110,7 @@ export function Markdown(props: MarkdownProps) {
 	const tokens = createMemo(() => {
 		if (!props.text?.trim()) return []
 		const normalized = props.text.replace(/\t/g, "   ")
-		return marked.lexer(normalized)
+		return mergeOrderedLists(marked.lexer(normalized))
 	})
 
 	const paddingX = () => props.paddingX ?? 0
@@ -230,12 +267,14 @@ function CodeBlockToken(props: { token: Tokens.Code; theme: MarkdownTheme; nextT
 function ListToken(props: { token: Tokens.List; theme: MarkdownTheme; depth: number }): JSX.Element {
 	const { token, theme, depth } = props
 	const indent = "  ".repeat(depth)
+	// Use offset from mergeOrderedLists if present (for continued lists)
+	const startOffset = (token as Tokens.List & { _listStartOffset?: number })._listStartOffset ?? 0
 
 	return (
 		<box flexDirection="column">
 			<For each={token.items}>
 				{(item, i) => {
-					const bullet = token.ordered ? `${i() + 1}. ` : "- "
+					const bullet = token.ordered ? `${startOffset + i() + 1}. ` : "- "
 					return <ListItemToken item={item} bullet={bullet} indent={indent} theme={theme} depth={depth} />
 				}}
 			</For>
@@ -256,12 +295,20 @@ function ListItemToken(props: {
 	const textTokens = () => (item.tokens ?? []).filter((t) => t.type !== "list")
 	const nestedLists = () => (item.tokens ?? []).filter((t) => t.type === "list") as Tokens.List[]
 
+	// Task list checkbox rendering
+	const checkbox = () => {
+		if (!item.task) return null
+		return item.checked ? "☑ " : "☐ "
+	}
+	const checkboxColor = () => item.checked ? theme.text : theme.listBullet
+
 	return (
 		<box flexDirection="column">
 			{/* First line with bullet */}
 			<text>
 				<span style={{ fg: theme.text }}>{indent}</span>
 				<span style={{ fg: theme.listBullet }}>{bullet}</span>
+				{checkbox() && <span style={{ fg: checkboxColor() }}>{checkbox()}</span>}
 				<For each={textTokens()}>
 					{(t) => {
 						if (t.type === "text") {
@@ -449,6 +496,17 @@ function InlineToken(props: { token: Token; theme: MarkdownTheme }): JSX.Element
 					<Show when={showUrl}>
 						<span style={{ fg: theme.linkUrl }}>{` (${t.href})`}</span>
 					</Show>
+				</>
+			)
+		}
+
+		case "image": {
+			const t = token as Tokens.Image
+			// Terminal can't display images, show as [img: alt] (url)
+			return (
+				<>
+					<span style={{ fg: theme.link }}>[img: {t.text || "image"}]</span>
+					<span style={{ fg: theme.linkUrl }}>{` (${t.href})`}</span>
 				</>
 			)
 		}
