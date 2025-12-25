@@ -16,26 +16,26 @@ This document explains the system design, data flow, and component interactions 
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                              TUI Layer (open-tui)                            │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  Solid Renderer → Components (Markdown, Diff, CodeBlock, Editor, etc) │ │
-│  │  Theme System → 30+ themes with semantic color tokens                  │ │
+│  │  @opentui/solid → Components (Markdown, Diff, CodeBlock, Editor, etc) │ │
+│  │  Theme System → multiple themes with semantic color tokens             │ │
 │  │  Autocomplete → File paths, slash commands, tool names                 │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                           Agent Core (agent-core)                            │
+│                         Agent Core (@marvin-agents/agent-core)               │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │  Agent State Machine → messages, model, tools, streaming state         │ │
 │  │  Event Emitter → granular events for UI binding                        │ │
 │  │  Transport Layer → ProviderTransport, RouterTransport, CodexTransport  │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                              AI Package (ai)                                 │
+│                              AI Package (@marvin-agents/ai)                  │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  Provider Adapters → Anthropic, OpenAI, Google, Mistral, etc.          │ │
+│  │  Provider Adapters → Anthropic, OpenAI, Google, Mistral                │ │
 │  │  Agent Loop → streaming, tool execution, multi-turn                    │ │
 │  │  Token Tracking → usage, cost estimation                               │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                     Base Tools + LSP (base-tools, lsp)                       │
+│                   Base Tools + LSP (base-tools, lsp)                         │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │  read, write, edit, bash → file operations with validation             │ │
 │  │  LSP Manager → TypeScript server, diagnostics injection                │ │
@@ -47,6 +47,20 @@ This document explains the system design, data flow, and component interactions 
                     │       LLM Provider APIs         │
                     │  (Anthropic, OpenAI, Google...) │
                     └─────────────────────────────────┘
+```
+
+## Package Structure
+
+```
+packages/
+├── agent/         @marvin-agents/agent-core - Agent state machine, transports
+├── ai/            @marvin-agents/ai - LLM provider abstraction, streaming
+├── base-tools/    @marvin-agents/base-tools - read, write, edit, bash tools
+├── lsp/           @marvin-agents/lsp - Language server protocol integration
+└── open-tui/      @marvin-agents/open-tui - TUI components and utilities
+
+apps/
+└── coding-agent/  @marvin-agents/coding-agent - Main CLI application
 ```
 
 ## Request Flow
@@ -102,7 +116,7 @@ User Input                 Agent Core                  LLM Provider
 The agent emits events at each stage of processing. The TUI subscribes to these events to update the display in real-time.
 
 ```
-AgentEvent Types
+AgentEvent Types (defined in packages/ai/src/agent/types.ts)
 ────────────────────────────────────────────────────────────────────
 
 agent_start          Fired once when agent loop begins
@@ -130,7 +144,7 @@ agent_start          Fired once when agent loop begins
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    createAgentEventHandler()                     │
+│              createAgentEventHandler() in agent-events.ts        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  agent_start ──► Reset turn index, clear extraction cache       │
@@ -138,7 +152,7 @@ agent_start          Fired once when agent loop begins
 │  message_start ──► Create streaming message placeholder         │
 │                    (if assistant)                                │
 │                                                                  │
-│  message_update ──► Throttled (80ms) incremental extraction     │
+│  message_update ──► Throttled incremental extraction            │
 │                     Extract text/thinking/toolCalls              │
 │                     Update streaming message                     │
 │                                                                  │
@@ -149,7 +163,7 @@ agent_start          Fired once when agent loop begins
 │  tool_execution_start ──► Add tool block to message              │
 │                           Set activity state to "tool"           │
 │                                                                  │
-│  tool_execution_update ──► Throttled (50ms) update               │
+│  tool_execution_update ──► Throttled update                      │
 │                            Update tool output preview            │
 │                                                                  │
 │  tool_execution_end ──► Final tool result                        │
@@ -167,11 +181,11 @@ agent_start          Fired once when agent loop begins
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                          AgentState                              │
+│               AgentState (packages/agent/src/types.ts)           │
 ├─────────────────────────────────────────────────────────────────┤
 │  systemPrompt: string        System prompt for context           │
 │  model: Model                Current LLM model                   │
-│  thinkingLevel: ThinkingLevel  Reasoning depth                   │
+│  thinkingLevel: ThinkingLevel  off|minimal|low|medium|high|xhigh │
 │  tools: AgentTool[]          Available tools                     │
 │  messages: AppMessage[]      Conversation history                │
 │  isStreaming: boolean        Response in progress                │
@@ -215,7 +229,7 @@ Transports abstract the communication with LLM backends:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      AgentTransport Interface                    │
+│          AgentTransport Interface (packages/agent/src/transports/types.ts)
 ├─────────────────────────────────────────────────────────────────┤
 │  run(messages, userMessage, config, signal)                      │
 │    → AsyncIterable<AgentEvent>                                   │
@@ -229,8 +243,8 @@ Transports abstract the communication with LLM backends:
 ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
 │ProviderTransport │ │ RouterTransport  │ │ CodexTransport   │
 ├──────────────────┤ ├──────────────────┤ ├──────────────────┤
-│ Direct API calls │ │ OpenRouter proxy │ │ OAuth + Codex    │
-│ to providers     │ │ for any model    │ │ API integration  │
+│ Direct API calls │ │ Routes between   │ │ OAuth + Codex    │
+│ to providers     │ │ codex & provider │ │ API integration  │
 └──────────────────┘ └──────────────────┘ └──────────────────┘
 ```
 
@@ -244,15 +258,14 @@ Direct calls to LLM provider APIs:
 
 ### RouterTransport
 
-Routes through OpenRouter for unified access to multiple models:
-1. Uses OpenRouter API key
-2. Maps model IDs to OpenRouter format
-3. Handles provider-specific quirks
+Routes to correct transport based on model.provider:
+- If provider is "codex" → uses CodexTransport
+- Otherwise → uses ProviderTransport
 
 ### CodexTransport
 
 Integrates with OpenAI Codex for OAuth-based authentication:
-1. Manages OAuth token flow
+1. Manages OAuth token flow (loadTokens, saveTokens, clearTokens)
 2. Handles token refresh
 3. Routes to Codex API endpoints
 
@@ -267,7 +280,7 @@ Tools are wrapped in multiple layers for interception and enhancement:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              wrapToolsWithLspDiagnostics()                       │
+│          wrapToolsWithLspDiagnostics() (packages/lsp)            │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  For write/edit tools:                                     │  │
 │  │  1. Execute original tool                                  │  │
@@ -279,7 +292,7 @@ Tools are wrapped in multiple layers for interception and enhancement:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   wrapToolsWithHooks()                           │
+│           wrapToolsWithHooks() (apps/coding-agent/src/hooks)     │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  1. Emit tool.execute.before                               │  │
 │  │  2. Check if hook returned { block: true }                 │  │
@@ -307,7 +320,7 @@ The LSP package provides language server integration for TypeScript:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        LspManager                                │
+│                 LspManager (packages/lsp/src/manager.ts)         │
 ├─────────────────────────────────────────────────────────────────┤
 │  touchFile(path, opts)     Notify server of file change         │
 │  diagnostics()             Get all current diagnostics           │
@@ -316,7 +329,7 @@ The LSP package provides language server integration for TypeScript:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                        LspClient                                 │
+│                 LspClient (packages/lsp/src/client.ts)           │
 ├─────────────────────────────────────────────────────────────────┤
 │  JSON-RPC communication with language server                     │
 │  Tracks open files and their diagnostics                         │
@@ -350,13 +363,32 @@ Diagnostic Format:
 }
 ```
 
+### LSP Registry (packages/lsp/src/registry.ts)
+
+Maps file extensions to language servers:
+
+```typescript
+LANGUAGE_ID_BY_EXT: {
+  ".ts": "typescript",
+  ".tsx": "typescriptreact",
+  ".js": "javascript",
+  ".jsx": "javascriptreact",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".py": "python",
+  ".pyi": "python",
+  ".go": "go",
+  ".rs": "rust",
+}
+```
+
 ## Hook System
 
 Hooks allow users to intercept and extend agent behavior:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        HookRunner                                │
+│          HookRunner (apps/coding-agent/src/hooks/runner.ts)      │
 ├─────────────────────────────────────────────────────────────────┤
 │  handlers: Map<eventType, handler[]>                             │
 │  messageCallback: (text) => void                                 │
@@ -387,7 +419,7 @@ ctx.cwd                     Current working directory
 ctx.configDir               Config directory path
 ```
 
-### Hook Event Flow
+### Hook Event Types (apps/coding-agent/src/hooks/types.ts)
 
 ```
 App Startup
@@ -428,56 +460,43 @@ Agent Loop
 ## TUI Component Hierarchy
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                          TuiApp                                  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ ThemeProvider                                              │  │
-│  │ ┌─────────────────────────────────────────────────────┐   │  │
-│  │ │ TerminalProvider                                     │   │  │
-│  │ │ ┌─────────────────────────────────────────────────┐ │   │  │
-│  │ │ │                                                  │ │   │  │
-│  │ │ │  ┌────────────────────────────────────────────┐ │ │   │  │
-│  │ │ │  │              MessageList                    │ │ │   │  │
-│  │ │ │  │  ┌──────────────────────────────────────┐  │ │ │   │  │
-│  │ │ │  │  │ UserMessage                          │  │ │ │   │  │
-│  │ │ │  │  │   └─ Markdown                        │  │ │ │   │  │
-│  │ │ │  │  ├──────────────────────────────────────┤  │ │ │   │  │
-│  │ │ │  │  │ AssistantMessage                     │  │ │ │   │  │
-│  │ │ │  │  │   ├─ Thinking (collapsible)          │  │ │ │   │  │
-│  │ │ │  │  │   ├─ Markdown (text content)         │  │ │ │   │  │
-│  │ │ │  │  │   └─ ToolBlock[]                     │  │ │ │   │  │
-│  │ │ │  │  │        ├─ ToolHeader (collapsible)   │  │ │ │   │  │
-│  │ │ │  │  │        └─ ToolBody                   │  │ │ │   │  │
-│  │ │ │  │  │             ├─ CodeBlock (bash/read) │  │ │ │   │  │
-│  │ │ │  │  │             └─ Diff (edit)           │  │ │ │   │  │
-│  │ │ │  │  └──────────────────────────────────────┘  │ │ │   │  │
-│  │ │ │  └────────────────────────────────────────────┘ │ │   │  │
-│  │ │ │                                                  │ │   │  │
-│  │ │ │  ┌────────────────────────────────────────────┐ │ │   │  │
-│  │ │ │  │              Editor                         │ │ │   │  │
-│  │ │ │  │   └─ Autocomplete overlay                   │ │ │   │  │
-│  │ │ │  └────────────────────────────────────────────┘ │ │   │  │
-│  │ │ │                                                  │ │   │  │
-│  │ │ │  ┌────────────────────────────────────────────┐ │ │   │  │
-│  │ │ │  │              Footer                         │ │ │   │  │
-│  │ │ │  │   ├─ Model badge                            │ │ │   │  │
-│  │ │ │  │   ├─ Context meter                          │ │ │   │  │
-│  │ │ │  │   └─ Activity indicator                     │ │ │   │  │
-│  │ │ │  └────────────────────────────────────────────┘ │ │   │  │
-│  │ │ │                                                  │ │   │  │
-│  │ │ └──────────────────────────────────────────────────┘ │   │  │
-│  │ └──────────────────────────────────────────────────────┘   │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+apps/coding-agent/src/
+├── tui-app.tsx           Main app component
+├── components/
+│   ├── MessageList.tsx   Scrollable message container
+│   └── Footer.tsx        Status bar with model/context
+├── session-picker.tsx    Session selection dialog
+├── rewind-picker.tsx     Checkpoint selection for rewind
+├── tui-open-rendering.tsx  Tool block components
+├── agent-events.ts       Event → UI state mapping
+└── keyboard-handler.ts   Key bindings
 
-Modal Overlays:
-───────────────
-  ├─ SessionPicker (dialog for session selection)
-  ├─ Toast (ephemeral notifications)
-  └─ Dialog (confirmation prompts)
+packages/open-tui/src/
+├── components/
+│   ├── badge.tsx         Status badges
+│   ├── code-block.tsx    Syntax highlighted code
+│   ├── dialog.tsx        Modal dialogs
+│   ├── diff.tsx          Diff rendering
+│   ├── divider.tsx       Visual dividers
+│   ├── editor.tsx        Text input
+│   ├── image.tsx         Image display
+│   ├── loader.tsx        Loading indicators
+│   ├── markdown.tsx      Markdown rendering
+│   ├── panel.tsx         Container panels
+│   ├── select-list.tsx   Selection lists
+│   ├── spacer.tsx        Layout spacers
+│   └── toast.tsx         Toast notifications
+├── context/
+│   ├── terminal.tsx      Terminal context provider
+│   └── theme.tsx         Theme context provider
+├── autocomplete/
+│   ├── autocomplete.ts   Autocomplete logic
+│   └── file-index.ts     File path indexing
+└── hooks/
+    └── use-keyboard.ts   Keyboard handling hook
 ```
 
-## Message Rendering Pipeline
+### Message Rendering Pipeline
 
 ```
 AppMessage (from agent)
@@ -537,8 +556,8 @@ Session Format:
   ]
 }
 
-SessionManager:
-───────────────
+SessionManager (apps/coding-agent/src/session-manager.ts):
+──────────────────────────────────────────────────────────
 
 startSession(provider, model, thinking)
   → Creates new session file
@@ -557,41 +576,11 @@ listSessions()
   → Returns available sessions for picker
 ```
 
-## Model Cycling (Overflow Recovery)
-
-When context exceeds model limits, the agent can cycle to a larger model:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Context Overflow Flow                        │
-└─────────────────────────────────────────────────────────────────┘
-
-1. Request fails with overflow error (529, token limit exceeded)
-
-2. Agent detects overflow via error pattern matching
-
-3. ModelCycler checks for larger model in same provider:
-   ┌──────────────────────────────────────────────────────┐
-   │  gemini-2.5-flash (1M) → gemini-2.5-pro (1M+)       │
-   │  claude-sonnet (200K) → claude-opus (200K)          │
-   │  gpt-4o (128K) → gpt-4-turbo (128K)                 │
-   └──────────────────────────────────────────────────────┘
-
-4. If larger model found:
-   - Emit model_cycle event
-   - Switch model
-   - Retry with agent.continue()
-
-5. If no larger model:
-   - Suggest /compact command
-   - Or truncate older messages
-```
-
 ## Autocomplete System
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                 CombinedAutocompleteProvider                     │
+│     CombinedAutocompleteProvider (apps/coding-agent/src/)        │
 ├─────────────────────────────────────────────────────────────────┤
 │  Combines multiple providers with priority ordering              │
 └─────────────────────────────────────────────────────────────────┘
@@ -616,4 +605,49 @@ Trigger Patterns:
 ./  ../   → file paths
 @         → tool names
 ~         → home directory expansion
+```
+
+## Custom Commands
+
+Custom slash commands are loaded from `~/.config/marvin/commands/*.md`:
+
+```
+loadCustomCommands(configDir)
+    │
+    ├─► Scan ~/.config/marvin/commands/*.md
+    │
+    ├─► For each file:
+    │   ├─ Parse markdown content
+    │   ├─ Extract $ARGUMENTS placeholder
+    │   └─ Create command entry
+    │
+    └─► Return Map<name, CustomCommand>
+
+Expansion:
+──────────
+- $ARGUMENTS in template is replaced with user args
+- If no placeholder, args are appended
+```
+
+## Custom Tools
+
+Custom tools are loaded from `~/.config/marvin/tools/*.ts`:
+
+```
+loadCustomTools(configDir, cwd, existingToolNames)
+    │
+    ├─► Scan ~/.config/marvin/tools/*.ts
+    │
+    ├─► For each file:
+    │   ├─ Transpile TypeScript
+    │   ├─ Dynamic import
+    │   ├─ Call default export (factory) with API
+    │   └─ Register tool(s)
+    │
+    └─► Return { tools, errors }
+
+Tool API:
+─────────
+api.cwd          Current working directory
+api.exec(...)    Execute shell commands
 ```

@@ -10,21 +10,21 @@ The main entry point parses CLI arguments and dispatches to TUI or headless mode
 
 ```typescript
 // apps/coding-agent/src/index.ts
-import { parseArgs } from "./args.js";
-import { runTuiOpen } from "./tui-app.js";
-import { runHeadless } from "./headless.js";
-
-const args = parseArgs();
+const args = parseArgs(argv);
 
 if (args.headless) {
-  await runHeadless({ prompt: args.headless, ...args });
+  await runHeadless({ prompt: args.prompt, ... });
 } else {
-  await runTuiOpen({ ...args });
+  // Dynamic import for TUI (requires solid plugin for TSX)
+  const solidPlugin = (await import("@opentui/solid/bun-plugin")).default;
+  Bun.plugin(solidPlugin);
+  const { runTuiOpen } = await import("./tui-app.js");
+  await runTuiOpen({ ... });
 }
 ```
 
 **Key files:**
-- `args.ts` — CLI argument parsing with yargs-style patterns
+- `args.ts` — CLI argument parsing
 - `tui-app.tsx` — Interactive TUI entry point
 - `headless.ts` — Non-interactive single-prompt execution
 
@@ -37,17 +37,18 @@ runTuiOpen()
     │
     ├─► loadAppConfig() ─────────────────► Config from ~/.config/marvin/
     │
+    ├─► loadCustomCommands() ────────────► Slash commands from commands/
+    │
     ├─► loadHooks() ─────────────────────► User hooks from hooks/
     │
     ├─► loadCustomTools() ───────────────► User tools from tools/
     │
-    ├─► loadCustomCommands() ────────────► Slash commands from commands/
-    │
-    ├─► Create Transport ────────────────► ProviderTransport or RouterTransport
-    │
-    ├─► Create LspManager ───────────────► LSP integration
+    ├─► createLspManager() ──────────────► LSP integration
     │
     ├─► Wrap tools ──────────────────────► hooks → LSP → base tools
+    │   └─► wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunner), lsp)
+    │
+    ├─► Create Transports ───────────────► ProviderTransport, CodexTransport, RouterTransport
     │
     ├─► Create Agent ────────────────────► State machine with transport
     │
@@ -57,10 +58,10 @@ runTuiOpen()
 ```
 
 **What to look at:**
-- **Transport selection** (lines ~50-80): Router vs Provider based on API key availability
-- **Tool wrapping** (lines ~90-100): `wrapToolsWithHooks(wrapToolsWithLspDiagnostics(...))`
-- **Agent creation** (lines ~110-140): Agent options, initial state
-- **Event subscription** (lines ~150-180): `createAgentEventHandler(ctx)`
+- **Config loading** (lines ~50-60): `loadAppConfig()` with CLI overrides
+- **Hook/tool loading** (lines ~65-100): Load and wrap with error handling
+- **Transport setup** (lines ~120-140): RouterTransport routes between ProviderTransport and CodexTransport
+- **Agent creation** (lines ~140-160): Agent with transport, initial state
 
 ### 3. Headless Mode: `apps/coding-agent/src/headless.ts`
 
@@ -120,13 +121,13 @@ loadHooks(configDir)
     │   ├─ Call default export (HookFactory)
     │   └─ Collect registrations
     │
-    └─► Return { hooks, runner, errors }
+    └─► Return { hooks, errors }
 ```
 
 ### Custom Tools: `apps/coding-agent/src/custom-tools/loader.ts`
 
 ```
-loadCustomTools(configDir, api)
+loadCustomTools(configDir, cwd, existingToolNames)
     │
     ├─► Scan ~/.config/marvin/tools/*.ts
     │
@@ -148,7 +149,7 @@ The Agent manages conversation state and coordinates with transports:
 ```
 class Agent
     │
-    ├─► State
+    ├─► State (AgentState from types.ts)
     │   ├─ systemPrompt, model, thinkingLevel
     │   ├─ tools: AgentTool[]
     │   ├─ messages: AppMessage[]
@@ -183,7 +184,7 @@ prompt(input)
     │   │   ├─ Create AbortController
     │   │   ├─ Set isStreaming = true
     │   │   ├─ Build AgentRunConfig
-    │   │   └─ Transform messages for LLM
+    │   │   └─ Transform messages for LLM (via messageTransformer)
     │   │
     │   ├─► transport.run(messages, userMessage, config, signal)
     │   │
@@ -215,8 +216,9 @@ interface AgentTransport {
 | Transport | Purpose | File |
 |-----------|---------|------|
 | ProviderTransport | Direct API calls | `ProviderTransport.ts` |
-| RouterTransport | OpenRouter proxy | `RouterTransport.ts` |
+| RouterTransport | Routes to codex or provider | `RouterTransport.ts` |
 | CodexTransport | OAuth + Codex API | `CodexTransport.ts` |
+| AppTransport | Proxy through server | `AppTransport.ts` |
 
 ### Agent Loop: `packages/ai/src/agent/agent-loop.ts`
 
@@ -225,7 +227,7 @@ The core loop that drives LLM interaction:
 ```
 agentLoop(prompt, context, config, signal)
     │
-    ├─► Push: agent_start, turn_start, message_start/end (user)
+    ├─► Emit: agent_start, turn_start, message_start/end (user)
     │
     └─► runLoop(context, newMessages, config, signal, stream)
         │
@@ -248,9 +250,9 @@ agentLoop(prompt, context, config, signal)
         │   │       ├─ Emit tool_execution_end
         │   │       └─ Return ToolResultMessage[]
         │   │
-        │   └─► Push: turn_end
+        │   └─► Emit: turn_end
         │
-        └─► Push: agent_end
+        └─► Emit: agent_end
 ```
 
 ## LLM Providers
@@ -275,10 +277,10 @@ Each provider adapter handles API-specific details:
 
 ```
 packages/ai/src/providers/
-├── anthropic.ts      Messages API, tool_use blocks
-├── google.ts         Gemini API, function calls
-├── openai-completions.ts   Chat completions, function_call
-└── openai-responses.ts     Responses API (newer)
+├── anthropic.ts           Messages API, tool_use blocks
+├── google.ts              Gemini API, function calls
+├── openai-completions.ts  Chat completions, function_call
+└── openai-responses.ts    Responses API (newer)
 ```
 
 **Common pattern:**
@@ -328,6 +330,9 @@ packages/base-tools/src/
     ├── bash.ts       Command execution
     ├── path-utils.ts Path normalization
     └── truncate.ts   Large output handling
+└── utils/
+    ├── mime.ts       MIME type detection
+    └── shell.ts      Shell utilities
 ```
 
 **Tool structure:**
@@ -335,10 +340,11 @@ packages/base-tools/src/
 ```typescript
 const readTool: AgentTool<ReadParams, ReadDetails> = {
   name: "read",
+  label: "Read",
   description: "Read file contents...",
   parameters: ReadParamsSchema,  // TypeBox schema
   
-  async execute({ path, offset, limit }, { signal }) {
+  async execute(toolCallId, params, signal, onUpdate) {
     // Implementation
     return {
       content: [{ type: "text", text: fileContent }],
@@ -350,7 +356,7 @@ const readTool: AgentTool<ReadParams, ReadDetails> = {
 
 ### Tool Wrapping Pipeline
 
-Tools are wrapped in layers for extensibility:
+Tools are wrapped in layers for extensibility (order matters):
 
 ```
 codingTools (base)
@@ -429,35 +435,46 @@ LspClient
 
 ### Server Registry: `packages/lsp/src/registry.ts`
 
-Defines which servers handle which file types:
+Defines file extension to language ID mapping:
 
 ```typescript
-const SERVERS: LspServerDefinition[] = [
-  {
-    id: "typescript-language-server",
-    languages: ["typescript", "typescriptreact", "javascript", "javascriptreact"],
-    extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
-    detectRoot: async (file, cwd) => {
-      // Find nearest package.json or tsconfig.json
-    }
-  }
-];
+const LANGUAGE_ID_BY_EXT = {
+  ".ts": "typescript",
+  ".tsx": "typescriptreact",
+  ".js": "javascript",
+  ".jsx": "javascriptreact",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".py": "python",
+  ".pyi": "python",
+  ".go": "go",
+  ".rs": "rust",
+}
 ```
 
 ## TUI Components
 
-### Component Tree
+### Component Locations
 
 ```
 apps/coding-agent/src/
-├── tui-app.tsx          Main app component
+├── tui-app.tsx              Main app component
 ├── components/
-│   ├── MessageList.tsx  Scrollable message container
-│   └── Footer.tsx       Status bar with model/context
-├── session-picker.tsx   Session selection dialog
-├── tui-open-rendering.tsx  Tool block components
-├── agent-events.ts      Event → UI state mapping
-└── keyboard-handler.ts  Key bindings
+│   ├── MessageList.tsx      Scrollable message container
+│   └── Footer.tsx           Status bar with model/context
+├── session-picker.tsx       Session selection dialog
+├── rewind-picker.tsx        Checkpoint rewind picker
+├── tui-open-rendering.tsx   Tool block components
+├── agent-events.ts          Event → UI state mapping
+├── keyboard-handler.ts      Key bindings
+├── syntax-highlighting.ts   Code highlighting
+└── types.ts                 UI-specific types (UIMessage, ToolBlock, etc.)
+
+packages/open-tui/src/
+├── components/              Reusable UI components
+├── context/                 Theme and terminal providers
+├── autocomplete/            Autocomplete system
+└── hooks/                   React-style hooks
 ```
 
 ### Reactive State Flow
@@ -503,12 +520,12 @@ const registry: Record<string, ToolRenderer> = {
 ### Keyboard Handling: `keyboard-handler.ts`
 
 ```
-useKeyboardHandler(opts)
+createKeyboardHandler(opts)
     │
     ├─► Global keys (always active):
     │   ├─ Ctrl+C → abort() or exit
     │   ├─ Ctrl+L → clear screen
-    │   └─ Esc → cancel retry/selection
+    │   └─ Esc → abort current request
     │
     ├─► Editor keys (when editing):
     │   ├─ Enter → submit prompt
@@ -516,10 +533,9 @@ useKeyboardHandler(opts)
     │   ├─ Up/Down → history navigation
     │   └─ Tab → autocomplete
     │
-    └─► Modal keys (when dialog open):
-        ├─ Up/Down → navigate options
-        ├─ Enter → select
-        └─ Esc → close
+    └─► Special:
+        ├─ Ctrl+P → cycle models
+        └─ Shift+Tab → cycle thinking level
 ```
 
 ## Session Management
@@ -537,10 +553,13 @@ SessionManager
     │   ├─ Create file with metadata
     │   └─ Set as current session
     │
-    ├─► loadSession(id)
+    ├─► loadSession(path)
     │   ├─ Read session file
     │   ├─ Populate agent.replaceMessages()
     │   └─ Return session metadata
+    │
+    ├─► loadLatest()
+    │   └─ Find most recent session for current cwd
     │
     ├─► appendMessage(message)
     │   ├─ Add to current session
@@ -559,7 +578,7 @@ HookRunner
     │
     ├─► handlers: Map<eventType, handler[]>
     │
-    ├─► register(hookAPI)
+    ├─► register(hookDefinition)
     │   └─ Hook calls marvin.on(event, handler)
     │       └─ handlers.get(event).push(handler)
     │
@@ -574,8 +593,11 @@ HookRunner
     │       ├─ tool.execute.before: { block?, reason? }
     │       └─ tool.execute.after: { content?, details? }
     │
-    └─► messageCallback
-        └─ Set by TUI to handle marvin.send()
+    ├─► messageCallback
+    │   └─ Set by TUI to handle marvin.send()
+    │
+    └─► onError(callback)
+        └─ Subscribe to runtime errors
 ```
 
 ### Tool Wrapper: `apps/coding-agent/src/hooks/tool-wrapper.ts`
@@ -584,7 +606,7 @@ HookRunner
 function wrapToolsWithHooks(tools, runner) {
   return tools.map(tool => ({
     ...tool,
-    execute: async (params, ctx) => {
+    execute: async (toolCallId, params, signal, onUpdate) => {
       // Before hook - can block
       const beforeResult = await runner.emit({
         type: "tool.execute.before",
@@ -597,7 +619,7 @@ function wrapToolsWithHooks(tools, runner) {
       }
       
       // Execute tool
-      const result = await tool.execute(params, ctx);
+      const result = await tool.execute(toolCallId, params, signal, onUpdate);
       
       // After hook - can modify
       const afterResult = await runner.emit({
@@ -627,7 +649,7 @@ handleSlashCommand(line, ctx)
     │   ├─ /exit, /quit → process.exit()
     │   ├─ /clear → agent.reset(), clear UI
     │   ├─ /thinking <level> → setThinkingLevel()
-    │   ├─ /model [provider] <id> → setModel()
+    │   ├─ /model [provider/]<id> → setModel()
     │   ├─ /theme [name] → setTheme()
     │   ├─ /compact [instructions] → doCompact()
     │   └─ /diffwrap → toggle mode
@@ -644,16 +666,16 @@ loadCustomCommands(configDir)
     │
     ├─► For each file:
     │   ├─ Parse markdown content
-    │   ├─ Extract {{input}} placeholder
+    │   ├─ Extract description from first line
     │   └─ Create command entry
     │
-    └─► Return Map<name, template>
+    └─► Return Map<name, CustomCommand>
 
-executeCustomCommand(name, input, commands)
+tryExpandCustomCommand(name, input, commands)
     │
     ├─► Get template from map
     │
-    ├─► Replace {{input}} or append input
+    ├─► Replace $ARGUMENTS or append input
     │
     └─► Return expanded prompt
 ```
@@ -665,17 +687,14 @@ executeCustomCommand(name, input, commands)
 ```
 CombinedAutocompleteProvider
     │
-    ├─► SlashCommandProvider
+    ├─► SlashCommandProvider (slashCommands array)
     │   ├─ Builtin commands
     │   └─ Custom commands from config
     │
-    ├─► FilePathProvider
-    │   ├─ Scans cwd recursively
-    │   ├─ Respects .gitignore
-    │   └─ Caches index for speed
-    │
-    └─► ToolNameProvider
-        └─ @tool_name completions
+    └─► FilePathProvider
+        ├─ Scans cwd recursively
+        ├─ Respects .gitignore
+        └─ Caches index for speed
 ```
 
 ### File Indexing: `packages/open-tui/src/autocomplete/file-index.ts`
@@ -695,36 +714,23 @@ FileIndex
         └─ Rebuild after file changes
 ```
 
-## Package Boundaries
-
-### What goes where:
-
-| Concern | Package | Reason |
-|---------|---------|--------|
-| LLM API calls | `ai` | Provider-agnostic abstraction |
-| Message streaming | `ai` | Tied to provider APIs |
-| Agent state | `agent-core` | Stateful, UI-independent |
-| Transport logic | `agent-core` | Backend abstraction |
-| File operations | `base-tools` | Reusable across agents |
-| LSP protocol | `lsp` | Isolated complexity |
-| UI components | `open-tui` | Reusable TUI library |
-| App logic | `coding-agent` | CLI-specific integration |
+## Package Dependencies
 
 ### Import Rules
 
 ```
 coding-agent can import from:
-  ├─ ai (types, models, streaming)
-  ├─ agent-core (Agent, transports)
-  ├─ base-tools (codingTools)
-  ├─ lsp (LspManager)
-  └─ open-tui (components, hooks)
+  ├─ @marvin-agents/ai (types, models, streaming)
+  ├─ @marvin-agents/agent-core (Agent, transports)
+  ├─ @marvin-agents/base-tools (codingTools)
+  ├─ @marvin-agents/lsp (LspManager)
+  └─ @marvin-agents/open-tui (components, hooks)
 
 agent-core can import from:
-  └─ ai (types, agent-loop)
+  └─ @marvin-agents/ai (types, agent-loop)
 
 base-tools can import from:
-  └─ ai (types only)
+  └─ @marvin-agents/ai (types only)
 
 lsp cannot import from:
   └─ (standalone, only vscode-languageserver-types)
@@ -739,17 +745,36 @@ open-tui cannot import from:
 
 ```
 apps/coding-agent/tests/
-├── config.test.ts        Config loading tests
-└── ...
+├── agent-events.test.ts      Agent event handling
+├── args.test.ts              CLI argument parsing
+├── autocomplete-commands.test.ts
+├── commands.test.ts          Slash command handling
+├── config.test.ts            Config loading
+├── custom-commands.test.ts   Custom command loading
+├── custom-tools.test.ts      Custom tool loading
+├── hooks.test.ts             Hook system
+├── session-manager.test.ts   Session persistence
+├── tool-ui-contracts.test.ts Tool UI rendering
+└── utils.test.ts             Utility functions
 
-packages/ai/tests/
-├── agent-loop.test.ts    Agent loop tests
-├── overflow.test.ts      Context overflow tests
-└── providers/*.test.ts   Provider-specific tests
+packages/agent/test/
+├── agent.test.ts             Agent state machine
+└── e2e.test.ts               End-to-end tests
+
+packages/ai/test/
+├── agent.test.ts             Agent loop tests
+├── abort.test.ts             Abort handling
+├── context-overflow.test.ts  Overflow recovery
+├── stream.test.ts            Provider streaming
+├── tool-validation.test.ts   Tool parameter validation
+└── ... (many provider-specific tests)
 
 packages/lsp/tests/
-├── diagnostics.test.ts   Diagnostic formatting
-└── tool-wrapper.test.ts  LSP tool wrapper
+├── diagnostics.test.ts       Diagnostic formatting
+└── tool-wrapper.test.ts      LSP tool wrapper
+
+packages/open-tui/tests/
+└── index.test.ts             Component tests
 ```
 
 ### Running Tests
@@ -759,13 +784,13 @@ packages/lsp/tests/
 bun run test
 
 # Specific package
-bun test packages/ai/tests
+bun test packages/ai/test
 
 # Specific file
 bun test apps/coding-agent/tests/config.test.ts
 
-# With coverage
-bun test --coverage
+# With watch
+bun test --watch
 ```
 
 ## Common Modification Patterns
@@ -780,21 +805,21 @@ bun test --coverage
 
 1. Create adapter in `packages/ai/src/providers/new-provider.ts`
 2. Add to switch in `packages/ai/src/stream.ts`
-3. Add models in `packages/ai/src/models.generated.ts`
+3. Add models in `packages/ai/src/models.generated.ts` (or run generate script)
 4. Update `getProviders()` in `packages/ai/src/models.ts`
 
 ### Adding a New Hook Event
 
 1. Add event type in `apps/coding-agent/src/hooks/types.ts`
-2. Update `HookEventMap` and `HookResultMap`
+2. Update `HookEventMap` union type
 3. Emit from appropriate location (agent-events.ts, tool-wrapper.ts)
 4. Document in README
 
 ### Adding a Slash Command
 
 1. Add handler in `apps/coding-agent/src/commands.ts`
-2. Add to autocomplete in `apps/coding-agent/src/autocomplete-commands.ts`
-3. Update help/docs
+2. Add to `slashCommands` array in `apps/coding-agent/src/autocomplete-commands.ts`
+3. Update help text in `index.ts`
 
 ## Debugging Tips
 
@@ -802,16 +827,6 @@ bun test --coverage
 
 ```bash
 DEBUG=* bun run marvin
-```
-
-### Inspect Agent State
-
-Add to keyboard handler:
-
-```typescript
-if (key === "d" && ctrl) {
-  console.log(JSON.stringify(agent.state, null, 2));
-}
 ```
 
 ### Trace Events
@@ -822,12 +837,61 @@ agent.subscribe((ev) => {
 });
 ```
 
-### Profile Performance
-
-```bash
-bun run marvin --profile
-```
-
 ### Inspect LSP Communication
 
 Set `DEBUG=lsp:*` or add logging in `packages/lsp/src/client.ts`.
+
+### Profile Performance
+
+```bash
+bun run marvin --profile  # if profiler is configured
+```
+
+## Key Types Reference
+
+```typescript
+// packages/agent/src/types.ts
+interface AgentState {
+  systemPrompt: string;
+  model: Model<any>;
+  thinkingLevel: ThinkingLevel;  // "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+  tools: AgentTool<any>[];
+  messages: AppMessage[];
+  isStreaming: boolean;
+  streamMessage: Message | null;
+  pendingToolCalls: Set<string>;
+  error?: string;
+}
+
+// packages/ai/src/agent/types.ts
+interface AgentTool<TParams, TDetails> {
+  name: string;
+  label: string;
+  description: string;
+  parameters: TSchema;
+  execute: (toolCallId, params, signal?, onUpdate?) => Promise<AgentToolResult<TDetails>>;
+}
+
+interface AgentToolResult<T> {
+  content: (TextContent | ImageContent)[];
+  details: T;
+}
+
+// apps/coding-agent/src/types.ts
+interface UIMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: UIContentBlock[];
+  isStreaming?: boolean;
+  usage?: TokenUsage;
+}
+
+interface ToolBlock {
+  toolCallId: string;
+  toolName: string;
+  args: any;
+  output?: string;
+  isComplete: boolean;
+  isError?: boolean;
+}
+```
