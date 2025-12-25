@@ -8,15 +8,15 @@ import type { ThinkingLevel } from "@marvin-agents/agent-core"
 import type { LspManager, LspServerId } from "@marvin-agents/lsp"
 import type { ActivityState } from "../types.js"
 
-/** Short display labels for LSP servers */
-const LSP_LABELS: Record<LspServerId, string> = {
-  typescript: "TS",
-  biome: "BIO",
-  basedpyright: "PY",
-  ruff: "RUFF",
-  ty: "TY",
-  gopls: "GO",
-  "rust-analyzer": "RS",
+/** LSP server symbols - [idle, active] pairs for pulse effect */
+const LSP_SYMBOLS: Record<LspServerId, [string, string]> = {
+  typescript: ["⬡", "⬢"],
+  biome: ["✧", "✦"],
+  basedpyright: ["ψ", "Ψ"],
+  ruff: ["△", "▲"],
+  ty: ["τ", "Τ"],
+  gopls: ["◎", "◉"],
+  "rust-analyzer": ["⛭", "⚙"],
 }
 
 export interface FooterProps {
@@ -30,6 +30,7 @@ export interface FooterProps {
   activityState: ActivityState
   retryStatus: string | null
   lspIterationCount: number
+  lspActive: boolean
   spinnerFrame: number
   lsp: LspManager
 }
@@ -110,15 +111,16 @@ export function Footer(props: FooterProps) {
     const servers = props.lsp.activeServers()
     if (servers.length === 0) return null
 
-    // Unique server IDs
+    // Unique server IDs - use symbols, pulse when active
     const uniqueIds = [...new Set(servers.map((s) => s.serverId))]
-    const labels = uniqueIds.map((id) => LSP_LABELS[id] || id).join(" ")
+    const symbolIndex = props.lspActive ? 1 : 0
+    const symbols = uniqueIds.map((id) => LSP_SYMBOLS[id]?.[symbolIndex] ?? id).join(" ")
 
     // Diagnostic counts
     const counts = props.lsp.diagnosticCounts()
     const hasIssues = counts.errors > 0 || counts.warnings > 0
 
-    return { labels, errors: counts.errors, warnings: counts.warnings, hasIssues }
+    return { symbols, errors: counts.errors, warnings: counts.warnings, hasIssues, isActive: props.lspActive }
   })
 
   return (
@@ -145,10 +147,10 @@ export function Footer(props: FooterProps) {
         <Show when={lspStatus()}>
           <text fg={theme.textMuted}>·</text>
           <Show when={lspStatus()!.hasIssues} fallback={
-            <text fg={theme.success}>{lspStatus()!.labels}</text>
+            <text fg={lspStatus()!.isActive ? theme.accent : theme.success}>{lspStatus()!.symbols}</text>
           }>
             <text>
-              <span style={{ fg: theme.success }}>{lspStatus()!.labels}</span>
+              <span style={{ fg: lspStatus()!.isActive ? theme.accent : theme.success }}>{lspStatus()!.symbols}</span>
               <span style={{ fg: theme.textMuted }}>(</span>
               <Show when={lspStatus()!.errors > 0}>
                 <span style={{ fg: theme.error }}>{lspStatus()!.errors}</span>

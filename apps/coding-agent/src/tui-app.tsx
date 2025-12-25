@@ -101,8 +101,11 @@ export const runTuiOpen = async (args?: {
 
 	// LSP iteration tracking - ref populated by App component
 	const lspIterationRef = { increment: () => {} }
+	const lspActiveRef = { setActive: (_v: boolean) => {} }
 	const tools = wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunner), lsp, {
 		cwd,
+		onCheckStart: () => lspActiveRef.setActive(true),
+		onCheckEnd: () => lspActiveRef.setActive(false),
 		onDiagnosticsInjected: () => lspIterationRef.increment(),
 	})
 
@@ -180,7 +183,7 @@ export const runTuiOpen = async (args?: {
 			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking} theme={loaded.theme}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
 			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
-			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} lspIterationRef={lspIterationRef} />
+			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} lspIterationRef={lspIterationRef} lspActiveRef={lspActiveRef} />
 	), { targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} })
 }
 
@@ -198,6 +201,8 @@ interface AppProps {
 	lsp: LspManager
 	/** Ref for LSP iteration tracking - App sets the callback */
 	lspIterationRef: { increment: () => void }
+	/** Ref for LSP active state - App sets the callback */
+	lspActiveRef: { setActive: (v: boolean) => void }
 }
 
 function App(props: AppProps) {
@@ -228,9 +233,11 @@ function App(props: AppProps) {
 	const [retryStatus, setRetryStatus] = createSignal<string | null>(null)
 	const [turnCount, setTurnCount] = createSignal(0)
 	const [lspIterationCount, setLspIterationCount] = createSignal(0)
+	const [lspActive, setLspActive] = createSignal(false)
 
-	// Wire up LSP iteration ref to state
+	// Wire up LSP refs to state
 	props.lspIterationRef.increment = () => setLspIterationCount((c) => c + 1)
+	props.lspActiveRef.setActive = setLspActive
 
 	const queuedMessages: string[] = []
 	const [queueCount, setQueueCount] = createSignal(0)
@@ -425,7 +432,7 @@ function App(props: AppProps) {
 		<ThemeProvider mode="dark" themeName={currentTheme()} onThemeChange={handleThemeChange}>
 			<MainView messages={messages()} toolBlocks={toolBlocks()} isResponding={isResponding()} activityState={activityState()}
 				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
-				contextTokens={contextTokens()} contextWindow={displayContextWindow()} cacheStats={cacheStats()} queueCount={queueCount()} retryStatus={retryStatus()} turnCount={turnCount()} lspIterationCount={lspIterationCount()}
+				contextTokens={contextTokens()} contextWindow={displayContextWindow()} cacheStats={cacheStats()} queueCount={queueCount()} retryStatus={retryStatus()} turnCount={turnCount()} lspIterationCount={lspIterationCount()} lspActive={lspActive()}
 				diffWrapMode={diffWrapMode()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
 				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking} exitHandlerRef={exitHandlerRef} lsp={props.lsp} />
 		</ThemeProvider>
@@ -437,7 +444,7 @@ function App(props: AppProps) {
 interface MainViewProps {
 	messages: UIMessage[]; toolBlocks: ToolBlock[]; isResponding: boolean; activityState: ActivityState
 	thinkingVisible: boolean; modelId: string; thinking: ThinkingLevel; provider: KnownProvider
-	contextTokens: number; contextWindow: number; cacheStats: { cacheRead: number; input: number } | null; queueCount: number; retryStatus: string | null; turnCount: number; lspIterationCount: number; diffWrapMode: "word" | "none"
+	contextTokens: number; contextWindow: number; cacheStats: { cacheRead: number; input: number } | null; queueCount: number; retryStatus: string | null; turnCount: number; lspIterationCount: number; lspActive: boolean; diffWrapMode: "word" | "none"
 	customCommands: Map<string, CustomCommand>
 	onSubmit: (text: string, clearFn?: () => void) => void; onAbort: () => string | null
 	onToggleThinking: () => void; onCycleModel: () => void; onCycleThinking: () => void
@@ -666,7 +673,7 @@ function MainView(props: MainViewProps) {
 					}} />
 			</box>
 			<Footer modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
-				cacheStats={props.cacheStats} queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} lspIterationCount={props.lspIterationCount} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
+				cacheStats={props.cacheStats} queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} lspIterationCount={props.lspIterationCount} lspActive={props.lspActive} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
 			<ToastViewport toasts={toasts()} />
 		</box>
 	)

@@ -12,6 +12,10 @@ export type LspDiagnosticsInjectedInfo = {
 export type WrapToolsOptions = {
   cwd: string
   caps?: Partial<LspDiagnosticCaps>
+  /** Called when LSP starts checking diagnostics */
+  onCheckStart?: () => void
+  /** Called when LSP finishes checking (whether diagnostics were injected or not) */
+  onCheckEnd?: () => void
   /** Called when LSP diagnostics are injected into a tool result */
   onDiagnosticsInjected?: (info: LspDiagnosticsInjectedInfo) => void
 }
@@ -34,7 +38,12 @@ export function wrapToolsWithLspDiagnostics(
 
         const absPath = path.resolve(opts.cwd, rawPath)
 
-        await lsp.touchFile(absPath, { waitForDiagnostics: true, signal }).catch(() => {})
+        opts.onCheckStart?.()
+        try {
+          await lsp.touchFile(absPath, { waitForDiagnostics: true, signal }).catch(() => {})
+        } finally {
+          opts.onCheckEnd?.()
+        }
         const diagnosticsByFile = await lsp.diagnostics().catch(() => ({}))
 
         const summary = summarizeDiagnostics({ diagnosticsByFile, filePath: absPath, caps: opts.caps })
