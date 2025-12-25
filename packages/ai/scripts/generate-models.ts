@@ -432,11 +432,19 @@ async function generateModels() {
 		opus45.cost.cacheWrite = 6.25;
 	}
 
-	// Fix glm-4.7-free: doesn't support developer role (returns "Incorrect role information")
-	// The paid alpha-glm-4.7 supports it, but the free tier doesn't
+	// Fix opencode models that don't support developer role
+	// glm-4.7-free returns "Incorrect role information", grok-code also fails
+	const opencodeNoDeveloperRole = ["glm-4.7-free", "grok-code"];
 	for (const model of allModels) {
-		if (model.provider === "opencode" && model.id === "glm-4.7-free") {
+		if (model.provider === "opencode" && opencodeNoDeveloperRole.includes(model.id)) {
 			model.compat = { supportsDeveloperRole: false };
+		}
+	}
+
+	// grok-code also doesn't support reasoning_effort parameter
+	for (const model of allModels) {
+		if (model.provider === "opencode" && model.id === "grok-code") {
+			model.compat = { ...model.compat, supportsReasoningEffort: false };
 		}
 	}
 
@@ -576,6 +584,7 @@ async function generateModels() {
 
 	allModels.push(
 		{ ...codexBase, id: "gpt-5.2", name: "GPT-5.2" },
+		{ ...codexBase, id: "gpt-5.2-codex", name: "GPT-5.2 Codex" },
 		{ ...codexBase, id: "gpt-5.2-mini", name: "GPT-5.2 Mini" },
 	);
 

@@ -2833,6 +2833,7 @@ export const MODELS = {
 			api: "openai-completions",
 			provider: "opencode",
 			baseUrl: "https://opencode.ai/zen/v1",
+			compat: {"supportsDeveloperRole":false,"supportsReasoningEffort":false},
 			reasoning: true,
 			input: ["text"],
 			cost: {
@@ -7303,6 +7304,23 @@ export const MODELS = {
 		"gpt-5.2": {
 			id: "gpt-5.2",
 			name: "GPT-5.2",
+			api: "openai-responses",
+			provider: "codex",
+			baseUrl: "https://chatgpt.com/backend-api",
+			reasoning: true,
+			input: ["text", "image"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+			contextWindow: 200000,
+			maxTokens: 32000,
+		} satisfies Model<"openai-responses">,
+		"gpt-5.2-codex": {
+			id: "gpt-5.2-codex",
+			name: "GPT-5.2 Codex",
 			api: "openai-responses",
 			provider: "codex",
 			baseUrl: "https://chatgpt.com/backend-api",
