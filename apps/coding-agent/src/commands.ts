@@ -2,6 +2,7 @@
  * Slash command handlers for TUI application
  */
 
+import { spawn } from "node:child_process"
 import type { Agent, ThinkingLevel } from "@marvin-agents/agent-core"
 import type { Api, Model } from "@marvin-agents/ai"
 import { getModels, getProviders } from "@marvin-agents/ai"
@@ -9,7 +10,8 @@ import type { CodexTransport } from "@marvin-agents/agent-core"
 import type { SessionManager } from "./session-manager.js"
 import type { UIMessage, ActivityState } from "./types.js"
 import { handleCompact as doCompact } from "./compact-handler.js"
-import { updateAppConfig } from "./config.js"
+import { updateAppConfig, type EditorConfig } from "./config.js"
+import { buildEditorInvocation } from "./editor.js"
 import { THEME_NAMES } from "./theme-names.js"
 import { listSnapshots, createSafetySnapshot, restoreSnapshot } from "./rewind.js"
 
@@ -23,6 +25,7 @@ export interface CommandContext {
 	configDir: string
 	configPath: string
 	cwd: string
+	editor?: EditorConfig
 	codexTransport: CodexTransport
 	getApiKey: (provider: string) => string | undefined
 
@@ -56,6 +59,12 @@ export interface CommandContext {
 	// Theme
 	setTheme?: (name: string) => void
 
+	// Editor launcher (optional for tests/custom behavior)
+	launchEditor?: (command: string, args: string[], cwd: string, onError: (error: Error) => void) => void
+
+	// Editor opener used by the TUI (optional for non-TUI contexts)
+	openEditor?: () => Promise<void> | void
+
 	// Exit handler - performs cleanup before exit (optional for backwards compat)
 	onExit?: () => void
 
@@ -86,6 +95,23 @@ function addSystemMessage(ctx: CommandContext, content: string): void {
 		...prev,
 		{ id: crypto.randomUUID(), role: "assistant" as const, content },
 	])
+}
+
+const defaultLaunchEditor = (
+	command: string,
+	args: string[],
+	cwd: string,
+	onError: (error: Error) => void,
+): void => {
+	try {
+		const child = spawn(command, args, { cwd, detached: true, stdio: "ignore" })
+		child.once("error", (err) => {
+			onError(err instanceof Error ? err : new Error(String(err)))
+		})
+		child.unref()
+	} catch (err) {
+		onError(err instanceof Error ? err : new Error(String(err)))
+	}
 }
 
 // ----- Individual Command Handlers -----
@@ -147,6 +173,22 @@ function handleTheme(args: string, ctx: CommandContext): boolean {
 	if (ctx.setTheme) {
 		ctx.setTheme(themeName)
 	}
+	return true
+}
+
+function handleEditor(ctx: CommandContext): boolean | Promise<boolean> {
+	if (ctx.openEditor) {
+		const result = ctx.openEditor()
+		if (result instanceof Promise) return result.then(() => true)
+		return true
+	}
+
+	const editor = ctx.editor ?? { command: "nvim", args: [] }
+	const { command, args } = buildEditorInvocation(editor, ctx.cwd, { appendCwd: true })
+	const launch = ctx.launchEditor ?? defaultLaunchEditor
+	launch(command, args, ctx.cwd, (error) => {
+		addSystemMessage(ctx, `Failed to launch editor: ${error.message}`)
+	})
 	return true
 }
 
@@ -326,6 +368,10 @@ export function handleSlashCommand(line: string, ctx: CommandContext): boolean |
 	if (trimmed === "/theme" || trimmed.startsWith("/theme ")) {
 		const args = trimmed.startsWith("/theme ") ? trimmed.slice("/theme ".length) : ""
 		return handleTheme(args, ctx)
+	}
+
+	if (trimmed === "/editor" || trimmed.startsWith("/editor ")) {
+		return handleEditor(ctx)
 	}
 
 	if (trimmed.startsWith("/model")) {

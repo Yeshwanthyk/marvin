@@ -62,9 +62,22 @@ Config lives in `~/.config/marvin/`:
   "model": "claude-sonnet-4-20250514",
   "thinking": "high",
   "theme": "catppuccin",
+  "editor": "code --wait",
   "lsp": { "enabled": true, "autoInstall": true }
 }
 ```
+
+Editor config (used by `/editor`):
+
+```json
+"editor": "code --wait"
+```
+
+```json
+"editor": { "command": "wezterm", "args": ["start", "--cwd", "{cwd}", "--", "nvim"] }
+```
+
+Use the object form when command/args include spaces. Defaults to `nvim` when unset. `/editor` writes a temp file, suspends the TUI, then restores the prompt with the edited contents when the editor exits. The editor runs with `cwd` set to the current working directory; include `{cwd}` if your editor needs it. For GUI editors, add `--wait` so `/editor` blocks until the file closes.
 
 ### AGENTS.md
 
@@ -112,6 +125,7 @@ Options:
 | `/model [provider] <id>` | Switch model |
 | `/thinking <level>` | Set thinking level |
 | `/theme [name]` | Switch theme (30+ built-in) |
+| `/editor` | Open configured editor |
 | `/compact [instructions]` | Compress context |
 | `/clear` | Clear conversation |
 | `/diffwrap` | Toggle diff word-wrap |

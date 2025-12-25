@@ -11,7 +11,8 @@ import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent
 import { getApiKey, getModels, getProviders, type AgentTool, type Model, type Api } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
 import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
-import { loadAppConfig, updateAppConfig } from "./config.js"
+import { loadAppConfig, updateAppConfig, type EditorConfig } from "./config.js"
+import { openExternalEditor } from "./editor.js"
 import { createAutocompleteCommands } from "./autocomplete-commands.js"
 import { SessionManager, type LoadedSession } from "./session-manager.js"
 import { selectSession as selectSessionOpen } from "./session-picker.js"
@@ -180,7 +181,7 @@ export const runTuiOpen = async (args?: {
 
 	render(() => (
 		<App agent={agent} sessionManager={sessionManager} initialSession={initialSession}
-			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking} theme={loaded.theme}
+			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking} theme={loaded.theme} editor={loaded.editor}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
 			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
 			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} lspIterationRef={lspIterationRef} lspActiveRef={lspActiveRef} />
@@ -191,7 +192,7 @@ export const runTuiOpen = async (args?: {
 
 interface AppProps {
 	agent: Agent; sessionManager: SessionManager; initialSession: LoadedSession | null
-	modelId: string; model: Model<Api>; provider: KnownProvider; thinking: ThinkingLevel; theme: string
+	modelId: string; model: Model<Api>; provider: KnownProvider; thinking: ThinkingLevel; theme: string; editor?: EditorConfig
 	cycleModels: Array<{ provider: KnownProvider; model: Model<Api> }>
 	configDir: string; configPath: string; codexTransport: CodexTransport
 	getApiKey: (provider: string) => string | undefined
@@ -355,10 +356,12 @@ function App(props: AppProps) {
 
 	// Ref for exit handler - populated by MainView once renderer is available
 	const exitHandlerRef = { current: () => process.exit(0) }
+	// Ref for editor handler - populated by MainView once renderer is available
+	const editorOpenRef = { current: async () => {} }
 
 	const cmdCtx: CommandContext = {
 		agent, sessionManager, configDir: props.configDir, configPath: props.configPath,
-		cwd: process.cwd(),
+		cwd: process.cwd(), editor: props.editor,
 		codexTransport: props.codexTransport, getApiKey: props.getApiKey,
 		get currentProvider() { return currentProvider }, get currentModelId() { return currentModelId }, get currentThinking() { return currentThinking },
 		setCurrentProvider: (p) => { currentProvider = p }, setCurrentModelId: (id) => { currentModelId = id }, setCurrentThinking: (t) => { currentThinking = t },
@@ -366,6 +369,7 @@ function App(props: AppProps) {
 		setMessages: setMessages as CommandContext["setMessages"], setToolBlocks: setToolBlocks as CommandContext["setToolBlocks"],
 		setContextTokens, setCacheStats, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode,
 		setTheme: handleThemeChange,
+		openEditor: () => editorOpenRef.current(),
 		onExit: () => exitHandlerRef.current(),
 		hookRunner: props.hookRunner,
 	}
@@ -378,12 +382,14 @@ function App(props: AppProps) {
 
 		// Handle slash commands
 		if (text.startsWith("/")) {
+			const trimmed = text.trim()
+			const isEditorCommand = trimmed === "/editor" || trimmed.startsWith("/editor ")
 			// Try built-in commands first
-			const result = handleSlashCommand(text.trim(), cmdCtx)
-			if (result instanceof Promise ? await result : result) { editorClearFn?.(); return }
+			const result = handleSlashCommand(trimmed, cmdCtx)
+			if (result instanceof Promise ? await result : result) { if (!isEditorCommand) editorClearFn?.(); return }
 
 			// Try custom command expansion (built-ins already take precedence)
-			const expanded = tryExpandCustomCommand(text.trim(), builtInCommandNames, props.customCommands)
+			const expanded = tryExpandCustomCommand(trimmed, builtInCommandNames, props.customCommands)
 			if (expanded !== null) {
 				// Submit expanded text as regular prompt (recursion-safe since expanded won't start with /)
 				editorClearFn?.()
@@ -434,7 +440,8 @@ function App(props: AppProps) {
 				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
 				contextTokens={contextTokens()} contextWindow={displayContextWindow()} cacheStats={cacheStats()} queueCount={queueCount()} retryStatus={retryStatus()} turnCount={turnCount()} lspIterationCount={lspIterationCount()} lspActive={lspActive()}
 				diffWrapMode={diffWrapMode()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
-				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking} exitHandlerRef={exitHandlerRef} lsp={props.lsp} />
+				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking}
+				exitHandlerRef={exitHandlerRef} editorOpenRef={editorOpenRef} editor={props.editor} lsp={props.lsp} />
 		</ThemeProvider>
 	)
 }
@@ -449,6 +456,8 @@ interface MainViewProps {
 	onSubmit: (text: string, clearFn?: () => void) => void; onAbort: () => string | null
 	onToggleThinking: () => void; onCycleModel: () => void; onCycleThinking: () => void
 	exitHandlerRef: { current: () => void }
+	editorOpenRef: { current: () => Promise<void> | void }
+	editor?: EditorConfig
 	lsp: LspManager
 }
 
@@ -568,6 +577,38 @@ function MainView(props: MainViewProps) {
 		const text = sel.getSelectedText(); if (!text || text.length === 0) return
 		copyToClipboard(text); pushToast({ title: "Copied to clipboard", variant: "success" }, 1500); renderer.clearSelection()
 	}
+
+	const openEditorFromTui = async () => {
+		if (!textareaRef) return
+		const editor = props.editor ?? { command: "nvim", args: [] }
+		setShowAutocomplete(false); setAutocompleteItems([])
+		textareaRef.clear()
+
+		try {
+			const content = await openExternalEditor({
+				editor,
+				cwd: process.cwd(),
+				renderer,
+				initialValue: "",
+			})
+			if (content === undefined) return
+			suppressNextAutocompleteUpdate = true
+			textareaRef.setText(content)
+			textareaRef.focus()
+			const lines = content.split("\n")
+			const lastLine = Math.max(0, lines.length - 1)
+			const lastCol = lines[lastLine]?.length ?? 0
+			textareaRef.editBuffer.setCursorToLineCol(lastLine, lastCol)
+			updateAutocomplete(content, lastLine, lastCol)
+		} catch (err) {
+			pushToast({
+				title: "Editor failed",
+				message: err instanceof Error ? err.message : String(err),
+				variant: "error",
+			}, 4000)
+		}
+	}
+	props.editorOpenRef.current = openEditorFromTui
 
 	// Model switch detector - warn on downshifts
 	let prevContextWindow = props.contextWindow

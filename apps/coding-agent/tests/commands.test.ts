@@ -160,7 +160,7 @@ describe("handleSlashCommand", () => {
 
 		it("blocks compact with insufficient messages", async () => {
 			const ctx = createMockContext()
-			ctx.agent.state.messages = [{ role: "user", content: "hi" }]
+			ctx.agent.state.messages = [{ role: "user", content: "hi", timestamp: Date.now() }]
 			const result = await handleSlashCommand("/compact", ctx)
 			expect(result).toBe(true)
 			// Should add a message about needing more messages
@@ -190,6 +190,50 @@ describe("handleSlashCommand", () => {
 			const ok = handleSlashCommand("/theme not-a-theme", ctx)
 			expect(ok).toBe(true)
 			expect(setTheme).not.toHaveBeenCalled()
+		})
+	})
+
+	describe("/editor", () => {
+		it("uses openEditor when provided", async () => {
+			const openEditor = mock(() => {})
+			const ctx = createMockContext({ openEditor })
+			const ok = handleSlashCommand("/editor", ctx)
+			if (ok instanceof Promise) await ok
+			expect(openEditor).toHaveBeenCalled()
+		})
+
+		it("defaults to nvim when not configured", () => {
+			const launchEditor = mock((..._args: unknown[]) => {})
+			const ctx = createMockContext({ launchEditor })
+			const ok = handleSlashCommand("/editor", ctx)
+			expect(ok).toBe(true)
+			expect(launchEditor).toHaveBeenCalledWith("nvim", [ctx.cwd], ctx.cwd, expect.any(Function))
+		})
+
+		it("launches configured editor with cwd", () => {
+			const launchEditor = mock((..._args: unknown[]) => {})
+			const ctx = createMockContext({
+				editor: { command: "code", args: [] },
+				launchEditor,
+			})
+			const ok = handleSlashCommand("/editor", ctx)
+			expect(ok).toBe(true)
+			expect(launchEditor).toHaveBeenCalledWith("code", [ctx.cwd], ctx.cwd, expect.any(Function))
+		})
+
+		it("replaces {cwd} without appending", () => {
+			const launchEditor = mock((..._args: unknown[]) => {})
+			const ctx = createMockContext({
+				editor: { command: "zed", args: ["--cwd", "{cwd}"] },
+				launchEditor,
+			})
+			const ok = handleSlashCommand("/editor", ctx)
+			expect(ok).toBe(true)
+			expect(launchEditor).toHaveBeenCalled()
+			expect(launchEditor).toHaveBeenCalledTimes(1)
+			const calls = launchEditor.mock.calls as unknown[][]
+			const args = calls[0]?.[1] as string[] | undefined
+			expect(args).toEqual(["--cwd", ctx.cwd])
 		})
 	})
 })

@@ -37,6 +37,7 @@ export const slashCommands: SlashCommand[] = [
         .map((t) => ({ value: t, label: t }));
     },
   },
+  { name: 'editor', description: 'Open configured editor' },
   {
     name: 'model',
     description: 'Set model: /model <provider> <modelId> (or /model <modelId>)',

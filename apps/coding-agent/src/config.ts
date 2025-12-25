@@ -42,6 +42,11 @@ export interface AgentsConfig {
   combined: string;
 }
 
+export interface EditorConfig {
+  command: string;
+  args: string[];
+}
+
 export const loadAgentsConfig = async (): Promise<AgentsConfig> => {
   const global = await loadFirstExisting(GLOBAL_AGENTS_PATHS);
   const project = await loadFirstExisting(PROJECT_AGENTS_PATHS);
@@ -63,6 +68,7 @@ export interface LoadedAppConfig {
   model: Model<Api>;
   thinking: ThinkingLevel;
   theme: string;
+  editor?: EditorConfig;
   systemPrompt: string;
   agentsConfig: AgentsConfig;
   configDir: string;
@@ -105,6 +111,34 @@ const resolveModel = (provider: KnownProvider, raw: unknown): Model<Api> | undef
   if (typeof raw !== 'string' || !raw.trim()) return undefined;
   const models = getModels(provider);
   return models.find((m) => m.id === raw) as Model<Api> | undefined;
+};
+
+const resolveEditorConfig = (raw: unknown): EditorConfig | undefined => {
+  if (typeof raw === 'string') {
+    const parts = raw.trim().split(/\s+/).filter(Boolean);
+    const command = parts[0] ?? '';
+    if (!command) return undefined;
+    return { command, args: parts.slice(1) };
+  }
+
+  if (Array.isArray(raw)) {
+    const parts = raw.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    const command = parts[0] ?? '';
+    if (!command) return undefined;
+    return { command, args: parts.slice(1) };
+  }
+
+  if (typeof raw === 'object' && raw !== null) {
+    const obj = raw as Record<string, unknown>;
+    const command = typeof obj.command === 'string' ? obj.command.trim() : '';
+    if (!command) return undefined;
+    const args = Array.isArray(obj.args)
+      ? obj.args.filter((value): value is string => typeof value === 'string')
+      : [];
+    return { command, args };
+  }
+
+  return undefined;
 };
 
 export const loadAppConfig = async (options?: {
@@ -158,6 +192,10 @@ export const loadAppConfig = async (options?: {
   const themeRaw = rawObj.theme;
   const theme = typeof themeRaw === 'string' && themeRaw.trim() ? themeRaw.trim() : 'marvin';
 
+  const editorRaw =
+    typeof nestedConfig.editor !== 'undefined' ? nestedConfig.editor : rawObj.editor;
+  const editor = resolveEditorConfig(editorRaw) ?? { command: 'nvim', args: [] };
+
   // Load AGENTS.md from global (~/.config/marvin/agents.md, ~/.codex/agents.md, ~/.claude/CLAUDE.md)
   // and project level (./AGENTS.md, ./CLAUDE.md)
   const agentsConfig = await loadAgentsConfig();
@@ -188,6 +226,7 @@ export const loadAppConfig = async (options?: {
     model,
     thinking,
     theme,
+    editor,
     systemPrompt,
     agentsConfig,
     configDir,
