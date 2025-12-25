@@ -95,8 +95,8 @@ describe("createAgentEventHandler", () => {
 				},
 			} as unknown as AgentEvent)
 
-			// Wait for throttled update (80ms throttle + buffer)
-			await new Promise((r) => setTimeout(r, 100))
+			// Wait for throttled update (150ms throttle + buffer)
+			await new Promise((r) => setTimeout(r, 180))
 			expect(ctx.setMessages).toHaveBeenCalled()
 		})
 
@@ -113,8 +113,8 @@ describe("createAgentEventHandler", () => {
 				},
 			} as unknown as AgentEvent)
 
-			// Wait for throttled update (80ms throttle + buffer)
-			await new Promise((r) => setTimeout(r, 100))
+			// Wait for throttled update (150ms throttle + buffer)
+			await new Promise((r) => setTimeout(r, 180))
 			expect(ctx.setActivityState).toHaveBeenCalledWith("thinking")
 		})
 	})
@@ -203,7 +203,7 @@ describe("createAgentEventHandler", () => {
 				partialResult: { content: [], details: { ui: { kind: "agent_delegation", mode: "single", items: [] } } },
 			} as unknown as AgentEvent)
 
-			await new Promise((r) => setTimeout(r, 80))
+			await new Promise((r) => setTimeout(r, 180))
 
 			handler({
 				type: "tool_execution_update",
@@ -213,7 +213,7 @@ describe("createAgentEventHandler", () => {
 				partialResult: { content: [], details: { ui: { kind: "agent_delegation", mode: "single", items: [] } } },
 			} as unknown as AgentEvent)
 
-			await new Promise((r) => setTimeout(r, 80))
+			await new Promise((r) => setTimeout(r, 180))
 
 			expect(toolBlocks.length).toBe(1)
 			expect(toolBlocks[0].id).toBe("tool-1")

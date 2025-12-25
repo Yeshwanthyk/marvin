@@ -66,9 +66,9 @@ export interface EventHandlerContext {
 
 export type AgentEventHandler = ((event: AgentEvent) => void) & { dispose: () => void }
 
-const UPDATE_THROTTLE_MS = 80 // ~12fps during streaming (reduced from 32ms)
-const UPDATE_THROTTLE_SLOW_MS = 120
-const UPDATE_THROTTLE_SLOWEST_MS = 160
+const UPDATE_THROTTLE_MS = 150 // ~7fps during streaming - smoother perceived text flow
+const UPDATE_THROTTLE_SLOW_MS = 180
+const UPDATE_THROTTLE_SLOWEST_MS = 220
 const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
 
 function computeUpdateThrottleMs(textLength: number): number {
