@@ -28,6 +28,7 @@ export const slashCommands: SlashCommand[] = [
   { name: 'diffwrap', description: 'Toggle diff word wrap mode' },
   { name: 'abort', description: 'Abort in-flight request' },
   { name: 'exit', description: 'Exit' },
+  { name: 'status', description: 'Show session status (model, context, turns)' },
   {
     name: 'theme',
     description: 'Set theme: /theme <name> (or /theme to list)',

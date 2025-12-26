@@ -356,5 +356,34 @@ export function handleSlashCommand(line: string, ctx: CommandContext): boolean |
 		return handleCompactCmd(args, ctx)
 	}
 
+	if (trimmed === "/status") {
+		return handleStatus(ctx)
+	}
+
 	return false
+}
+
+function handleStatus(ctx: CommandContext): boolean {
+	const model = ctx.agent.state.model
+	const messages = ctx.agent.state.messages
+	// Find last assistant message with usage
+	let usage: { totalTokens?: number; cacheRead?: number } | undefined
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const msg = messages[i] as { role: string; usage?: { totalTokens?: number; cacheRead?: number } }
+		if (msg.role === "assistant" && msg.usage?.totalTokens) {
+			usage = msg.usage
+			break
+		}
+	}
+	const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+	let ctx_str = `0/${fmt(model.contextWindow)}`
+	let cache = ""
+	if (usage?.totalTokens) {
+		const pct = ((usage.totalTokens / model.contextWindow) * 100).toFixed(1)
+		ctx_str = `${fmt(usage.totalTokens)}/${fmt(model.contextWindow)} (${pct}%)`
+		if (usage.cacheRead) cache = ` | cache: ${fmt(usage.cacheRead)} read`
+	}
+	const status = `${ctx.currentModelId} (${ctx.currentProvider}) | ${ctx.currentThinking} | ${ctx_str}${cache} | turns: ${messages.filter(m => (m as {role:string}).role === "user").length}`
+	addSystemMessage(ctx, status)
+	return true
 }
