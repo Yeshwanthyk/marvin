@@ -1,7 +1,6 @@
 /**
- * Header - 3 section layout.
- * Left: activity+label / context%
- * Center: project / scrolling branch + model / thinking
+ * Header - 2 section layout.
+ * Left: project/branch + model/thinking + activity/context (with gaps)
  * Right: LSP / queue
  */
 
@@ -109,29 +108,10 @@ export function Header(props: HeaderProps) {
 
   return (
     <box flexDirection="row" flexShrink={0} paddingLeft={1} paddingRight={1} border={["bottom"]} borderColor={theme.border}>
-      {/* Left: Activity / Context% */}
-      <box flexDirection="column" flexShrink={0} minWidth={12}>
-        <Show when={props.retryStatus} fallback={
-          <Show when={activity()} keyed fallback={<text> </text>}>
-            {(act) => (
-              <text>
-                <span style={{ fg: theme.accent }}>{act.dot}</span>
-                <span style={{ fg: theme.textMuted }}> {act.label}</span>
-              </text>
-            )}
-          </Show>
-        }>
-          <text fg={theme.warning}>! retry</text>
-        </Show>
-        <Show when={contextInfo()} keyed fallback={<text> </text>}>
-          {(ctx) => <text fg={ctx.color}>{ctx.display}</text>}
-        </Show>
-      </box>
-
-      {/* Center: Project/Branch + Model/Thinking */}
-      <box flexGrow={1} flexDirection="row" justifyContent="center" gap={4}>
+      {/* Left: Project/Branch + Model/Thinking + Activity/Context */}
+      <box flexDirection="row" flexShrink={0} gap={1}>
         {/* Project / Branch */}
-        <box flexDirection="column" minWidth={BRANCH_MAX_WIDTH}>
+        <box flexDirection="column">
           <text fg={theme.text}>{project()}</text>
           <Show when={scrollingBranch()} fallback={<text> </text>}>
             <text fg={theme.secondary}>{scrollingBranch()}</text>
@@ -145,10 +125,32 @@ export function Header(props: HeaderProps) {
             <text fg={theme.textMuted}>{thinkingLabel()}</text>
           </Show>
         </box>
+
+        {/* Activity / Context% */}
+        <box flexDirection="column" flexShrink={0}>
+          <Show when={props.retryStatus} fallback={
+            <Show when={activity()} keyed fallback={<text> </text>}>
+              {(act) => (
+                <text>
+                  <span style={{ fg: theme.accent }}>{act.dot}</span>
+                  <span style={{ fg: theme.textMuted }}> {act.label}</span>
+                </text>
+              )}
+            </Show>
+          }>
+            <text fg={theme.warning}>! retry</text>
+          </Show>
+          <Show when={contextInfo()} keyed fallback={<text> </text>}>
+            {(ctx) => <text fg={ctx.color}>{ctx.display}</text>}
+          </Show>
+        </box>
       </box>
 
-      {/* Right: LSP / Cache */}
-      <box flexDirection="column" flexShrink={0} alignItems="flex-end" minWidth={6}>
+      {/* Spacer */}
+      <box flexGrow={1} />
+
+      {/* Right: LSP / Queue */}
+      <box flexDirection="column" flexShrink={0} alignItems="flex-end" minWidth={10}>
         <Show when={lspStatus()} keyed fallback={<text> </text>}>
           {(lsp) => (
             <text>
