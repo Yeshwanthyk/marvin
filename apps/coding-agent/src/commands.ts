@@ -55,6 +55,9 @@ export interface CommandContext {
 	// Diff wrap mode
 	setDiffWrapMode: (updater: (prev: "word" | "none") => "word" | "none") => void
 
+	// Markdown conceal mode
+	setConcealMarkdown: (updater: (prev: boolean) => boolean) => void
+
 	// Theme
 	setTheme?: (name: string) => void
 
@@ -150,6 +153,11 @@ function handleThinking(args: string, ctx: CommandContext): boolean {
 
 function handleDiffwrap(ctx: CommandContext): boolean {
 	ctx.setDiffWrapMode((prev) => (prev === "word" ? "none" : "word"))
+	return true
+}
+
+function handleConceal(ctx: CommandContext): boolean {
+	ctx.setConcealMarkdown((prev) => !prev)
 	return true
 }
 
@@ -323,6 +331,10 @@ export function handleSlashCommand(line: string, ctx: CommandContext): boolean |
 
 	if (trimmed === "/diffwrap") {
 		return handleDiffwrap(ctx)
+	}
+
+	if (trimmed === "/conceal") {
+		return handleConceal(ctx)
 	}
 
 	if (trimmed === "/theme" || trimmed.startsWith("/theme ")) {

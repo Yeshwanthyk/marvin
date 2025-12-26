@@ -24,6 +24,8 @@ const resolveProvider = (raw: string): KnownProvider | undefined => {
 export const slashCommands: SlashCommand[] = [
   { name: 'clear', description: 'Clear chat + reset agent' },
   { name: 'compact', description: 'Compact context into summary + start fresh' },
+  { name: 'conceal', description: 'Toggle markdown conceal mode (hide syntax chars)' },
+  { name: 'diffwrap', description: 'Toggle diff word wrap mode' },
   { name: 'abort', description: 'Abort in-flight request' },
   { name: 'exit', description: 'Exit' },
   {
