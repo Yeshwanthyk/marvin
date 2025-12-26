@@ -237,6 +237,7 @@ function App(props: AppProps) {
 	props.lspActiveRef.setActive = setLspActive
 
 	const queuedMessages: string[] = []
+	const [queueCount, setQueueCount] = createSignal(0)
 	const retryConfig = { enabled: true, maxRetries: 3, baseDelayMs: 2000 }
 	const retryablePattern = /overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error/i
 	const retryState = { attempt: 0, abortController: null as AbortController | null }
@@ -393,7 +394,7 @@ function App(props: AppProps) {
 		}
 
 		if (isResponding()) {
-			queuedMessages.push(text)
+			queuedMessages.push(text); setQueueCount(queuedMessages.length)
 			void agent.queueMessage({ role: "user", content: [{ type: "text", text }], timestamp: Date.now() })
 			editorClearFn?.(); return
 		}
@@ -411,7 +412,7 @@ function App(props: AppProps) {
 		if (retryState.abortController) { retryState.abortController.abort(); retryState.abortController = null; retryState.attempt = 0; setRetryStatus(null) }
 		agent.abort(); agent.clearMessageQueue()
 		let restore: string | null = null
-		if (queuedMessages.length > 0) { restore = queuedMessages.join("\n"); queuedMessages.length = 0 }
+		if (queuedMessages.length > 0) { restore = queuedMessages.join("\n"); queuedMessages.length = 0; setQueueCount(0) }
 		batch(() => { setIsResponding(false); setActivityState("idle") }); return restore
 	}
 
@@ -433,7 +434,7 @@ function App(props: AppProps) {
 		<ThemeProvider mode="dark" themeName={currentTheme()} onThemeChange={handleThemeChange}>
 			<MainView messages={messages()} toolBlocks={toolBlocks()} isResponding={isResponding()} activityState={activityState()}
 				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
-				contextTokens={contextTokens()} contextWindow={displayContextWindow()} cacheStats={cacheStats()} retryStatus={retryStatus()} turnCount={turnCount()} lspActive={lspActive()}
+				contextTokens={contextTokens()} contextWindow={displayContextWindow()} queueCount={queueCount()} retryStatus={retryStatus()} turnCount={turnCount()} lspActive={lspActive()}
 				diffWrapMode={diffWrapMode()} concealMarkdown={concealMarkdown()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
 				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking}
 				exitHandlerRef={exitHandlerRef} editorOpenRef={editorOpenRef} editor={props.editor} lsp={props.lsp} />
@@ -446,7 +447,7 @@ function App(props: AppProps) {
 interface MainViewProps {
 	messages: UIMessage[]; toolBlocks: ToolBlock[]; isResponding: boolean; activityState: ActivityState
 	thinkingVisible: boolean; modelId: string; thinking: ThinkingLevel; provider: KnownProvider
-	contextTokens: number; contextWindow: number; cacheStats: { cacheRead: number; input: number } | null; retryStatus: string | null; turnCount: number; lspActive: boolean; diffWrapMode: "word" | "none"; concealMarkdown: boolean
+	contextTokens: number; contextWindow: number; queueCount: number; retryStatus: string | null; turnCount: number; lspActive: boolean; diffWrapMode: "word" | "none"; concealMarkdown: boolean
 	customCommands: Map<string, CustomCommand>
 	onSubmit: (text: string, clearFn?: () => void) => void; onAbort: () => string | null
 	onToggleThinking: () => void; onCycleModel: () => void; onCycleThinking: () => void
@@ -654,7 +655,7 @@ function MainView(props: MainViewProps) {
 		<box flexDirection="column" width={dimensions().width} height={dimensions().height}
 			onMouseUp={() => { const sel = renderer.getSelection(); if (sel && sel.getSelectedText()) copySelectionToClipboard() }}>
 			<Header modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
-				cacheStats={props.cacheStats} activityState={props.activityState} retryStatus={props.retryStatus} lspActive={props.lspActive} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
+				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} lspActive={props.lspActive} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
 			<scrollbox stickyScroll stickyStart="bottom" flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
 				<MessageList messages={props.messages} toolBlocks={props.toolBlocks} thinkingVisible={props.thinkingVisible} diffWrapMode={props.diffWrapMode} concealMarkdown={props.concealMarkdown}
 					isToolExpanded={isToolExpanded} toggleToolExpanded={toggleToolExpanded} isThinkingExpanded={isThinkingExpanded} toggleThinkingExpanded={toggleThinkingExpanded} />

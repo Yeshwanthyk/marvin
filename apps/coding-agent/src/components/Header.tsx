@@ -2,7 +2,7 @@
  * Header - 3 section layout.
  * Left: activity+label / context%
  * Center: project / scrolling branch + model / thinking
- * Right: LSP / cache
+ * Right: LSP / queue
  */
 
 import { Show, createMemo } from "solid-js"
@@ -29,7 +29,7 @@ export interface HeaderProps {
   branch: string | null
   contextTokens: number
   contextWindow: number
-  cacheStats: { cacheRead: number; input: number } | null
+  queueCount: number
   activityState: ActivityState
   retryStatus: string | null
   lspActive: boolean
@@ -76,14 +76,9 @@ export function Header(props: HeaderProps) {
     return padded.slice(scrollPos, scrollPos + BRANCH_MAX_WIDTH)
   })
 
-  const cacheBolts = createMemo(() => {
-    const stats = props.cacheStats
-    if (!stats || stats.input === 0) return null
-    const total = stats.cacheRead + stats.input
-    if (total === 0) return null
-    const hitRate = stats.cacheRead / total
-    if (hitRate < 0.5) return null
-    return hitRate >= 0.85 ? "⚡⚡⚡" : hitRate >= 0.7 ? "⚡⚡" : "⚡"
+  const queueIndicator = createMemo(() => {
+    if (props.queueCount <= 0) return null
+    return "▸".repeat(props.queueCount)
   })
 
   const lspStatus = createMemo(() => {
@@ -174,8 +169,8 @@ export function Header(props: HeaderProps) {
             </text>
           )}
         </Show>
-        <Show when={cacheBolts()} fallback={<text> </text>}>
-          <text fg={theme.success}>{cacheBolts()}</text>
+        <Show when={queueIndicator()} fallback={<text> </text>}>
+          <text fg={theme.warning}>{queueIndicator()}</text>
         </Show>
       </box>
     </box>
