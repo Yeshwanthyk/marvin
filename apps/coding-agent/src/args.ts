@@ -1,5 +1,6 @@
 export interface ParsedArgs {
   headless: boolean;
+  acp: boolean;
   prompt?: string;
   configDir?: string;
   configPath?: string;
@@ -16,6 +17,7 @@ export interface ParsedArgs {
 export const parseArgs = (argv: string[]): ParsedArgs => {
   const args: ParsedArgs = {
     headless: false,
+    acp: false,
     prompt: undefined,
     configDir: undefined,
     configPath: undefined,
@@ -49,6 +51,10 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (a === "--headless") {
       args.headless = true;
+      continue;
+    }
+    if (a === "--acp") {
+      args.acp = true;
       continue;
     }
     if (a === "--config-dir") {

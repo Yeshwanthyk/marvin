@@ -1,6 +1,7 @@
 import pkg from '../package.json';
 import { parseArgs } from './args.js';
 import { runHeadless } from './headless.js';
+import { runAcp } from './acp/index.js';
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
 
 // Dynamic import for TUI (requires solid plugin for TSX)
@@ -40,6 +41,7 @@ const printHelp = () => {
       '  -c, --continue               Resume most recent session for current directory',
       '  -r, --resume                 Pick from recent sessions to resume',
       '  --headless                   Run without TUI; reads prompt from args or stdin',
+      '  --acp                        Run as ACP server for Zed integration',
       '  -h, --help                   Show help',
       '  -v, --version                Print version',
       '',
@@ -85,6 +87,15 @@ const main = async () => {
 
   if (args.help) {
     printHelp();
+    return;
+  }
+
+  if (args.acp) {
+    await runAcp({
+      configDir: args.configDir,
+      configPath: args.configPath,
+      model: args.model,
+    });
     return;
   }
 
