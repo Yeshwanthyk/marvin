@@ -167,6 +167,8 @@ export async function runAcp(args: {
 			emitter,
 			models: MODEL_OPTIONS,
 			currentModelId: state.currentModelId,
+			contextWindow: model.contextWindow,
+			thinkingLevel: "medium",
 			setModel: setModelFn,
 		})
 

@@ -14,6 +14,8 @@ export interface AcpSessionConfig {
 	emitter: UpdateEmitter
 	models: ModelOption[]
 	currentModelId: string
+	contextWindow: number
+	thinkingLevel: string
 	setModel: (modelId: string) => boolean
 }
 
@@ -31,15 +33,21 @@ export interface AcpSession {
 const AVAILABLE_COMMANDS: SlashCommand[] = [
 	{ name: "model", description: "Switch model: /model <modelId>" },
 	{ name: "thinking", description: "Set thinking: /thinking off|minimal|low|medium|high|xhigh" },
+	{ name: "status", description: "Show session status" },
 	{ name: "compact", description: "Compact conversation context" },
 	{ name: "clear", description: "Clear conversation" },
 ]
 
 export function createAcpSession(config: AcpSessionConfig): AcpSession {
-	const { sessionId, cwd, agent, emitter, models } = config
+	const { sessionId, cwd, agent, emitter, models, contextWindow } = config
 	let currentModelId = config.currentModelId
+	let thinkingLevel = config.thinkingLevel
 	let cancelled = false
 	let unsubscribe: (() => void) | null = null
+
+	// Track session stats
+	let turnCount = 0
+	let lastUsage: { totalTokens: number; cacheRead?: number; cacheWrite?: number } | null = null
 
 	// Track emitted content to avoid duplicate chunks
 	let lastEmittedTextLen = 0
@@ -115,12 +123,27 @@ export function createAcpSession(config: AcpSessionConfig): AcpSession {
 						)
 					)
 					break
+
+				case "message_end":
+					// Capture usage from assistant messages
+					if (event.message.role === "assistant") {
+						const msg = event.message as { usage?: { totalTokens?: number; cacheRead?: number; cacheWrite?: number } }
+						if (msg.usage?.totalTokens) {
+							lastUsage = {
+								totalTokens: msg.usage.totalTokens,
+								cacheRead: msg.usage.cacheRead,
+								cacheWrite: msg.usage.cacheWrite,
+							}
+						}
+					}
+					break
 			}
 		})
 	}
 
 	async function prompt(content: ContentBlock[]): Promise<StopReason> {
 		cancelled = false
+		turnCount++
 		unsubscribe = subscribeToEvents()
 
 		try {
@@ -186,10 +209,26 @@ export function createAcpSession(config: AcpSessionConfig): AcpSession {
 				const levels = ["off", "minimal", "low", "medium", "high", "xhigh"]
 				if (levels.includes(args)) {
 					agent.setThinkingLevel(args as "off" | "minimal" | "low" | "medium" | "high" | "xhigh")
+					thinkingLevel = args
 					emitter.emit(textChunk(`Thinking level set to ${args}`))
 				} else {
 					emitter.emit(textChunk(`Invalid thinking level. Use: ${levels.join(", ")}`))
 				}
+				break
+			}
+
+			case "status": {
+				const provider = currentModelId.includes("/") ? currentModelId.split("/")[0] : "anthropic"
+				const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+				let ctx = `0/${fmt(contextWindow)}`
+				let cache = ""
+				if (lastUsage && contextWindow > 0) {
+					const pct = ((lastUsage.totalTokens / contextWindow) * 100).toFixed(1)
+					ctx = `${fmt(lastUsage.totalTokens)}/${fmt(contextWindow)} (${pct}%)`
+					if (lastUsage.cacheRead) cache = ` | cache: ${fmt(lastUsage.cacheRead)} read`
+				}
+				const status = `${currentModelId} (${provider}) | ${thinkingLevel} | ${ctx}${cache} | turns: ${turnCount}`
+				emitter.emit(textChunk(status))
 				break
 			}
 
