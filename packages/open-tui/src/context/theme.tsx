@@ -138,6 +138,12 @@ export interface ThemeColors {
 	markdownBlockQuoteBorder: RGBA
 	markdownHr: RGBA
 	markdownListBullet: RGBA
+	// Extended markdown colors for tree-sitter
+	markdownStrong: RGBA
+	markdownEmph: RGBA
+	markdownListEnumeration: RGBA
+	markdownImage: RGBA
+	markdownStrikethrough: RGBA
 
 	// Syntax colors
 	syntaxComment: RGBA
@@ -213,6 +219,11 @@ const defaultDarkTheme: Theme = {
 	markdownBlockQuoteBorder: parseColor("#303030"),
 	markdownHr: parseColor("#303030"),
 	markdownListBullet: parseColor("#707070"),
+	markdownStrong: parseColor("#c8c8c8"),
+	markdownEmph: parseColor("#d4c48a"),
+	markdownListEnumeration: parseColor("#7d9bba"),
+	markdownImage: parseColor("#9090a0"),
+	markdownStrikethrough: parseColor("#6b6b6b"),
 
 	// Syntax - soft but readable contrast
 	syntaxComment: parseColor("#5a5a5a"),
@@ -283,6 +294,11 @@ const defaultLightTheme: Theme = {
 	markdownBlockQuoteBorder: parseColor("#bcc0cc"),
 	markdownHr: parseColor("#bcc0cc"),
 	markdownListBullet: parseColor("#40a02b"),
+	markdownStrong: parseColor("#4c4f69"),
+	markdownEmph: parseColor("#df8e1d"),
+	markdownListEnumeration: parseColor("#1e66f5"),
+	markdownImage: parseColor("#ea76cb"),
+	markdownStrikethrough: parseColor("#9ca0b0"),
 
 	syntaxComment: parseColor("#9ca0b0"),
 	syntaxString: parseColor("#40a02b"),
@@ -403,6 +419,11 @@ function mapToThemeColors(resolved: Partial<Record<string, RGBA>>, mode: ThemeMo
 		markdownBlockQuoteBorder: get("markdownBlockQuoteBorder", "border"),
 		markdownHr: get("markdownHorizontalRule", "border"),
 		markdownListBullet: get("markdownListBullet", "markdownListItem", "accent"),
+		markdownStrong: get("markdownStrong", "text"),
+		markdownEmph: get("markdownEmph", "warning"),
+		markdownListEnumeration: get("markdownListEnumeration", "markdownListBullet"),
+		markdownImage: get("markdownImage", "markdownLink"),
+		markdownStrikethrough: get("markdownStrikethrough", "textMuted"),
 
 		// Syntax colors
 		syntaxComment: get("syntaxComment"),
@@ -424,22 +445,114 @@ function mapToThemeColors(resolved: Partial<Record<string, RGBA>>, mode: ThemeMo
 export type SyntaxVariant = "normal" | "subtle"
 
 export function createSyntaxStyle(theme: Theme, variant: SyntaxVariant = "normal"): SyntaxStyle {
-	const dim = variant === "subtle"
-	return SyntaxStyle.fromStyles({
-		comment: { fg: theme.syntaxComment, italic: true, ...(dim ? { dim: true } : {}) },
-		string: { fg: theme.syntaxString, ...(dim ? { dim: true } : {}) },
-		number: { fg: theme.syntaxNumber, ...(dim ? { dim: true } : {}) },
-		constant: { fg: theme.syntaxConstant, ...(dim ? { dim: true } : {}) },
-		keyword: { fg: theme.syntaxKeyword, ...(dim ? { dim: true } : { bold: true }) },
-		operator: { fg: theme.syntaxOperator, ...(dim ? { dim: true } : {}) },
-		punctuation: { fg: theme.syntaxPunctuation, ...(dim ? { dim: true } : {}) },
-		function: { fg: theme.syntaxFunction, ...(dim ? { dim: true } : {}) },
-		variable: { fg: theme.syntaxVariable, ...(dim ? { dim: true } : {}) },
-		property: { fg: theme.syntaxProperty, ...(dim ? { dim: true } : {}) },
-		type: { fg: theme.syntaxType, ...(dim ? { dim: true } : {}) },
-		tag: { fg: theme.syntaxTag, ...(dim ? { dim: true } : {}) },
-		attribute: { fg: theme.syntaxAttribute, ...(dim ? { dim: true } : {}) },
-	})
+	const rules = getSyntaxRules(theme)
+	if (variant === "subtle") {
+		return SyntaxStyle.fromTheme(
+			rules.map((rule) => ({
+				...rule,
+				style: { ...rule.style, dim: true },
+			})),
+		)
+	}
+	return SyntaxStyle.fromTheme(rules)
+}
+
+interface SyntaxRule {
+	scope: string[]
+	style: {
+		foreground?: RGBA
+		background?: RGBA
+		bold?: boolean
+		italic?: boolean
+		underline?: boolean
+	}
+}
+
+function getSyntaxRules(theme: Theme): SyntaxRule[] {
+	return [
+		// Default text
+		{ scope: ["default"], style: { foreground: theme.text } },
+
+		// Comments
+		{ scope: ["comment", "comment.documentation"], style: { foreground: theme.syntaxComment, italic: true } },
+
+		// Strings
+		{ scope: ["string", "symbol"], style: { foreground: theme.syntaxString } },
+		{ scope: ["string.escape", "string.regexp"], style: { foreground: theme.syntaxKeyword } },
+		{ scope: ["character", "character.special"], style: { foreground: theme.syntaxString } },
+
+		// Numbers and constants
+		{ scope: ["number", "boolean", "float"], style: { foreground: theme.syntaxNumber } },
+		{ scope: ["constant", "constant.builtin"], style: { foreground: theme.syntaxConstant } },
+
+		// Keywords
+		{ scope: ["keyword"], style: { foreground: theme.syntaxKeyword, italic: true } },
+		{
+			scope: ["keyword.function", "keyword.return", "keyword.conditional", "keyword.repeat"],
+			style: { foreground: theme.syntaxKeyword, italic: true },
+		},
+		{ scope: ["keyword.operator", "operator"], style: { foreground: theme.syntaxOperator } },
+		{ scope: ["keyword.import", "keyword.export"], style: { foreground: theme.syntaxKeyword } },
+		{ scope: ["keyword.type"], style: { foreground: theme.syntaxType, bold: true, italic: true } },
+
+		// Functions
+		{
+			scope: ["function", "function.call", "function.method", "function.method.call", "function.builtin"],
+			style: { foreground: theme.syntaxFunction },
+		},
+		{ scope: ["constructor"], style: { foreground: theme.syntaxFunction } },
+
+		// Variables and parameters
+		{ scope: ["variable", "variable.parameter", "parameter"], style: { foreground: theme.syntaxVariable } },
+		{ scope: ["variable.member", "property", "field"], style: { foreground: theme.syntaxProperty } },
+		{ scope: ["variable.builtin", "variable.super"], style: { foreground: theme.error } },
+
+		// Types
+		{ scope: ["type", "type.builtin", "type.definition"], style: { foreground: theme.syntaxType } },
+		{ scope: ["class", "module", "namespace"], style: { foreground: theme.syntaxType } },
+
+		// Punctuation
+		{ scope: ["punctuation", "punctuation.bracket", "punctuation.delimiter"], style: { foreground: theme.syntaxPunctuation } },
+		{ scope: ["punctuation.special"], style: { foreground: theme.syntaxOperator } },
+
+		// Tags (HTML/XML)
+		{ scope: ["tag"], style: { foreground: theme.syntaxTag } },
+		{ scope: ["tag.attribute"], style: { foreground: theme.syntaxAttribute } },
+		{ scope: ["tag.delimiter"], style: { foreground: theme.syntaxOperator } },
+
+		// Attributes and annotations
+		{ scope: ["attribute", "annotation"], style: { foreground: theme.warning } },
+
+		// Markdown specific
+		{
+			scope: ["markup.heading", "markup.heading.1", "markup.heading.2", "markup.heading.3", "markup.heading.4", "markup.heading.5", "markup.heading.6"],
+			style: { foreground: theme.markdownHeading, bold: true },
+		},
+		{ scope: ["markup.bold", "markup.strong"], style: { foreground: theme.markdownStrong, bold: true } },
+		{ scope: ["markup.italic"], style: { foreground: theme.markdownEmph, italic: true } },
+		{ scope: ["markup.strikethrough"], style: { foreground: theme.markdownStrikethrough } },
+		{ scope: ["markup.link", "markup.link.url"], style: { foreground: theme.markdownLink, underline: true } },
+		{ scope: ["markup.link.label", "label"], style: { foreground: theme.markdownLinkUrl } },
+		{ scope: ["markup.raw", "markup.raw.inline", "markup.raw.block"], style: { foreground: theme.markdownCode } },
+		{ scope: ["markup.list"], style: { foreground: theme.markdownListBullet } },
+		{ scope: ["markup.list.checked"], style: { foreground: theme.success } },
+		{ scope: ["markup.list.unchecked"], style: { foreground: theme.textMuted } },
+		{ scope: ["markup.quote"], style: { foreground: theme.markdownBlockQuote, italic: true } },
+
+		// Diff
+		{ scope: ["diff.plus"], style: { foreground: theme.diffAdded, background: theme.diffAddedBg } },
+		{ scope: ["diff.minus"], style: { foreground: theme.diffRemoved, background: theme.diffRemovedBg } },
+		{ scope: ["diff.delta"], style: { foreground: theme.diffContext, background: theme.diffContextBg } },
+
+		// Conceal (for hidden markdown syntax)
+		{ scope: ["conceal"], style: { foreground: theme.textMuted } },
+
+		// Misc
+		{ scope: ["spell", "nospell"], style: { foreground: theme.text } },
+		{ scope: ["error"], style: { foreground: theme.error, bold: true } },
+		{ scope: ["warning"], style: { foreground: theme.warning, bold: true } },
+		{ scope: ["info"], style: { foreground: theme.info } },
+	]
 }
 
 interface ThemeContextValue {

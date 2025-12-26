@@ -116,3 +116,6 @@ export {
 	type FileSearchResult,
 	type SlashCommand,
 } from "./autocomplete/index.js"
+
+// Tree-sitter parser configuration
+export { parsersConfig } from "./parsers-config.js"

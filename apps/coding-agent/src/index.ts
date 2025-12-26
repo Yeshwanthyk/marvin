@@ -15,6 +15,12 @@ const runTui = async (args: {
 }) => {
   const solidPlugin = (await import("@opentui/solid/bun-plugin")).default;
   Bun.plugin(solidPlugin);
+
+  // Initialize tree-sitter parsers for code syntax highlighting
+  const { addDefaultParsers } = await import("@opentui/core");
+  const { parsersConfig } = await import("@marvin-agents/open-tui");
+  addDefaultParsers(parsersConfig.parsers);
+
   const { runTuiOpen } = await import("./tui-app.js");
   return runTuiOpen(args);
 };
