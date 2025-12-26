@@ -2,7 +2,7 @@
  * OpenTUI-based TUI application for coding-agent
  */
 
-import { TextareaRenderable, ScrollBoxRenderable } from "@opentui/core"
+import { TextareaRenderable } from "@opentui/core"
 import { render, useTerminalDimensions } from "@opentui/solid"
 import { createSignal, createEffect, Show, onCleanup, onMount, batch } from "solid-js"
 import { CombinedAutocompleteProvider, SelectList, ThemeProvider, ToastViewport, useRenderer, useTheme, type AutocompleteItem, type SelectItem, type ToastItem } from "@marvin-agents/open-tui"
@@ -465,7 +465,6 @@ function MainView(props: MainViewProps) {
 	const { theme } = useTheme()
 	const dimensions = useTerminalDimensions()
 	let textareaRef: TextareaRenderable | undefined
-	let scrollRef: ScrollBoxRenderable | undefined
 	const lastCtrlC = { current: 0 }
 
 	// Autocomplete
@@ -536,15 +535,7 @@ function MainView(props: MainViewProps) {
 		if (props.activityState !== "idle") { if (!spinnerInterval) spinnerInterval = setInterval(() => setSpinnerFrame((f) => (f + 1) % 8), 200) }
 		else { if (spinnerInterval) { clearInterval(spinnerInterval); spinnerInterval = null } }
 	})
-	// Scroll only when message count increases (not on every reactive change)
-	let prevMsgCount = 0, prevToolCount = 0
-	createEffect(() => {
-		const msgCount = props.messages.length, toolCount = props.toolBlocks.length
-		if (msgCount > prevMsgCount || toolCount > prevToolCount) {
-			prevMsgCount = msgCount; prevToolCount = toolCount
-			if (scrollRef) scrollRef.scrollBy(100_000)
-		}
-	})
+	// Scrollbox handles sticky-follow for new output when already at bottom.
 
 	// Exit handler - cleans up renderer before exit
 	const renderer = useRenderer()
@@ -673,7 +664,7 @@ function MainView(props: MainViewProps) {
 	return (
 		<box flexDirection="column" width={dimensions().width} height={dimensions().height}
 			onMouseUp={() => { const sel = renderer.getSelection(); if (sel && sel.getSelectedText()) copySelectionToClipboard() }}>
-			<scrollbox ref={(r: ScrollBoxRenderable) => { scrollRef = r }} flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
+			<scrollbox stickyScroll stickyStart="bottom" flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
 				<MessageList messages={props.messages} toolBlocks={props.toolBlocks} thinkingVisible={props.thinkingVisible} diffWrapMode={props.diffWrapMode}
 					isToolExpanded={isToolExpanded} toggleToolExpanded={toggleToolExpanded} isThinkingExpanded={isThinkingExpanded} toggleThinkingExpanded={toggleThinkingExpanded} />
 			</scrollbox>
