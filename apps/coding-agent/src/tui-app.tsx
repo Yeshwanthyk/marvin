@@ -26,6 +26,7 @@ import { loadCustomCommands, tryExpandCustomCommand, type CustomCommand } from "
 import { slashCommands } from "./autocomplete-commands.js"
 import { createAgentEventHandler, type EventHandlerContext } from "./agent-events.js"
 import { Footer } from "./components/Footer.js"
+import { Header } from "./components/Header.js"
 import { MessageList } from "./components/MessageList.js"
 import { createKeyboardHandler, type KeyboardHandlerConfig } from "./keyboard-handler.js"
 import { loadHooks, HookRunner, wrapToolsWithHooks, type HookError } from "./hooks/index.js"
@@ -100,14 +101,12 @@ export const runTuiOpen = async (args?: {
 		autoInstall: loaded.lsp.autoInstall,
 	})
 
-	// LSP iteration tracking - ref populated by App component
-	const lspIterationRef = { increment: () => {} }
+	// LSP active state - ref populated by App component
 	const lspActiveRef = { setActive: (_v: boolean) => {} }
 	const tools = wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunner), lsp, {
 		cwd,
 		onCheckStart: () => lspActiveRef.setActive(true),
 		onCheckEnd: () => lspActiveRef.setActive(false),
-		onDiagnosticsInjected: () => lspIterationRef.increment(),
 	})
 
 	// Build tool metadata registry for custom rendering
@@ -184,7 +183,7 @@ export const runTuiOpen = async (args?: {
 			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking} theme={loaded.theme} editor={loaded.editor}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
 			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
-			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} lspIterationRef={lspIterationRef} lspActiveRef={lspActiveRef} />
+			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} lspActiveRef={lspActiveRef} />
 	), { targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} })
 }
 
@@ -200,8 +199,6 @@ interface AppProps {
 	hookRunner: HookRunner
 	toolByName: Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>
 	lsp: LspManager
-	/** Ref for LSP iteration tracking - App sets the callback */
-	lspIterationRef: { increment: () => void }
 	/** Ref for LSP active state - App sets the callback */
 	lspActiveRef: { setActive: (v: boolean) => void }
 }
@@ -226,6 +223,7 @@ function App(props: AppProps) {
 	const [activityState, setActivityState] = createSignal<ActivityState>("idle")
 	const [thinkingVisible, setThinkingVisible] = createSignal(true)
 	const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
+	const [concealMarkdown, setConcealMarkdown] = createSignal(true)
 	const [displayModelId, setDisplayModelId] = createSignal(props.modelId)
 	const [displayThinking, setDisplayThinking] = createSignal(props.thinking)
 	const [displayContextWindow, setDisplayContextWindow] = createSignal(props.model.contextWindow)
@@ -233,15 +231,12 @@ function App(props: AppProps) {
 	const [cacheStats, setCacheStats] = createSignal<{ cacheRead: number; input: number } | null>(null)
 	const [retryStatus, setRetryStatus] = createSignal<string | null>(null)
 	const [turnCount, setTurnCount] = createSignal(0)
-	const [lspIterationCount, setLspIterationCount] = createSignal(0)
 	const [lspActive, setLspActive] = createSignal(false)
 
 	// Wire up LSP refs to state
-	props.lspIterationRef.increment = () => setLspIterationCount((c) => c + 1)
 	props.lspActiveRef.setActive = setLspActive
 
 	const queuedMessages: string[] = []
-	const [queueCount, setQueueCount] = createSignal(0)
 	const retryConfig = { enabled: true, maxRetries: 3, baseDelayMs: 2000 }
 	const retryablePattern = /overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error/i
 	const retryState = { attempt: 0, abortController: null as AbortController | null }
@@ -336,8 +331,8 @@ function App(props: AppProps) {
 	const eventCtx: EventHandlerContext = {
 		setMessages: setMessages as (updater: (prev: UIMessage[]) => UIMessage[]) => void,
 		setToolBlocks: setToolBlocks as (updater: (prev: ToolBlock[]) => ToolBlock[]) => void,
-		setActivityState, setIsResponding, setContextTokens, setCacheStats, setRetryStatus, setTurnCount, setLspIterationCount,
-		queuedMessages, setQueueCount, sessionManager, streamingMessageId: streamingMessageIdRef,
+		setActivityState, setIsResponding, setContextTokens, setCacheStats, setRetryStatus, setTurnCount,
+		queuedMessages, sessionManager, streamingMessageId: streamingMessageIdRef,
 		retryConfig, retryablePattern, retryState, agent: agent as EventHandlerContext["agent"],
 		hookRunner: props.hookRunner,
 		toolByName: props.toolByName,
@@ -367,7 +362,7 @@ function App(props: AppProps) {
 		setCurrentProvider: (p) => { currentProvider = p }, setCurrentModelId: (id) => { currentModelId = id }, setCurrentThinking: (t) => { currentThinking = t },
 		isResponding, setIsResponding, setActivityState,
 		setMessages: setMessages as CommandContext["setMessages"], setToolBlocks: setToolBlocks as CommandContext["setToolBlocks"],
-		setContextTokens, setCacheStats, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode,
+		setContextTokens, setCacheStats, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode, setConcealMarkdown,
 		setTheme: handleThemeChange,
 		openEditor: () => editorOpenRef.current(),
 		onExit: () => exitHandlerRef.current(),
@@ -398,7 +393,7 @@ function App(props: AppProps) {
 		}
 
 		if (isResponding()) {
-			queuedMessages.push(text); setQueueCount(queuedMessages.length)
+			queuedMessages.push(text)
 			void agent.queueMessage({ role: "user", content: [{ type: "text", text }], timestamp: Date.now() })
 			editorClearFn?.(); return
 		}
@@ -416,7 +411,7 @@ function App(props: AppProps) {
 		if (retryState.abortController) { retryState.abortController.abort(); retryState.abortController = null; retryState.attempt = 0; setRetryStatus(null) }
 		agent.abort(); agent.clearMessageQueue()
 		let restore: string | null = null
-		if (queuedMessages.length > 0) { restore = queuedMessages.join("\n"); queuedMessages.length = 0; setQueueCount(0) }
+		if (queuedMessages.length > 0) { restore = queuedMessages.join("\n"); queuedMessages.length = 0 }
 		batch(() => { setIsResponding(false); setActivityState("idle") }); return restore
 	}
 
@@ -438,8 +433,8 @@ function App(props: AppProps) {
 		<ThemeProvider mode="dark" themeName={currentTheme()} onThemeChange={handleThemeChange}>
 			<MainView messages={messages()} toolBlocks={toolBlocks()} isResponding={isResponding()} activityState={activityState()}
 				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
-				contextTokens={contextTokens()} contextWindow={displayContextWindow()} cacheStats={cacheStats()} queueCount={queueCount()} retryStatus={retryStatus()} turnCount={turnCount()} lspIterationCount={lspIterationCount()} lspActive={lspActive()}
-				diffWrapMode={diffWrapMode()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
+				contextTokens={contextTokens()} contextWindow={displayContextWindow()} cacheStats={cacheStats()} retryStatus={retryStatus()} turnCount={turnCount()} lspActive={lspActive()}
+				diffWrapMode={diffWrapMode()} concealMarkdown={concealMarkdown()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
 				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking}
 				exitHandlerRef={exitHandlerRef} editorOpenRef={editorOpenRef} editor={props.editor} lsp={props.lsp} />
 		</ThemeProvider>
@@ -451,7 +446,7 @@ function App(props: AppProps) {
 interface MainViewProps {
 	messages: UIMessage[]; toolBlocks: ToolBlock[]; isResponding: boolean; activityState: ActivityState
 	thinkingVisible: boolean; modelId: string; thinking: ThinkingLevel; provider: KnownProvider
-	contextTokens: number; contextWindow: number; cacheStats: { cacheRead: number; input: number } | null; queueCount: number; retryStatus: string | null; turnCount: number; lspIterationCount: number; lspActive: boolean; diffWrapMode: "word" | "none"
+	contextTokens: number; contextWindow: number; cacheStats: { cacheRead: number; input: number } | null; retryStatus: string | null; turnCount: number; lspActive: boolean; diffWrapMode: "word" | "none"; concealMarkdown: boolean
 	customCommands: Map<string, CustomCommand>
 	onSubmit: (text: string, clearFn?: () => void) => void; onAbort: () => string | null
 	onToggleThinking: () => void; onCycleModel: () => void; onCycleThinking: () => void
@@ -619,27 +614,21 @@ function MainView(props: MainViewProps) {
 		const formatK = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
 
 		if (usagePct > 100) {
-			// Overflow - critical
+			// Overflow - tokens exceed new model's context
 			pushToast({
-				title: `Context overflow: ${formatK(tokens)}/${formatK(newWindow)} (${Math.round(usagePct)}%)`,
+				title: `Context overflow: ${formatK(tokens)}/${formatK(newWindow)}`,
 				message: "Run /compact before continuing",
 				variant: "error",
 			}, 5000)
 		} else if (usagePct > 85) {
-			// Warning threshold
+			// Near limit warning
 			pushToast({
-				title: `Context near limit: ${formatK(tokens)}/${formatK(newWindow)} (${Math.round(usagePct)}%)`,
+				title: `Context near limit: ${formatK(tokens)}/${formatK(newWindow)}`,
 				message: `${formatK(remaining)} remaining`,
 				variant: "warning",
 			}, 4000)
-		} else {
-			// Info - context window changed
-			pushToast({
-				title: `Context window: ${formatK(oldWindow)} → ${formatK(newWindow)}`,
-				message: `${Math.round(usagePct)}% used`,
-				variant: "info",
-			}, 3000)
 		}
+		// No toast for safe switches - header shows context info
 	})
 
 	// Expansion state
@@ -664,8 +653,10 @@ function MainView(props: MainViewProps) {
 	return (
 		<box flexDirection="column" width={dimensions().width} height={dimensions().height}
 			onMouseUp={() => { const sel = renderer.getSelection(); if (sel && sel.getSelectedText()) copySelectionToClipboard() }}>
+			<Header modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
+				cacheStats={props.cacheStats} activityState={props.activityState} retryStatus={props.retryStatus} lspActive={props.lspActive} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
 			<scrollbox stickyScroll stickyStart="bottom" flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
-				<MessageList messages={props.messages} toolBlocks={props.toolBlocks} thinkingVisible={props.thinkingVisible} diffWrapMode={props.diffWrapMode}
+				<MessageList messages={props.messages} toolBlocks={props.toolBlocks} thinkingVisible={props.thinkingVisible} diffWrapMode={props.diffWrapMode} concealMarkdown={props.concealMarkdown}
 					isToolExpanded={isToolExpanded} toggleToolExpanded={toggleToolExpanded} isThinkingExpanded={isThinkingExpanded} toggleThinkingExpanded={toggleThinkingExpanded} />
 			</scrollbox>
 			<Show when={showAutocomplete() && autocompleteItems().length > 0}>
@@ -684,7 +675,7 @@ function MainView(props: MainViewProps) {
 				</box>
 			</Show>
 			<box border={["top"]} borderColor={theme.border} paddingTop={1} flexShrink={0}>
-				<textarea ref={(r: TextareaRenderable) => { textareaRef = r; r.focus() }} placeholder="Ask anything..." textColor={theme.text} focusedTextColor={theme.text} cursorColor={theme.text} minHeight={1} maxHeight={6}
+				<textarea ref={(r: TextareaRenderable) => { textareaRef = r; r.focus() }} placeholder="" textColor={theme.text} focusedTextColor={theme.text} cursorColor={theme.text} minHeight={1} maxHeight={6}
 					keyBindings={[{ name: "return", action: "submit" as const }, { name: "return", meta: true, action: "newline" as const }, { name: "left", action: "move-left" as const }, { name: "right", action: "move-right" as const },
 						{ name: "backspace", action: "backspace" as const }, { name: "delete", action: "delete" as const }, { name: "a", ctrl: true, action: "line-home" as const }, { name: "e", ctrl: true, action: "line-end" as const },
 						{ name: "k", ctrl: true, action: "delete-to-line-end" as const }, { name: "u", ctrl: true, action: "delete-to-line-start" as const }, { name: "w", ctrl: true, action: "delete-word-backward" as const }]}
@@ -704,8 +695,7 @@ function MainView(props: MainViewProps) {
 						props.onSubmit(textareaRef.plainText, () => textareaRef?.clear())
 					}} />
 			</box>
-			<Footer modelId={props.modelId} thinking={props.thinking} branch={branch()} contextTokens={props.contextTokens} contextWindow={props.contextWindow}
-				cacheStats={props.cacheStats} queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} lspIterationCount={props.lspIterationCount} lspActive={props.lspActive} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
+			<Footer />
 			<ToastViewport toasts={toasts()} />
 		</box>
 	)
