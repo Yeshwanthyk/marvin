@@ -10,7 +10,6 @@ import {
 import type { AgentRunConfig, AgentTransport } from "./types.js";
 import type { CodexTokens } from "./codex/types.js";
 import { createCodexFetch } from "./codex/fetch.js";
-import { CODEX_BASE_URL } from "./codex/constants.js";
 import { getCodexInstructions } from "./codex/instructions.js";
 
 export interface CodexTransportOptions {
