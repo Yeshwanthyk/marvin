@@ -24,10 +24,8 @@ function createMockContext(overrides: Partial<EventHandlerContext> = {}): EventH
 		setCacheStats: mock(() => {}),
 		setRetryStatus: mock(() => {}),
 		setTurnCount: mock(() => {}),
-		setLspIterationCount: mock(() => {}),
 
 		queuedMessages: [],
-		setQueueCount: mock(() => {}),
 
 		sessionManager: {
 			appendMessage: mock(() => {}),
@@ -76,7 +74,6 @@ describe("createAgentEventHandler", () => {
 			} as unknown as AgentEvent)
 
 			expect(ctx.queuedMessages.length).toBe(0)
-			expect(ctx.setQueueCount).toHaveBeenCalledWith(0)
 			expect(ctx.setActivityState).toHaveBeenCalledWith("thinking")
 		})
 	})

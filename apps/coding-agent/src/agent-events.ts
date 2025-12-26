@@ -33,11 +33,9 @@ export interface EventHandlerContext {
 	setCacheStats: (v: { cacheRead: number; input: number } | null) => void
 	setRetryStatus: (v: string | null) => void
 	setTurnCount: (v: number) => void
-	setLspIterationCount: (v: number) => void
 
 	// Queue management
 	queuedMessages: string[]
-	setQueueCount: (v: number) => void
 
 	// Session management
 	sessionManager: SessionManager
@@ -231,7 +229,6 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		if (event.type === "agent_start") {
 			turnIndex = 0
 			ctx.setTurnCount(0) // Reset turn count for new agent run
-			ctx.setLspIterationCount(0) // Reset LSP iteration count for new agent run
 			extractionCache = createExtractionCache() // Reset for new agent run
 			void ctx.hookRunner?.emit({ type: "agent.start" })
 		}
@@ -338,7 +335,6 @@ function handleMessageStart(
 	if (event.message.role === "user") {
 		if (ctx.queuedMessages.length > 0) {
 			ctx.queuedMessages.shift()
-			ctx.setQueueCount(ctx.queuedMessages.length)
 			ctx.sessionManager.appendMessage(event.message as AppMessage)
 
 			const text = typeof event.message.content === "string"
