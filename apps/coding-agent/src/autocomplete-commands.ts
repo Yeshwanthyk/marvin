@@ -26,7 +26,6 @@ export const slashCommands: SlashCommand[] = [
   { name: 'compact', description: 'Compact context into summary + start fresh' },
   { name: 'abort', description: 'Abort in-flight request' },
   { name: 'exit', description: 'Exit' },
-  { name: 'rewind', description: 'Rewind working tree to a snapshot' },
   {
     name: 'theme',
     description: 'Set theme: /theme <name> (or /theme to list)',

@@ -463,7 +463,6 @@ apps/coding-agent/src/
 │   ├── MessageList.tsx      Scrollable message container
 │   └── Footer.tsx           Status bar with model/context
 ├── session-picker.tsx       Session selection dialog
-├── rewind-picker.tsx        Checkpoint rewind picker
 ├── tui-open-rendering.tsx   Tool block components
 ├── agent-events.ts          Event → UI state mapping
 ├── keyboard-handler.ts      Key bindings
