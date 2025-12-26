@@ -7332,7 +7332,7 @@ export const MODELS = {
 				cacheRead: 0,
 				cacheWrite: 0,
 			},
-			contextWindow: 200000,
+			contextWindow: 400000,
 			maxTokens: 32000,
 		} satisfies Model<"openai-responses">,
 		"gpt-5.2-mini": {
