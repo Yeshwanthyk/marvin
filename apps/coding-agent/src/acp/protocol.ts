@@ -85,7 +85,6 @@ export interface ModelOption {
 
 export interface NewSessionResult {
 	sessionId: string
-	availableCommands?: SlashCommand[]
 	models?: {
 		availableModels: ModelOption[]
 		currentModelId: string

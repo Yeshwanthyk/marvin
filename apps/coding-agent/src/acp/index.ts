@@ -170,18 +170,21 @@ export async function runAcp(args: {
 			setModel: setModelFn,
 		})
 
-		// Emit initial commands and models
-		emitter.emitCommands(state.session.getAvailableCommands())
-		emitter.emitModels(MODEL_OPTIONS, state.currentModelId)
-
 		return {
 			sessionId,
-			availableCommands: state.session.getAvailableCommands(),
 			models: {
 				availableModels: MODEL_OPTIONS,
 				currentModelId: state.currentModelId,
 			},
 		}
+	}
+
+	// Emit post-session notifications (called after response is sent)
+	const emitSessionNotifications = () => {
+		if (!state.session) return
+		const emitter = createUpdateEmitter(state.session.id, writeMessage)
+		emitter.emitCommands(state.session.getAvailableCommands())
+		emitter.emitModels(MODEL_OPTIONS, state.currentModelId)
 	}
 
 	// Handle session/prompt request
@@ -245,6 +248,11 @@ export async function runAcp(args: {
 			}
 
 			writeMessage(makeResponse(req.id, result))
+
+			// Emit notifications after session/new response
+			if (req.method === "session/new") {
+				emitSessionNotifications()
+			}
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err)
 			writeMessage(makeError(req.id, ErrorCodes.InternalError, message))
