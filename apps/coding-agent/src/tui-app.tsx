@@ -35,6 +35,8 @@ import { loadCustomTools, getToolNames } from "./custom-tools/index.js"
 
 type KnownProvider = ReturnType<typeof getProviders>[number]
 
+const SHELL_INJECTION_PREFIX = "[Shell output]" as const
+
 // ----- Main Entry -----
 
 export const runTuiOpen = async (args?: {
@@ -281,7 +283,9 @@ function App(props: AppProps) {
 		const uiMessages: UIMessage[] = []
 		for (const msg of sessionMessages) {
 			if (msg.role === "user") {
-				uiMessages.push({ id: crypto.randomUUID(), role: "user", content: typeof msg.content === "string" ? msg.content : extractText(msg.content as unknown[]) })
+				const contentText = typeof msg.content === "string" ? msg.content : extractText(msg.content as unknown[])
+				if (contentText.startsWith(SHELL_INJECTION_PREFIX)) continue
+				uiMessages.push({ id: crypto.randomUUID(), role: "user", content: contentText })
 			} else if (msg.role === "assistant") {
 				const text = extractText(msg.content as unknown[]), thinking = extractThinking(msg.content as unknown[])
 				const toolCalls = extractToolCalls(msg.content as unknown[])
@@ -392,7 +396,8 @@ function App(props: AppProps) {
 
 		// Handle shell commands (! prefix)
 		if (text.startsWith("!")) {
-			const command = text.slice(1).trim()
+			const shouldInject = text.startsWith("!!")
+			const command = text.slice(shouldInject ? 2 : 1).trim()
 			if (!command) return
 			editorClearFn?.()
 			ensureSession()
@@ -436,6 +441,28 @@ function App(props: AppProps) {
 				tempFilePath: result.tempFilePath,
 				timestamp: Date.now(),
 			} as unknown as AppMessage)
+
+			if (shouldInject) {
+				const injectionLines = [
+					SHELL_INJECTION_PREFIX,
+					`$ ${command}`,
+					result.output,
+				]
+				if (result.exitCode !== null && result.exitCode !== 0) {
+					injectionLines.push(`[exit ${result.exitCode}]`)
+				}
+				if (result.truncated && result.tempFilePath) {
+					injectionLines.push(`[truncated, full output: ${result.tempFilePath}]`)
+				}
+				const injectedText = injectionLines.filter((line) => line.length > 0).join("\n")
+				const injectionMessage: AppMessage = {
+					role: "user",
+					content: [{ type: "text", text: injectedText }],
+					timestamp: Date.now(),
+				}
+				agent.appendMessage(injectionMessage)
+				sessionManager.appendMessage(injectionMessage)
+			}
 
 			return
 		}
@@ -766,7 +793,7 @@ function MainView(props: MainViewProps) {
 						})
 					}} />
 			</box>
-			<Footer />
+			<Footer borderColor={isBashMode() ? theme.warning : theme.border} />
 			<ToastViewport toasts={toasts()} />
 		</box>
 	)
