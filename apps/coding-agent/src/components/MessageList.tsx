@@ -48,6 +48,7 @@ function ThinkingBlockWrapper(props: {
 	full: string
 	isExpanded: (id: string) => boolean
 	onToggle: (id: string) => void
+	concealMarkdown?: boolean
 }) {
 	const { theme } = useTheme()
 	const expanded = createMemo(() => props.isExpanded(props.id))
@@ -70,9 +71,7 @@ function ThinkingBlockWrapper(props: {
 			</box>
 			<Show when={expanded()}>
 				<box paddingLeft={2} paddingTop={1}>
-					<text fg={theme.textMuted} attributes={TextAttributes.ITALIC}>
-						{props.full}
-					</text>
+					<Markdown text={props.full} conceal={props.concealMarkdown} dim />
 				</box>
 			</Show>
 		</box>
@@ -308,6 +307,7 @@ export function MessageList(props: MessageListProps) {
 									full={thinkingItem().full}
 									isExpanded={props.isThinkingExpanded}
 									onToggle={props.toggleThinkingExpanded}
+									concealMarkdown={props.concealMarkdown}
 								/>
 							)}
 						</Match>

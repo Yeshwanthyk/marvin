@@ -12,6 +12,8 @@ export interface MarkdownProps {
 	conceal?: boolean
 	/** Whether content is actively streaming */
 	streaming?: boolean
+	/** Use dimmed/subtle styling (for secondary content like thinking blocks) */
+	dim?: boolean
 }
 
 /**
@@ -23,17 +25,17 @@ export interface MarkdownProps {
  * ```
  */
 export function Markdown(props: MarkdownProps): JSX.Element {
-	const { theme, syntaxStyle } = useTheme()
+	const { theme, syntaxStyle, subtleSyntaxStyle } = useTheme()
 
 	return (
 		<code
 			filetype="markdown"
 			content={props.text ?? ""}
-			syntaxStyle={syntaxStyle}
+			syntaxStyle={props.dim ? subtleSyntaxStyle : syntaxStyle}
 			conceal={props.conceal ?? true}
 			streaming={props.streaming ?? false}
 			drawUnstyledText={false}
-			fg={theme.markdownText}
+			fg={props.dim ? theme.textMuted : theme.markdownText}
 		/>
 	)
 }
