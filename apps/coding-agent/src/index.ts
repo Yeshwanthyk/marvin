@@ -48,7 +48,7 @@ const printHelp = () => {
       'Keybinds:',
       '  Ctrl+P                       Cycle through --models list',
       '  Shift+Tab                    Cycle thinking level',
-      '  Ctrl+C                       Clear / double to exit',
+      '  Ctrl+C                       Clear input / double to exit',
       '  Esc                          Abort current request',
       '',
       'Custom Commands:',

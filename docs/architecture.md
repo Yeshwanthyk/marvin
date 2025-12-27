@@ -6,7 +6,7 @@ This document explains the system design, data flow, and component interactions 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              coding-agent (CLI)                              │
+│                              coding-agent (CLI)                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐ │
 │  │   Commands   │  │    Hooks     │  │ Custom Tools │  │  Session Mgmt    │ │
@@ -14,28 +14,28 @@ This document explains the system design, data flow, and component interactions 
 │  │   custom)    │  │   events)    │  │   files)     │  │                  │ │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                              TUI Layer (open-tui)                            │
+│                            TUI Layer (open-tui)                             │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  @opentui/solid → Components (Markdown, Diff, CodeBlock, Editor, etc) │ │
+│  │  @opentui/solid → Components (Markdown, Diff, CodeBlock, Editor, etc)  │ │
 │  │  Theme System → multiple themes with semantic color tokens             │ │
 │  │  Autocomplete → File paths, slash commands, tool names                 │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                         Agent Core (@marvin-agents/agent-core)               │
+│                   Agent Core (@marvin-agents/agent-core)                    │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │  Agent State Machine → messages, model, tools, streaming state         │ │
 │  │  Event Emitter → granular events for UI binding                        │ │
 │  │  Transport Layer → ProviderTransport, RouterTransport, CodexTransport  │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                              AI Package (@marvin-agents/ai)                  │
+│                       AI Package (@marvin-agents/ai)                        │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │  Provider Adapters → Anthropic, OpenAI, Google, Mistral                │ │
 │  │  Agent Loop → streaming, tool execution, multi-turn                    │ │
 │  │  Token Tracking → usage, cost estimation                               │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                   Base Tools + LSP (base-tools, lsp)                         │
+│                     Base Tools + LSP (base-tools, lsp)                      │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │  read, write, edit, bash → file operations with validation             │ │
 │  │  LSP Manager → TypeScript server, diagnostics injection                │ │
@@ -144,36 +144,36 @@ agent_start          Fired once when agent loop begins
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│              createAgentEventHandler() in agent-events.ts        │
+│              createAgentEventHandler() in agent-events.ts       │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
+│                                                                 │
 │  agent_start ──► Reset turn index, clear extraction cache       │
-│                                                                  │
+│                                                                 │
 │  message_start ──► Create streaming message placeholder         │
-│                    (if assistant)                                │
-│                                                                  │
+│                    (if assistant)                               │
+│                                                                 │
 │  message_update ──► Throttled incremental extraction            │
-│                     Extract text/thinking/toolCalls              │
-│                     Update streaming message                     │
-│                                                                  │
+│                     Extract text/thinking/toolCalls             │
+│                     Update streaming message                    │
+│                                                                 │
 │  message_end ──► Final extraction, clear streaming flag         │
-│                  Persist to session                              │
-│                  Update context token count                      │
-│                                                                  │
-│  tool_execution_start ──► Add tool block to message              │
-│                           Set activity state to "tool"           │
-│                                                                  │
-│  tool_execution_update ──► Throttled update                      │
-│                            Update tool output preview            │
-│                                                                  │
-│  tool_execution_end ──► Final tool result                        │
-│                         Update diff preview if edit              │
-│                         Set isComplete flag                      │
-│                                                                  │
-│  agent_end ──► Clear streaming state                             │
-│               Set activity to "idle"                             │
-│               Handle retry logic if error                        │
-│                                                                  │
+│                  Persist to session                             │
+│                  Update context token count                     │
+│                                                                 │
+│  tool_execution_start ──► Add tool block to message             │
+│                           Set activity state to "tool"          │
+│                                                                 │
+│  tool_execution_update ──► Throttled update                     │
+│                            Update tool output preview           │
+│                                                                 │
+│  tool_execution_end ──► Final tool result                       │
+│                         Update diff preview if edit             │
+│                         Set isComplete flag                     │
+│                                                                 │
+│  agent_end ──► Clear streaming state                            │
+│               Set activity to "idle"                            │
+│               Handle retry logic if error                       │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -181,17 +181,17 @@ agent_start          Fired once when agent loop begins
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│               AgentState (packages/agent/src/types.ts)           │
+│               AgentState (packages/agent/src/types.ts)          │
 ├─────────────────────────────────────────────────────────────────┤
-│  systemPrompt: string        System prompt for context           │
-│  model: Model                Current LLM model                   │
-│  thinkingLevel: ThinkingLevel  off|minimal|low|medium|high|xhigh │
-│  tools: AgentTool[]          Available tools                     │
-│  messages: AppMessage[]      Conversation history                │
-│  isStreaming: boolean        Response in progress                │
-│  streamMessage: Message|null Current partial response            │
-│  pendingToolCalls: Set<id>   Tools currently executing           │
-│  error: string|undefined     Last error message                  │
+│  systemPrompt: string        System prompt for context          │
+│  model: Model                Current LLM model                  │
+│  thinkingLevel: ThinkingLevel  off|minimal|low|medium|high|xhigh│
+│  tools: AgentTool[]          Available tools                    │
+│  messages: AppMessage[]      Conversation history               │
+│  isStreaming: boolean        Response in progress               │
+│  streamMessage: Message|null Current partial response           │
+│  pendingToolCalls: Set<id>   Tools currently executing          │
+│  error: string|undefined     Last error message                 │
 └─────────────────────────────────────────────────────────────────┘
 
 State Transitions:
@@ -229,13 +229,13 @@ Transports abstract the communication with LLM backends:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│          AgentTransport Interface (packages/agent/src/transports/types.ts)
+│AgentTransport Interface (packages/agent/src/transports/types.ts)│
 ├─────────────────────────────────────────────────────────────────┤
-│  run(messages, userMessage, config, signal)                      │
-│    → AsyncIterable<AgentEvent>                                   │
-│                                                                  │
-│  continue(messages, config, signal)                              │
-│    → AsyncIterable<AgentEvent>                                   │
+│  run(messages, userMessage, config, signal)                     │
+│    → AsyncIterable<AgentEvent>                                  │
+│                                                                 │
+│  continue(messages, config, signal)                             │
+│    → AsyncIterable<AgentEvent>                                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
           ┌───────────────────┼───────────────────┐
@@ -275,41 +275,41 @@ Tools are wrapped in multiple layers for interception and enhancement:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Tool Execution                            │
+│                          Tool Execution                         │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│          wrapToolsWithLspDiagnostics() (packages/lsp)            │
+│         wrapToolsWithLspDiagnostics() (packages/lsp)            │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  For write/edit tools:                                     │  │
-│  │  1. Execute original tool                                  │  │
-│  │  2. Touch file with LSP manager                            │  │
-│  │  3. Wait for diagnostics                                   │  │
-│  │  4. Inject diagnostics into result                         │  │
+│  │  For write/edit tools:                                    │  │
+│  │  1. Execute original tool                                 │  │
+│  │  2. Touch file with LSP manager                           │  │
+│  │  3. Wait for diagnostics                                  │  │
+│  │  4. Inject diagnostics into result                        │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│           wrapToolsWithHooks() (apps/coding-agent/src/hooks)     │
+│        wrapToolsWithHooks() (apps/coding-agent/src/hooks)       │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  1. Emit tool.execute.before                               │  │
-│  │  2. Check if hook returned { block: true }                 │  │
-│  │  3. Execute tool (or return blocked result)                │  │
-│  │  4. Emit tool.execute.after                                │  │
-│  │  5. Apply any result modifications from hooks              │  │
+│  │  1. Emit tool.execute.before                              │  │
+│  │  2. Check if hook returned { block: true }                │  │
+│  │  3. Execute tool (or return blocked result)               │  │
+│  │  4. Emit tool.execute.after                               │  │
+│  │  5. Apply any result modifications from hooks             │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Original Tool                               │
+│                         Original Tool                           │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  read: file content, image base64                          │  │
-│  │  write: create/overwrite file                              │  │
-│  │  edit: surgical text replacement                           │  │
-│  │  bash: command execution with timeout                      │  │
+│  │  read: file content, image base64                         │  │
+│  │  write: create/overwrite file                             │  │
+│  │  edit: surgical text replacement                          │  │
+│  │  bash: command execution with timeout                     │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -320,26 +320,26 @@ The LSP package provides language server integration for TypeScript:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                 LspManager (packages/lsp/src/manager.ts)         │
+│               LspManager (packages/lsp/src/manager.ts)          │
 ├─────────────────────────────────────────────────────────────────┤
 │  touchFile(path, opts)     Notify server of file change         │
-│  diagnostics()             Get all current diagnostics           │
-│  shutdown()                Clean up all servers                  │
+│  diagnostics()             Get all current diagnostics          │
+│  shutdown()                Clean up all servers                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                 LspClient (packages/lsp/src/client.ts)           │
+│               LspClient (packages/lsp/src/client.ts)            │
 ├─────────────────────────────────────────────────────────────────┤
-│  JSON-RPC communication with language server                     │
-│  Tracks open files and their diagnostics                         │
-│  Handles initialization handshake                                │
+│  JSON-RPC communication with language server                    │
+│  Tracks open files and their diagnostics                        │
+│  Handles initialization handshake                               │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│              typescript-language-server                          │
-│  (auto-installed to ~/.config/marvin/lsp/)                       │
+│                   typescript-language-server                    │
+│             (auto-installed to ~/.config/marvin/lsp/)           │
 └─────────────────────────────────────────────────────────────────┘
 
 Flow:
@@ -388,17 +388,17 @@ Hooks allow users to intercept and extend agent behavior:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│          HookRunner (apps/coding-agent/src/hooks/runner.ts)      │
+│        HookRunner (apps/coding-agent/src/hooks/runner.ts)       │
 ├─────────────────────────────────────────────────────────────────┤
-│  handlers: Map<eventType, handler[]>                             │
-│  messageCallback: (text) => void                                 │
+│  handlers: Map<eventType, handler[]>                            │
+│  messageCallback: (text) => void                                │
 ├─────────────────────────────────────────────────────────────────┤
-│  emit(event) → Promise<result>                                   │
-│    Runs all handlers for event type                              │
-│    Collects and merges results                                   │
-│                                                                  │
-│  register(hookAPI)                                               │
-│    Called by hook factory with marvin.on(), marvin.send()        │
+│  emit(event) → Promise<result>                                  │
+│    Runs all handlers for event type                             │
+│    Collects and merges results                                  │
+│                                                                 │
+│  register(hookAPI)                                              │
+│    Called by hook factory with marvin.on(), marvin.send()       │
 └─────────────────────────────────────────────────────────────────┘
 
 Hook Loading:
@@ -579,9 +579,9 @@ listSessions()
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│     CombinedAutocompleteProvider (apps/coding-agent/src/)        │
+│      CombinedAutocompleteProvider (apps/coding-agent/src/)      │
 ├─────────────────────────────────────────────────────────────────┤
-│  Combines multiple providers with priority ordering              │
+│  Combines multiple providers with priority ordering             │
 └─────────────────────────────────────────────────────────────────┘
         │
         ├─► SlashCommandProvider

@@ -111,12 +111,12 @@ Options:
 | Key | Action |
 |-----|--------|
 | `Enter` | Send message |
-| `Ctrl+C` | Abort current request / Exit |
+| `Ctrl+C` | Clear input / double to exit |
 | `Ctrl+P` | Cycle through model list |
 | `Ctrl+L` | Clear screen |
 | `Ctrl+N/P` | Autocomplete navigation |
 | `Tab` | Accept autocomplete |
-| `Esc` | Dismiss autocomplete |
+| `Esc` | Abort current request / dismiss autocomplete |
 
 ## Slash Commands
 

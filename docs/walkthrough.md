@@ -522,7 +522,7 @@ const registry: Record<string, ToolRenderer> = {
 createKeyboardHandler(opts)
     │
     ├─► Global keys (always active):
-    │   ├─ Ctrl+C → abort() or exit
+    │   ├─ Ctrl+C → clear input or exit
     │   ├─ Ctrl+L → clear screen
     │   └─ Esc → abort current request
     │

@@ -75,12 +75,10 @@ export function createKeyboardHandler(config: KeyboardHandlerConfig): (e: KeyEve
 			return
 		}
 
-		// Ctrl+C - abort or exit
+		// Ctrl+C - clear or exit
 		if (e.ctrl && e.name === "c") {
 			const now = Date.now()
-			if (config.isResponding()) {
-				config.onAbort()
-			} else if (now - config.lastCtrlC.current < 750) {
+			if (now - config.lastCtrlC.current < 750) {
 				config.onExit()
 			} else {
 				config.clearEditor()
