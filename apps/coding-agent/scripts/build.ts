@@ -6,9 +6,27 @@
  * Patches dynamic imports to static for bundling.
  */
 import solidPlugin from "@opentui/solid/bun-plugin";
-import { join } from "path";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 
 const outfile = process.argv[2] || join(process.env.HOME!, "commands", "marvin");
+const require = createRequire(import.meta.url);
+
+const resolveWorkerPaths = (): { workerPath: string; workerMapPath: string } => {
+  const packageJsonPath = require.resolve("@opentui/core/package.json");
+  const workerPath = join(dirname(packageJsonPath), "parser.worker.js");
+  return { workerPath, workerMapPath: `${workerPath}.map` };
+};
+
+const copyWorkerAssets = (targetDir: string): void => {
+  const { workerPath, workerMapPath } = resolveWorkerPaths();
+  mkdirSync(targetDir, { recursive: true });
+  copyFileSync(workerPath, join(targetDir, "parser.worker.js"));
+  if (existsSync(workerMapPath)) {
+    copyFileSync(workerMapPath, join(targetDir, "parser.worker.js.map"));
+  }
+};
 
 // Step 1: Bundle with solid plugin (transforms JSX)
 const bundleResult = await Bun.build({
@@ -40,10 +58,7 @@ if (!mainOutput) {
 let bundledCode = await Bun.file(mainOutput.path).text();
 
 // Find the dylib path
-const dylibPath = join(
-  process.cwd(),
-  "../../node_modules/.bun/@opentui+core-darwin-arm64@0.1.62/node_modules/@opentui/core-darwin-arm64/libopentui.dylib"
-);
+const dylibPath = require.resolve("@opentui/core-darwin-arm64/libopentui.dylib");
 
 // Replace the entire dynamic platform loading block with direct dylib import
 // The pattern loads the platform-specific module which just exports the dylib path
@@ -55,6 +70,9 @@ bundledCode = bundledCode.replace(dynamicImportPattern, staticImport);
 await Bun.write(mainOutput.path, bundledCode);
 console.log("Patched dynamic platform imports");
 
+copyWorkerAssets(join(process.cwd(), "dist"));
+console.log("Copied Tree-sitter worker assets");
+
 // Step 3: Compile to single executable
 const proc = Bun.spawn(["bun", "build", "--compile", mainOutput.path, "--outfile", outfile], {
   stdout: "inherit",
@@ -64,6 +82,8 @@ const proc = Bun.spawn(["bun", "build", "--compile", mainOutput.path, "--outfile
 
 const exitCode = await proc.exited;
 if (exitCode === 0) {
+  copyWorkerAssets(dirname(outfile));
+  console.log("Copied Tree-sitter worker assets to output directory");
   console.log(`Built: ${outfile}`);
 }
 process.exit(exitCode);

@@ -1,8 +1,44 @@
 import pkg from '../package.json';
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from './args.js';
 import { runHeadless } from './headless.js';
 import { runAcp } from './acp/index.js';
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
+
+const ensureTreeSitterWorkerPath = (): void => {
+  if (process.env.OTUI_TREE_SITTER_WORKER_PATH) return;
+
+  const candidates: string[] = [];
+
+  const execDir = dirname(process.execPath);
+  candidates.push(join(execDir, 'parser.worker.js'));
+
+  try {
+    const moduleDir = dirname(fileURLToPath(import.meta.url));
+    candidates.push(join(moduleDir, 'parser.worker.js'));
+  } catch {
+    // Ignore non-file URLs (e.g. bundled snapshot)
+  }
+
+  try {
+    const require = createRequire(import.meta.url);
+    candidates.push(require.resolve('@opentui/core/parser.worker.js'));
+  } catch {
+    // Ignore missing module resolution in minimal installs
+  }
+
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) {
+      process.env.OTUI_TREE_SITTER_WORKER_PATH = candidate;
+      break;
+    }
+  }
+};
+
+ensureTreeSitterWorkerPath();
 
 // Dynamic import for TUI (requires solid plugin for TSX)
 const runTui = async (args: {
