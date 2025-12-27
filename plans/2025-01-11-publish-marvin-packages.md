@@ -73,6 +73,21 @@ node -e "import('@marvin-agents/ai').then(m => console.log(Object.keys(m)))"
 - CI/CD automation (manual first)
 - SDK creation (separate plan)
 
+## Distribution Strategy
+
+Because marvin uses `@opentui/core` (native dylib + tree-sitter WASM), we use a **dual distribution model**:
+
+1. **Library packages** → npm (`@marvin-agents/ai`, `@marvin-agents/base-tools`, etc.)
+   - For hooks, custom tools, embedding in other projects
+   - Standard `npm install @marvin-agents/ai`
+
+2. **CLI binary** → GitHub Releases (compiled standalone executables)
+   - Self-contained Bun binary with all deps embedded
+   - Platform-specific: darwin-arm64, darwin-x64, linux-x64, linux-arm64
+   - Users update via `marvin update` command
+
+This differs from pi-mono (which can use `npm install -g` because pi-tui is pure JS) and follows opencode's model (native deps require compiled binaries).
+
 ---
 
 ## Phase 1: Add Build Infrastructure
@@ -883,8 +898,596 @@ git push origin main --tags
 
 ---
 
+## Phase 7: Add Self-Update Command
+
+### Overview
+
+Add `marvin update` command that checks GitHub releases and updates the binary in-place.
+
+### Prerequisites
+
+- [ ] Phase 6 complete
+- [ ] GitHub releases exist (Phase 8)
+
+### Changes
+
+#### 1. Create updater module
+
+**File**: `apps/coding-agent/src/updater.ts` (new)
+
+**Add**:
+```typescript
+import { existsSync, unlinkSync, renameSync, chmodSync } from 'node:fs';
+import { dirname } from 'node:path';
+import pkg from '../package.json';
+
+const GITHUB_REPO = 'Yeshwanthyk/marvin';
+const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+
+interface Release {
+  tag_name: string;
+  assets: { name: string; browser_download_url: string }[];
+}
+
+export async function checkForUpdate(): Promise<{ available: boolean; current: string; latest: string }> {
+  const current = pkg.version;
+  try {
+    const res = await fetch(RELEASES_URL, {
+      headers: { 'User-Agent': 'marvin-updater' },
+    });
+    if (!res.ok) return { available: false, current, latest: current };
+    
+    const release: Release = await res.json();
+    const latest = release.tag_name.replace(/^v/, '');
+    const available = latest !== current && compareVersions(latest, current) > 0;
+    
+    return { available, current, latest };
+  } catch {
+    return { available: false, current, latest: current };
+  }
+}
+
+export async function performUpdate(silent = false): Promise<boolean> {
+  const log = silent ? () => {} : console.log;
+  
+  const { available, current, latest } = await checkForUpdate();
+  if (!available) {
+    log(`Already at latest version (${current})`);
+    return false;
+  }
+  
+  log(`Updating marvin: ${current} → ${latest}`);
+  
+  const platform = process.platform === 'darwin' ? 'darwin' : 'linux';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const assetName = `marvin-${platform}-${arch}.tar.gz`;
+  
+  try {
+    const res = await fetch(RELEASES_URL, {
+      headers: { 'User-Agent': 'marvin-updater' },
+    });
+    const release: Release = await res.json();
+    const asset = release.assets.find(a => a.name === assetName);
+    
+    if (!asset) {
+      console.error(`No binary found for ${platform}-${arch}`);
+      return false;
+    }
+    
+    log(`Downloading ${assetName}...`);
+    const downloadRes = await fetch(asset.browser_download_url, {
+      headers: { 'User-Agent': 'marvin-updater' },
+      redirect: 'follow',
+    });
+    
+    if (!downloadRes.ok) {
+      console.error(`Download failed: ${downloadRes.status}`);
+      return false;
+    }
+    
+    const execPath = process.execPath;
+    const tempPath = `${execPath}.new`;
+    const backupPath = `${execPath}.bak`;
+    
+    // Extract and write new binary
+    const tarball = await downloadRes.arrayBuffer();
+    const extracted = await extractTarGz(new Uint8Array(tarball));
+    await Bun.write(tempPath, extracted);
+    chmodSync(tempPath, 0o755);
+    
+    // Atomic swap
+    if (existsSync(backupPath)) unlinkSync(backupPath);
+    renameSync(execPath, backupPath);
+    renameSync(tempPath, execPath);
+    
+    log(`✅ Updated to ${latest}`);
+    log(`   Backup saved to ${backupPath}`);
+    
+    return true;
+  } catch (err) {
+    console.error('Update failed:', err);
+    return false;
+  }
+}
+
+async function extractTarGz(data: Uint8Array): Promise<Uint8Array> {
+  // Use Bun's built-in decompression
+  const decompressed = Bun.gunzipSync(data);
+  
+  // Simple tar extraction - find the marvin binary
+  // TAR format: 512-byte header blocks, file content follows
+  let offset = 0;
+  while (offset < decompressed.length) {
+    const header = decompressed.slice(offset, offset + 512);
+    if (header[0] === 0) break; // End of archive
+    
+    const name = new TextDecoder().decode(header.slice(0, 100)).replace(/\0/g, '').trim();
+    const sizeOctal = new TextDecoder().decode(header.slice(124, 136)).replace(/\0/g, '').trim();
+    const size = parseInt(sizeOctal, 8) || 0;
+    
+    offset += 512; // Move past header
+    
+    if (name === 'marvin' || name.endsWith('/marvin')) {
+      return decompressed.slice(offset, offset + size);
+    }
+    
+    // Move to next file (size rounded up to 512-byte boundary)
+    offset += Math.ceil(size / 512) * 512;
+  }
+  
+  throw new Error('marvin binary not found in archive');
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
+}
+
+export async function checkUpdateOnStart(): Promise<void> {
+  // Check once per day
+  const lastCheckFile = `${process.env.HOME}/.config/marvin/.last-update-check`;
+  const now = Date.now();
+  
+  try {
+    if (existsSync(lastCheckFile)) {
+      const lastCheck = parseInt(await Bun.file(lastCheckFile).text(), 10);
+      if (now - lastCheck < 24 * 60 * 60 * 1000) return; // Less than 24h ago
+    }
+  } catch {}
+  
+  await Bun.write(lastCheckFile, String(now));
+  
+  const { available, latest } = await checkForUpdate();
+  if (available) {
+    console.log(`\n💡 New version available: ${latest}`);
+    console.log(`   Run \`marvin update\` to upgrade\n`);
+  }
+}
+```
+
+#### 2. Add update command to args parser
+
+**File**: `apps/coding-agent/src/args.ts`
+
+**Add** to the args interface and parsing:
+```typescript
+// In parseArgs function, add:
+if (argv[0] === 'update') {
+  return { update: true };
+}
+
+// In Args interface, add:
+update?: boolean;
+```
+
+#### 3. Handle update command in main
+
+**File**: `apps/coding-agent/src/index.ts`
+
+**Add** before TUI launch:
+```typescript
+import { performUpdate, checkUpdateOnStart } from './updater.js';
+
+// In main(), add:
+if (args.update) {
+  const success = await performUpdate();
+  process.exit(success ? 0 : 1);
+}
+
+// Before runTui(), add:
+checkUpdateOnStart().catch(() => {}); // Silent background check
+```
+
+### Success Criteria
+
+```bash
+# Check for updates
+marvin update
+
+# Should show current version or update if available
+```
+
+---
+
+## Phase 8: Multi-Platform Binary Builds
+
+### Overview
+
+Add build script for all platforms and GitHub Actions workflow for releases.
+
+### Prerequisites
+
+- [ ] Phase 7 complete
+
+### Changes
+
+#### 1. Create multi-platform build script
+
+**File**: `apps/coding-agent/scripts/build-all.ts` (new)
+
+**Add**:
+```typescript
+#!/usr/bin/env bun
+/**
+ * Build marvin binaries for all platforms.
+ * Run from apps/coding-agent directory.
+ */
+import { $ } from 'bun';
+import { mkdirSync, existsSync, readdirSync, realpathSync } from 'node:fs';
+import { join, dirname, relative } from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import solidPlugin from '@opentui/solid/bun-plugin';
+import pkg from '../package.json';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const projectRoot = join(__dirname, '..');
+const distDir = join(projectRoot, 'dist');
+const require = createRequire(import.meta.url);
+
+const TARGETS = [
+  { os: 'darwin', arch: 'arm64' },
+  { os: 'darwin', arch: 'x64' },
+  { os: 'linux', arch: 'x64' },
+  { os: 'linux', arch: 'arm64' },
+];
+
+// Clean and create dist
+if (existsSync(distDir)) await $`rm -rf ${distDir}`;
+mkdirSync(distDir, { recursive: true });
+
+// Resolve dylib for each platform
+const getDylibPath = (os: string, arch: string): string => {
+  const packageName = `@opentui/core-${os}-${arch}`;
+  try {
+    const pkgPath = require.resolve(`${packageName}/package.json`);
+    const pkgDir = dirname(pkgPath);
+    const files = readdirSync(pkgDir);
+    const dylib = files.find(f => f.endsWith('.dylib') || f.endsWith('.so'));
+    if (!dylib) throw new Error(`No dylib in ${pkgDir}`);
+    return join(pkgDir, dylib);
+  } catch (e) {
+    console.warn(`Skipping ${packageName}: not installed`);
+    return '';
+  }
+};
+
+// Resolve parser worker
+const opentuiCorePath = dirname(require.resolve('@opentui/core/package.json'));
+const parserWorkerPath = realpathSync(join(opentuiCorePath, 'parser.worker.js'));
+const bunfsRoot = '/$bunfs/root/';
+const workerRelativePath = relative(projectRoot, parserWorkerPath).replaceAll('\\', '/');
+
+for (const { os, arch } of TARGETS) {
+  const dylibPath = getDylibPath(os, arch);
+  if (!dylibPath) continue;
+
+  const name = `marvin-${os}-${arch}`;
+  const outDir = join(distDir, name);
+  mkdirSync(outDir, { recursive: true });
+
+  console.log(`Building ${name}...`);
+
+  const result = await Bun.build({
+    entrypoints: ['./src/index.ts', parserWorkerPath],
+    target: 'bun',
+    minify: false,
+    plugins: [
+      solidPlugin,
+      {
+        name: 'patch-dylib',
+        setup(build) {
+          build.onLoad({ filter: /index-.*\.js$/ }, async (args) => {
+            let contents = await Bun.file(args.path).text();
+            const pattern = /import\(`@opentui\/core-\$\{process\.platform\}-\$\{process\.arch\}\/index\.ts`\)/g;
+            contents = contents.replace(pattern, `import("${dylibPath}", { with: { type: "file" } }).then(m => ({ default: m.default }))`);
+            return { contents, loader: 'js' };
+          });
+        },
+      },
+    ],
+    naming: { asset: '[name].[ext]' },
+    define: {
+      OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
+    },
+    compile: {
+      target: `bun-${os}-${arch}` as any,
+      outfile: join(outDir, 'marvin'),
+    },
+  });
+
+  if (!result.success) {
+    console.error(`Failed to build ${name}`);
+    continue;
+  }
+
+  // Create tarball
+  await $`tar -czf ${join(distDir, `${name}.tar.gz`)} -C ${outDir} marvin`;
+  console.log(`✅ ${name}.tar.gz`);
+}
+
+console.log('\nBinaries ready in dist/');
+```
+
+#### 2. Add build:all script to package.json
+
+**File**: `apps/coding-agent/package.json`
+
+**Add** to scripts:
+```json
+"build:all": "bun scripts/build-all.ts"
+```
+
+#### 3. Create GitHub Actions release workflow
+
+**File**: `.github/workflows/release.yml` (new)
+
+**Add**:
+```yaml
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      
+      - name: Install all platform deps
+        run: |
+          bun install
+          bun install --os=darwin --cpu=arm64 @opentui/core
+          bun install --os=darwin --cpu=x64 @opentui/core
+          bun install --os=linux --cpu=x64 @opentui/core
+          bun install --os=linux --cpu=arm64 @opentui/core
+      
+      - name: Build all platforms
+        run: cd apps/coding-agent && bun run build:all
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: apps/coding-agent/dist/*.tar.gz
+          generate_release_notes: true
+```
+
+#### 4. Create install script
+
+**File**: `install.sh` (new, in repo root)
+
+**Add**:
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="Yeshwanthyk/marvin"
+INSTALL_DIR="${MARVIN_INSTALL_DIR:-$HOME/.local/bin}"
+
+# Detect platform
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+
+case "$OS" in
+  darwin) OS="darwin" ;;
+  linux) OS="linux" ;;
+  *) echo "Unsupported OS: $OS"; exit 1 ;;
+esac
+
+case "$ARCH" in
+  x86_64|amd64) ARCH="x64" ;;
+  arm64|aarch64) ARCH="arm64" ;;
+  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
+ASSET="marvin-${OS}-${ARCH}.tar.gz"
+
+echo "Installing marvin for ${OS}-${ARCH}..."
+
+# Get latest release URL
+RELEASE_URL=$(curl -sL "https://api.github.com/repos/${REPO}/releases/latest" \
+  | grep "browser_download_url.*${ASSET}" \
+  | cut -d '"' -f 4)
+
+if [ -z "$RELEASE_URL" ]; then
+  echo "Error: Could not find release for ${ASSET}"
+  exit 1
+fi
+
+# Download and install
+mkdir -p "$INSTALL_DIR"
+curl -sL "$RELEASE_URL" | tar -xz -C "$INSTALL_DIR"
+chmod +x "$INSTALL_DIR/marvin"
+
+echo "✅ Installed marvin to $INSTALL_DIR/marvin"
+echo ""
+echo "Add to PATH if needed:"
+echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
+```
+
+### Success Criteria
+
+```bash
+# Local build test
+cd apps/coding-agent && bun run build:all
+ls dist/*.tar.gz
+
+# Release process:
+# 1. npm run version:patch
+# 2. git add -A && git commit -m "chore: release $(node -p \"require('./packages/ai/package.json').version\")"
+# 3. git tag v$(node -p "require('./packages/ai/package.json').version")
+# 4. git push origin main --tags
+# 5. GitHub Actions builds and creates release
+```
+
+---
+
+## Phase 9: Auto-Update on Startup (Optional)
+
+### Overview
+
+Prompt user to update on startup if new version available.
+
+### Prerequisites
+
+- [ ] Phase 8 complete
+
+### Changes
+
+#### 1. Add auto-update config option
+
+**File**: `apps/coding-agent/src/config.ts`
+
+**Add** to config schema:
+```typescript
+autoUpdate?: 'prompt' | 'auto' | 'off';  // default: 'prompt'
+```
+
+#### 2. Update startup check behavior
+
+**File**: `apps/coding-agent/src/updater.ts`
+
+**Modify** `checkUpdateOnStart`:
+```typescript
+export async function checkUpdateOnStart(config: { autoUpdate?: string }): Promise<void> {
+  const mode = config.autoUpdate ?? 'prompt';
+  if (mode === 'off') return;
+  
+  // Check once per day
+  const lastCheckFile = `${process.env.HOME}/.config/marvin/.last-update-check`;
+  const now = Date.now();
+  
+  try {
+    if (existsSync(lastCheckFile)) {
+      const lastCheck = parseInt(await Bun.file(lastCheckFile).text(), 10);
+      if (now - lastCheck < 24 * 60 * 60 * 1000) return;
+    }
+  } catch {}
+  
+  await Bun.write(lastCheckFile, String(now));
+  
+  const { available, current, latest } = await checkForUpdate();
+  if (!available) return;
+  
+  if (mode === 'auto') {
+    console.log(`\n🔄 Auto-updating marvin: ${current} → ${latest}...`);
+    const success = await performUpdate(true);
+    if (success) {
+      console.log('✅ Updated! Restart marvin to use new version.\n');
+    }
+  } else {
+    console.log(`\n💡 New version available: ${latest} (current: ${current})`);
+    console.log(`   Run \`marvin update\` to upgrade`);
+    console.log(`   Set autoUpdate: "auto" in config to auto-update\n`);
+  }
+}
+```
+
+### Success Criteria
+
+```bash
+# With config autoUpdate: "prompt" (default)
+marvin  # Shows update notice if available
+
+# With config autoUpdate: "auto"  
+marvin  # Auto-downloads and updates
+
+# With config autoUpdate: "off"
+marvin  # No update check
+```
+
+---
+
+## Appendix: Workflow After Setup
+
+### Daily Development
+
+```bash
+# No build needed - Bun uses tsconfig paths
+bun run marvin
+
+# Type checking
+bun run check
+```
+
+### Before PR
+
+```bash
+bun run check
+```
+
+### Releasing (Library + CLI)
+
+```bash
+# 1. Bump version (all packages together)
+npm run version:patch  # or minor/major
+
+# 2. Commit
+git add -A
+git commit -m "chore: release $(node -p "require('./packages/ai/package.json').version")"
+
+# 3. Publish library packages to npm
+npm run publish:packages
+
+# 4. Tag and push (triggers binary build)
+VERSION=$(node -p "require('./packages/ai/package.json').version")
+git tag -a "v${VERSION}" -m "Release v${VERSION}"
+git push origin main --tags
+
+# 5. GitHub Actions builds binaries and creates release
+```
+
+### User Installation
+
+```bash
+# Install CLI (one-liner)
+curl -fsSL https://raw.githubusercontent.com/Yeshwanthyk/marvin/main/install.sh | bash
+
+# Update CLI
+marvin update
+
+# Install library packages (for hooks/custom tools)
+npm install @marvin-agents/ai @marvin-agents/base-tools
+```
+
+---
+
 ## References
 
 - Pi-mono publish pattern: `/Users/yesh/Documents/personal/reference/pi-mono/package.json`
 - Pi-mono tsconfig paths: `/Users/yesh/Documents/personal/reference/pi-mono/tsconfig.json`
 - Pi-mono sync-versions: `/Users/yesh/Documents/personal/reference/pi-mono/scripts/sync-versions.js`
+- Opencode distribution: `github.com/sst/opencode` (optionalDeps + platform packages)
