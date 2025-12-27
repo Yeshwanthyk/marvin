@@ -27,17 +27,22 @@ export interface MarkdownProps {
 export function Markdown(props: MarkdownProps): JSX.Element {
 	const { theme, syntaxStyle, subtleSyntaxStyle } = useTheme()
 
-	return (
-		<code
-			filetype="markdown"
-			content={props.text ?? ""}
-			syntaxStyle={props.dim ? subtleSyntaxStyle : syntaxStyle}
-			conceal={props.conceal ?? true}
-			streaming={props.streaming ?? false}
-			drawUnstyledText={false}
-			fg={props.dim ? theme.textMuted : theme.markdownText}
-		/>
-	)
+	const isStreaming = props.streaming ?? false
+	const commonProps = {
+		content: props.text ?? "",
+		syntaxStyle: props.dim ? subtleSyntaxStyle : syntaxStyle,
+		conceal: props.conceal ?? true,
+		streaming: isStreaming,
+		drawUnstyledText: true as const,
+		fg: props.dim ? theme.textMuted : theme.markdownText,
+	}
+
+	if (isStreaming) {
+		// Skip tree-sitter while streaming to avoid O(n) highlight cost.
+		return <code {...commonProps} />
+	}
+
+	return <code filetype="markdown" {...commonProps} />
 }
 
 // Re-export for backwards compatibility
