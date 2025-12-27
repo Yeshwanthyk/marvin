@@ -235,11 +235,7 @@ if (
 ) {
 	const existing = loadTokens();
 	if (existing && existing.expires > Date.now()) {
-		const accountId = extractAccountId(existing.access);
-		console.log(`✅ Already authenticated`);
-		console.log(`   Account: ${accountId || "unknown"}`);
-		console.log(`   Expires: ${new Date(existing.expires).toLocaleString()}`);
-		console.log(`\nRun with --force to re-authenticate`);
+		// Already authenticated, silently exit
 	} else if (process.argv.includes("--force") || !existing) {
 		authenticate().catch(console.error);
 	} else {
