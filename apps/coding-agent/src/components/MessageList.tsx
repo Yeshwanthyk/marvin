@@ -241,6 +241,21 @@ export function buildContentItems(
 					}
 				}
 			}
+		} else if (msg.role === "shell") {
+			const item: ContentItem = {
+				type: "shell",
+				command: msg.command,
+				output: msg.output,
+				exitCode: msg.exitCode,
+				truncated: msg.truncated,
+				tempFilePath: msg.tempFilePath,
+			}
+			items.push(
+				getCachedItem(`shell:${msg.id}`, item, (a, b) =>
+					a.type === "shell" && b.type === "shell" &&
+					a.command === b.command && a.output === b.output
+				)
+			)
 		}
 	}
 
@@ -315,6 +330,27 @@ export function MessageList(props: MessageListProps) {
 										onToggle={props.toggleToolExpanded}
 										diffWrapMode={props.diffWrapMode}
 									/>
+								</box>
+							)}
+						</Match>
+						<Match when={item.type === "shell" && item}>
+							{(shellItem) => (
+								<box paddingLeft={1} flexDirection="column">
+									<text fg={theme.warning}>
+										<span>{"$ "}</span>
+										{shellItem().command}
+									</text>
+									<Show when={shellItem().output}>
+										<box paddingLeft={2} paddingTop={1}>
+											<text fg={theme.textMuted}>{shellItem().output}</text>
+										</box>
+									</Show>
+									<Show when={shellItem().exitCode !== null && shellItem().exitCode !== 0}>
+										<text fg={theme.error}>{`exit ${shellItem().exitCode}`}</text>
+									</Show>
+									<Show when={shellItem().truncated && shellItem().tempFilePath}>
+										<text fg={theme.textMuted}>{`[truncated, full output: ${shellItem().tempFilePath}]`}</text>
+									</Show>
 								</box>
 							)}
 						</Match>

@@ -8,9 +8,18 @@ export type UIContentBlock =
 	| { type: "text"; text: string }
 	| { type: "tool"; tool: ToolBlock }
 
-export interface UIMessage {
+/** User message */
+export interface UIUserMessage {
 	id: string
-	role: "user" | "assistant"
+	role: "user"
+	content: string
+	timestamp?: number
+}
+
+/** Assistant message with optional tool calls and thinking */
+export interface UIAssistantMessage {
+	id: string
+	role: "assistant"
 	content: string
 	/** Ordered content blocks - preserves interleaving of thinking, text, tools */
 	contentBlocks?: UIContentBlock[]
@@ -21,6 +30,20 @@ export interface UIMessage {
 	tools?: ToolBlock[]
 	timestamp?: number
 }
+
+/** Shell command execution result (from ! prefix) */
+export interface UIShellMessage {
+	id: string
+	role: "shell"
+	command: string
+	output: string
+	exitCode: number | null
+	truncated: boolean
+	tempFilePath?: string
+	timestamp?: number
+}
+
+export type UIMessage = UIUserMessage | UIAssistantMessage | UIShellMessage
 
 import type { AgentToolResult } from "@marvin-agents/ai"
 import type { Theme } from "@marvin-agents/open-tui"
@@ -53,3 +76,4 @@ export type ContentItem =
 	| { type: "thinking"; id: string; summary: string; full: string; isStreaming?: boolean }
 	| { type: "assistant"; content: string; isStreaming?: boolean }
 	| { type: "tool"; tool: ToolBlock }
+	| { type: "shell"; command: string; output: string; exitCode: number | null; truncated: boolean; tempFilePath?: string }

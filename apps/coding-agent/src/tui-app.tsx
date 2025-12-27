@@ -19,8 +19,9 @@ import { selectSession as selectSessionOpen } from "./session-picker.js"
 import { watch, type FSWatcher } from "fs"
 
 // Extracted modules
-import type { UIMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
+import type { UIMessage, ToolBlock, ActivityState, UIContentBlock, UIShellMessage } from "./types.js"
 import { findGitHeadPath, getCurrentBranch, extractText, extractThinking, extractToolCalls, extractOrderedBlocks, copyToClipboard, getToolText, getEditDiffText } from "./utils.js"
+import { runShellCommand } from "./shell-runner.js"
 import { handleSlashCommand, resolveProvider, resolveModel, THINKING_LEVELS, type CommandContext } from "./commands.js"
 import { loadCustomCommands, tryExpandCustomCommand, type CustomCommand } from "./custom-commands.js"
 import { slashCommands } from "./autocomplete-commands.js"
@@ -320,6 +321,19 @@ function App(props: AppProps) {
 					}
 				})
 				uiMessages.push({ id: crypto.randomUUID(), role: "assistant", content: text, thinking: thinking || undefined, isStreaming: false, tools, contentBlocks })
+			} else if ((msg as { role: string }).role === "shell") {
+				// Restore shell command messages
+				const shellMsg = msg as unknown as { command: string; output: string; exitCode: number | null; truncated: boolean; tempFilePath?: string; timestamp?: number }
+				uiMessages.push({
+					id: crypto.randomUUID(),
+					role: "shell",
+					command: shellMsg.command,
+					output: shellMsg.output,
+					exitCode: shellMsg.exitCode,
+					truncated: shellMsg.truncated,
+					tempFilePath: shellMsg.tempFilePath,
+					timestamp: shellMsg.timestamp,
+				})
 			}
 			// Skip toolResult messages - they're attached to assistant messages via toolResultMap
 		}
@@ -375,6 +389,56 @@ function App(props: AppProps) {
 
 	const handleSubmit = async (text: string, editorClearFn?: () => void) => {
 		if (!text.trim()) return
+
+		// Handle shell commands (! prefix)
+		if (text.startsWith("!")) {
+			const command = text.slice(1).trim()
+			if (!command) return
+			editorClearFn?.()
+			ensureSession()
+
+			// Show pending state
+			const shellMsgId = crypto.randomUUID()
+			const pendingMsg: UIShellMessage = {
+				id: shellMsgId,
+				role: "shell",
+				command,
+				output: "",
+				exitCode: null,
+				truncated: false,
+				timestamp: Date.now(),
+			}
+			setMessages((prev) => [...prev, pendingMsg])
+
+			// Execute command
+			const result = await runShellCommand(command, { timeout: 30000 })
+
+			// Update message with result
+			const finalMsg: UIShellMessage = {
+				id: shellMsgId,
+				role: "shell",
+				command,
+				output: result.output,
+				exitCode: result.exitCode,
+				truncated: result.truncated,
+				tempFilePath: result.tempFilePath,
+				timestamp: Date.now(),
+			}
+			setMessages((prev) => prev.map((m) => (m.id === shellMsgId ? finalMsg : m)))
+
+			// Save to session (shell messages stored alongside regular messages)
+			sessionManager.appendMessage({
+				role: "shell",
+				command,
+				output: result.output,
+				exitCode: result.exitCode,
+				truncated: result.truncated,
+				tempFilePath: result.tempFilePath,
+				timestamp: Date.now(),
+			} as unknown as AppMessage)
+
+			return
+		}
 
 		// Handle slash commands
 		if (text.startsWith("/")) {

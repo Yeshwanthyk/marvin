@@ -9,7 +9,7 @@ import type { AgentToolResult, AssistantMessage, ToolResultMessage } from "@marv
 import type { Theme } from "@marvin-agents/open-tui"
 import type { JSX } from "solid-js"
 import type { SessionManager } from "./session-manager.js"
-import type { UIMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
+import type { UIMessage, UIAssistantMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
 import { extractText, extractThinking, extractOrderedBlocks, getToolText, getEditDiffText } from "./utils.js"
 import type { HookRunner } from "./hooks/index.js"
 import type { RenderResultOptions } from "./custom-tools/types.js"
@@ -296,7 +296,7 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 	return handler
 }
 
-function updateStreamingMessage(ctx: EventHandlerContext, updater: (msg: UIMessage) => UIMessage): void {
+function updateStreamingMessage(ctx: EventHandlerContext, updater: (msg: UIAssistantMessage) => UIAssistantMessage): void {
 	const streamingId = ctx.streamingMessageId.current
 	if (!streamingId) return
 
@@ -305,7 +305,7 @@ function updateStreamingMessage(ctx: EventHandlerContext, updater: (msg: UIMessa
 
 		const lastIdx = prev.length - 1
 		const last = prev[lastIdx]
-		if (last?.id === streamingId) {
+		if (last?.id === streamingId && last.role === "assistant") {
 			const nextLast = updater(last)
 			if (nextLast === last) return prev
 			const next = prev.slice()
@@ -317,6 +317,7 @@ function updateStreamingMessage(ctx: EventHandlerContext, updater: (msg: UIMessa
 		if (idx === -1) return prev
 
 		const current = prev[idx]!
+		if (current.role !== "assistant") return prev
 		const updated = updater(current)
 		if (updated === current) return prev
 
@@ -528,13 +529,16 @@ function handleToolEnd(
 	ctx.setMessages((prev) => {
 		const idx = prev.findIndex(
 			(m) =>
-				m.tools?.some((t) => t.id === event.toolCallId) ||
-				m.contentBlocks?.some((b) => b.type === "tool" && b.tool.id === event.toolCallId)
+				m.role === "assistant" && (
+					m.tools?.some((t: ToolBlock) => t.id === event.toolCallId) ||
+					m.contentBlocks?.some((b: UIContentBlock) => b.type === "tool" && b.tool.id === event.toolCallId)
+				)
 		)
 		if (idx === -1) return prev
 
 		const msg = prev[idx]!
-		const updated = {
+		if (msg.role !== "assistant") return prev
+		const updated: UIAssistantMessage = {
 			...msg,
 			tools: updateTool(msg.tools || []),
 			contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, toolUpdater),
