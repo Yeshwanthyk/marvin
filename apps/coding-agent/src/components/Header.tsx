@@ -53,6 +53,18 @@ export function Header(props: HeaderProps) {
     return props.thinking
   })
 
+  const thinkingColor = createMemo(() => {
+    const colors: Record<ThinkingLevel, typeof theme.text> = {
+      off: theme.textMuted,
+      minimal: theme.secondary,
+      low: theme.info,
+      medium: theme.accent,
+      high: theme.primary,
+      xhigh: theme.warning,
+    }
+    return colors[props.thinking]
+  })
+
   // Context as tokens - color shifts with usage
   const contextInfo = createMemo(() => {
     if (props.contextWindow <= 0 || props.contextTokens <= 0) return null
@@ -122,7 +134,7 @@ export function Header(props: HeaderProps) {
         <box flexDirection="column">
           <text fg={theme.text}>{shortModel()}</text>
           <Show when={thinkingLabel()} fallback={<text> </text>}>
-            <text fg={theme.textMuted}>{thinkingLabel()}</text>
+            <text fg={thinkingColor()}>{thinkingLabel()}</text>
           </Show>
         </box>
 
