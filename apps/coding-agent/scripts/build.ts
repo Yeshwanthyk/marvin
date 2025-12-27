@@ -5,9 +5,15 @@
  * Single-step compile with Solid plugin - assets are embedded automatically.
  */
 import solidPlugin from "@opentui/solid/bun-plugin";
-import { readdirSync } from "node:fs";
+import { readdirSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const projectRoot = join(__dirname, ".."); // apps/coding-agent
+const workspaceRoot = join(__dirname, "../../.."); // monorepo root where bun.lock lives
 
 const outfile = process.argv[2] || join(process.env.HOME!, "commands", "marvin");
 const require = createRequire(import.meta.url);
@@ -40,9 +46,20 @@ const getPlatformDylibPath = (): string => {
 const dylibPath = getPlatformDylibPath();
 console.log(`Using dylib: ${dylibPath}`);
 
+// Resolve tree-sitter parser worker path for markdown rendering
+const opentuiCorePath = dirname(require.resolve("@opentui/core/package.json"));
+const parserWorkerPath = realpathSync(join(opentuiCorePath, "parser.worker.js"));
+console.log(`Using parser worker: ${parserWorkerPath}`);
+
+// Use bunfs root path for embedded assets (Unix: /$bunfs/root/, Windows: B:/~BUN/root/)
+// Path must be relative to projectRoot (where build runs from), as Bun uses the build CWD for entrypoint paths
+const bunfsRoot = process.platform === "win32" ? "B:/~BUN/root/" : "/$bunfs/root/";
+const workerRelativePath = relative(projectRoot, parserWorkerPath).replaceAll("\\", "/");
+console.log(`Worker path in bunfs: ${bunfsRoot}${workerRelativePath}`);
+
 // Single-step compile with solid plugin
 const result = await Bun.build({
-  entrypoints: ["./src/index.ts"],
+  entrypoints: ["./src/index.ts", parserWorkerPath],
   target: "bun",
   minify: false,
   plugins: [
@@ -66,7 +83,14 @@ const result = await Bun.build({
     },
   ],
   naming: {
-    asset: "[name].[ext]", // Preserve original asset names for runtime resolution
+    // Use hash to avoid conflicts between assets with same name in different directories
+    // (e.g., markdown/highlights.scm vs javascript/highlights.scm)
+    asset: "[name]-[hash].[ext]",
+  },
+  define: {
+    // Critical: Define tree-sitter worker path at compile time for markdown rendering
+    // Must be a quoted string literal for JS replacement
+    OTUI_TREE_SITTER_WORKER_PATH: JSON.stringify(bunfsRoot + workerRelativePath),
   },
   compile: {
     outfile,
