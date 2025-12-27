@@ -8,8 +8,15 @@ import { runHeadless } from './headless.js';
 import { runAcp } from './acp/index.js';
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
 
+declare const OTUI_TREE_SITTER_WORKER_PATH: string | undefined;
+
 const ensureTreeSitterWorkerPath = (): void => {
-  if (process.env.OTUI_TREE_SITTER_WORKER_PATH) return;
+  if (
+    process.env.OTUI_TREE_SITTER_WORKER_PATH ||
+    typeof OTUI_TREE_SITTER_WORKER_PATH !== 'undefined'
+  ) {
+    return;
+  }
 
   const candidates: string[] = [];
 
@@ -25,7 +32,9 @@ const ensureTreeSitterWorkerPath = (): void => {
 
   try {
     const require = createRequire(import.meta.url);
-    candidates.push(require.resolve('@opentui/core/parser.worker.js'));
+    // Use dynamic string to prevent static analysis by bundler
+    const modulePath = ['@opentui', 'core', 'parser.worker.js'].join('/');
+    candidates.push(require.resolve(modulePath));
   } catch {
     // Ignore missing module resolution in minimal installs
   }

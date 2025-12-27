@@ -1,89 +1,84 @@
 #!/usr/bin/env bun
 /**
  * Build script for marvin CLI
- * 
- * Uses solid plugin to transform JSX, then compiles to single executable.
- * Patches dynamic imports to static for bundling.
+ *
+ * Single-step compile with Solid plugin - assets are embedded automatically.
  */
 import solidPlugin from "@opentui/solid/bun-plugin";
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
 const outfile = process.argv[2] || join(process.env.HOME!, "commands", "marvin");
 const require = createRequire(import.meta.url);
 
-const resolveWorkerPaths = (): { workerPath: string; workerMapPath: string } => {
-  const packageJsonPath = require.resolve("@opentui/core/package.json");
-  const workerPath = join(dirname(packageJsonPath), "parser.worker.js");
-  return { workerPath, workerMapPath: `${workerPath}.map` };
-};
+// Resolve the dylib path for the current platform
+const getPlatformDylibPath = (): string => {
+  const platform = process.platform;
+  const arch = process.arch;
+  const packageName = `@opentui/core-${platform}-${arch}`;
 
-const copyWorkerAssets = (targetDir: string): void => {
-  const { workerPath, workerMapPath } = resolveWorkerPaths();
-  mkdirSync(targetDir, { recursive: true });
-  copyFileSync(workerPath, join(targetDir, "parser.worker.js"));
-  if (existsSync(workerMapPath)) {
-    copyFileSync(workerMapPath, join(targetDir, "parser.worker.js.map"));
+  try {
+    const packageJsonPath = require.resolve(`${packageName}/package.json`);
+    const packageDir = dirname(packageJsonPath);
+    // Find the dylib file (libopentui.dylib on macOS, libopentui.so on Linux, opentui.dll on Windows)
+    const files = readdirSync(packageDir);
+    const dylibFile = files.find(
+      (f) => f.endsWith(".dylib") || f.endsWith(".so") || f.endsWith(".dll")
+    );
+    if (!dylibFile) {
+      throw new Error(`No dylib found in ${packageDir}`);
+    }
+    return join(packageDir, dylibFile);
+  } catch (error) {
+    throw new Error(
+      `Failed to resolve platform-specific package ${packageName}: ${error}`
+    );
   }
 };
 
-// Step 1: Bundle with solid plugin (transforms JSX)
-const bundleResult = await Bun.build({
+const dylibPath = getPlatformDylibPath();
+console.log(`Using dylib: ${dylibPath}`);
+
+// Single-step compile with solid plugin
+const result = await Bun.build({
   entrypoints: ["./src/index.ts"],
-  outdir: "./dist",
   target: "bun",
   minify: false,
-  plugins: [solidPlugin],
+  plugins: [
+    solidPlugin,
+    {
+      name: "patch-dynamic-platform-import",
+      setup(build) {
+        // Intercept the dynamic platform import and replace with static path
+        build.onLoad({ filter: /index-.*\.js$/ }, async (args) => {
+          let contents = await Bun.file(args.path).text();
+
+          // Replace dynamic platform import with static dylib import
+          const dynamicImportPattern =
+            /import\(`@opentui\/core-\$\{process\.platform\}-\$\{process\.arch\}\/index\.ts`\)/g;
+          const staticImport = `import("${dylibPath}", { with: { type: "file" } }).then(m => ({ default: m.default }))`;
+          contents = contents.replace(dynamicImportPattern, staticImport);
+
+          return { contents, loader: "js" };
+        });
+      },
+    },
+  ],
+  naming: {
+    asset: "[name].[ext]", // Preserve original asset names for runtime resolution
+  },
+  compile: {
+    outfile,
+  },
 });
 
-if (!bundleResult.success) {
-  console.error("Bundle failed:");
-  for (const log of bundleResult.logs) {
+if (!result.success) {
+  console.error("Build failed:");
+  for (const log of result.logs) {
     console.error(log);
   }
   process.exit(1);
 }
 
-console.log(`Bundled ${bundleResult.outputs.length} files`);
-
-// Find the main JS output  
-const mainOutput = bundleResult.outputs.find(o => o.path.endsWith("index.js"));
-if (!mainOutput) {
-  console.error("No index.js output found");
-  process.exit(1);
-}
-
-// Step 2: Patch the bundled code to resolve dynamic platform import
-let bundledCode = await Bun.file(mainOutput.path).text();
-
-// Find the dylib path
-const dylibPath = require.resolve("@opentui/core-darwin-arm64/libopentui.dylib");
-
-// Replace the entire dynamic platform loading block with direct dylib import
-// The pattern loads the platform-specific module which just exports the dylib path
-const dynamicImportPattern = /import\(`@opentui\/core-\$\{process\.platform\}-\$\{process\.arch\}\/index\.ts`\)/g;
-const staticImport = `import("${dylibPath}", { with: { type: "file" } }).then(m => ({ default: m.default }))`;
-bundledCode = bundledCode.replace(dynamicImportPattern, staticImport);
-
-// Write patched code
-await Bun.write(mainOutput.path, bundledCode);
-console.log("Patched dynamic platform imports");
-
-copyWorkerAssets(join(process.cwd(), "dist"));
-console.log("Copied Tree-sitter worker assets");
-
-// Step 3: Compile to single executable
-const proc = Bun.spawn(["bun", "build", "--compile", mainOutput.path, "--outfile", outfile], {
-  stdout: "inherit",
-  stderr: "inherit",
-  cwd: process.cwd(),
-});
-
-const exitCode = await proc.exited;
-if (exitCode === 0) {
-  copyWorkerAssets(dirname(outfile));
-  console.log("Copied Tree-sitter worker assets to output directory");
-  console.log(`Built: ${outfile}`);
-}
-process.exit(exitCode);
+console.log(`Built: ${outfile}`);
