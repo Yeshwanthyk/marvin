@@ -539,6 +539,7 @@ function MainView(props: MainViewProps) {
 	const [autocompletePrefix, setAutocompletePrefix] = createSignal("")
 	const [autocompleteIndex, setAutocompleteIndex] = createSignal(0)
 	const [showAutocomplete, setShowAutocomplete] = createSignal(false)
+	const [isBashMode, setIsBashMode] = createSignal(false)
 	let suppressNextAutocompleteUpdate = false
 
 	const updateAutocomplete = (text: string, cursorLine: number, cursorCol: number) => {
@@ -739,7 +740,7 @@ function MainView(props: MainViewProps) {
 					<text fg={theme.textMuted}>{"   "}↑↓ navigate · Tab select · Esc cancel</text>
 				</box>
 			</Show>
-			<box border={["top"]} borderColor={theme.border} paddingTop={1} flexShrink={0}>
+			<box border={["top"]} borderColor={isBashMode() ? theme.warning : theme.border} paddingTop={1} flexShrink={0}>
 				<textarea ref={(r: TextareaRenderable) => { textareaRef = r; r.focus() }} placeholder="" textColor={theme.text} focusedTextColor={theme.text} cursorColor={theme.text} minHeight={1} maxHeight={6}
 					keyBindings={[{ name: "return", action: "submit" as const }, { name: "return", meta: true, action: "newline" as const }, { name: "left", action: "move-left" as const }, { name: "right", action: "move-right" as const },
 						{ name: "backspace", action: "backspace" as const }, { name: "delete", action: "delete" as const }, { name: "a", ctrl: true, action: "line-home" as const }, { name: "e", ctrl: true, action: "line-end" as const },
@@ -752,12 +753,17 @@ function MainView(props: MainViewProps) {
 							return
 						}
 						const text = textareaRef.plainText
+						// Detect bash mode (! prefix)
+						setIsBashMode(text.trimStart().startsWith("!"))
 						const cursor = textareaRef.logicalCursor
 						updateAutocomplete(text, cursor.row, cursor.col)
 					}}
 					onSubmit={() => {
 						if (!textareaRef) return
-						props.onSubmit(textareaRef.plainText, () => textareaRef?.clear())
+						props.onSubmit(textareaRef.plainText, () => {
+							textareaRef?.clear()
+							setIsBashMode(false)
+						})
 					}} />
 			</box>
 			<Footer />
