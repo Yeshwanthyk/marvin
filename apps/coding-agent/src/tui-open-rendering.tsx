@@ -19,10 +19,22 @@ const symbols = {
 	error: "✕",
 }
 
-const shortenPath = (p: string): string => {
+export const shortenPath = (p: string): string => {
 	const home = process.env.HOME || process.env.USERPROFILE || ""
-	if (home && p.startsWith(home)) return "~" + p.slice(home.length)
-	return p
+	let shortened = p
+
+	// Replace home with ~
+	if (home && shortened.startsWith(home)) {
+		shortened = "~" + shortened.slice(home.length)
+	}
+
+	// If still long, show .../{parent}/{file}
+	const parts = shortened.split("/")
+	if (parts.length > 4) {
+		shortened = ".../" + parts.slice(-2).join("/")
+	}
+
+	return shortened
 }
 
 // Simple diff preview with manual line coloring (tree-sitter lacks diff grammar)
@@ -332,9 +344,7 @@ const registry: Record<string, ToolRenderer> = {
 		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
 		renderHeader: (ctx) => {
 			const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
-			const lines = ctx.output ? ctx.output.split("\n").length : null
-			const suffix = ctx.isComplete && !ctx.isError && lines !== null ? String(lines) : undefined
-			return <ToolHeader label="bash" detail={cmd} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
+			return <ToolHeader label="bash" detail={cmd} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -348,9 +358,7 @@ const registry: Record<string, ToolRenderer> = {
 		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
 		renderHeader: (ctx) => {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
-			const lines = ctx.output ? replaceTabs(ctx.output).split("\n").length : null
-			const suffix = ctx.isComplete && lines !== null ? String(lines) : undefined
-			return <ToolHeader label="read" detail={path} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
+			return <ToolHeader label="read" detail={path} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -384,10 +392,7 @@ const registry: Record<string, ToolRenderer> = {
 		mode: () => "block",
 		renderHeader: (ctx) => {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
-			const content = String(ctx.args?.content || "")
-			const lines = content ? content.split("\n").length : null
-			const suffix = ctx.isComplete && lines !== null ? String(lines) : undefined
-			return <ToolHeader label="write" detail={path} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
+			return <ToolHeader label="write" detail={path} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
