@@ -71,9 +71,19 @@ export interface ToolBlock {
 
 export type ActivityState = "idle" | "thinking" | "streaming" | "tool" | "compacting"
 
+/** Grouped section for display - thinking header with nested tools */
+export interface SectionItem {
+	type: "section"
+	id: string
+	thinking: { id: string; summary: string; full: string } | null
+	tools: ToolBlock[]
+	isComplete: boolean // true when all tools complete
+}
+
 export type ContentItem =
 	| { type: "user"; content: string }
 	| { type: "thinking"; id: string; summary: string; full: string; isStreaming?: boolean }
 	| { type: "assistant"; content: string; isStreaming?: boolean }
 	| { type: "tool"; tool: ToolBlock }
+	| { type: "section"; section: SectionItem }
 	| { type: "shell"; command: string; output: string; exitCode: number | null; truncated: boolean; tempFilePath?: string }
