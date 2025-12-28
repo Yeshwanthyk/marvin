@@ -8,7 +8,8 @@
  * OpenTUI's text buffer (which doesn't properly handle OSC sequences).
  */
 
-import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, onCleanup, Show } from "solid-js"
+import { useTerminalDimensions } from "../context/terminal.js"
 import { type RGBA, useTheme } from "../context/theme.js"
 
 // Terminal image protocol types
@@ -288,9 +289,7 @@ export function Image(props: ImageProps) {
 	const { theme } = useTheme()
 	const caps = getCapabilities()
 	const fallbackColor = () => props.fallbackColor ?? theme.textMuted
-
-	// Generate unique ID for this image instance
-	const [imageId] = createSignal(`img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+	const termDimensions = useTerminalDimensions()
 
 	// Get or detect dimensions
 	const dimensions = createMemo(() => {
@@ -298,7 +297,19 @@ export function Image(props: ImageProps) {
 		return getImageDimensions(props.data, props.mimeType) ?? { widthPx: 800, heightPx: 600 }
 	})
 
-	const maxWidth = () => props.maxWidth ?? 60
+	// Dynamic maxWidth based on terminal size
+	const maxWidth = createMemo(() => Math.min(props.maxWidth ?? 60, termDimensions().width - 4))
+	const maxHeight = () => props.maxHeight ?? 24
+
+	// Generate content-based key for caching (re-render if data or size changes)
+	const imageKey = createMemo(() => {
+		const dims = dimensions()
+		const mw = maxWidth()
+		const mh = maxHeight()
+		// Use first 32 chars of data for key
+		const dataPrefix = props.data.slice(0, 32)
+		return `img-${dataPrefix}-${dims.widthPx}x${dims.heightPx}-${mw}x${mh}`
+	})
 
 	// Render image or fallback
 	const renderResult = createMemo(() => {
@@ -306,8 +317,13 @@ export function Image(props: ImageProps) {
 			return { type: "fallback" as const, text: imageFallback(props.mimeType, dimensions(), props.filename) }
 		}
 
-		const width = Math.min(maxWidth(), 80)
-		const rows = calculateRows(dimensions(), width)
+		const width = maxWidth()
+		let rows = calculateRows(dimensions(), width)
+
+		// Clamp to maxHeight
+		if (rows > maxHeight()) {
+			rows = maxHeight()
+		}
 
 		if (caps.images === "kitty") {
 			const sequence = encodeKitty(props.data, width, rows)
@@ -325,17 +341,25 @@ export function Image(props: ImageProps) {
 	// Write image directly to stdout when component renders
 	createEffect(() => {
 		const result = renderResult()
+		const key = imageKey()
 		if (result.type === "image") {
 			// Small delay to ensure the box has been rendered and positioned
 			setTimeout(() => {
-				writeImageToStdout(result.sequence, result.rows, imageId())
+				writeImageToStdout(result.sequence, result.rows, key)
 			}, 50)
 		}
 	})
 
+	// Re-render on terminal resize - imageKey already depends on maxWidth which depends on termDimensions
+	createEffect(() => {
+		const key = imageKey()
+		// Remove from cache to force re-render when dimensions change
+		renderedImages.delete(key)
+	})
+
 	// Cleanup: remove from rendered set when component unmounts
 	onCleanup(() => {
-		renderedImages.delete(imageId())
+		renderedImages.delete(imageKey())
 	})
 
 	return (
@@ -344,8 +368,8 @@ export function Image(props: ImageProps) {
 			fallback={<text fg={fallbackColor()}>{(renderResult() as { type: "fallback"; text: string }).text}</text>}
 		>
 			{/* Reserve vertical space for the image - content is written directly to stdout */}
-			<box height={(renderResult() as { type: "image"; rows: number }).rows}>
-				<text fg={theme.textMuted}>{`[Image: ${props.mimeType}]`}</text>
+			<box height={(renderResult() as { type: "image"; rows: number }).rows} width={maxWidth()}>
+				<text fg={theme.textMuted}>{" ".repeat(maxWidth())}</text>
 			</box>
 		</Show>
 	)

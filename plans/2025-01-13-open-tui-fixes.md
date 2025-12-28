@@ -3,7 +3,7 @@
 ## Plan Metadata
 - Created: 2025-01-13
 - Ticket: N/A (internal quality improvements)
-- Status: in-progress
+- Status: complete
 - Owner: yesh
 - Assumptions:
   - Bun runtime is required (already in package.json engines)
@@ -12,8 +12,8 @@
 
 ## Progress Tracking
 - [x] Phase 1: Quick Wins (5 items)
-- [ ] Phase 2: Component Improvements (4 items)
-- [ ] Phase 3: Larger Work (3 items)
+- [x] Phase 2: Component Improvements (4 items)
+- [x] Phase 3: Larger Work (3 items)
 
 ## Overview
 Address correctness, reliability, and UX issues in the open-tui package identified during code review. Fixes range from one-line patches to component overhauls, organized by effort and impact.
@@ -574,10 +574,10 @@ Four component improvements requiring coordination but still isolated to single 
 - [ ] Codebase builds: `bun run typecheck` passes
 
 ### Change Checklist
-- [ ] 2.1 Add Editor value prop with sync
-- [ ] 2.2 Add Dialog ESC handling
-- [ ] 2.3 Add ToastViewport auto-dismiss
-- [ ] 2.4 Add Loader theme awareness
+- [x] 2.1 Add Editor value prop with sync
+- [x] 2.2 Add Dialog ESC handling
+- [x] 2.3 Add ToastViewport auto-dismiss
+- [x] 2.4 Add Loader theme awareness
 
 ### Changes
 
@@ -1006,9 +1006,9 @@ Image component overhaul, test coverage, and demo expansion. Highest effort but 
 - [ ] Codebase builds: `bun run typecheck` passes
 
 ### Change Checklist
-- [ ] 3.1 Image component overhaul
-- [ ] 3.2 Add autocomplete tests
-- [ ] 3.3 Expand demo with new components
+- [x] 3.1 Image component overhaul
+- [x] 3.2 Add autocomplete tests
+- [x] 3.3 Expand demo with new components
 
 ### Changes
 
