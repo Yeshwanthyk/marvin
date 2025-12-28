@@ -32,11 +32,13 @@ interface TextSegment {
 	value: string
 }
 
+// Cache segmenter instance - it's stateless and reusable
+const graphemeSegmenter: Intl.Segmenter = new Intl.Segmenter()
+
 /**
  * Parse text into segments of ANSI codes and graphemes
  */
 function parseTextSegments(text: string): TextSegment[] {
-	const segmenter = new Intl.Segmenter()
 	const segments: TextSegment[] = []
 	let i = 0
 
@@ -63,7 +65,7 @@ function parseTextSegments(text: string): TextSegment[] {
 
 		// Segment this non-ANSI portion into graphemes
 		const textPortion = text.slice(i, end)
-		for (const seg of segmenter.segment(textPortion)) {
+		for (const seg of graphemeSegmenter.segment(textPortion)) {
 			segments.push({ type: "grapheme", value: seg.segment })
 		}
 		i = end

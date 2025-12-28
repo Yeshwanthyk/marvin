@@ -593,6 +593,13 @@ export function ThemeProvider(props: ThemeProviderProps): JSX.Element {
 		}
 	})
 
+	// Sync mode prop changes to store (for external light/dark toggle)
+	createEffect(() => {
+		if (props.mode !== undefined && props.mode !== store.mode) {
+			setStore("mode", props.mode)
+		}
+	})
+
 	const resolvedTheme = createMemo((): Theme => {
 		const name = store.themeName
 		const mode = store.mode

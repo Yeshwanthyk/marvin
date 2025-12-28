@@ -295,7 +295,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			// For relative paths, use index-backed fuzzy search (respects .gitignore)
 			const isAbsoluteOrHome = expandedPrefix.startsWith("/") || prefix.startsWith("~");
 			if (!isAbsoluteOrHome) {
-				return this.getFuzzyFileSuggestions(expandedPrefix);
+				return this.getFuzzyFileSuggestions(expandedPrefix, isAtPrefix)
 			}
 
 			// Fall through to readdirSync for absolute/home paths
@@ -424,17 +424,18 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 	}
 
 	// Fuzzy file search using ripgrep + fuzzysort (fast, respects .gitignore)
-	private getFuzzyFileSuggestions(query: string): AutocompleteItem[] {
-		const results = this.fileIndex.search(query, { limit: 20, includeDirs: true });
+	private getFuzzyFileSuggestions(query: string, includeAtPrefix: boolean = true): AutocompleteItem[] {
+		const results = this.fileIndex.search(query, { limit: 20, includeDirs: true })
 
 		return results
 			.filter((r) => r.path != null) // Guard against malformed results
 			.map(({ path: entryPath, isDirectory }) => {
-				const pathWithoutSlash = isDirectory ? entryPath.slice(0, -1) : entryPath;
-				const entryName = basename(pathWithoutSlash);
+				const pathWithoutSlash = isDirectory ? entryPath.slice(0, -1) : entryPath
+				const entryName = basename(pathWithoutSlash)
+				const value = includeAtPrefix ? `@${String(entryPath)}` : String(entryPath)
 
 				return {
-					value: "@" + String(entryPath),
+					value,
 					label: String(entryName) + (isDirectory ? "/" : ""),
 					description: String(pathWithoutSlash),
 				};
