@@ -68,6 +68,7 @@ const UPDATE_THROTTLE_MS = 150 // ~7fps during streaming - smoother perceived te
 const UPDATE_THROTTLE_SLOW_MS = 180
 const UPDATE_THROTTLE_SLOWEST_MS = 220
 const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
+const STREAMING_TAIL_CHARS = 4000
 
 function computeUpdateThrottleMs(textLength: number): number {
 	if (textLength > 12000) return UPDATE_THROTTLE_SLOWEST_MS
@@ -79,8 +80,10 @@ function computeUpdateThrottleMs(textLength: number): number {
 interface ExtractionCache {
 	// Track processed content length for incremental updates
 	lastContentLength: number
-	// Accumulated extracted values
-	text: string
+	// Total streaming text length (full content, even if view is tailed)
+	textLength: number
+	// Tail of streaming text for display
+	textTail: string
 	thinking: { summary: string; full: string } | null
 	orderedBlocks: ReturnType<typeof extractOrderedBlocks>
 	// For thinking block ID generation
@@ -88,7 +91,20 @@ interface ExtractionCache {
 }
 
 function createExtractionCache(): ExtractionCache {
-	return { lastContentLength: 0, text: "", thinking: null, orderedBlocks: [], thinkingCounter: 0 }
+	return {
+		lastContentLength: 0,
+		textLength: 0,
+		textTail: "",
+		thinking: null,
+		orderedBlocks: [],
+		thinkingCounter: 0,
+	}
+}
+
+function appendStreamingTail(current: string, next: string): string {
+	if (next.length >= STREAMING_TAIL_CHARS) return next.slice(-STREAMING_TAIL_CHARS)
+	if (current.length + next.length <= STREAMING_TAIL_CHARS) return current + next
+	return (current + next).slice(-STREAMING_TAIL_CHARS)
 }
 
 /** Incrementally extract new content blocks, appending to cached results */
@@ -97,7 +113,8 @@ function extractIncremental(content: unknown[], cache: ExtractionCache): Extract
 	if (len === cache.lastContentLength) return cache // No change
 
 	// Process only new blocks
-	let text = cache.text
+	let textLength = cache.textLength
+	let textTail = cache.textTail
 	let thinking = cache.thinking
 	const orderedBlocks = cache.orderedBlocks.slice() // Clone for mutation
 	let thinkingCounter = cache.thinkingCounter
@@ -108,13 +125,17 @@ function extractIncremental(content: unknown[], cache: ExtractionCache): Extract
 		const b = block as Record<string, unknown>
 
 		if (b.type === "text" && typeof b.text === "string") {
-			text += b.text
+			textLength += b.text.length
+			textTail = appendStreamingTail(textTail, b.text)
 			// Merge with last text block or add new
 			const lastBlock = orderedBlocks[orderedBlocks.length - 1]
 			if (lastBlock?.type === "text") {
-				(lastBlock as { type: "text"; text: string }).text += b.text
+				(lastBlock as { type: "text"; text: string }).text = appendStreamingTail(
+					(lastBlock as { type: "text"; text: string }).text,
+					b.text
+				)
 			} else {
-				orderedBlocks.push({ type: "text", text: b.text })
+				orderedBlocks.push({ type: "text", text: appendStreamingTail("", b.text) })
 			}
 		} else if (b.type === "thinking" && typeof b.thinking === "string") {
 			const full = b.thinking
@@ -128,7 +149,7 @@ function extractIncremental(content: unknown[], cache: ExtractionCache): Extract
 		}
 	}
 
-	return { lastContentLength: len, text, thinking, orderedBlocks, thinkingCounter }
+	return { lastContentLength: len, textLength, textTail, thinking, orderedBlocks, thinkingCounter }
 }
 
 export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHandler {
@@ -162,8 +183,8 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 
 			// Use incremental extraction - only processes new blocks
 			extractionCache = extractIncremental(content, extractionCache)
-			const { text, thinking, orderedBlocks } = extractionCache
-			updateThrottleMs = computeUpdateThrottleMs(text.length)
+			const { textLength, textTail, thinking, orderedBlocks } = extractionCache
+			updateThrottleMs = computeUpdateThrottleMs(textLength)
 
 			// Convert ordered blocks to UIContentBlocks
 			const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
@@ -181,10 +202,10 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 
 			updateStreamingMessage(ctx, (msg) => {
 				const nextThinking = thinking || msg.thinking
-				return { ...msg, content: text, thinking: nextThinking, contentBlocks }
+				return { ...msg, content: textTail, thinking: nextThinking, contentBlocks }
 			})
 
-			if (thinking && !text) ctx.setActivityState("thinking")
+			if (thinking && textLength === 0) ctx.setActivityState("thinking")
 		})
 	
 	const flushPendingUpdate = () => {
