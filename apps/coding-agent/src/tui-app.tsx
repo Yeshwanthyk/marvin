@@ -31,7 +31,7 @@ import { Header } from "./components/Header.js"
 import { MessageList } from "./components/MessageList.js"
 import { createKeyboardHandler, type KeyboardHandlerConfig } from "./keyboard-handler.js"
 import { loadHooks, HookRunner, wrapToolsWithHooks, type HookError } from "./hooks/index.js"
-import { loadCustomTools, getToolNames } from "./custom-tools/index.js"
+import { loadCustomTools, getToolNames, type SendRef } from "./custom-tools/index.js"
 
 type KnownProvider = ReturnType<typeof getProviders>[number]
 
@@ -91,10 +91,13 @@ export const runTuiOpen = async (args?: {
 	})
 
 	// Load custom tools from ~/.config/marvin/tools/
+	// sendRef starts as no-op, wired up in App component
+	const sendRef: SendRef = { current: () => {} }
 	const { tools: customTools, errors: toolErrors } = await loadCustomTools(
 		loaded.configDir,
 		cwd,
 		getToolNames(codingTools),
+		sendRef,
 	)
 
 	// Report tool load errors to stderr (non-fatal)
@@ -193,7 +196,7 @@ export const runTuiOpen = async (args?: {
 			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking} theme={loaded.theme} editor={loaded.editor}
 			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
 			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
-			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} lspActiveRef={lspActiveRef} />
+			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} lspActiveRef={lspActiveRef} sendRef={sendRef} />
 	), { targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} })
 }
 
@@ -211,6 +214,8 @@ interface AppProps {
 	lsp: LspManager
 	/** Ref for LSP active state - App sets the callback */
 	lspActiveRef: { setActive: (v: boolean) => void }
+	/** Ref for custom tools send() - App sets the callback */
+	sendRef: SendRef
 }
 
 function App(props: AppProps) {
@@ -504,8 +509,9 @@ function App(props: AppProps) {
 		catch (err) { batch(() => { setMessages((prev) => appendWithCap(prev, { id: crypto.randomUUID(), role: "assistant", content: `Error: ${err instanceof Error ? err.message : String(err)}` })); setIsResponding(false); setActivityState("idle") }) }
 	}
 
-	// Connect hook send() to handleSubmit
+	// Connect hook send() and custom tools send() to handleSubmit
 	props.hookRunner.setSendHandler((text) => void handleSubmit(text))
+	props.sendRef.current = (text) => void handleSubmit(text)
 
 	const handleAbort = (): string | null => {
 		if (retryState.abortController) { retryState.abortController.abort(); retryState.abortController = null; retryState.attempt = 0; setRetryStatus(null) }
