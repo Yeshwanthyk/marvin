@@ -323,7 +323,7 @@ export function MessageList(props: MessageListProps) {
 						</Match>
 						<Match when={item.type === "tool" && item}>
 							{(toolItem) => (
-								<box paddingLeft={4}>
+								<box paddingLeft={6}>
 									<ToolBlockWrapper
 										tool={toolItem().tool}
 										isExpanded={props.isToolExpanded}
