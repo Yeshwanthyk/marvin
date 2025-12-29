@@ -167,6 +167,100 @@ describe("hooks runner", () => {
 	})
 })
 
+describe("turn.end with usage", () => {
+	let tempDir: string
+	let hooksDir: string
+
+	// Minimal mock message for tests
+	const mockMessage = { role: "assistant", content: [], timestamp: Date.now() } as any
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "marvin-hooks-test-"))
+		hooksDir = join(tempDir, "hooks")
+		mkdirSync(hooksDir)
+	})
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true })
+	})
+
+	it("receives usage data on turn.end event", async () => {
+		writeFileSync(
+			join(hooksDir, "usage-tracker.ts"),
+			`export default function(marvin) {
+				marvin.on("turn.end", async (event) => {
+					(globalThis as any).lastUsage = event.usage
+				})
+			}`
+		)
+
+		const { hooks } = await loadHooks(tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+
+		await runner.emit({
+			type: "turn.end",
+			turnIndex: 0,
+			message: mockMessage,
+			toolResults: [],
+			usage: { current: 50000, max: 100000, percent: 50 },
+		})
+
+		expect((globalThis as any).lastUsage).toEqual({ current: 50000, max: 100000, percent: 50 })
+		delete (globalThis as any).lastUsage
+	})
+
+	it("can trigger send on high usage", async () => {
+		const sentMessages: string[] = []
+
+		writeFileSync(
+			join(hooksDir, "auto-compact.ts"),
+			`let triggered = false
+			export default function(marvin) {
+				marvin.on("turn.end", async (event) => {
+					if (event.usage && event.usage.percent >= 85 && !triggered) {
+						triggered = true
+						marvin.send("/compact")
+					}
+				})
+			}`
+		)
+
+		const { hooks } = await loadHooks(tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		runner.setSendHandler((text) => sentMessages.push(text))
+
+		// First turn at 50% - no compact
+		await runner.emit({
+			type: "turn.end",
+			turnIndex: 0,
+			message: mockMessage,
+			toolResults: [],
+			usage: { current: 50000, max: 100000, percent: 50 },
+		})
+		expect(sentMessages).toEqual([])
+
+		// Second turn at 90% - triggers compact
+		await runner.emit({
+			type: "turn.end",
+			turnIndex: 1,
+			message: mockMessage,
+			toolResults: [],
+			usage: { current: 90000, max: 100000, percent: 90 },
+		})
+		expect(sentMessages).toEqual(["/compact"])
+
+		// Third turn still high - should not trigger again
+		await runner.emit({
+			type: "turn.end",
+			turnIndex: 2,
+			message: mockMessage,
+			toolResults: [],
+			usage: { current: 92000, max: 100000, percent: 92 },
+		})
+		expect(sentMessages).toEqual(["/compact"])
+	})
+})
+
 describe("hooks send", () => {
 	let tempDir: string
 	let hooksDir: string

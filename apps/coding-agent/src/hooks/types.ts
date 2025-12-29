@@ -67,12 +67,24 @@ export interface TurnStartEvent {
 	turnIndex: number
 }
 
+/** Context usage info for hooks */
+export interface ContextUsage {
+	/** Current token count */
+	current: number
+	/** Max context window */
+	max: number
+	/** Usage percentage (0-100) */
+	percent: number
+}
+
 /** Fired when a turn ends */
 export interface TurnEndEvent {
 	type: "turn.end"
 	turnIndex: number
 	message: AppMessage
 	toolResults: ToolResultMessage[]
+	/** Context usage after this turn (if available) */
+	usage?: ContextUsage
 }
 
 /** Fired before a tool executes. Hooks can block. */
