@@ -19,7 +19,7 @@ const symbols = {
 	error: "✕",
 }
 
-export const shortenPath = (p: string): string => {
+export const shortenPath = (p: string, maxLen = 40): string => {
 	const home = process.env.HOME || process.env.USERPROFILE || ""
 	let shortened = p
 
@@ -30,8 +30,13 @@ export const shortenPath = (p: string): string => {
 
 	// If still long, show .../{parent}/{file}
 	const parts = shortened.split("/")
-	if (parts.length > 4) {
-		shortened = ".../" + parts.slice(-2).join("/")
+	if (parts.length > 3) {
+		shortened = "…/" + parts.slice(-2).join("/")
+	}
+
+	// Final truncation if still too long
+	if (shortened.length > maxLen) {
+		shortened = "…" + shortened.slice(-(maxLen - 1))
 	}
 
 	return shortened
@@ -222,24 +227,26 @@ function getDiffStats(diffText: string): { added: number; removed: number } {
 function toolTitle(name: string, args: any): string {
 	switch (name) {
 		case "bash": {
+			// Prefer description if available
+			if (args?.description) return truncate(String(args.description), 50)
 			const cmd = String(args?.command || "…")
-			return cmd.split("\n")[0] || "…"
+			return truncate(cmd.split("\n")[0] || "…", 40)
 		}
 		case "read":
-			return shortenPath(String(args?.path || args?.file_path || "…"))
+			return shortenPath(String(args?.path || args?.file_path || "…"), 35)
 		case "write":
-			return shortenPath(String(args?.path || args?.file_path || "…"))
+			return shortenPath(String(args?.path || args?.file_path || "…"), 35)
 		case "edit":
-			return shortenPath(String(args?.path || args?.file_path || "…"))
+			return shortenPath(String(args?.path || args?.file_path || "…"), 35)
 		case "ask_user_question": {
 			const count = Array.isArray(args?.questions) ? args.questions.length : 0
 			return count ? `${count} question${count > 1 ? "s" : ""}` : ""
 		}
 		default: {
 			const delegation = getAgentDelegationArgs(args)
-			if (delegation?.chain?.length) return `chain (${delegation.chain.length} steps)`
-			if (delegation?.tasks?.length) return `parallel (${delegation.tasks.length} tasks)`
-			if (delegation?.agent) return delegation.agent
+			if (delegation?.chain?.length) return `chain ${delegation.chain.length}`
+			if (delegation?.tasks?.length) return `${delegation.tasks.length} tasks`
+			if (delegation?.agent) return truncate(delegation.agent, 30)
 			return ""
 		}
 	}
@@ -313,27 +320,27 @@ interface ToolHeaderProps {
 
 function ToolHeader(props: ToolHeaderProps): JSX.Element {
 	const { theme } = useTheme()
-	
+
 	const symbol = () => {
 		if (!props.isComplete) return symbols.running
 		if (props.isError) return symbols.error
 		if (props.expanded) return symbols.expanded
 		return symbols.complete
 	}
-	
+
 	const symbolColor = () => {
 		if (props.isError) return theme.error
 		if (!props.isComplete) return theme.textMuted
-		return theme.accent
+		return theme.textMuted // subdued when complete
 	}
-	
+
 	return (
 		<text selectable={false}>
 			<span style={{ fg: symbolColor() }}>{symbol()}</span>
 			{" "}
-			<span style={{ fg: theme.accent }}>{props.label}</span>
+			<span style={{ fg: theme.textMuted }}>{props.label}</span>
 			<Show when={props.detail}>
-				<span style={{ fg: theme.text }}> {props.detail}</span>
+				<span style={{ fg: theme.textMuted }}> {props.detail}</span>
 			</Show>
 			<Show when={props.suffix}>
 				<span style={{ fg: theme.textMuted }}> · {props.suffix}</span>
@@ -347,8 +354,15 @@ const registry: Record<string, ToolRenderer> = {
 		// Inline when collapsed (just command), block when expanded (show output)
 		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
 		renderHeader: (ctx) => {
-			const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
-			return <ToolHeader label="bash" detail={cmd} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
+			// Prefer description if available, otherwise truncate command
+			let detail: string
+			if (ctx.args?.description) {
+				detail = truncate(String(ctx.args.description), 60)
+			} else {
+				const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
+				detail = truncate(cmd, 50)
+			}
+			return <ToolHeader label="bash" detail={detail} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
