@@ -36,6 +36,13 @@ import { loadCustomTools, getToolNames } from "./custom-tools/index.js"
 type KnownProvider = ReturnType<typeof getProviders>[number]
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
+const MESSAGE_CAP = 30 // Max messages in UI for performance
+
+/** Append to array with cap */
+const appendWithCap = <T,>(arr: T[], item: T, cap = MESSAGE_CAP): T[] => {
+	const next = [...arr, item]
+	return next.length > cap ? next.slice(-cap) : next
+}
 
 // ----- Main Entry -----
 
@@ -413,7 +420,7 @@ function App(props: AppProps) {
 				truncated: false,
 				timestamp: Date.now(),
 			}
-			setMessages((prev) => [...prev, pendingMsg])
+			setMessages((prev) => appendWithCap(prev, pendingMsg))
 
 			// Execute command
 			const result = await runShellCommand(command, { timeout: 30000 })
@@ -491,9 +498,9 @@ function App(props: AppProps) {
 		}
 		editorClearFn?.(); ensureSession()
 		sessionManager.appendMessage({ role: "user", content: [{ type: "text", text }], timestamp: Date.now() })
-		batch(() => { setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() }]); setToolBlocks([]); setIsResponding(true); setActivityState("thinking") })
+		batch(() => { setMessages((prev) => appendWithCap(prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() })); setToolBlocks([]); setIsResponding(true); setActivityState("thinking") })
 		try { await agent.prompt(text) }
-		catch (err) { batch(() => { setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: `Error: ${err instanceof Error ? err.message : String(err)}` }]); setIsResponding(false); setActivityState("idle") }) }
+		catch (err) { batch(() => { setMessages((prev) => appendWithCap(prev, { id: crypto.randomUUID(), role: "assistant", content: `Error: ${err instanceof Error ? err.message : String(err)}` })); setIsResponding(false); setActivityState("idle") }) }
 	}
 
 	// Connect hook send() to handleSubmit

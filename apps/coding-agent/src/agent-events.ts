@@ -69,6 +69,13 @@ const UPDATE_THROTTLE_SLOW_MS = 180
 const UPDATE_THROTTLE_SLOWEST_MS = 220
 const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
 const STREAMING_TAIL_CHARS = 4000
+const MESSAGE_CAP = 30 // Max messages in UI for performance
+
+/** Append to array with cap */
+function appendWithCap<T>(arr: T[], item: T, cap = MESSAGE_CAP): T[] {
+	const next = [...arr, item]
+	return next.length > cap ? next.slice(-cap) : next
+}
 
 function computeUpdateThrottleMs(textLength: number): number {
 	if (textLength > 12000) return UPDATE_THROTTLE_SLOWEST_MS
@@ -363,10 +370,7 @@ function handleMessageStart(
 				? event.message.content
 				: extractText(event.message.content as unknown[])
 
-			ctx.setMessages((prev) => [
-				...prev,
-				{ id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() },
-			])
+			ctx.setMessages((prev) => appendWithCap(prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() }))
 			ctx.setActivityState("thinking")
 		}
 	}
@@ -377,17 +381,14 @@ function handleMessageStart(
 		cache.current = createExtractionCache() // Reset cache for new message
 		batch(() => {
 			ctx.setActivityState("streaming")
-			ctx.setMessages((prev) => [
-				...prev,
-				{
-					id: ctx.streamingMessageId.current!,
-					role: "assistant",
-					content: "",
-					isStreaming: true,
-					tools: [],
-					timestamp: Date.now(),
-				},
-			])
+			ctx.setMessages((prev) => appendWithCap(prev, {
+				id: ctx.streamingMessageId.current!,
+				role: "assistant",
+				content: "",
+				isStreaming: true,
+				tools: [],
+				timestamp: Date.now(),
+			}))
 		})
 	}
 }
