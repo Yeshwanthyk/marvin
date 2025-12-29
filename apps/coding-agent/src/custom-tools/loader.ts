@@ -16,6 +16,7 @@ import type {
 	ExecOptions,
 	ExecResult,
 	LoadedCustomTool,
+	SendRef,
 	ToolAPI,
 } from "./types.js"
 
@@ -164,11 +165,13 @@ function discoverToolsInDir(dir: string): string[] {
  * @param configDir - Base config directory (e.g., ~/.config/marvin)
  * @param cwd - Current working directory for tool execution
  * @param builtInToolNames - Names of built-in tools to check for conflicts
+ * @param sendRef - Ref for send handler (set by App after initialization)
  */
 export async function loadCustomTools(
 	configDir: string,
 	cwd: string,
 	builtInToolNames: string[],
+	sendRef: SendRef,
 ): Promise<CustomToolsLoadResult> {
 	const tools: LoadedCustomTool[] = []
 	const errors: Array<{ path: string; error: string }> = []
@@ -178,6 +181,7 @@ export async function loadCustomTools(
 	const api: ToolAPI = {
 		cwd,
 		exec: (command: string, args: string[], options?: ExecOptions) => execCommand(command, args, cwd, options),
+		send: (text: string) => sendRef.current(text),
 	}
 
 	const toolsDir = join(configDir, "tools")

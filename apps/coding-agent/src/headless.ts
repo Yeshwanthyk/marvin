@@ -5,7 +5,7 @@ import { createLspManager, wrapToolsWithLspDiagnostics } from '@marvin-agents/ls
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
 import { loadAppConfig } from './config.js';
 import { loadHooks, HookRunner, wrapToolsWithHooks, type HookError } from './hooks/index.js';
-import { loadCustomTools, getToolNames } from './custom-tools/index.js';
+import { loadCustomTools, getToolNames, type SendRef } from './custom-tools/index.js';
 
 const readStdin = async (): Promise<string> => {
   const chunks: Buffer[] = [];
@@ -96,10 +96,13 @@ export const runHeadless = async (args: {
   });
 
   // Load custom tools from ~/.config/marvin/tools/
+  // In headless mode, send() is a no-op (no user input queue)
+  const headlessSendRef: SendRef = { current: () => {} };
   const { tools: customTools, errors: toolErrors } = await loadCustomTools(
     loaded.configDir,
     cwd,
     getToolNames(codingTools),
+    headlessSendRef,
   );
 
   // Report tool load errors to stderr (non-fatal)

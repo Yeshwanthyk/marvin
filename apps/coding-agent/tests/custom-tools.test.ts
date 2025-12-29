@@ -3,12 +3,14 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { loadCustomTools, getToolNames } from "../src/custom-tools/loader.js"
+import type { SendRef } from "../src/custom-tools/types.js"
 
 describe("custom-tools", () => {
 	let tempDir: string
 	let configDir: string
 	let toolsDir: string
 	const cwd = process.cwd()
+	const sendRef: SendRef = { current: () => {} }
 
 	beforeEach(() => {
 		tempDir = mkdtempSync(join(tmpdir(), "marvin-custom-tools-test-"))
@@ -24,13 +26,13 @@ describe("custom-tools", () => {
 	describe("loadCustomTools", () => {
 		test("returns empty for nonexistent directory", async () => {
 			const nonExistentDir = join(tempDir, "nonexistent")
-			const result = await loadCustomTools(nonExistentDir, cwd, [])
+			const result = await loadCustomTools(nonExistentDir, cwd, [], sendRef)
 			expect(result.tools).toEqual([])
 			expect(result.errors).toEqual([])
 		})
 
 		test("returns empty for empty directory", async () => {
-			const result = await loadCustomTools(configDir, cwd, [])
+			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.tools).toEqual([])
 			expect(result.errors).toEqual([])
 		})
@@ -57,7 +59,7 @@ export default function(api) {
 `
 			writeFileSync(join(toolsDir, "test-tool.ts"), toolCode)
 
-			const result = await loadCustomTools(configDir, cwd, [])
+			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.errors).toEqual([])
 			expect(result.tools.length).toBe(1)
 			expect(result.tools[0]!.tool.name).toBe("test-tool")
@@ -86,7 +88,7 @@ export default function(api) {
 `
 			writeFileSync(join(toolsDir, "multi-tool.ts"), toolCode)
 
-			const result = await loadCustomTools(configDir, cwd, [])
+			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.errors).toEqual([])
 			expect(result.tools.length).toBe(2)
 			expect(result.tools.map((t) => t.tool.name).sort()).toEqual(["tool-one", "tool-two"])
@@ -106,7 +108,7 @@ export default function(api) {
 `
 			writeFileSync(join(toolsDir, "conflict.ts"), toolCode)
 
-			const result = await loadCustomTools(configDir, cwd, ["bash", "read", "write", "edit"])
+			const result = await loadCustomTools(configDir, cwd, ["bash", "read", "write", "edit"], sendRef)
 			expect(result.tools).toEqual([])
 			expect(result.errors.length).toBe(1)
 			expect(result.errors[0]!.error).toContain('conflicts with existing tool')
@@ -134,7 +136,7 @@ export default (api) => ({
 			writeFileSync(join(toolsDir, "first.ts"), tool1)
 			writeFileSync(join(toolsDir, "second.ts"), tool2)
 
-			const result = await loadCustomTools(configDir, cwd, [])
+			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			// One succeeds, one fails due to conflict
 			expect(result.tools.length).toBe(1)
 			expect(result.errors.length).toBe(1)
@@ -144,7 +146,7 @@ export default (api) => ({
 		test("reports error for non-function export", async () => {
 			writeFileSync(join(toolsDir, "invalid.ts"), 'export default "not a function"')
 
-			const result = await loadCustomTools(configDir, cwd, [])
+			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.tools).toEqual([])
 			expect(result.errors.length).toBe(1)
 			expect(result.errors[0]!.error).toContain("must export a default function")
@@ -154,7 +156,7 @@ export default (api) => ({
 			writeFileSync(join(toolsDir, "readme.md"), "# Not a tool")
 			writeFileSync(join(toolsDir, "config.json"), '{}')
 
-			const result = await loadCustomTools(configDir, cwd, [])
+			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.tools).toEqual([])
 			expect(result.errors).toEqual([])
 		})
@@ -176,7 +178,7 @@ export default function(api) {
 `
 			writeFileSync(join(toolsDir, "cwd-test.ts"), toolCode)
 
-			const result = await loadCustomTools(configDir, cwd, [])
+			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.errors).toEqual([])
 			expect(result.tools.length).toBe(1)
 
@@ -205,12 +207,43 @@ export default function(api) {
 `
 			writeFileSync(join(toolsDir, "exec-test.ts"), toolCode)
 
-			const result = await loadCustomTools(configDir, cwd, [])
+			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.errors).toEqual([])
 			expect(result.tools.length).toBe(1)
 
 			const execResult = await result.tools[0]!.tool.execute("test-call", {})
 			expect(execResult.content[0]).toEqual({ type: "text", text: "hello" })
+		})
+
+		test("tool can use send api", async () => {
+			const messages: string[] = []
+			const testSendRef: SendRef = { current: (text) => messages.push(text) }
+
+			const toolCode = `
+export default function(api) {
+	return {
+		name: "send-test",
+		label: "Send Test",
+		description: "Uses send API",
+		parameters: { type: "object", properties: {} },
+		execute: async () => {
+			api.send("hello from tool")
+			return {
+				content: [{ type: "text", text: "sent" }],
+				details: {}
+			}
+		}
+	}
+}
+`
+			writeFileSync(join(toolsDir, "send-test.ts"), toolCode)
+
+			const result = await loadCustomTools(configDir, cwd, [], testSendRef)
+			expect(result.errors).toEqual([])
+			expect(result.tools.length).toBe(1)
+
+			await result.tools[0]!.tool.execute("test-call", {})
+			expect(messages).toEqual(["hello from tool"])
 		})
 	})
 

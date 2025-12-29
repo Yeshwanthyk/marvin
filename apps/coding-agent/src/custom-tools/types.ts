@@ -58,6 +58,11 @@ export interface ExecOptions {
 }
 
 /**
+ * Ref for send handler - allows late binding of the send function.
+ */
+export type SendRef = { current: (text: string) => void }
+
+/**
  * API provided to custom tool factories.
  */
 export interface ToolAPI {
@@ -65,6 +70,8 @@ export interface ToolAPI {
 	cwd: string
 	/** Execute a command */
 	exec: (command: string, args: string[], options?: ExecOptions) => Promise<ExecResult>
+	/** Send a message to the agent (queued as user input) */
+	send: (text: string) => void
 }
 
 /**

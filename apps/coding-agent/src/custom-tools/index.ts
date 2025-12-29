@@ -11,6 +11,7 @@ export type {
 	ExecResult,
 	LoadedCustomTool,
 	RenderResultOptions,
+	SendRef,
 	SessionEvent,
 	ToolAPI,
 } from "./types.js"
