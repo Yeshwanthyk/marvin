@@ -60,6 +60,9 @@ export interface EventHandlerContext {
 
 	// Tool metadata registry for custom tool rendering
 	toolByName?: Map<string, ToolMeta>
+
+	// Context window getter for usage calculations
+	getContextWindow?: () => number
 }
 
 export type AgentEventHandler = ((event: AgentEvent) => void) & { dispose: () => void }
@@ -267,11 +270,19 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		}
 
 		if (event.type === "turn_end") {
+			// Extract usage from message for hook consumption
+			const msgUsage = event.message as { usage?: { totalTokens?: number } }
+			const contextWindow = ctx.getContextWindow?.() ?? 0
+			const currentTokens = msgUsage.usage?.totalTokens ?? 0
+
 			void ctx.hookRunner?.emit({
 				type: "turn.end",
 				turnIndex,
 				message: event.message,
 				toolResults: event.toolResults as ToolResultMessage[],
+				usage: contextWindow > 0 && currentTokens > 0
+					? { current: currentTokens, max: contextWindow, percent: (currentTokens / contextWindow) * 100 }
+					: undefined,
 			})
 			turnIndex++
 		}

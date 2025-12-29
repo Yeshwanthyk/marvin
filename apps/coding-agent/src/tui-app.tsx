@@ -362,6 +362,7 @@ function App(props: AppProps) {
 		retryConfig, retryablePattern, retryState, agent: agent as EventHandlerContext["agent"],
 		hookRunner: props.hookRunner,
 		toolByName: props.toolByName,
+		getContextWindow: () => displayContextWindow(),
 	}
 	const handleAgentEvent = createAgentEventHandler(eventCtx)
 

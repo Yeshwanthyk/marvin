@@ -8,13 +8,14 @@ export type DialogProps = Omit<JSX.IntrinsicElements["box"], "children"> & {
 	open: boolean
 	title?: string
 	borderColor?: RGBA
+	closeOnOverlayClick?: boolean
 	onClose?: () => void
 	children?: JSX.Element
 }
 
 export function Dialog(props: DialogProps): JSX.Element {
 	const { theme } = useTheme()
-	const [local, rest] = splitProps(props, ["open", "title", "borderColor", "onClose", "children"])
+	const [local, rest] = splitProps(props, ["open", "title", "borderColor", "closeOnOverlayClick", "onClose", "children"])
 
 	return (
 		<Show when={local.open}>
@@ -27,7 +28,10 @@ export function Dialog(props: DialogProps): JSX.Element {
 					height="100%"
 					backgroundColor={theme.background}
 					opacity={0.8}
-					onMouseUp={() => local.onClose?.()}
+					onMouseUp={() => {
+						if (local.closeOnOverlayClick === false) return
+						local.onClose?.()
+					}}
 				/>
 				<box
 					position="absolute"

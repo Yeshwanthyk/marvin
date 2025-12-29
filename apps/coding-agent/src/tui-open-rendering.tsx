@@ -231,6 +231,10 @@ function toolTitle(name: string, args: any): string {
 			return shortenPath(String(args?.path || args?.file_path || "…"))
 		case "edit":
 			return shortenPath(String(args?.path || args?.file_path || "…"))
+		case "ask_user_question": {
+			const count = Array.isArray(args?.questions) ? args.questions.length : 0
+			return count ? `${count} question${count > 1 ? "s" : ""}` : ""
+		}
 		default: {
 			const delegation = getAgentDelegationArgs(args)
 			if (delegation?.chain?.length) return `chain (${delegation.chain.length} steps)`
