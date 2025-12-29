@@ -11,11 +11,11 @@ import { getAgentDelegationArgs, getAgentDelegationUi, type AgentDelegationArgs,
 // Re-export for backwards compatibility
 export { getToolText, getEditDiffText }
 
-// Design tokens - state-based symbols
+// Design tokens - minimal symbols
 const symbols = {
-	running: "◌",
-	complete: "○",
-	expanded: "●",
+	running: "·",
+	complete: "▸",
+	expanded: "▾",
 	error: "✕",
 }
 
@@ -307,8 +307,7 @@ function defaultHeader(ctx: ToolRenderContext): JSX.Element {
 	return <ToolHeader label={ctx.name} detail={title} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 }
 
-// Tool header: symbol label detail · suffix
-// Symbol shows state: ◌ running, ○ complete, ● expanded, ✕ error
+// Tool header: compact "▸ label detail" format
 interface ToolHeaderProps {
 	label: string
 	detail?: string
@@ -330,15 +329,14 @@ function ToolHeader(props: ToolHeaderProps): JSX.Element {
 
 	const symbolColor = () => {
 		if (props.isError) return theme.error
-		if (!props.isComplete) return theme.textMuted
-		return theme.textMuted // subdued when complete
+		return theme.textMuted
 	}
 
+	// Tool name gets subtle accent, rest muted
 	return (
 		<text selectable={false}>
 			<span style={{ fg: symbolColor() }}>{symbol()}</span>
-			{" "}
-			<span style={{ fg: theme.textMuted }}>{props.label}</span>
+			<span style={{ fg: theme.accent }}> {props.label}</span>
 			<Show when={props.detail}>
 				<span style={{ fg: theme.textMuted }}> {props.detail}</span>
 			</Show>

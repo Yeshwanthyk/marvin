@@ -42,6 +42,14 @@ function ToolBlockWrapper(props: {
 
 // ----- Thinking Block Wrapper -----
 
+const THINKING_MAX_WIDTH = 50
+
+function truncateThinking(text: string): string {
+	const firstLine = text.split("\n")[0] || ""
+	if (firstLine.length <= THINKING_MAX_WIDTH) return firstLine
+	return firstLine.slice(0, THINKING_MAX_WIDTH - 1) + "…"
+}
+
 function ThinkingBlockWrapper(props: {
 	id: string
 	summary: string
@@ -52,22 +60,20 @@ function ThinkingBlockWrapper(props: {
 }) {
 	const { theme } = useTheme()
 	const expanded = createMemo(() => props.isExpanded(props.id))
+	const preview = () => truncateThinking(props.summary || props.full)
 
 	return (
-		<box paddingLeft={1} flexDirection="column">
+		<box paddingLeft={4} flexDirection="column">
 			<box
 				flexDirection="row"
-				gap={1}
 				onMouseUp={(e: { isSelecting?: boolean }) => {
 					if (e.isSelecting) return
 					props.onToggle(props.id)
 				}}
 			>
-				<text selectable={false} fg={theme.textMuted}>◦</text>
-				<text selectable={false} fg={theme.textMuted} attributes={TextAttributes.ITALIC}>
-					{expanded() ? "" : props.summary}
+				<text selectable={false} fg={theme.textMuted}>
+					{expanded() ? "▾" : "▸"} {preview()}
 				</text>
-				<text selectable={false} fg={theme.textMuted}>{expanded() ? "▴" : "▸"}</text>
 			</box>
 			<Show when={expanded()}>
 				<box paddingLeft={2} paddingTop={1}>
@@ -317,7 +323,7 @@ export function MessageList(props: MessageListProps) {
 						</Match>
 						<Match when={item.type === "tool" && item}>
 							{(toolItem) => (
-								<box paddingLeft={3}>
+								<box paddingLeft={4}>
 									<ToolBlockWrapper
 										tool={toolItem().tool}
 										isExpanded={props.isToolExpanded}
