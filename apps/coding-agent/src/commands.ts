@@ -278,7 +278,7 @@ async function handleCompactCmd(args: string, ctx: CommandContext): Promise<bool
 	ctx.setIsResponding(true)
 
 	try {
-		const { summary, summaryMessage } = await doCompact({
+		const { summary, summaryMessage, fileOps: _fileOps } = await doCompact({
 			agent: ctx.agent,
 			currentProvider: ctx.currentProvider,
 			getApiKey: ctx.getApiKey,

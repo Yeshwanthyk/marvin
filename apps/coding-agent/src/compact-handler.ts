@@ -2,6 +2,81 @@ import type { Agent, AppMessage } from '@marvin-agents/agent-core';
 import { completeSimple, type Message, type TextContent } from '@marvin-agents/ai';
 import type { CodexTransport } from '@marvin-agents/agent-core';
 
+/**
+ * Tracks file operations across messages for deterministic file list generation.
+ */
+export interface FileOperations {
+  read: Set<string>;
+  written: Set<string>;
+  edited: Set<string>;
+}
+
+/**
+ * Extract file operations from a single message's tool calls.
+ */
+function extractFileOpsFromMessage(message: Message, fileOps: FileOperations): void {
+  if (message.role !== 'assistant') return;
+  
+  for (const block of message.content) {
+    if (block.type !== 'toolCall') continue;
+    
+    const path = block.arguments?.path;
+    if (typeof path !== 'string') continue;
+    
+    switch (block.name) {
+      case 'read':
+        fileOps.read.add(path);
+        break;
+      case 'write':
+        fileOps.written.add(path);
+        break;
+      case 'edit':
+        fileOps.edited.add(path);
+        break;
+    }
+  }
+}
+
+/**
+ * Extract file operations from all messages.
+ */
+export function extractAllFileOps(messages: Message[]): FileOperations {
+  const fileOps: FileOperations = {
+    read: new Set(),
+    written: new Set(),
+    edited: new Set(),
+  };
+  
+  for (const msg of messages) {
+    extractFileOpsFromMessage(msg, fileOps);
+  }
+  
+  return fileOps;
+}
+
+/**
+ * Format file operations as XML tags for appending to summary.
+ * Modified files = edited ∪ written
+ * Read files = read - modified (files only read, not modified)
+ */
+export function formatFileOperations(fileOps: FileOperations): string {
+  const modified = new Set([...fileOps.edited, ...fileOps.written]);
+  const readOnly = [...fileOps.read].filter(f => !modified.has(f)).sort();
+  const modifiedList = [...modified].sort();
+  
+  let result = '';
+  
+  if (readOnly.length > 0) {
+    result += `\n\n<read-files>\n${readOnly.join('\n')}\n</read-files>`;
+  }
+  
+  if (modifiedList.length > 0) {
+    result += `\n\n<modified-files>\n${modifiedList.join('\n')}\n</modified-files>`;
+  }
+  
+  return result;
+}
+
 export const SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
 
 <summary>
@@ -10,20 +85,48 @@ export const SUMMARY_PREFIX = `The conversation history before this point was co
 export const SUMMARY_SUFFIX = `
 </summary>`;
 
-const SUMMARIZATION_PROMPT = `You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.
+const SUMMARIZATION_PROMPT = `You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM.
 
-Include:
-- Current progress and key decisions made
-- Important context, constraints, or user preferences
-- Absolute file paths of any relevant files that were read or modified
-- What remains to be done (clear next steps)
-- Any critical data, examples, or references needed to continue
+Use this EXACT format:
 
-Be concise, structured, and focused on helping the next LLM seamlessly continue the work.`;
+## Goal
+[What is the user trying to accomplish? Can be multiple items if the session covers different tasks.]
+
+## Constraints & Preferences
+- [Any constraints, preferences, or requirements mentioned by user]
+- [Or "(none)" if none were mentioned]
+
+## Progress
+### Done
+- [x] [Completed task with relevant file paths]
+
+### In Progress
+- [ ] [Current work being done]
+
+### Blocked
+- [Issues preventing progress, if any, or "(none)"]
+
+## Key Decisions
+- **[Decision]**: [Brief rationale]
+- [Or "(none)" if no significant decisions]
+
+## Next Steps
+1. [Immediate next action]
+2. [Following actions in order]
+
+## Critical Context
+- [Data, examples, error messages, or references needed to continue]
+- [Or "(none)" if not applicable]
+
+IMPORTANT:
+- Be concise but preserve ALL important details
+- Include exact file paths, function names, error messages
+- Preserve any code snippets or data the next LLM will need`;
 
 export interface CompactResult {
   summary: string;
   summaryMessage: AppMessage;
+  fileOps: FileOperations;
 }
 
 export interface CompactOptions {
@@ -81,7 +184,7 @@ export async function handleCompact(opts: CompactOptions): Promise<CompactResult
     throw new Error(response.errorMessage);
   }
 
-  const summary = response.content
+  let summary = response.content
     .filter((c): c is TextContent => c.type === 'text')
     .map((c) => c.text)
     .join('\n');
@@ -91,11 +194,15 @@ export async function handleCompact(opts: CompactOptions): Promise<CompactResult
     throw new Error(`No text in response (got: ${contentTypes || 'empty'})`);
   }
 
+  // Extract file operations and append to summary
+  const fileOps = extractAllFileOps(messages);
+  summary += formatFileOperations(fileOps);
+
   const summaryMessage: AppMessage = {
     role: 'user',
     content: [{ type: 'text', text: SUMMARY_PREFIX + summary + SUMMARY_SUFFIX }],
     timestamp: Date.now(),
   };
 
-  return { summary, summaryMessage };
+  return { summary, summaryMessage, fileOps };
 }
