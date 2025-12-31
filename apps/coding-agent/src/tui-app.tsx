@@ -704,7 +704,7 @@ function MainView(props: MainViewProps) {
 	}
 	props.editorOpenRef.current = openEditorFromTui
 
-	const handleEditFile = async (filePath: string) => {
+	const handleEditFile = async (filePath: string, line?: number) => {
 		// Don't allow while agent is responding
 		if (props.isResponding) return
 
@@ -724,6 +724,7 @@ function MainView(props: MainViewProps) {
 			await openFileInEditor({
 				editor,
 				filePath,
+				line,
 				cwd: process.cwd(),
 				renderer,
 			})

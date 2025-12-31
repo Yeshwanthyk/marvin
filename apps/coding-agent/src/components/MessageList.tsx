@@ -15,7 +15,7 @@ function ToolBlockWrapper(props: {
 	isExpanded: (id: string) => boolean
 	onToggle: (id: string) => void
 	diffWrapMode: "word" | "none"
-	onEditFile?: (path: string) => void
+	onEditFile?: (path: string, line?: number) => void
 }) {
 	const expanded = createMemo(() => props.isExpanded(props.tool.id))
 
@@ -274,7 +274,7 @@ export interface MessageListProps {
 	toggleToolExpanded: (id: string) => void
 	isThinkingExpanded: (id: string) => boolean
 	toggleThinkingExpanded: (id: string) => void
-	onEditFile?: (path: string) => void
+	onEditFile?: (path: string, line?: number) => void
 }
 
 export function MessageList(props: MessageListProps) {

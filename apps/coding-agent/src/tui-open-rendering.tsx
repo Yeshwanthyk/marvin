@@ -222,7 +222,13 @@ function getDiffStats(diffText: string): { added: number; removed: number } {
 	return { added, removed }
 }
 
-
+function getDiffStartLine(diffText: string): number | undefined {
+	const match = diffText.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/m)
+	if (!match) return undefined
+	const line = Number.parseInt(match[1], 10)
+	if (!Number.isFinite(line) || line <= 0) return undefined
+	return line
+}
 
 function toolTitle(name: string, args: any): string {
 	switch (name) {
@@ -272,7 +278,7 @@ export interface ToolBlockProps {
 	onToggleExpanded?: () => void
 	diffWrapMode?: "word" | "none"
 	// Edit file callback - opens file in editor for user review
-	onEditFile?: (path: string) => void
+	onEditFile?: (path: string, line?: number) => void
 	// Custom tool metadata
 	label?: string
 	source?: "builtin" | "custom"
@@ -294,7 +300,7 @@ interface ToolRenderContext {
 	isComplete: boolean
 	expanded: boolean
 	diffWrapMode: "word" | "none"
-	onEditFile?: (path: string) => void
+	onEditFile?: (path: string, line?: number) => void
 }
 
 interface ToolRenderer {
@@ -431,6 +437,7 @@ const registry: Record<string, ToolRenderer> = {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const fullPath = String(ctx.args?.path || ctx.args?.file_path || "")
 			const diffStats = ctx.editDiff ? getDiffStats(ctx.editDiff) : null
+			const startLine = ctx.editDiff ? getDiffStartLine(ctx.editDiff) : undefined
 			const suffix = ctx.isComplete && !ctx.isError && diffStats ? `+${diffStats.added}/-${diffStats.removed}` : undefined
 			const showEditButton = ctx.isComplete && !ctx.isError && ctx.onEditFile && fullPath
 			return (
@@ -441,7 +448,7 @@ const registry: Record<string, ToolRenderer> = {
 							fg={theme.textMuted}
 							onMouseUp={(e: { stopPropagation?: () => void }) => {
 								e.stopPropagation?.()
-								ctx.onEditFile?.(fullPath)
+								ctx.onEditFile?.(fullPath, startLine)
 							}}
 						>
 							{" [e]"}
