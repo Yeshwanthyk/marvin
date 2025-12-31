@@ -6,6 +6,24 @@ import type { CliRenderer } from "@marvin-agents/open-tui"
 import type { EditorConfig } from "./config.js"
 
 const CWD_PLACEHOLDER = "{cwd}"
+const LINE_JUMP_EDITORS = new Set([
+	"vi",
+	"vim",
+	"nvim",
+	"emacs",
+	"emacsclient",
+	"nano",
+	"hx",
+	"helix",
+	"micro",
+	"kak",
+	"kakoune",
+])
+
+const supportsLineJump = (command: string): boolean => {
+	const baseName = path.basename(command).toLowerCase()
+	return LINE_JUMP_EDITORS.has(baseName)
+}
 
 export const buildEditorInvocation = (
 	editor: EditorConfig,
@@ -63,16 +81,20 @@ export const openExternalEditor = async (opts: {
 export const openFileInEditor = async (opts: {
 	editor: EditorConfig
 	filePath: string
+	line?: number
 	cwd: string
 	renderer: CliRenderer
 }): Promise<void> => {
 	const { command, args } = buildEditorInvocation(opts.editor, opts.cwd, { appendCwd: false })
+	const lineArg = typeof opts.line === "number" && Number.isFinite(opts.line) && opts.line > 0 && supportsLineJump(command)
+		? [`+${opts.line}`]
+		: []
 
 	opts.renderer.suspend()
 	opts.renderer.currentRenderBuffer.clear()
 
 	try {
-		await runEditor(command, [...args, opts.filePath], opts.cwd)
+		await runEditor(command, [...args, ...lineArg, opts.filePath], opts.cwd)
 	} finally {
 		opts.renderer.currentRenderBuffer.clear()
 		opts.renderer.resume()
