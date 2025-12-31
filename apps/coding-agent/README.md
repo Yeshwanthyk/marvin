@@ -112,11 +112,17 @@ Options:
 |-----|--------|
 | `Enter` | Send message |
 | `Ctrl+C` | Clear input / double to exit |
+| `Esc` | Abort current request / dismiss autocomplete |
 | `Ctrl+P` | Cycle through model list |
 | `Ctrl+L` | Clear screen |
 | `Ctrl+N/P` | Autocomplete navigation |
 | `Tab` | Accept autocomplete |
-| `Esc` | Abort current request / dismiss autocomplete |
+
+### Shell Mode
+
+Prefix input with `!` for quick shell commands:
+- `! ls -la` — Run command, show output
+- `!! git status` — Run command and inject output into context
 
 ## Slash Commands
 
@@ -127,6 +133,8 @@ Options:
 | `/theme [name]` | Switch theme (30+ built-in) |
 | `/editor` | Open configured editor |
 | `/compact [instructions]` | Compress context |
+| `/status` | Show agent/session status |
+| `/conceal` | Toggle markdown syntax hiding |
 | `/clear` | Clear conversation |
 | `/diffwrap` | Toggle diff word-wrap |
 | `/exit`, `/quit` | Exit |

@@ -107,10 +107,19 @@ All config in `~/.config/marvin/`:
 /model [provider] <id>    Switch model
 /thinking <level>         Set thinking level
 /theme [name]             Switch theme
+/editor                   Open external editor
 /compact [instructions]   Compress context
+/status                   Show agent/session status
+/conceal                  Toggle markdown syntax hiding
 /clear                    Clear conversation
 /exit                     Exit
 ```
+
+## Shell Mode
+
+Prefix input with `!` for quick shell commands:
+- `! ls -la` — Run command, show output
+- `!! git status` — Run and inject output into context
 
 ## Extensibility
 

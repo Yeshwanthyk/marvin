@@ -36,7 +36,7 @@ import { loadCustomTools, getToolNames, type SendRef } from "./custom-tools/inde
 type KnownProvider = ReturnType<typeof getProviders>[number]
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
-const MESSAGE_CAP = 30 // Max messages in UI for performance
+const MESSAGE_CAP = 75 // Max messages in UI for performance
 
 /** Append to array with cap */
 const appendWithCap = <T,>(arr: T[], item: T, cap = MESSAGE_CAP): T[] => {

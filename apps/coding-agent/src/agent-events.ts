@@ -72,7 +72,7 @@ const UPDATE_THROTTLE_SLOW_MS = 180
 const UPDATE_THROTTLE_SLOWEST_MS = 220
 const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
 const STREAMING_TAIL_CHARS = 4000
-const MESSAGE_CAP = 30 // Max messages in UI for performance
+const MESSAGE_CAP = 75 // Max messages in UI for performance
 
 /** Append to array with cap */
 function appendWithCap<T>(arr: T[], item: T, cap = MESSAGE_CAP): T[] {
