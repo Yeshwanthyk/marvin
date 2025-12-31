@@ -34,9 +34,13 @@ marvin --headless "fix the types"
 |----------|------|-------|
 | Anthropic | `ANTHROPIC_API_KEY` or OAuth | Pro/Max plans via OAuth flow |
 | OpenAI | `OPENAI_API_KEY` | GPT-4o, o1, o3 |
-| Codex | CodexTransport | OAuth-based, `bun run codex-auth` |
 | Google | `GOOGLE_API_KEY` | Gemini models |
-| opencode | `OPENCODE_API_KEY` | Zen |
+| Codex | OAuth | `bun run codex-auth` |
+| OpenRouter | `OPENROUTER_API_KEY` | Multi-provider gateway |
+| Groq | `GROQ_API_KEY` | Fast inference |
+| xAI | `XAI_API_KEY` | Grok models |
+| Mistral | `MISTRAL_API_KEY` | Mistral models |
+| Cerebras | `CEREBRAS_API_KEY` | Quick inference |
 
 ## Configuration
 
@@ -96,7 +100,7 @@ Project-level (merged with global):
 marvin [prompt]
 
 Options:
-  --provider <name>      Provider (anthropic, openai, codex, google, opencode)
+  --provider <name>      Provider (anthropic, openai, google, codex, openrouter, groq, xai, mistral, cerebras)
   --model <id>           Model id or comma-separated list (Ctrl+P to cycle)
   --thinking <level>     off | minimal | low | medium | high | xhigh
   --continue, -c         Continue most recent session
@@ -133,10 +137,11 @@ Prefix input with `!` for quick shell commands:
 | `/theme [name]` | Switch theme (30+ built-in) |
 | `/editor` | Open configured editor |
 | `/compact [instructions]` | Compress context |
-| `/status` | Show agent/session status |
+| `/status` | Show session status |
 | `/conceal` | Toggle markdown syntax hiding |
-| `/clear` | Clear conversation |
 | `/diffwrap` | Toggle diff word-wrap |
+| `/abort` | Abort in-flight request |
+| `/clear` | Clear chat + reset agent |
 | `/exit`, `/quit` | Exit |
 
 Custom commands: `~/.config/marvin/commands/*.md`
