@@ -278,12 +278,20 @@ async function handleCompactCmd(args: string, ctx: CommandContext): Promise<bool
 	ctx.setIsResponding(true)
 
 	try {
-		const { summary, summaryMessage, fileOps: _fileOps } = await doCompact({
+		// Get previous compaction state for iterative update
+		const prevState = ctx.sessionManager.getCompactionState()
+		
+		const { summary, summaryMessage, fileOps } = await doCompact({
 			agent: ctx.agent,
 			currentProvider: ctx.currentProvider,
 			getApiKey: ctx.getApiKey,
 			codexTransport: ctx.codexTransport,
 			customInstructions,
+			previousSummary: prevState?.lastSummary,
+			previousFileOps: prevState ? { 
+				readFiles: prevState.readFiles, 
+				modifiedFiles: prevState.modifiedFiles 
+			} : undefined,
 		})
 
 		// Reset agent and add summary message
@@ -293,6 +301,15 @@ async function handleCompactCmd(args: string, ctx: CommandContext): Promise<bool
 		// Start a new session containing the compacted context, so resume works as expected.
 		ctx.sessionManager.startSession(ctx.currentProvider, ctx.currentModelId, ctx.currentThinking)
 		ctx.sessionManager.appendMessage(summaryMessage)
+		
+		// Store compaction state for next iteration
+		const modified = new Set([...fileOps.edited, ...fileOps.written])
+		const readOnly = [...fileOps.read].filter(f => !modified.has(f))
+		ctx.sessionManager.updateCompactionState({
+			lastSummary: summary,
+			readFiles: readOnly.sort(),
+			modifiedFiles: [...modified].sort(),
+		})
 
 		// Clear UI and show compaction result
 		ctx.setMessages(() => [

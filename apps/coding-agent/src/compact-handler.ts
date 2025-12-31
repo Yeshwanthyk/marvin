@@ -123,6 +123,48 @@ IMPORTANT:
 - Include exact file paths, function names, error messages
 - Preserve any code snippets or data the next LLM will need`;
 
+const UPDATE_SUMMARIZATION_PROMPT = `You are performing a CONTEXT CHECKPOINT COMPACTION. The previous summary is provided in <previous-summary> tags. Update it with information from the NEW messages above.
+
+RULES:
+- PRESERVE all existing information from the previous summary
+- ADD new progress, decisions, and context from the new messages
+- UPDATE the Progress section: move items from "In Progress" to "Done" when completed
+- UPDATE "Next Steps" based on what was accomplished
+- PRESERVE exact file paths, function names, and error messages
+- If something is no longer relevant, you may remove it
+- Keep the same structured format
+
+Use this EXACT format:
+
+## Goal
+[What is the user trying to accomplish? Can be multiple items if the session covers different tasks.]
+
+## Constraints & Preferences
+- [Any constraints, preferences, or requirements mentioned by user]
+- [Or "(none)" if none were mentioned]
+
+## Progress
+### Done
+- [x] [Completed task with relevant file paths]
+
+### In Progress
+- [ ] [Current work being done]
+
+### Blocked
+- [Issues preventing progress, if any, or "(none)"]
+
+## Key Decisions
+- **[Decision]**: [Brief rationale]
+- [Or "(none)" if no significant decisions]
+
+## Next Steps
+1. [Immediate next action]
+2. [Following actions in order]
+
+## Critical Context
+- [Data, examples, error messages, or references needed to continue]
+- [Or "(none)" if not applicable]`;
+
 export interface CompactResult {
   summary: string;
   summaryMessage: AppMessage;
@@ -135,10 +177,12 @@ export interface CompactOptions {
   getApiKey: (provider: string) => string | undefined;
   codexTransport: CodexTransport;
   customInstructions?: string;
+  previousSummary?: string;
+  previousFileOps?: { readFiles: string[]; modifiedFiles: string[] };
 }
 
 export async function handleCompact(opts: CompactOptions): Promise<CompactResult> {
-  const { agent, currentProvider, getApiKey, codexTransport, customInstructions } = opts;
+  const { agent, currentProvider, getApiKey, codexTransport, customInstructions, previousSummary, previousFileOps } = opts;
   const model = agent.state.model;
   
   if (!model) {
@@ -150,9 +194,17 @@ export async function handleCompact(opts: CompactOptions): Promise<CompactResult
     (m) => m.role === 'user' || m.role === 'assistant' || m.role === 'toolResult'
   ) as Message[];
 
+  // Choose prompt based on whether we have a previous summary
+  let basePrompt: string;
+  if (previousSummary) {
+    basePrompt = `${UPDATE_SUMMARIZATION_PROMPT}\n\n<previous-summary>\n${previousSummary}\n</previous-summary>`;
+  } else {
+    basePrompt = SUMMARIZATION_PROMPT;
+  }
+  
   const prompt = customInstructions
-    ? `${SUMMARIZATION_PROMPT}\n\nAdditional focus: ${customInstructions}`
-    : SUMMARIZATION_PROMPT;
+    ? `${basePrompt}\n\nAdditional focus: ${customInstructions}`
+    : basePrompt;
 
   const summarizationMessages: Message[] = [
     ...messages,
@@ -194,8 +246,20 @@ export async function handleCompact(opts: CompactOptions): Promise<CompactResult
     throw new Error(`No text in response (got: ${contentTypes || 'empty'})`);
   }
 
-  // Extract file operations and append to summary
+  // Extract file operations from current messages
   const fileOps = extractAllFileOps(messages);
+  
+  // Merge with previous file operations (union)
+  if (previousFileOps) {
+    for (const path of previousFileOps.readFiles) {
+      fileOps.read.add(path);
+    }
+    for (const path of previousFileOps.modifiedFiles) {
+      // Previous modified files go into written (they were modified at some point)
+      fileOps.written.add(path);
+    }
+  }
+  
   summary += formatFileOperations(fileOps);
 
   const summaryMessage: AppMessage = {

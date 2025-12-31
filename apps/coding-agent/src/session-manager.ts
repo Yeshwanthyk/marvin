@@ -6,6 +6,15 @@ import type { AppMessage, ThinkingLevel } from '@marvin-agents/agent-core';
 // Ensure strictly increasing timestamps within a process, even if multiple sessions start in the same millisecond.
 let lastSessionTimestamp = 0;
 
+/**
+ * Compaction state stored in session for iterative updates.
+ */
+export interface CompactionState {
+  lastSummary: string;
+  readFiles: string[];
+  modifiedFiles: string[];
+}
+
 export interface SessionMetadata {
   type: 'session';
   id: string;
@@ -14,6 +23,7 @@ export interface SessionMetadata {
   provider: string;
   modelId: string;
   thinkingLevel: ThinkingLevel;
+  compaction?: CompactionState;
 }
 
 export interface SessionMessageEntry {
@@ -118,6 +128,47 @@ export class SessionManager {
   continueSession(sessionPath: string, sessionId: string): void {
     this.currentSessionPath = sessionPath;
     this.currentSessionId = sessionId;
+  }
+
+  /**
+   * Update compaction state in current session metadata.
+   * Rewrites the session file with updated metadata.
+   */
+  updateCompactionState(state: CompactionState): void {
+    if (!this.currentSessionPath) return;
+    
+    try {
+      const content = readFileSync(this.currentSessionPath, 'utf8');
+      const lines = content.trim().split('\n');
+      if (lines.length === 0) return;
+      
+      const metadata = JSON.parse(lines[0]!) as SessionMetadata;
+      metadata.compaction = state;
+      
+      // Rewrite file with updated metadata
+      lines[0] = JSON.stringify(metadata);
+      writeFileSync(this.currentSessionPath, lines.join('\n') + '\n');
+    } catch (err) {
+      console.error('Failed to update compaction state:', err);
+    }
+  }
+
+  /**
+   * Get current compaction state from session metadata.
+   */
+  getCompactionState(): CompactionState | undefined {
+    if (!this.currentSessionPath) return undefined;
+    
+    try {
+      const content = readFileSync(this.currentSessionPath, 'utf8');
+      const firstLine = content.split('\n')[0];
+      if (!firstLine) return undefined;
+      
+      const metadata = JSON.parse(firstLine) as SessionMetadata;
+      return metadata.compaction;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
