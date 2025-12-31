@@ -271,6 +271,8 @@ export interface ToolBlockProps {
 	expanded?: boolean
 	onToggleExpanded?: () => void
 	diffWrapMode?: "word" | "none"
+	// Edit file callback - opens file in editor for user review
+	onEditFile?: (path: string) => void
 	// Custom tool metadata
 	label?: string
 	source?: "builtin" | "custom"
@@ -292,6 +294,7 @@ interface ToolRenderContext {
 	isComplete: boolean
 	expanded: boolean
 	diffWrapMode: "word" | "none"
+	onEditFile?: (path: string) => void
 }
 
 interface ToolRenderer {
@@ -424,10 +427,28 @@ const registry: Record<string, ToolRenderer> = {
 	edit: {
 		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
 		renderHeader: (ctx) => {
+			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
+			const fullPath = String(ctx.args?.path || ctx.args?.file_path || "")
 			const diffStats = ctx.editDiff ? getDiffStats(ctx.editDiff) : null
 			const suffix = ctx.isComplete && !ctx.isError && diffStats ? `+${diffStats.added}/-${diffStats.removed}` : undefined
-			return <ToolHeader label="edit" detail={path} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
+			const showEditButton = ctx.isComplete && !ctx.isError && ctx.onEditFile && fullPath
+			return (
+				<box flexDirection="row">
+					<ToolHeader label="edit" detail={path} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
+					{showEditButton && (
+						<text
+							fg={theme.textMuted}
+							onMouseUp={(e: { stopPropagation?: () => void }) => {
+								e.stopPropagation?.()
+								ctx.onEditFile?.(fullPath)
+							}}
+						>
+							{" [e]"}
+						</text>
+					)}
+				</box>
+			)
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
@@ -462,6 +483,7 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 		isComplete: props.isComplete,
 		get expanded() { return props.expanded ?? false },
 		get diffWrapMode() { return props.diffWrapMode ?? "word" },
+		onEditFile: props.onEditFile,
 	}
 
 	const renderer = registry[props.name] ?? {

@@ -55,3 +55,27 @@ export const openExternalEditor = async (opts: {
 		await rm(dir, { recursive: true, force: true })
 	}
 }
+
+/**
+ * Open an existing file in the user's editor.
+ * Unlike openExternalEditor, this opens the file directly without creating a temp copy.
+ */
+export const openFileInEditor = async (opts: {
+	editor: EditorConfig
+	filePath: string
+	cwd: string
+	renderer: CliRenderer
+}): Promise<void> => {
+	const { command, args } = buildEditorInvocation(opts.editor, opts.cwd, { appendCwd: false })
+
+	opts.renderer.suspend()
+	opts.renderer.currentRenderBuffer.clear()
+
+	try {
+		await runEditor(command, [...args, opts.filePath], opts.cwd)
+	} finally {
+		opts.renderer.currentRenderBuffer.clear()
+		opts.renderer.resume()
+		opts.renderer.requestRender()
+	}
+}

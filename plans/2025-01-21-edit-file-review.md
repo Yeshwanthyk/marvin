@@ -10,10 +10,10 @@
   - Mouse click events work in the TUI (already proven with other clickable elements)
 
 ## Progress Tracking
-- [ ] Phase 1: Add `openFileInEditor` function
-- [ ] Phase 2: Thread `onEditFile` callback through component hierarchy
-- [ ] Phase 3: Add `[e]` UI element to edit tool header
-- [ ] Phase 4: Implement `handleEditFile` in tui-app
+- [x] Phase 1: Add `openFileInEditor` function
+- [x] Phase 2: Thread `onEditFile` callback through component hierarchy
+- [x] Phase 3: Add `[e]` UI element to edit tool header
+- [x] Phase 4: Implement `handleEditFile` in tui-app
 
 ## Overview
 Add `[e]` button to completed edit tool results. Clicking opens the file in user's editor. On return, if file was modified, inject the diff to conversation context as a queued user message.

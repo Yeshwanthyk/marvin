@@ -12,11 +12,12 @@ import { getApiKey, getModels, getProviders, type AgentTool, type Model, type Ap
 import { codingTools } from "@marvin-agents/base-tools"
 import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
 import { loadAppConfig, updateAppConfig, type EditorConfig } from "./config.js"
-import { openExternalEditor } from "./editor.js"
+import { openExternalEditor, openFileInEditor } from "./editor.js"
 import { createAutocompleteCommands } from "./autocomplete-commands.js"
 import { SessionManager, type LoadedSession } from "./session-manager.js"
 import { selectSession as selectSessionOpen } from "./session-picker.js"
 import { watch, type FSWatcher } from "fs"
+import { createPatch } from "diff"
 
 // Extracted modules
 import type { UIMessage, ToolBlock, ActivityState, UIContentBlock, UIShellMessage } from "./types.js"
@@ -703,6 +704,62 @@ function MainView(props: MainViewProps) {
 	}
 	props.editorOpenRef.current = openEditorFromTui
 
+	const handleEditFile = async (filePath: string) => {
+		// Don't allow while agent is responding
+		if (props.isResponding) return
+
+		const editor = props.editor ?? { command: "nvim", args: [] }
+
+		// Snapshot current content
+		let beforeContent: string
+		try {
+			beforeContent = await Bun.file(filePath).text()
+		} catch (err) {
+			pushToast({ title: `Cannot read file: ${filePath}`, variant: "error" }, 3000)
+			return
+		}
+
+		// Open editor
+		try {
+			await openFileInEditor({
+				editor,
+				filePath,
+				cwd: process.cwd(),
+				renderer,
+			})
+		} catch (err) {
+			pushToast({ title: `Editor failed: ${err instanceof Error ? err.message : String(err)}`, variant: "error" }, 3000)
+			return
+		}
+
+		// Read after
+		let afterContent: string
+		try {
+			afterContent = await Bun.file(filePath).text()
+		} catch (err) {
+			pushToast({ title: `Cannot read file after edit: ${filePath}`, variant: "error" }, 3000)
+			return
+		}
+
+		// Compare - if unchanged, do nothing
+		if (beforeContent === afterContent) {
+			return
+		}
+
+		// Compute diff
+		const diff = createPatch(filePath, beforeContent, afterContent)
+		// Trim header lines, keep from first @@ onwards
+		const lines = diff.split("\n")
+		const hunkStart = lines.findIndex((l) => l.startsWith("@@"))
+		const diffBody = hunkStart >= 0 ? lines.slice(hunkStart).join("\n") : diff
+
+		// Queue message for next turn
+		const message = `Modified ${filePath}:\n${diffBody}`
+		props.onSubmit(message)
+
+		pushToast({ title: "Edit recorded", variant: "success" }, 1500)
+	}
+
 	// Model switch detector - warn on downshifts
 	let prevContextWindow = props.contextWindow
 	createEffect(() => {
@@ -764,7 +821,7 @@ function MainView(props: MainViewProps) {
 				queueCount={props.queueCount} activityState={props.activityState} retryStatus={props.retryStatus} lspActive={props.lspActive} spinnerFrame={spinnerFrame()} lsp={props.lsp} />
 			<scrollbox stickyScroll stickyStart="bottom" flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
 				<MessageList messages={props.messages} toolBlocks={props.toolBlocks} thinkingVisible={props.thinkingVisible} diffWrapMode={props.diffWrapMode} concealMarkdown={props.concealMarkdown}
-					isToolExpanded={isToolExpanded} toggleToolExpanded={toggleToolExpanded} isThinkingExpanded={isThinkingExpanded} toggleThinkingExpanded={toggleThinkingExpanded} />
+					isToolExpanded={isToolExpanded} toggleToolExpanded={toggleToolExpanded} isThinkingExpanded={isThinkingExpanded} toggleThinkingExpanded={toggleThinkingExpanded} onEditFile={handleEditFile} />
 			</scrollbox>
 			<Show when={showAutocomplete() && autocompleteItems().length > 0}>
 				<box flexDirection="column" borderColor={theme.border} maxHeight={15} flexShrink={0}>
