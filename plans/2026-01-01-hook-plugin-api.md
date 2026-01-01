@@ -73,6 +73,7 @@ Marvin hooks currently support basic lifecycle events and tool interception, but
 - Hook API is extended (additive). Existing hooks remain compatible.
 - Session log format adds new `custom` entries (backward-compatible, ignored by old readers).
 - Tool hook behavior: `tool.execute.after` now fires on tool errors (additional callbacks).
+- `turn.end` event shape changes: `event.usage.percent` → `event.tokens` + `event.contextLimit` (affects auto-compact.ts).
 
 ## Dependency and Configuration Changes
 
@@ -1981,11 +1982,87 @@ it("turn.end includes token usage", async () => {
 it("ctx.session.summarize triggers compaction", async () => {
 	// call ctx.session.summarize() and verify compaction flow runs
 })
+
+it("auto-compact hook triggers at threshold", async () => {
+	// simulate turn.end with tokens.total / contextLimit >= 90%
+	// verify ctx.session.summarize() is called on agent.end
+})
 ```
 
-**Why**: Coverage for new hook surfaces, tools, token tracking, and session facade.
+**Why**: Coverage for new hook surfaces, tools, token tracking, session facade, and auto-compact migration.
 
-#### 6. Local Hook Setup (Manual)
+#### 6. Migrate auto-compact.ts Hook
+**File**: `~/.config/marvin/hooks/auto-compact.ts`
+
+**Before**:
+```ts
+interface HookAPI {
+  on(event: string, handler: (ev: any) => void): void
+  send(text: string): void
+}
+
+export default function autoCompact(marvin: HookAPI): void {
+  const threshold = Number(process.env.MARVIN_COMPACT_THRESHOLD) || 90
+  let shouldCompact = false
+  let compactPending = false
+
+  marvin.on("turn.end", (event) => {
+    if (!event.usage) return
+    if (event.usage.percent >= threshold && !compactPending) {
+      shouldCompact = true
+    }
+  })
+
+  marvin.on("agent.end", () => {
+    if (shouldCompact && !compactPending) {
+      compactPending = true
+      shouldCompact = false
+      marvin.send("/compact")
+    }
+  })
+
+  marvin.on("session.clear", () => {
+    shouldCompact = false
+    compactPending = false
+  })
+}
+```
+
+**After**:
+```ts
+import type { HookFactory, TurnEndEvent, HookEventContext } from "marvin/hooks"
+
+export default ((marvin) => {
+  const threshold = Number(process.env.MARVIN_COMPACT_THRESHOLD) || 90
+  let shouldCompact = false
+  let compactPending = false
+
+  marvin.on("turn.end", (event: TurnEndEvent) => {
+    if (!event.tokens || !event.contextLimit) return
+    const percent = (event.tokens.total / event.contextLimit) * 100
+    if (percent >= threshold && !compactPending) {
+      shouldCompact = true
+    }
+  })
+
+  marvin.on("agent.end", async (_event, ctx: HookEventContext) => {
+    if (shouldCompact && !compactPending) {
+      compactPending = true
+      shouldCompact = false
+      await ctx.session.summarize()
+    }
+  })
+
+  marvin.on("session.clear", () => {
+    shouldCompact = false
+    compactPending = false
+  })
+}) satisfies HookFactory
+```
+
+**Why**: Adapts to new token usage shape and uses cleaner `ctx.session.summarize()` API.
+
+#### 7. Local Hook Setup (Manual)
 **Paths**:
 - `~/.config/marvin/hooks/supermemory.ts`
 - `~/.config/marvin/hooks/gemini-auth.ts`
@@ -2125,6 +2202,7 @@ describe("tool.execute.after", () => {
 5. [ ] Verify `turn.end` event contains token usage (check with debug logging).
 6. [ ] Verify `ctx.session.summarize()` triggers compaction flow.
 7. [ ] Verify `ctx.session.toast()` shows notification in TUI.
+8. [ ] Verify migrated auto-compact.ts triggers compaction at threshold.
 
 ## Deployment Instructions
 
