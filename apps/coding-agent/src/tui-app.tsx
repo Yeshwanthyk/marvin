@@ -363,7 +363,7 @@ function App(props: AppProps) {
 	const eventCtx: EventHandlerContext = {
 		setMessages: setMessages as (updater: (prev: UIMessage[]) => UIMessage[]) => void,
 		setToolBlocks: setToolBlocks as (updater: (prev: ToolBlock[]) => ToolBlock[]) => void,
-		setActivityState, setIsResponding, setContextTokens, setCacheStats, setRetryStatus, setTurnCount,
+		setActivityState, setIsResponding, setContextTokens, setCacheStats, setRetryStatus, setTurnCount, setQueueCount,
 		queuedMessages, sessionManager, streamingMessageId: streamingMessageIdRef,
 		retryConfig, retryablePattern, retryState, agent: agent as EventHandlerContext["agent"],
 		hookRunner: props.hookRunner,

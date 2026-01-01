@@ -33,6 +33,7 @@ export interface EventHandlerContext {
 	setCacheStats: (v: { cacheRead: number; input: number } | null) => void
 	setRetryStatus: (v: string | null) => void
 	setTurnCount: (v: number) => void
+	setQueueCount: (v: number) => void
 
 	// Queue management
 	queuedMessages: string[]
@@ -375,6 +376,7 @@ function handleMessageStart(
 	if (event.message.role === "user") {
 		if (ctx.queuedMessages.length > 0) {
 			ctx.queuedMessages.shift()
+			ctx.setQueueCount(ctx.queuedMessages.length)
 			ctx.sessionManager.appendMessage(event.message as AppMessage)
 
 			const text = typeof event.message.content === "string"
