@@ -18,6 +18,24 @@ export const compactCommand: CommandDefinition = {
 
 		const customInstructions = args.trim() || undefined
 
+		// Emit session.before_compact hook - allows hooks to cancel or add context
+		const beforeCompactEvent = {
+			type: "session.before_compact" as const,
+			input: { sessionId: ctx.sessionManager.sessionId },
+			output: { cancel: false, prompt: undefined as string | undefined, context: [] as string[] },
+		}
+		await ctx.hookRunner?.emit(beforeCompactEvent)
+		if (beforeCompactEvent.output.cancel) {
+			addSystemMessage(ctx, "Compaction cancelled by hook")
+			return true
+		}
+
+		// Merge hook-provided instructions with user-provided ones
+		const hookPrompt = beforeCompactEvent.output.prompt
+		const mergedInstructions = [customInstructions, hookPrompt, ...beforeCompactEvent.output.context]
+			.filter(Boolean)
+			.join("\n\n") || undefined
+
 		ctx.setActivityState("compacting")
 		ctx.setIsResponding(true)
 
@@ -29,7 +47,7 @@ export const compactCommand: CommandDefinition = {
 				currentProvider: ctx.currentProvider,
 				getApiKey: ctx.getApiKey,
 				codexTransport: ctx.codexTransport,
-				customInstructions,
+				customInstructions: mergedInstructions,
 				previousSummary: prevState?.lastSummary,
 				previousFileOps: prevState
 					? {
@@ -37,6 +55,13 @@ export const compactCommand: CommandDefinition = {
 						modifiedFiles: prevState.modifiedFiles,
 					}
 					: undefined,
+			})
+
+			// Emit session.compact hook after successful compaction
+			await ctx.hookRunner?.emit({
+				type: "session.compact",
+				sessionId: ctx.sessionManager.sessionId,
+				summary,
 			})
 
 			ctx.agent.reset()
