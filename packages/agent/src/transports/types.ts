@@ -1,13 +1,21 @@
-import type { AgentEvent, AgentTool, Message, Model, QueuedMessage, ReasoningEffort } from "@marvin-agents/ai";
+import type { AgentEvent, AgentTool, Api, Message, Model, QueuedMessage, ReasoningEffort, SimpleStreamOptions } from "@marvin-agents/ai";
 
 /**
  * The minimal configuration needed to run an agent turn.
  */
 export interface AgentRunConfig {
 	systemPrompt: string;
-	tools: AgentTool<any>[];
-	model: Model<any>;
+	tools: AgentTool[];
+	model: Model<Api>;
 	reasoning?: ReasoningEffort;
+	/** Stream options (hook overridable) */
+	streamOptions?: SimpleStreamOptions;
+	/** API key override (from auth hook) */
+	apiKey?: string;
+	/** Custom headers override (from auth hook) */
+	headers?: Record<string, string>;
+	/** Base URL override (from model.resolve hook) */
+	baseUrl?: string;
 	getQueuedMessages?: <T>() => Promise<QueuedMessage<T>[]>;
 }
 

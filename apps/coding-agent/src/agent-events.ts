@@ -263,25 +263,46 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 			turnIndex = 0
 			ctx.setTurnCount(0) // Reset turn count for new agent run
 			extractionCache = createExtractionCache() // Reset for new agent run
-			void ctx.hookRunner?.emit({ type: "agent.start" })
+			void ctx.hookRunner?.emit({
+				type: "agent.start",
+				sessionId: ctx.sessionManager.sessionId,
+			})
 		}
 
 		if (event.type === "turn_start") {
 			ctx.setTurnCount(turnIndex + 1) // Update UI with current turn (1-indexed for display)
-			void ctx.hookRunner?.emit({ type: "turn.start", turnIndex })
+			void ctx.hookRunner?.emit({
+				type: "turn.start",
+				sessionId: ctx.sessionManager.sessionId,
+				turnIndex,
+			})
 		}
 
 		if (event.type === "turn_end") {
 			// Extract usage from message for hook consumption
-			const msgUsage = event.message as { usage?: { totalTokens?: number } }
+			const msgUsage = event.message as { usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number } }
 			const contextWindow = ctx.getContextWindow?.() ?? 0
 			const currentTokens = msgUsage.usage?.totalTokens ?? 0
 
+			const tokens = {
+				input: msgUsage.usage?.inputTokens ?? 0,
+				output: msgUsage.usage?.outputTokens ?? 0,
+				cacheRead: msgUsage.usage?.cacheReadInputTokens,
+				cacheWrite: msgUsage.usage?.cacheCreationInputTokens,
+				total: currentTokens,
+			}
+
+			// Update hook runner with token usage for session context
+			ctx.hookRunner?.updateTokenUsage(tokens, contextWindow)
+
 			void ctx.hookRunner?.emit({
 				type: "turn.end",
+				sessionId: ctx.sessionManager.sessionId,
 				turnIndex,
 				message: event.message,
 				toolResults: event.toolResults as ToolResultMessage[],
+				tokens,
+				contextLimit: contextWindow,
 				usage: contextWindow > 0 && currentTokens > 0
 					? { current: currentTokens, max: contextWindow, percent: (currentTokens / contextWindow) * 100 }
 					: undefined,
@@ -590,8 +611,16 @@ function handleAgentEnd(
 ): void {
 	ctx.streamingMessageId.current = null
 
-	// Emit hook event
-	void ctx.hookRunner?.emit({ type: "agent.end", messages: event.messages })
+	// Emit hook event - aggregate total tokens from all turns
+	const totalTokens = ctx.hookRunner?.getContext?.()?.session?.getTokenUsage?.() ?? { input: 0, output: 0, total: 0 }
+	const contextLimit = ctx.getContextWindow?.() ?? 0
+	void ctx.hookRunner?.emit({
+		type: "agent.end",
+		sessionId: ctx.sessionManager.sessionId,
+		messages: event.messages,
+		totalTokens,
+		contextLimit,
+	})
 
 	// Check for retryable error
 	const lastMsg = ctx.agent.state.messages[ctx.agent.state.messages.length - 1] as AssistantMessage | undefined

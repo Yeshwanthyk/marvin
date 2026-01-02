@@ -142,12 +142,14 @@ export const createRuntime = async (
 	const { commands: customCommands, issues: commandIssues } = loadCustomCommands(loaded.configDir)
 	const cwd = process.cwd()
 	const sendRef: SendRef = { current: () => {} }
+	const sessionManager = new SessionManager(loaded.configDir)
 	const extensibility = await loadExtensibility({
 		configDir: loaded.configDir,
 		cwd,
 		sendRef,
 		builtinTools: codingTools,
 		hasUI: adapter === "tui",
+		sessionManager,
 	})
 
 	const validationIssues: ValidationIssue[] = [...commandIssues, ...extensibility.validationIssues]
@@ -188,7 +190,6 @@ export const createRuntime = async (
 
 	await extensibility.hookRunner.emit({ type: "app.start" })
 
-	const sessionManager = new SessionManager(loaded.configDir)
 	const toolByName = buildToolRegistry(extensibility.customTools)
 	const cycleModels = buildCycleModels(args.model, loaded)
 

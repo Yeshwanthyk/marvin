@@ -3,25 +3,61 @@
  */
 
 import { spawn } from "node:child_process"
-import type { LoadedHook, SendHandler } from "./loader.js"
+import type { AppendEntryHandler, LoadedHook, SendHandler, SendMessageHandler } from "./loader.js"
 import type {
+	BeforeAgentStartEvent,
+	BeforeAgentStartResult,
+	ChatMessageEvent,
+	ChatMessagesTransformEvent,
+	ChatParamsEvent,
+	ChatSystemTransformEvent,
+	AuthGetEvent,
 	ExecOptions,
 	ExecResult,
 	HookError,
 	HookEvent,
 	HookEventContext,
 	HookEventType,
+	HookMessageRenderer,
+	HookSessionContext,
+	HookUIContext,
+	ModelResolveEvent,
+	RegisteredCommand,
+	RegisteredTool,
+	TokenUsage,
 	ToolExecuteBeforeEvent,
 	ToolExecuteBeforeResult,
 	ToolExecuteAfterEvent,
 	ToolExecuteAfterResult,
 } from "./types.js"
-
-/** Default timeout for hook execution (5 seconds) */
-const DEFAULT_TIMEOUT = 5000
+import type { AgentRunConfig } from "@marvin-agents/agent-core"
+import type { Api, ImageContent, Message, Model } from "@marvin-agents/ai"
+import type { ReadonlySessionManager } from "../session-manager.js"
 
 /** Listener for hook errors */
 export type HookErrorListener = (error: HookError) => void
+
+/** No-op UI context for headless/ACP modes */
+const noOpUIContext: HookUIContext = {
+	select: async () => undefined,
+	confirm: async () => false,
+	input: async () => undefined,
+	editor: async () => undefined,
+	notify: () => {},
+	custom: async () => undefined,
+	setEditorText: () => {},
+	getEditorText: () => "",
+}
+
+/** No-op session context for headless/ACP modes */
+const noOpSessionContext: HookSessionContext = {
+	summarize: async () => {},
+	toast: () => {},
+	getTokenUsage: () => undefined,
+	getContextLimit: () => undefined,
+	newSession: async () => ({ cancelled: true }),
+	getApiKey: async () => undefined,
+}
 
 /**
  * Execute a command and return stdout/stderr/code.
@@ -71,15 +107,6 @@ async function exec(command: string, args: string[], cwd: string, options?: Exec
 	})
 }
 
-/** Create a timeout promise */
-function createTimeout(ms: number): { promise: Promise<never>; clear: () => void } {
-	let timeoutId: ReturnType<typeof setTimeout>
-	const promise = new Promise<never>((_, reject) => {
-		timeoutId = setTimeout(() => reject(new Error(`Hook timed out after ${ms}ms`)), ms)
-	})
-	return { promise, clear: () => clearTimeout(timeoutId) }
-}
-
 /**
  * HookRunner executes hooks and manages event emission.
  */
@@ -87,14 +114,58 @@ export class HookRunner {
 	private hooks: LoadedHook[]
 	private cwd: string
 	private configDir: string
-	private timeout: number
+	private sessionManager: ReadonlySessionManager
+	private uiContext: HookUIContext
+	private sessionContext: HookSessionContext
+	private hasUI: boolean
 	private errorListeners = new Set<HookErrorListener>()
+	private sessionIdProvider: () => string | null
+	private modelProvider: () => Model<Api> | null
+	private tokenUsage: TokenUsage | undefined
+	private contextLimit: number | undefined
 
-	constructor(hooks: LoadedHook[], cwd: string, configDir: string, timeout = DEFAULT_TIMEOUT) {
+	constructor(hooks: LoadedHook[], cwd: string, configDir: string, sessionManager: ReadonlySessionManager) {
 		this.hooks = hooks
 		this.cwd = cwd
 		this.configDir = configDir
-		this.timeout = timeout
+		this.sessionManager = sessionManager
+		this.uiContext = noOpUIContext
+		this.sessionContext = noOpSessionContext
+		this.hasUI = false
+		this.sessionIdProvider = () => null
+		this.modelProvider = () => null
+	}
+
+	/**
+	 * Initialize the runner with handlers and context providers.
+	 * Must be called before emitting events.
+	 */
+	initialize(options: {
+		sendHandler: SendHandler
+		sendMessageHandler: SendMessageHandler
+		appendEntryHandler: AppendEntryHandler
+		getSessionId: () => string | null
+		getModel: () => Model<Api> | null
+		uiContext?: HookUIContext
+		sessionContext?: HookSessionContext
+		hasUI?: boolean
+	}): void {
+		this.sessionIdProvider = options.getSessionId
+		this.modelProvider = options.getModel
+		this.uiContext = options.uiContext ?? noOpUIContext
+		this.sessionContext = options.sessionContext ?? noOpSessionContext
+		this.hasUI = options.hasUI ?? false
+		for (const hook of this.hooks) {
+			hook.setSendHandler(options.sendHandler)
+			hook.setSendMessageHandler(options.sendMessageHandler)
+			hook.setAppendEntryHandler(options.appendEntryHandler)
+		}
+	}
+
+	/** Update token usage for context tracking */
+	updateTokenUsage(tokens: TokenUsage, contextLimit: number): void {
+		this.tokenUsage = tokens
+		this.contextLimit = contextLimit
 	}
 
 	/** Get the paths of all loaded hooks */
@@ -138,6 +209,16 @@ export class HookRunner {
 			exec: (command: string, args: string[], options?: ExecOptions) => exec(command, args, this.cwd, options),
 			cwd: this.cwd,
 			configDir: this.configDir,
+			sessionId: this.sessionIdProvider(),
+			sessionManager: this.sessionManager,
+			model: this.modelProvider(),
+			ui: this.uiContext,
+			hasUI: this.hasUI,
+			session: {
+				...this.sessionContext,
+				getTokenUsage: () => this.tokenUsage,
+				getContextLimit: () => this.contextLimit,
+			},
 		}
 	}
 
@@ -149,14 +230,12 @@ export class HookRunner {
 		const ctx = this.createContext()
 
 		for (const hook of this.hooks) {
-			const handlers = hook.handlers.get(event.type as HookEventType)
+			const handlers = hook.handlers.get(event.type)
 			if (!handlers || handlers.length === 0) continue
 
 			for (const handler of handlers) {
 				try {
-					const timeout = createTimeout(this.timeout)
-					await Promise.race([handler(event, ctx), timeout.promise])
-					timeout.clear()
+					await handler(event, ctx)
 				} catch (err) {
 					const message = err instanceof Error ? err.message : String(err)
 					this.emitError({ hookPath: hook.path, event: event.type, error: message })
@@ -204,9 +283,7 @@ export class HookRunner {
 
 			for (const handler of handlers) {
 				try {
-					const timeout = createTimeout(this.timeout)
-					const handlerResult = await Promise.race([handler(event, ctx), timeout.promise]) as ToolExecuteAfterResult | undefined
-					timeout.clear()
+					const handlerResult = await handler(event, ctx) as ToolExecuteAfterResult | undefined
 
 					if (handlerResult) {
 						result = handlerResult
@@ -224,11 +301,134 @@ export class HookRunner {
 
 		return result
 	}
+
+	/** Get current session ID */
+	getSessionId(): string | null {
+		return this.sessionIdProvider()
+	}
+
+	/** Get current hook context */
+	getContext(): HookEventContext {
+		return this.createContext()
+	}
+
+	/** Get message renderer for a custom type */
+	getMessageRenderer(customType: string): HookMessageRenderer | undefined {
+		for (const hook of this.hooks) {
+			const renderer = hook.messageRenderers.get(customType)
+			if (renderer) return renderer
+		}
+		return undefined
+	}
+
+	/** Get all registered commands */
+	getRegisteredCommands(): RegisteredCommand[] {
+		const commands: RegisteredCommand[] = []
+		for (const hook of this.hooks) {
+			for (const cmd of hook.commands.values()) commands.push(cmd)
+		}
+		return commands
+	}
+
+	/** Get a registered command by name */
+	getCommand(name: string): RegisteredCommand | undefined {
+		for (const hook of this.hooks) {
+			const cmd = hook.commands.get(name)
+			if (cmd) return cmd
+		}
+		return undefined
+	}
+
+	/** Get all registered tools */
+	getRegisteredTools(): RegisteredTool[] {
+		const tools: RegisteredTool[] = []
+		for (const hook of this.hooks) {
+			for (const tool of hook.tools.values()) tools.push(tool)
+		}
+		return tools
+	}
+
+	/** Get a registered tool by name */
+	getTool(name: string): RegisteredTool | undefined {
+		for (const hook of this.hooks) {
+			const tool = hook.tools.get(name)
+			if (tool) return tool
+		}
+		return undefined
+	}
+
+	/** Transform messages through chat.messages.transform hooks */
+	async emitContext(messages: Message[]): Promise<Message[]> {
+		let current = messages.map((msg) => structuredClone(msg))
+		for (const hook of this.hooks) {
+			const handlers = hook.handlers.get("chat.messages.transform")
+			if (!handlers || handlers.length === 0) continue
+			for (const handler of handlers) {
+				const event: ChatMessagesTransformEvent = { type: "chat.messages.transform", messages: current }
+				try {
+					await handler(event, this.createContext())
+					current = event.messages
+				} catch (err) {
+					this.emitError({ hookPath: hook.path, event: "chat.messages.transform", error: String(err) })
+				}
+			}
+		}
+		return current
+	}
+
+	/** Emit chat.message event */
+	async emitChatMessage(input: ChatMessageEvent["input"], output: ChatMessageEvent["output"]): Promise<void> {
+		await this.emit({ type: "chat.message", input, output })
+	}
+
+	/** Emit agent.before_start event and return first message result */
+	async emitBeforeAgentStart(prompt: string, images?: ImageContent[]): Promise<BeforeAgentStartResult | undefined> {
+		let result: BeforeAgentStartResult | undefined
+		for (const hook of this.hooks) {
+			const handlers = hook.handlers.get("agent.before_start")
+			if (!handlers || handlers.length === 0) continue
+			for (const handler of handlers) {
+				const event: BeforeAgentStartEvent = { type: "agent.before_start", prompt, images }
+				try {
+					const handlerResult = await handler(event, this.createContext()) as BeforeAgentStartResult | undefined
+					if (handlerResult?.message && !result) result = handlerResult
+				} catch (err) {
+					this.emitError({ hookPath: hook.path, event: "agent.before_start", error: String(err) })
+				}
+			}
+		}
+		return result
+	}
+
+	/** Apply run config through chat/auth/model hooks */
+	async applyRunConfig(cfg: AgentRunConfig, sessionId: string | null): Promise<AgentRunConfig> {
+		const system: ChatSystemTransformEvent["output"] = { systemPrompt: cfg.systemPrompt }
+		await this.emit({ type: "chat.system.transform", input: { sessionId, systemPrompt: cfg.systemPrompt }, output: system })
+
+		const params: ChatParamsEvent["output"] = { streamOptions: cfg.streamOptions ?? {} }
+		await this.emit({ type: "chat.params", input: { sessionId }, output: params })
+
+		const modelOutput: ModelResolveEvent["output"] = { model: cfg.model }
+		await this.emit({ type: "model.resolve", input: { sessionId, model: cfg.model }, output: modelOutput })
+
+		const auth: AuthGetEvent["output"] = {}
+		await this.emit({ type: "auth.get", input: { sessionId, provider: modelOutput.model.provider, modelId: modelOutput.model.id }, output: auth })
+
+		return {
+			...cfg,
+			systemPrompt: system.systemPrompt,
+			streamOptions: params.streamOptions,
+			model: modelOutput.model,
+			apiKey: auth.apiKey ?? cfg.apiKey,
+			headers: auth.headers ?? cfg.headers,
+			baseUrl: auth.baseUrl ?? cfg.baseUrl,
+		}
+	}
 }
 
 /**
  * Create an empty hook runner (when no hooks are loaded).
  */
-export function createEmptyRunner(cwd: string, configDir: string): HookRunner {
-	return new HookRunner([], cwd, configDir)
+export function createEmptyRunner(cwd: string, configDir: string, sessionManager: ReadonlySessionManager): HookRunner {
+	return new HookRunner([], cwd, configDir, sessionManager)
 }

@@ -6,6 +6,7 @@ import { loadExtensibility } from "@runtime/extensibility/index.js"
 import { formatValidationIssue, hasBlockingIssues } from "@ext/validation.js"
 import type { ValidationIssue } from "@ext/schema.js"
 import type { SendRef } from "../../custom-tools/types.js"
+import { SessionManager } from "../../session-manager.js"
 
 export const runValidate = async (args: RuntimeInitArgs = {}): Promise<void> => {
 	const loaded = await loadAppConfig({
@@ -18,12 +19,14 @@ export const runValidate = async (args: RuntimeInitArgs = {}): Promise<void> => 
 
 	const { issues: commandIssues } = loadCustomCommands(loaded.configDir)
 	const sendRef: SendRef = { current: () => {} }
+	const sessionManager = new SessionManager(loaded.configDir)
 	const extensibility = await loadExtensibility({
 		configDir: loaded.configDir,
 		cwd: process.cwd(),
 		sendRef,
 		builtinTools: codingTools,
 		hasUI: false,
+		sessionManager,
 	})
 
 	const issues: ValidationIssue[] = [...commandIssues, ...extensibility.validationIssues]

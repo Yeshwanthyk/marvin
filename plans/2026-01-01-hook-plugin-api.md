@@ -11,7 +11,7 @@
   - Hook-based auth/routing only mutates existing model properties (baseUrl/headers/apiKey), not the model registry.
 
 ## Progress Tracking
-- [ ] Phase 1: Hook Core + Persistence Foundations
+- [x] Phase 1: Hook Core + Persistence Foundations
 - [ ] Phase 2: Runtime + Transport Integration
 - [ ] Phase 3: TUI UX, Commands, Renderers, Tests, and Local Hook Setup
 
@@ -52,17 +52,19 @@ Marvin hooks currently support basic lifecycle events and tool interception, but
 - Hooks can supply auth (`auth.get`) and routing overrides (`model.resolve`) per request.
 - Hooks can inject persisted messages (`sendMessage`) and persist non-LLM state (`appendEntry`), with optional custom renderers and slash commands.
 - Hooks can register agent tools via `registerTool()` that are available alongside built-in tools.
-- Hooks can prompt users via `ctx.ui` in TUI mode; headless/ACP provide no-op UI.
+- Hooks can prompt users via `ctx.ui` in TUI mode (including full editor modal via `ctx.ui.editor()`); headless/ACP provide no-op UI.
 - Hooks receive token usage stats in `turn.end` and `agent.end` events for compaction triggers.
-- Hooks can trigger session operations via `ctx.session` facade (summarize, toast notifications).
+- Hooks can trigger session operations via `ctx.session` facade (summarize, toast, newSession, getApiKey).
+- Hooks have access to current model via `ctx.model` for LLM calls within hooks.
 - Tool hooks fire on errors and allow input mutation before execution.
 - Session lifecycle hooks include shutdown and compaction extension points.
-- Supermemory and Gemini auth hooks are installable as local hook files under `~/.config/marvin/hooks/`.
+- Supermemory, Gemini auth, and handoff hooks are installable as local hook files under `~/.config/marvin/hooks/`.
 
 ### Verification
 - `bun run typecheck`
 - `bun run test`
 - Manual: run TUI, confirm `chat.message` injects memory; confirm auth hook overrides API key/header for Gemini.
+- Manual: run `/handoff implement tests` and verify prompt generation, editor opens, and new session is created.
 
 ## Out of Scope
 - npm plugin loader, project-level plugin discovery, or Bun install caching.
@@ -152,6 +154,7 @@ export interface HookEventContext {
 	configDir: string
 	sessionId: string | null
 	sessionManager: ReadonlySessionManager
+	model: Model<Api> | null
 	ui: HookUIContext
 	hasUI: boolean
 	session: HookSessionContext
@@ -170,6 +173,7 @@ export interface HookUIContext {
 	select(title: string, options: string[]): Promise<string | undefined>
 	confirm(title: string, message: string): Promise<boolean>
 	input(title: string, placeholder?: string): Promise<string | undefined>
+	editor(title: string, initialText?: string): Promise<string | undefined>
 	notify(message: string, type?: "info" | "warning" | "error"): void
 	custom<T>(factory: (done: (result: T) => void) => JSX.Element): Promise<T | undefined>
 	setEditorText(text: string): void
@@ -225,6 +229,10 @@ export interface HookSessionContext {
 	getTokenUsage(): TokenUsage | undefined
 	/** Get model context limit */
 	getContextLimit(): number | undefined
+	/** Create a new session, optionally linking to parent */
+	newSession(opts?: { parentSession?: string }): Promise<{ cancelled: boolean; sessionId?: string }>
+	/** Get API key for a model's provider */
+	getApiKey(model: Model<Api>): Promise<string | undefined>
 }
 ```
 
@@ -868,6 +876,7 @@ const noOpUIContext: HookUIContext = {
 	select: async () => undefined,
 	confirm: async () => false,
 	input: async () => undefined,
+	editor: async () => undefined,
 	notify: () => {},
 	custom: async () => undefined,
 	setEditorText: () => {},
@@ -879,6 +888,8 @@ const noOpSessionContext: HookSessionContext = {
 	toast: () => {},
 	getTokenUsage: () => undefined,
 	getContextLimit: () => undefined,
+	newSession: async () => ({ cancelled: true }),
+	getApiKey: async () => undefined,
 }
 
 export class HookRunner {
@@ -891,6 +902,7 @@ export class HookRunner {
 	private hasUI: boolean
 	private errorListeners = new Set<HookErrorListener>()
 	private sessionIdProvider: () => string | null
+	private modelProvider: () => Model<Api> | null
 	private tokenUsage: TokenUsage | undefined
 	private contextLimit: number | undefined
 
@@ -903,6 +915,7 @@ export class HookRunner {
 		this.sessionContext = noOpSessionContext
 		this.hasUI = false
 		this.sessionIdProvider = () => null
+		this.modelProvider = () => null
 	}
 
 	initialize(options: {
@@ -910,11 +923,13 @@ export class HookRunner {
 		sendMessageHandler: SendMessageHandler
 		appendEntryHandler: AppendEntryHandler
 		getSessionId: () => string | null
+		getModel: () => Model<Api> | null
 		uiContext?: HookUIContext
 		sessionContext?: HookSessionContext
 		hasUI?: boolean
 	}): void {
 		this.sessionIdProvider = options.getSessionId
+		this.modelProvider = options.getModel
 		this.uiContext = options.uiContext ?? noOpUIContext
 		this.sessionContext = options.sessionContext ?? noOpSessionContext
 		this.hasUI = options.hasUI ?? false
@@ -988,6 +1003,7 @@ private createContext(): HookEventContext {
 		configDir: this.configDir,
 		sessionId: this.sessionIdProvider(),
 		sessionManager: this.sessionManager,
+		model: this.modelProvider(),
 		ui: this.uiContext,
 		hasUI: this.hasUI,
 		session: {
@@ -1791,7 +1807,7 @@ uiContext: createHookUIContext({ setEditorText, getEditorText, showSelect, showI
 
 **After**:
 ```ts
-uiContext: createHookUIContext({ setEditorText, getEditorText, showSelect, showInput, showConfirm, showNotify }),
+uiContext: createHookUIContext({ setEditorText, getEditorText, showSelect, showInput, showConfirm, showNotify, showEditor }),
 sessionContext: {
 	summarize: async () => {
 		// Trigger /compact flow
@@ -1802,6 +1818,14 @@ sessionContext: {
 	},
 	getTokenUsage: () => hookRunner.tokenUsage,
 	getContextLimit: () => hookRunner.contextLimit,
+	newSession: async (opts) => {
+		// Create new session with optional parent tracking
+		const result = await handleNewSession(opts)
+		return { cancelled: result.cancelled, sessionId: result.sessionId }
+	},
+	getApiKey: async (model) => {
+		return modelRegistry.getApiKey(model.provider)
+	},
 },
 ```
 
@@ -1921,7 +1945,7 @@ props.hookRunner.initialize({
 	},
 	appendEntryHandler: (customType, data) => sessionManager.appendEntry(customType, data),
 	getSessionId: () => sessionManager.sessionId,
-	uiContext: createHookUIContext({ setEditorText, getEditorText, showSelect, showInput, showConfirm, showNotify }),
+	uiContext: createHookUIContext({ setEditorText, getEditorText, showSelect, showInput, showConfirm, showNotify, showEditor }),
 	hasUI: true,
 })
 props.sendRef.current = (text) => void handleSubmit(text)
@@ -1929,7 +1953,41 @@ props.sendRef.current = (text) => void handleSubmit(text)
 
 **Why**: Enables hook messages, persistence, and UI prompts.
 
-#### 4. Hook Command Handling
+#### 4. Hook UI Context Implementation
+**File**: `apps/coding-agent/src/hooks/hook-ui-context.ts` (new file)
+
+**After**:
+```ts
+import type { HookUIContext } from "./types.js"
+
+export interface HookUIHandlers {
+	setEditorText: (text: string) => void
+	getEditorText: () => string
+	showSelect: (title: string, options: string[]) => Promise<string | undefined>
+	showInput: (title: string, placeholder?: string) => Promise<string | undefined>
+	showConfirm: (title: string, message: string) => Promise<boolean>
+	showNotify: (message: string, type?: "info" | "warning" | "error") => void
+	showEditor: (title: string, initialText?: string) => Promise<string | undefined>
+	showCustom?: <T>(factory: (done: (result: T) => void) => JSX.Element) => Promise<T | undefined>
+}
+
+export function createHookUIContext(handlers: HookUIHandlers): HookUIContext {
+	return {
+		select: handlers.showSelect,
+		confirm: handlers.showConfirm,
+		input: handlers.showInput,
+		editor: handlers.showEditor,
+		notify: handlers.showNotify,
+		custom: handlers.showCustom ?? (async () => undefined),
+		setEditorText: handlers.setEditorText,
+		getEditorText: handlers.getEditorText,
+	}
+}
+```
+
+**Why**: Centralizes hook UI context creation with all required methods including editor.
+
+#### 5. Hook Command Handling
 **File**: `apps/coding-agent/src/tui-app.tsx`
 **Location**: inside `handleSubmit` slash command block
 
@@ -1986,6 +2044,24 @@ it("ctx.session.summarize triggers compaction", async () => {
 it("auto-compact hook triggers at threshold", async () => {
 	// simulate turn.end with tokens.total / contextLimit >= 90%
 	// verify ctx.session.summarize() is called on agent.end
+})
+
+it("ctx.session.newSession creates session with parent tracking", async () => {
+	// call ctx.session.newSession({ parentSession: "path" })
+	// verify new session is created and returns sessionId
+})
+
+it("ctx.session.getApiKey returns key for model provider", async () => {
+	// call ctx.session.getApiKey(model) and verify API key returned
+})
+
+it("ctx.ui.editor opens editor and returns edited text", async () => {
+	// call ctx.ui.editor("Title", "initial") and verify editor opens
+	// verify returned text matches saved content
+})
+
+it("ctx.model provides current model in context", async () => {
+	// verify hook context has ctx.model set to current model
 })
 ```
 
@@ -2066,6 +2142,7 @@ export default ((marvin) => {
 **Paths**:
 - `~/.config/marvin/hooks/supermemory.ts`
 - `~/.config/marvin/hooks/gemini-auth.ts`
+- `~/.config/marvin/hooks/handoff.ts`
 
 **After** (example outline only):
 ```ts
@@ -2141,13 +2218,162 @@ export default ((marvin) => {
 		}
 	})
 }) satisfies HookFactory
+
+// handoff.ts - Transfer context to a new focused session
+import type { HookFactory, HookEventContext, SessionMessageEntry } from "marvin/hooks"
+import { complete, type Message } from "@marvin-agents/ai"
+
+const HANDOFF_SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
+
+1. Summarizes relevant context from the conversation (decisions made, approaches taken, key findings)
+2. Lists any relevant files that were discussed or modified
+3. Clearly states the next task based on the user's goal
+4. Is self-contained - the new thread should be able to proceed without the old conversation
+
+Format your response as a prompt the user can send to start the new thread. Be concise but include all necessary context. Do not include any preamble like "Here's the prompt" - just output the prompt itself.`
+
+export default ((marvin) => {
+	marvin.registerCommand("handoff", {
+		description: "Transfer context to a new focused session",
+		handler: async (args: string, ctx: HookEventContext) => {
+			if (!ctx.hasUI) {
+				ctx.ui.notify("handoff requires interactive mode", "error")
+				return
+			}
+
+			if (!ctx.model) {
+				ctx.ui.notify("No model selected", "error")
+				return
+			}
+
+			const goal = args.trim()
+			if (!goal) {
+				ctx.ui.notify("Usage: /handoff <goal for new thread>", "error")
+				return
+			}
+
+			// Gather conversation context from current session
+			const entries = ctx.sessionManager.getEntries()
+			const messages = entries
+				.filter((e): e is SessionMessageEntry => e.type === "message")
+				.map((e) => e.message)
+
+			if (messages.length === 0) {
+				ctx.ui.notify("No conversation to hand off", "error")
+				return
+			}
+
+			// Serialize conversation for the LLM
+			const conversationText = messages
+				.map((m) => {
+					const role = m.role === "assistant" ? "Assistant" : "User"
+					const text = typeof m.content === "string"
+						? m.content
+						: m.content.filter((c) => c.type === "text").map((c) => c.text).join("\n")
+					return `${role}: ${text}`
+				})
+				.join("\n\n")
+
+			const currentSessionPath = ctx.sessionManager.sessionPath
+
+			// Get API key for current model
+			const apiKey = await ctx.session.getApiKey(ctx.model)
+			if (!apiKey) {
+				ctx.ui.notify("Could not get API key for model", "error")
+				return
+			}
+
+			// Generate handoff prompt
+			ctx.ui.notify("Generating handoff prompt...", "info")
+
+			const userMessage: Message = {
+				role: "user",
+				content: [{
+					type: "text",
+					text: `## Conversation History\n\n${conversationText}\n\n## User's Goal for New Thread\n\n${goal}`,
+				}],
+				timestamp: Date.now(),
+			}
+
+			const response = await complete(
+				ctx.model,
+				{ systemPrompt: HANDOFF_SYSTEM_PROMPT, messages: [userMessage] },
+				{ apiKey },
+			)
+
+			if (response.stopReason === "aborted") {
+				ctx.ui.notify("Cancelled", "info")
+				return
+			}
+
+			const generatedPrompt = response.content
+				.filter((c): c is { type: "text"; text: string } => c.type === "text")
+				.map((c) => c.text)
+				.join("\n")
+
+			// Let user edit the generated prompt
+			const editedPrompt = await ctx.ui.editor("Edit handoff prompt (save to continue, cancel to abort)", generatedPrompt)
+
+			if (editedPrompt === undefined) {
+				ctx.ui.notify("Cancelled", "info")
+				return
+			}
+
+			// Create new session with parent tracking
+			const newSessionResult = await ctx.session.newSession({
+				parentSession: currentSessionPath ?? undefined,
+			})
+
+			if (newSessionResult.cancelled) {
+				ctx.ui.notify("New session cancelled", "info")
+				return
+			}
+
+			// Set the edited prompt in the main editor for submission
+			ctx.ui.setEditorText(editedPrompt)
+			ctx.ui.notify("Handoff ready. Submit when ready.", "info")
+		},
+	})
+}) satisfies HookFactory
 ```
 
-**Why**: Demonstrates full supermemory-compatible hook with memory injection, tool registration, token-based compaction, and summary persistence.
+**Why**: Demonstrates full supermemory-compatible hook with memory injection, tool registration, token-based compaction, and summary persistence. Handoff hook shows command registration, UI integration (editor, notifications), session management, and LLM calls from hooks.
+
+#### 8. Hook Utility Exports
+**File**: `apps/coding-agent/src/hooks/index.ts` (update exports)
+
+**After**:
+```ts
+// Re-export types for hook authors
+export type {
+	HookAPI,
+	HookFactory,
+	HookEventContext,
+	HookUIContext,
+	HookSessionContext,
+	HookMessage,
+	RegisteredCommand,
+	RegisteredTool,
+	TokenUsage,
+	// Event types
+	TurnEndEvent,
+	AgentEndEvent,
+	ChatMessageEvent,
+	ToolExecuteBeforeEvent,
+	ToolExecuteAfterEvent,
+	// ... other event types
+} from "./types.js"
+
+export type { SessionEntry, SessionMessageEntry, SessionCustomEntry } from "../session-manager.js"
+```
+
+**Why**: Allows hooks to import types directly from `marvin/hooks` instead of reaching into internal paths.
 
 ### Edge Cases to Handle
 - [ ] Hook UI prompts return undefined (cancel) → hook should no-op.
 - [ ] Hook message display=false → skip UI rendering but still sent to LLM.
+- [ ] `ctx.session.newSession()` called while agent is responding → should queue or reject gracefully.
+- [ ] `ctx.ui.editor()` called in headless mode → returns undefined (no-op).
 
 ### Success Criteria
 
@@ -2203,6 +2429,10 @@ describe("tool.execute.after", () => {
 6. [ ] Verify `ctx.session.summarize()` triggers compaction flow.
 7. [ ] Verify `ctx.session.toast()` shows notification in TUI.
 8. [ ] Verify migrated auto-compact.ts triggers compaction at threshold.
+9. [ ] Add handoff hook and verify `/handoff <goal>` generates prompt, opens editor, and creates new session.
+10. [ ] Verify `ctx.ui.editor()` opens full editor modal and returns edited text on save.
+11. [ ] Verify `ctx.session.newSession()` creates new session with parent tracking.
+12. [ ] Verify `ctx.session.getApiKey()` returns API key for current model's provider.
 
 ## Deployment Instructions
 
@@ -2239,3 +2469,17 @@ SUPERMEMORY_TOKEN=...
 | `ctx.client.tui.showToast` | `ctx.session.toast()` | ✅ Full |
 | Token usage tracking | `turn.end.tokens`, `ctx.session.getTokenUsage()` | ✅ Full |
 | Context limit | `turn.end.contextLimit`, `ctx.session.getContextLimit()` | ✅ Full |
+
+## Handoff Hook Capabilities
+
+| Feature | Hook API | Status |
+|---------|----------|--------|
+| Register slash command | `registerCommand("handoff", {...})` | ✅ Full |
+| Check UI availability | `ctx.hasUI` | ✅ Full |
+| Show notifications | `ctx.ui.notify()` | ✅ Full |
+| Open full editor | `ctx.ui.editor()` | ✅ Full |
+| Access current model | `ctx.model` | ✅ Full |
+| Get API key for LLM call | `ctx.session.getApiKey(model)` | ✅ Full |
+| Read session messages | `ctx.sessionManager.getEntries()` | ✅ Full |
+| Create new session | `ctx.session.newSession()` | ✅ Full |
+| Set main editor text | `ctx.ui.setEditorText()` | ✅ Full |

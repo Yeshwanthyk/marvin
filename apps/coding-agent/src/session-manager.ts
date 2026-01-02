@@ -32,7 +32,25 @@ export interface SessionMessageEntry {
   message: AppMessage;
 }
 
-export type SessionEntry = SessionMetadata | SessionMessageEntry;
+export interface SessionCustomEntry<T = unknown> {
+  type: 'custom';
+  timestamp: number;
+  customType: string;
+  data?: T;
+}
+
+export type SessionEntry = SessionMetadata | SessionMessageEntry | SessionCustomEntry;
+
+/** Read-only session manager interface for hooks */
+export interface ReadonlySessionManager {
+  sessionId: string | null
+  sessionPath: string | null
+  getCompactionState(): CompactionState | undefined
+  getEntries(): SessionEntry[]
+  listSessions(): SessionInfo[]
+  loadSession(sessionPath: string): LoadedSession | null
+  loadLatest(): LoadedSession | null
+}
 
 export interface SessionInfo {
   id: string;
@@ -309,4 +327,52 @@ export class SessionManager {
   get sessionPath(): string | null {
     return this.currentSessionPath;
   }
+
+  /**
+   * Append a custom entry to the current session (async, non-blocking)
+   */
+  appendEntry<T = unknown>(customType: string, data?: T): void {
+    if (!this.currentSessionPath) return;
+
+    const entry: SessionCustomEntry<T> = {
+      type: 'custom',
+      timestamp: Date.now(),
+      customType,
+      data,
+    };
+
+    appendFile(this.currentSessionPath, JSON.stringify(entry) + '\n', (err) => {
+      if (err) console.error('Session write error:', err.message);
+    });
+  }
+
+  /**
+   * Get all entries from the current session
+   */
+  getEntries(): SessionEntry[] {
+    if (!this.currentSessionPath || !existsSync(this.currentSessionPath)) return [];
+
+    try {
+      const content = readFileSync(this.currentSessionPath, 'utf8');
+      const lines = content.trim().split('\n').filter((l) => l.length > 0);
+      const entries: SessionEntry[] = [];
+
+      for (const line of lines) {
+        const parsed: unknown = JSON.parse(line);
+        if (isSessionEntry(parsed)) {
+          entries.push(parsed);
+        }
+      }
+
+      return entries;
+    } catch {
+      return [];
+    }
+  }
+}
+
+function isSessionEntry(value: unknown): value is SessionEntry {
+  if (typeof value !== 'object' || value === null) return false;
+  const type = (value as Record<string, unknown>).type;
+  return type === 'session' || type === 'message' || type === 'custom';
 }

@@ -7,9 +7,10 @@ import type { HookRunner } from "./runner.js"
 
 /**
  * Wrap a tool with hook callbacks.
- * - Emits tool.execute.before event (can block)
- * - Emits tool.execute.after event (can modify result)
+ * - Emits tool.execute.before event (can block or modify input)
+ * - Emits tool.execute.after event (can modify result, fires on errors too)
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function wrapToolWithHooks<TDetails>(
 	tool: AgentTool<any, TDetails>,
 	hookRunner: HookRunner
@@ -18,41 +19,40 @@ export function wrapToolWithHooks<TDetails>(
 		...tool,
 		execute: async (
 			toolCallId: string,
-			params: any,
+			params: unknown,
 			signal?: AbortSignal,
 			onUpdate?: AgentToolUpdateCallback<TDetails>
 		) => {
-			// Emit tool.execute.before - hooks can block execution
-			if (hookRunner.hasHandlers("tool.execute.before")) {
-				try {
-					const callResult = await hookRunner.emitToolExecuteBefore({
-						type: "tool.execute.before",
-						toolName: tool.name,
-						toolCallId,
-						input: params,
-					})
+			const sessionId = hookRunner.getSessionId()
 
-					if (callResult?.block) {
-						const reason = callResult.reason || "Tool execution was blocked by a hook"
-						throw new Error(reason)
-					}
-				} catch (err) {
-					// Hook error or explicit block - fail-safe by throwing
-					if (err instanceof Error) throw err
-					throw new Error(`Hook failed, blocking execution: ${String(err)}`)
-				}
+			// Emit tool.execute.before - hooks can block or modify input
+			const beforeResult = await hookRunner.emitToolExecuteBefore({
+				type: "tool.execute.before",
+				sessionId,
+				toolName: tool.name,
+				toolCallId,
+				input: params as Record<string, unknown>,
+			})
+
+			if (beforeResult?.block) {
+				const reason = beforeResult.reason ?? "Tool execution was blocked by a hook"
+				throw new Error(reason)
 			}
 
-			// Execute the actual tool
-			const result = await tool.execute(toolCallId, params, signal, onUpdate)
+			// Use potentially modified input
+			const effectiveParams = beforeResult?.input ?? params
 
-			// Emit tool.execute.after - hooks can modify the result
-			if (hookRunner.hasHandlers("tool.execute.after")) {
+			try {
+				// Execute the actual tool
+				const result = await tool.execute(toolCallId, effectiveParams, signal, onUpdate)
+
+				// Emit tool.execute.after - hooks can modify the result
 				const afterResult = await hookRunner.emitToolExecuteAfter({
 					type: "tool.execute.after",
+					sessionId,
 					toolName: tool.name,
 					toolCallId,
-					input: params,
+					input: effectiveParams as Record<string, unknown>,
 					content: result.content,
 					details: result.details,
 					isError: false,
@@ -64,9 +64,22 @@ export function wrapToolWithHooks<TDetails>(
 						details: (afterResult.details ?? result.details) as TDetails,
 					}
 				}
-			}
 
-			return result
+				return result
+			} catch (err) {
+				// Emit tool.execute.after on errors too
+				await hookRunner.emitToolExecuteAfter({
+					type: "tool.execute.after",
+					sessionId,
+					toolName: tool.name,
+					toolCallId,
+					input: effectiveParams as Record<string, unknown>,
+					content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
+					details: undefined as TDetails,
+					isError: true,
+				})
+				throw err
+			}
 		},
 	}
 }

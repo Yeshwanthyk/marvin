@@ -6,7 +6,10 @@
  */
 
 import type { AppMessage, ThinkingLevel } from "@marvin-agents/agent-core"
-import type { AgentTool, ImageContent, TextContent, ToolResultMessage } from "@marvin-agents/ai"
+import type { Api, ImageContent, Message, Model, SimpleStreamOptions, TextContent, ToolResultMessage } from "@marvin-agents/ai"
+import type { Theme } from "@marvin-agents/open-tui"
+import type { JSX } from "solid-js"
+import type { ReadonlySessionManager } from "../session-manager.js"
 
 // ============================================================================
 // Execution Context
@@ -33,6 +36,106 @@ export interface HookEventContext {
 	cwd: string
 	/** Config directory (~/.config/marvin) */
 	configDir: string
+	/** Current session ID (null if no session) */
+	sessionId: string | null
+	/** Read-only session manager for accessing session data */
+	sessionManager: ReadonlySessionManager
+	/** Current model (null if not set) */
+	model: Model<Api> | null
+	/** UI context for prompts/notifications */
+	ui: HookUIContext
+	/** Whether UI is available (false in headless/ACP) */
+	hasUI: boolean
+	/** Session operations (summarize, toast, etc.) */
+	session: HookSessionContext
+}
+
+// ============================================================================
+// UI Context + Messages + Commands
+// ============================================================================
+
+/** UI context for hook prompts and notifications */
+export interface HookUIContext {
+	select(title: string, options: string[]): Promise<string | undefined>
+	confirm(title: string, message: string): Promise<boolean>
+	input(title: string, placeholder?: string): Promise<string | undefined>
+	editor(title: string, initialText?: string): Promise<string | undefined>
+	notify(message: string, type?: "info" | "warning" | "error"): void
+	custom<T>(factory: (done: (result: T) => void) => JSX.Element): Promise<T | undefined>
+	setEditorText(text: string): void
+	getEditorText(): string
+}
+
+/** Token usage stats */
+export interface TokenUsage {
+	input: number
+	output: number
+	cacheRead?: number
+	cacheWrite?: number
+	total: number
+}
+
+/** Session operations available to hooks */
+export interface HookSessionContext {
+	/** Trigger session compaction/summarization */
+	summarize(): Promise<void>
+	/** Show toast notification (TUI only, no-op in headless) */
+	toast(title: string, message: string, variant?: "info" | "warning" | "success" | "error"): void
+	/** Get current token usage for the session */
+	getTokenUsage(): TokenUsage | undefined
+	/** Get model context limit */
+	getContextLimit(): number | undefined
+	/** Create a new session, optionally linking to parent */
+	newSession(opts?: { parentSession?: string }): Promise<{ cancelled: boolean; sessionId?: string }>
+	/** Get API key for a model's provider */
+	getApiKey(model: Model<Api>): Promise<string | undefined>
+}
+
+/** Message part (text or image) */
+export type MessagePart = TextContent | ImageContent
+
+/** Hook-injected message */
+export interface HookMessage<T = unknown> {
+	role: "hookMessage"
+	customType: string
+	content: string | MessagePart[]
+	display: boolean
+	details?: T
+	timestamp: number
+}
+
+/** Registered slash command from a hook */
+export interface RegisteredCommand {
+	name: string
+	description?: string
+	handler: (args: string, ctx: HookEventContext) => Promise<void>
+}
+
+/** Renderer for hook messages */
+export type HookMessageRenderer<T = unknown> = (
+	message: HookMessage<T>,
+	options: { expanded: boolean },
+	theme: Theme
+) => JSX.Element | undefined
+
+/** Schema for hook-registered tool */
+export interface HookToolSchema {
+	type: "object"
+	properties: Record<string, {
+		type: "string" | "number" | "boolean" | "array" | "object"
+		description?: string
+		enum?: string[]
+		optional?: boolean
+	}>
+	required?: string[]
+}
+
+/** Tool registered by a hook */
+export interface RegisteredTool {
+	name: string
+	description: string
+	schema: HookToolSchema
+	execute: (args: Record<string, unknown>, ctx: HookEventContext) => Promise<string>
 }
 
 // ============================================================================
@@ -53,17 +156,22 @@ export interface SessionEvent {
 /** Fired when agent loop starts (once per user prompt) */
 export interface AgentStartEvent {
 	type: "agent.start"
+	sessionId: string | null
 }
 
 /** Fired when agent loop ends */
 export interface AgentEndEvent {
 	type: "agent.end"
+	sessionId: string | null
 	messages: AppMessage[]
+	totalTokens: TokenUsage
+	contextLimit: number
 }
 
 /** Fired when a turn starts (one LLM call cycle) */
 export interface TurnStartEvent {
 	type: "turn.start"
+	sessionId: string | null
 	turnIndex: number
 }
 
@@ -80,57 +188,147 @@ export interface ContextUsage {
 /** Fired when a turn ends */
 export interface TurnEndEvent {
 	type: "turn.end"
+	sessionId: string | null
 	turnIndex: number
 	message: AppMessage
 	toolResults: ToolResultMessage[]
-	/** Context usage after this turn (if available) */
+	tokens: TokenUsage
+	contextLimit: number
+	/** @deprecated Use tokens and contextLimit instead */
 	usage?: ContextUsage
 }
 
-/** Fired before a tool executes. Hooks can block. */
+/** Fired before a tool executes. Hooks can block or modify input. */
 export interface ToolExecuteBeforeEvent {
 	type: "tool.execute.before"
+	sessionId: string | null
 	toolName: string
 	toolCallId: string
 	input: Record<string, unknown>
 }
 
 /** Fired after a tool executes. Hooks can modify result. */
-export interface ToolExecuteAfterEvent {
+export interface ToolExecuteAfterEvent<TDetails = unknown> {
 	type: "tool.execute.after"
+	sessionId: string | null
 	toolName: string
 	toolCallId: string
 	input: Record<string, unknown>
 	content: (TextContent | ImageContent)[]
-	details: unknown
+	details: TDetails
 	isError: boolean
+}
+
+/** Fired before agent starts, allows injecting context */
+export interface BeforeAgentStartEvent {
+	type: "agent.before_start"
+	prompt: string
+	images?: ImageContent[]
+}
+
+/** Result from agent.before_start handler */
+export interface BeforeAgentStartResult {
+	message?: Pick<HookMessage, "customType" | "content" | "display" | "details">
+}
+
+/** Mutates user input before sending to LLM */
+export interface ChatMessageEvent {
+	type: "chat.message"
+	input: { sessionId: string | null; text: string }
+	output: { parts: MessagePart[] }
+}
+
+/** Transforms full message history before LLM call */
+export interface ChatMessagesTransformEvent {
+	type: "chat.messages.transform"
+	messages: Message[]
+}
+
+/** Transforms system prompt before LLM call */
+export interface ChatSystemTransformEvent {
+	type: "chat.system.transform"
+	input: { sessionId: string | null; systemPrompt: string }
+	output: { systemPrompt: string }
+}
+
+/** Mutates stream options before LLM call */
+export interface ChatParamsEvent {
+	type: "chat.params"
+	input: { sessionId: string | null }
+	output: { streamOptions: SimpleStreamOptions }
+}
+
+/** Provides auth overrides per request */
+export interface AuthGetEvent {
+	type: "auth.get"
+	input: { sessionId: string | null; provider: string; modelId: string }
+	output: { apiKey?: string; headers?: Record<string, string>; baseUrl?: string }
+}
+
+/** Resolves/overrides model for request */
+export interface ModelResolveEvent {
+	type: "model.resolve"
+	input: { sessionId: string | null; model: Model<Api> }
+	output: { model: Model<Api> }
+}
+
+/** Fired before session compaction */
+export interface SessionBeforeCompactEvent {
+	type: "session.before_compact"
+	input: { sessionId: string | null }
+	output: { cancel?: boolean; prompt?: string; context?: string[] }
+}
+
+/** Fired after session compaction completes */
+export interface SessionCompactEvent {
+	type: "session.compact"
+	sessionId: string | null
+	summary: string
+}
+
+/** Fired when session/app is shutting down */
+export interface SessionShutdownEvent {
+	type: "session.shutdown"
+	sessionId: string | null
 }
 
 /** Union of all hook event types */
 export type HookEvent =
 	| AppStartEvent
 	| SessionEvent
+	| SessionBeforeCompactEvent
+	| SessionCompactEvent
+	| SessionShutdownEvent
+	| BeforeAgentStartEvent
 	| AgentStartEvent
 	| AgentEndEvent
 	| TurnStartEvent
 	| TurnEndEvent
 	| ToolExecuteBeforeEvent
 	| ToolExecuteAfterEvent
+	| ChatMessageEvent
+	| ChatMessagesTransformEvent
+	| ChatSystemTransformEvent
+	| ChatParamsEvent
+	| AuthGetEvent
+	| ModelResolveEvent
 
 // ============================================================================
 // Event Results
 // ============================================================================
 
-/** Return type for tool.execute.before handlers - can block execution */
+/** Return type for tool.execute.before handlers - can block execution or modify input */
 export interface ToolExecuteBeforeResult {
 	block?: boolean
 	reason?: string
+	/** Modified input to use instead of original */
+	input?: Record<string, unknown>
 }
 
 /** Return type for tool.execute.after handlers - can modify result */
-export interface ToolExecuteAfterResult {
+export interface ToolExecuteAfterResult<TDetails = unknown> {
 	content?: (TextContent | ImageContent)[]
-	details?: unknown
+	details?: TDetails
 	isError?: boolean
 }
 
@@ -150,12 +348,22 @@ export interface HookEventMap {
 	"session.start": SessionEvent
 	"session.resume": SessionEvent
 	"session.clear": SessionEvent
+	"session.before_compact": SessionBeforeCompactEvent
+	"session.compact": SessionCompactEvent
+	"session.shutdown": SessionShutdownEvent
+	"agent.before_start": BeforeAgentStartEvent
 	"agent.start": AgentStartEvent
 	"agent.end": AgentEndEvent
 	"turn.start": TurnStartEvent
 	"turn.end": TurnEndEvent
 	"tool.execute.before": ToolExecuteBeforeEvent
 	"tool.execute.after": ToolExecuteAfterEvent
+	"chat.message": ChatMessageEvent
+	"chat.messages.transform": ChatMessagesTransformEvent
+	"chat.system.transform": ChatSystemTransformEvent
+	"chat.params": ChatParamsEvent
+	"auth.get": AuthGetEvent
+	"model.resolve": ModelResolveEvent
 }
 
 /** Map event type to result type */
@@ -164,12 +372,22 @@ export interface HookResultMap {
 	"session.start": void
 	"session.resume": void
 	"session.clear": void
+	"session.before_compact": void
+	"session.compact": void
+	"session.shutdown": void
+	"agent.before_start": BeforeAgentStartResult | undefined
 	"agent.start": void
 	"agent.end": void
 	"turn.start": void
 	"turn.end": void
 	"tool.execute.before": ToolExecuteBeforeResult | undefined
 	"tool.execute.after": ToolExecuteAfterResult | undefined
+	"chat.message": void
+	"chat.messages.transform": void
+	"chat.system.transform": void
+	"chat.params": void
+	"auth.get": void
+	"model.resolve": void
 }
 
 /**
@@ -181,13 +399,43 @@ export interface HookAPI {
 		event: T,
 		handler: HookHandler<HookEventMap[T], HookResultMap[T]>
 	): void
-	
+
 	/**
 	 * Send a message to the agent.
 	 * If agent is streaming, message is queued.
 	 * If agent is idle, triggers a new agent loop.
 	 */
 	send(text: string): void
+
+	/**
+	 * Send a hook message to the agent.
+	 * Message is persisted and optionally triggers a new turn.
+	 */
+	sendMessage<T = unknown>(
+		message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
+		triggerTurn?: boolean,
+	): void
+
+	/**
+	 * Append a custom entry to the session log.
+	 * Does not affect agent state, only persists data.
+	 */
+	appendEntry<T = unknown>(customType: string, data?: T): void
+
+	/**
+	 * Register a custom renderer for hook messages of a given type.
+	 */
+	registerMessageRenderer<T = unknown>(customType: string, renderer: HookMessageRenderer<T>): void
+
+	/**
+	 * Register a slash command.
+	 */
+	registerCommand(name: string, options: { description?: string; handler: RegisteredCommand["handler"] }): void
+
+	/**
+	 * Register a tool that will be available to the agent.
+	 */
+	registerTool(tool: RegisteredTool): void
 }
 
 /**
