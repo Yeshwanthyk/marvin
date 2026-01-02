@@ -1,6 +1,6 @@
 import { createSignal, onCleanup, onMount } from "solid-js"
 import { watch, type FSWatcher } from "fs"
-import { findGitHeadPath, getCurrentBranch } from "../utils.js"
+import { findGitHeadPath, getCurrentBranch } from "@runtime/git/git-info.js"
 
 export function useGitStatus(): () => string | null {
 	const [branch, setBranch] = createSignal<string | null>(getCurrentBranch())

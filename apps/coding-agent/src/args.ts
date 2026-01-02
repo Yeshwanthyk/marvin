@@ -1,6 +1,7 @@
 export interface ParsedArgs {
   headless: boolean;
   acp: boolean;
+  command?: 'validate';
   prompt?: string;
   configDir?: string;
   configPath?: string;
@@ -33,6 +34,10 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
   const rest: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
+    if (!a.startsWith('-') && !args.command && rest.length === 0 && a === 'validate') {
+      args.command = 'validate';
+      continue;
+    }
     if (a === '--help' || a === '-h') {
       args.help = true;
       continue;

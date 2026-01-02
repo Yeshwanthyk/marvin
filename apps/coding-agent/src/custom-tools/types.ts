@@ -5,6 +5,7 @@
 import type { AgentTool, AgentToolResult } from "@marvin-agents/ai"
 import type { Theme } from "@marvin-agents/open-tui"
 import type { JSX } from "solid-js"
+import type { ValidationIssue } from "@ext/schema.js"
 
 /**
  * Options passed to custom tool result renderers.
@@ -97,5 +98,5 @@ export interface LoadedCustomTool {
  */
 export interface CustomToolsLoadResult {
 	tools: LoadedCustomTool[]
-	errors: Array<{ path: string; error: string }>
+	issues: ValidationIssue[]
 }

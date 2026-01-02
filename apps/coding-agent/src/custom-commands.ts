@@ -7,6 +7,8 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import type { ValidationIssue } from "@ext/schema.js"
+import { validateCustomCommand, issueFromError } from "@ext/validation.js"
 
 export interface CustomCommand {
 	name: string
@@ -17,43 +19,62 @@ export interface CustomCommand {
 /** Valid command name: alphanumeric, starting with letter/digit, allowing _ and - */
 const VALID_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/
 
+const createInvalidNameIssue = (path: string, message: string): ValidationIssue => ({
+	kind: "command",
+	severity: "error",
+	path,
+	message,
+})
+
+export interface CustomCommandLoadResult {
+	commands: Map<string, CustomCommand>
+	issues: ValidationIssue[]
+}
+
 /**
  * Load custom commands from a config directory.
  * @param configDir - Base config directory (e.g., ~/.config/marvin)
- * @returns Map of command name -> CustomCommand
  */
-export function loadCustomCommands(configDir: string): Map<string, CustomCommand> {
+export function loadCustomCommands(configDir: string): CustomCommandLoadResult {
 	const commands = new Map<string, CustomCommand>()
+	const issues: ValidationIssue[] = []
 	const commandsDir = join(configDir, "commands")
 
 	if (!existsSync(commandsDir)) {
-		return commands
+		return { commands, issues }
 	}
 
 	let entries: string[]
 	try {
 		entries = readdirSync(commandsDir)
-	} catch {
-		return commands
+	} catch (error) {
+		issues.push(issueFromError("command", commandsDir, error))
+		return { commands, issues }
 	}
 
 	for (const entry of entries) {
 		if (!entry.endsWith(".md")) continue
 
 		const name = entry.slice(0, -3) // Remove .md extension
-		if (!VALID_NAME_PATTERN.test(name)) continue
-
 		const filePath = join(commandsDir, entry)
+		if (!VALID_NAME_PATTERN.test(name)) {
+			issues.push(
+				createInvalidNameIssue(filePath, `Invalid command name "${name}". Use letters, numbers, _ or -.`),
+			)
+			continue
+		}
+
 		let content: string
 		try {
 			content = readFileSync(filePath, "utf-8")
-		} catch {
+		} catch (error) {
+			issues.push(issueFromError("command", filePath, error))
 			continue
 		}
 
 		// Extract description from first non-empty line, truncated to 60 chars
 		const lines = content.split("\n")
-		let description = ""
+		let description = `/${name}`
 		for (const line of lines) {
 			const trimmed = line.trim()
 			if (trimmed) {
@@ -62,14 +83,18 @@ export function loadCustomCommands(configDir: string): Map<string, CustomCommand
 			}
 		}
 
-		commands.set(name, {
+		const manifest = {
 			name,
 			description,
 			template: content,
-		})
+		}
+
+		issues.push(...validateCustomCommand(manifest, filePath))
+
+		commands.set(name, manifest)
 	}
 
-	return commands
+	return { commands, issues }
 }
 
 /**

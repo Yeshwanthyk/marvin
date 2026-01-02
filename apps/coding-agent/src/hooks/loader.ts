@@ -9,6 +9,8 @@ import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import type { HookAPI, HookEventType, HookFactory } from "./types.js"
+import type { ValidationIssue } from "@ext/schema.js"
+import { validateHookDescriptor, issueFromError } from "@ext/validation.js"
 
 /** Generic handler function type for internal storage */
 type HandlerFn = (...args: unknown[]) => Promise<unknown> | unknown
@@ -29,7 +31,7 @@ export interface LoadedHook {
 /** Result of loading hooks */
 export interface LoadHooksResult {
 	hooks: LoadedHook[]
-	errors: Array<{ path: string; error: string }>
+	issues: ValidationIssue[]
 }
 
 /**
@@ -118,7 +120,7 @@ function discoverHooksInDir(dir: string): string[] {
  */
 export async function loadHooks(configDir: string): Promise<LoadHooksResult> {
 	const hooks: LoadedHook[] = []
-	const errors: Array<{ path: string; error: string }> = []
+	const issues: ValidationIssue[] = []
 
 	const hooksDir = join(configDir, "hooks")
 	const paths = discoverHooksInDir(hooksDir)
@@ -127,14 +129,20 @@ export async function loadHooks(configDir: string): Promise<LoadHooksResult> {
 		const { hook, error } = await loadHook(hookPath)
 
 		if (error) {
-			errors.push({ path: hookPath, error })
+			issues.push(issueFromError("hook", hookPath, error))
 			continue
 		}
 
 		if (hook) {
 			hooks.push(hook)
+			issues.push(
+				...validateHookDescriptor({
+					path: hook.path,
+					events: Array.from(hook.handlers.keys()),
+				}),
+			)
 		}
 	}
 
-	return { hooks, errors }
+	return { hooks, issues }
 }

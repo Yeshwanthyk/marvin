@@ -10,7 +10,14 @@ import type { Theme } from "@marvin-agents/open-tui"
 import type { JSX } from "solid-js"
 import type { SessionManager } from "./session-manager.js"
 import type { UIMessage, UIAssistantMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
-import { extractText, extractThinking, extractOrderedBlocks, getToolText, getEditDiffText, appendWithCap } from "./utils.js"
+import {
+	appendWithCap,
+	extractOrderedBlocks,
+	extractThinking,
+	extractText,
+	getEditDiffText,
+	getToolText,
+} from "@domain/messaging/content.js"
 import type { PromptQueue } from "./hooks/usePromptQueue.js"
 import type { HookRunner } from "./hooks/index.js"
 import type { RenderResultOptions } from "./custom-tools/types.js"

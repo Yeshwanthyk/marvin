@@ -19,6 +19,15 @@ import type {
 	SendRef,
 	ToolAPI,
 } from "./types.js"
+import type { ValidationIssue, ValidationSeverity } from "@ext/schema.js"
+import { validateCustomTool, issueFromError } from "@ext/validation.js"
+
+const createToolIssue = (path: string, message: string, severity: ValidationSeverity = "error"): ValidationIssue => ({
+	kind: "tool",
+	severity,
+	path,
+	message,
+})
 
 /**
  * Execute a command and return stdout/stderr/code.
@@ -174,7 +183,7 @@ export async function loadCustomTools(
 	sendRef: SendRef,
 ): Promise<CustomToolsLoadResult> {
 	const tools: LoadedCustomTool[] = []
-	const errors: Array<{ path: string; error: string }> = []
+	const issues: ValidationIssue[] = []
 	const seenNames = new Set<string>(builtInToolNames)
 
 	// Shared API object - all tools get the same instance
@@ -191,7 +200,7 @@ export async function loadCustomTools(
 		const { tools: loadedTools, error } = await loadTool(toolPath, cwd, api)
 
 		if (error) {
-			errors.push({ path: toolPath, error })
+			issues.push(issueFromError("tool", toolPath, error))
 			continue
 		}
 
@@ -199,20 +208,42 @@ export async function loadCustomTools(
 			for (const loadedTool of loadedTools) {
 				// Check for name conflicts
 				if (seenNames.has(loadedTool.tool.name)) {
-					errors.push({
-						path: toolPath,
-						error: `Tool name "${loadedTool.tool.name}" conflicts with existing tool`,
-					})
+					issues.push(
+						createToolIssue(
+							toolPath,
+							`Tool name "${loadedTool.tool.name}" conflicts with existing tool`,
+						),
+					)
 					continue
 				}
 
 				seenNames.add(loadedTool.tool.name)
 				tools.push(loadedTool)
+
+				issues.push(...validateCustomTool(loadedTool.tool as any, toolPath))
+
+				if (typeof loadedTool.tool.execute !== "function") {
+					issues.push(
+						createToolIssue(
+							toolPath,
+							`Tool "${loadedTool.tool.name}" is missing an execute() function`,
+						),
+					)
+				}
+				if (!loadedTool.tool.parameters) {
+					issues.push(
+						createToolIssue(
+							toolPath,
+							`Tool "${loadedTool.tool.name}" does not export parameters schema`,
+							"warning",
+						),
+					)
+				}
 			}
 		}
 	}
 
-	return { tools, errors }
+	return { tools, issues }
 }
 
 /**

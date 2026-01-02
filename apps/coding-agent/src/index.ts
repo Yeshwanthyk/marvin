@@ -4,8 +4,9 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from './args.js';
-import { runHeadless } from './headless.js';
-import { runAcp } from './acp/index.js';
+import { runHeadless } from './adapters/cli/headless.js';
+import { runValidate } from './adapters/cli/validate.js';
+import { runAcp } from './adapters/acp/index.js';
 import type { ThinkingLevel } from '@marvin-agents/agent-core';
 
 declare const OTUI_TREE_SITTER_WORKER_PATH: string | undefined;
@@ -67,7 +68,7 @@ const runTui = async (args: {
   const { parsersConfig } = await import("@marvin-agents/open-tui");
   addDefaultParsers(parsersConfig.parsers);
 
-  const { runTuiOpen } = await import("./tui-app.js");
+  const { runTuiOpen } = await import('./adapters/tui/app.js');
   return runTuiOpen(args);
 };
 
@@ -76,6 +77,7 @@ const printHelp = () => {
     [
       'Usage:',
       '  marvin [options] [prompt...]',
+      '  marvin validate [options]',
       '',
       'Options:',
       '  --provider <name>            Provider (e.g. openai, anthropic, codex)',
@@ -114,6 +116,9 @@ const printHelp = () => {
       '  api.cwd: current working directory',
       '  api.exec(cmd, args, opts): run commands',
       '',
+      'Validation:',
+      '  Run "marvin validate --config-dir <dir>" to check custom hooks/tools/commands',
+      '',
       'Environment:',
       '  OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY / ...',
       '',
@@ -132,6 +137,17 @@ const main = async () => {
 
   if (args.help) {
     printHelp();
+    return;
+  }
+
+  if (args.command === 'validate') {
+    await runValidate({
+      configDir: args.configDir,
+      configPath: args.configPath,
+      provider: args.provider,
+      model: args.model,
+      thinking: args.thinking,
+    });
     return;
   }
 
