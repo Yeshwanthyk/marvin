@@ -7,6 +7,25 @@ function createMockContext(overrides: Partial<EventHandlerContext> = {}): EventH
 	const messages: unknown[] = []
 	const toolBlocks: unknown[] = []
 
+	const queue: string[] = []
+	const promptQueue = {
+		push: mock((text: string) => {
+			queue.push(text)
+		}),
+		shift: mock(() => queue.shift()),
+		drainToText: mock(() => {
+			if (queue.length === 0) return null
+			const combined = queue.join("\n")
+			queue.length = 0
+			return combined
+		}),
+		clear: mock(() => {
+			queue.length = 0
+		}),
+		size: mock(() => queue.length),
+		peekAll: mock(() => [...queue]),
+	}
+
 	return {
 		setMessages: mock((updater) => {
 			const result = updater(messages as any)
@@ -24,9 +43,8 @@ function createMockContext(overrides: Partial<EventHandlerContext> = {}): EventH
 		setCacheStats: mock(() => {}),
 		setRetryStatus: mock(() => {}),
 		setTurnCount: mock(() => {}),
-		setQueueCount: mock(() => {}),
 
-		queuedMessages: [],
+		promptQueue,
 
 		sessionManager: {
 			appendMessage: mock(() => {}),
@@ -66,7 +84,7 @@ describe("createAgentEventHandler", () => {
 
 		it("processes queued user messages", () => {
 			const ctx = createMockContext()
-			ctx.queuedMessages.push("test message")
+			ctx.promptQueue.push("test message")
 			const handler = createAgentEventHandler(ctx)
 
 			handler({
@@ -74,8 +92,7 @@ describe("createAgentEventHandler", () => {
 				message: { role: "user", content: [{ type: "text", text: "test message" }] },
 			} as unknown as AgentEvent)
 
-			expect(ctx.queuedMessages.length).toBe(0)
-			expect(ctx.setQueueCount).toHaveBeenCalledWith(0)
+			expect(ctx.promptQueue.shift).toHaveBeenCalled()
 			expect(ctx.setActivityState).toHaveBeenCalledWith("thinking")
 		})
 	})

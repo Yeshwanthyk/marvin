@@ -10,7 +10,8 @@ import type { Theme } from "@marvin-agents/open-tui"
 import type { JSX } from "solid-js"
 import type { SessionManager } from "./session-manager.js"
 import type { UIMessage, UIAssistantMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
-import { extractText, extractThinking, extractOrderedBlocks, getToolText, getEditDiffText } from "./utils.js"
+import { extractText, extractThinking, extractOrderedBlocks, getToolText, getEditDiffText, appendWithCap } from "./utils.js"
+import type { PromptQueue } from "./hooks/usePromptQueue.js"
 import type { HookRunner } from "./hooks/index.js"
 import type { RenderResultOptions } from "./custom-tools/types.js"
 
@@ -33,10 +34,9 @@ export interface EventHandlerContext {
 	setCacheStats: (v: { cacheRead: number; input: number } | null) => void
 	setRetryStatus: (v: string | null) => void
 	setTurnCount: (v: number) => void
-	setQueueCount: (v: number) => void
 
 	// Queue management
-	queuedMessages: string[]
+	promptQueue: PromptQueue
 
 	// Session management
 	sessionManager: SessionManager
@@ -74,12 +74,6 @@ const UPDATE_THROTTLE_SLOWEST_MS = 220
 const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
 const STREAMING_TAIL_CHARS = 4000
 const MESSAGE_CAP = 75 // Max messages in UI for performance
-
-/** Append to array with cap */
-function appendWithCap<T>(arr: T[], item: T, cap = MESSAGE_CAP): T[] {
-	const next = [...arr, item]
-	return next.length > cap ? next.slice(-cap) : next
-}
 
 function computeUpdateThrottleMs(textLength: number): number {
 	if (textLength > 12000) return UPDATE_THROTTLE_SLOWEST_MS
@@ -374,9 +368,8 @@ function handleMessageStart(
 ): void {
 	// Handle queued user message being processed
 	if (event.message.role === "user") {
-		if (ctx.queuedMessages.length > 0) {
-			ctx.queuedMessages.shift()
-			ctx.setQueueCount(ctx.queuedMessages.length)
+		const dequeued = ctx.promptQueue.shift()
+		if (dequeued !== undefined) {
 			ctx.sessionManager.appendMessage(event.message as AppMessage)
 
 			const text = typeof event.message.content === "string"
