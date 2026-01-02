@@ -4,235 +4,92 @@
 
 import { TextareaRenderable } from "@opentui/core"
 import { render, useTerminalDimensions } from "@opentui/solid"
-import { createSignal, createEffect, Show, onCleanup, onMount, batch } from "solid-js"
-import { CombinedAutocompleteProvider, SelectList, ThemeProvider, ToastViewport, useRenderer, useTheme, type AutocompleteItem, type SelectItem, type ToastItem } from "@marvin-agents/open-tui"
-import { Agent, ProviderTransport, RouterTransport, CodexTransport, loadTokens, saveTokens, clearTokens } from "@marvin-agents/agent-core"
-import type { AgentEvent, ThinkingLevel, AppMessage } from "@marvin-agents/agent-core"
-import { getApiKey, getModels, getProviders, type AgentTool, type Model, type Api } from "@marvin-agents/ai"
-import { codingTools } from "@marvin-agents/base-tools"
-import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
-import { loadAppConfig, updateAppConfig, type EditorConfig } from "./config.js"
-import { openExternalEditor, openFileInEditor } from "./editor.js"
-import { createAutocompleteCommands } from "./autocomplete-commands.js"
-import { SessionManager, type LoadedSession } from "./session-manager.js"
+import { createSignal, createEffect, Show, onMount, batch } from "solid-js"
+import { CombinedAutocompleteProvider, SelectList, ThemeProvider, ToastViewport, useRenderer, useTheme, type AutocompleteItem, type SelectItem } from "@marvin-agents/open-tui"
+import type { ThinkingLevel, AppMessage } from "@marvin-agents/agent-core"
+import type { KnownProvider } from "@marvin-agents/ai"
+import type { LspManager } from "@marvin-agents/lsp"
+import { updateAppConfig, type EditorConfig } from "./config.js"
+import { createAutocompleteCommands, slashCommands } from "./autocomplete-commands.js"
+import type { LoadedSession } from "./session-manager.js"
 import { selectSession as selectSessionOpen } from "./session-picker.js"
-import { watch, type FSWatcher } from "fs"
-import { createPatch } from "diff"
-
-// Extracted modules
 import type { UIMessage, ToolBlock, ActivityState, UIContentBlock, UIShellMessage } from "./types.js"
-import { findGitHeadPath, getCurrentBranch, extractText, extractThinking, extractToolCalls, extractOrderedBlocks, copyToClipboard, getToolText, getEditDiffText } from "./utils.js"
+import { extractText, extractThinking, extractToolCalls, extractOrderedBlocks, copyToClipboard, getToolText, getEditDiffText, appendWithCap } from "./utils.js"
 import { runShellCommand } from "./shell-runner.js"
-import { handleSlashCommand, resolveProvider, resolveModel, THINKING_LEVELS, type CommandContext } from "./commands.js"
-import { loadCustomCommands, tryExpandCustomCommand, type CustomCommand } from "./custom-commands.js"
-import { slashCommands } from "./autocomplete-commands.js"
-import { createAgentEventHandler, type EventHandlerContext } from "./agent-events.js"
+import { handleSlashCommand, THINKING_LEVELS, type CommandContext } from "./commands.js"
+import { tryExpandCustomCommand, type CustomCommand } from "./custom-commands.js"
+import type { EventHandlerContext } from "./agent-events.js"
 import { Footer } from "./components/Footer.js"
 import { Header } from "./components/Header.js"
 import { MessageList } from "./components/MessageList.js"
 import { createKeyboardHandler, type KeyboardHandlerConfig } from "./keyboard-handler.js"
-import { loadHooks, HookRunner, wrapToolsWithHooks, type HookError } from "./hooks/index.js"
-import { loadCustomTools, getToolNames, type SendRef } from "./custom-tools/index.js"
-
-type KnownProvider = ReturnType<typeof getProviders>[number]
+import { RuntimeProvider, useRuntime } from "./runtime/context.js"
+import { createRuntime, type RunTuiArgs } from "./runtime/create-runtime.js"
+import { createSessionController } from "./hooks/useSessionController.js"
+import { createPromptQueue } from "./hooks/usePromptQueue.js"
+import { useAgentEvents } from "./hooks/useAgentEvents.js"
+import { useGitStatus } from "./hooks/useGitStatus.js"
+import { useSpinner } from "./hooks/useSpinner.js"
+import { useToastManager } from "./hooks/useToastManager.js"
+import { useEditorBridge } from "./hooks/useEditorBridge.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
-const MESSAGE_CAP = 75 // Max messages in UI for performance
-
-/** Append to array with cap */
-const appendWithCap = <T,>(arr: T[], item: T, cap = MESSAGE_CAP): T[] => {
-	const next = [...arr, item]
-	return next.length > cap ? next.slice(-cap) : next
-}
 
 // ----- Main Entry -----
 
-export const runTuiOpen = async (args?: {
-	configDir?: string
-	configPath?: string
-	provider?: string
-	model?: string
-	thinking?: ThinkingLevel
-	continueSession?: boolean
-	resumeSession?: boolean
-}) => {
-	const firstModelRaw = args?.model?.split(",")[0]?.trim()
-	let firstProvider = args?.provider
-	let firstModel = firstModelRaw
-	if (firstModelRaw?.includes("/")) {
-		const [p, m] = firstModelRaw.split("/")
-		firstProvider = p
-		firstModel = m
-	}
-
-	const loaded = await loadAppConfig({
-		configDir: args?.configDir,
-		configPath: args?.configPath,
-		provider: firstProvider,
-		model: firstModel,
-		thinking: args?.thinking,
-	})
-
-	// Load custom slash commands from ~/.config/marvin/commands/
-	const customCommands = loadCustomCommands(loaded.configDir)
-
-	// Load hooks from ~/.config/marvin/hooks/
-	const cwd = process.cwd()
-	const { hooks, errors: hookErrors } = await loadHooks(loaded.configDir)
-	const hookRunner = new HookRunner(hooks, cwd, loaded.configDir)
-
-	// Report hook load errors to stderr (non-fatal)
-	for (const { path, error } of hookErrors) {
-		process.stderr.write(`Hook load error: ${path}: ${error}\n`)
-	}
-
-	// Subscribe to hook runtime errors
-	hookRunner.onError((err: HookError) => {
-		process.stderr.write(`Hook error [${err.event}] ${err.hookPath}: ${err.error}\n`)
-	})
-
-	// Load custom tools from ~/.config/marvin/tools/
-	// sendRef starts as no-op, wired up in App component
-	const sendRef: SendRef = { current: () => {} }
-	const { tools: customTools, errors: toolErrors } = await loadCustomTools(
-		loaded.configDir,
-		cwd,
-		getToolNames(codingTools),
-		sendRef,
-	)
-
-	// Report tool load errors to stderr (non-fatal)
-	for (const { path, error } of toolErrors) {
-		process.stderr.write(`Tool load error: ${path}: ${error}\n`)
-	}
-
-	// Combine built-in and custom tools, then wrap with hooks for interception
-	const allTools: AgentTool<any, any>[] = [...codingTools, ...customTools.map((t) => t.tool)]
-	const lsp = createLspManager({
-		cwd,
-		configDir: loaded.configDir,
-		enabled: loaded.lsp.enabled,
-		autoInstall: loaded.lsp.autoInstall,
-	})
-
-	// LSP active state - ref populated by App component
-	const lspActiveRef = { setActive: (_v: boolean) => {} }
-	const tools = wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunner), lsp, {
-		cwd,
-		onCheckStart: () => lspActiveRef.setActive(true),
-		onCheckEnd: () => lspActiveRef.setActive(false),
-	})
-
-	// Build tool metadata registry for custom rendering
-	const toolByName = new Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>()
-	for (const tool of codingTools) {
-		toolByName.set(tool.name, { label: tool.label, source: "builtin" })
-	}
-	for (const { tool, resolvedPath } of customTools) {
-		const customTool = tool as any
-		toolByName.set(tool.name, {
-			label: tool.label,
-			source: "custom",
-			sourcePath: resolvedPath,
-			renderCall: customTool.renderCall,
-			renderResult: customTool.renderResult,
-		})
-	}
-
-	const sessionManager = new SessionManager(loaded.configDir)
+export const runTuiOpen = async (args?: RunTuiArgs) => {
+	const runtime = await createRuntime(args)
+	const { sessionManager } = runtime
 	let initialSession: LoadedSession | null = null
 
 	if (args?.resumeSession) {
 		const selectedPath = await selectSessionOpen(sessionManager)
-		if (selectedPath === null) { process.stdout.write("No session selected\n"); return }
+		if (selectedPath === null) {
+			process.stdout.write("No session selected\n")
+			return
+		}
 		initialSession = sessionManager.loadSession(selectedPath)
 	}
+
 	if (args?.continueSession && !initialSession) {
 		initialSession = sessionManager.loadLatest()
 	}
 
-	const getApiKeyForProvider = (provider: string): string | undefined => {
-		if (provider === "anthropic") return process.env["ANTHROPIC_OAUTH_TOKEN"] || getApiKey(provider)
-		return getApiKey(provider)
-	}
-
-	const providerTransport = new ProviderTransport({ getApiKey: getApiKeyForProvider })
-	const codexTransport = new CodexTransport({
-		getTokens: async () => loadTokens({ configDir: loaded.configDir }),
-		setTokens: async (tokens) => saveTokens(tokens, { configDir: loaded.configDir }),
-		clearTokens: async () => clearTokens({ configDir: loaded.configDir }),
-	})
-
-	const transport = new RouterTransport({ provider: providerTransport, codex: codexTransport })
-	const agent = new Agent({
-		transport,
-		initialState: { systemPrompt: loaded.systemPrompt, model: loaded.model, thinkingLevel: loaded.thinking, tools },
-	})
-
-	// Emit app.start hook event
-	await hookRunner.emit({ type: "app.start" })
-
-	type ModelEntry = { provider: KnownProvider; model: Model<Api> }
-	const cycleModels: ModelEntry[] = []
-	const modelIds = args?.model?.split(",").map((s) => s.trim()).filter(Boolean) || [loaded.modelId]
-
-	for (const id of modelIds) {
-		if (id.includes("/")) {
-			const [provStr, modelStr] = id.split("/")
-			const prov = resolveProvider(provStr!)
-			if (!prov) continue
-			const model = resolveModel(prov, modelStr!)
-			if (model) cycleModels.push({ provider: prov, model })
-		} else {
-			for (const prov of getProviders()) {
-				const model = resolveModel(prov as KnownProvider, id)
-				if (model) { cycleModels.push({ provider: prov as KnownProvider, model }); break }
-			}
-		}
-	}
-	if (cycleModels.length === 0) cycleModels.push({ provider: loaded.provider, model: loaded.model })
-
-	render(() => (
-		<App agent={agent} sessionManager={sessionManager} initialSession={initialSession}
-			modelId={loaded.modelId} model={loaded.model} provider={loaded.provider} thinking={loaded.thinking} theme={loaded.theme} editor={loaded.editor}
-			cycleModels={cycleModels} configDir={loaded.configDir} configPath={loaded.configPath}
-			codexTransport={codexTransport} getApiKey={getApiKeyForProvider} customCommands={customCommands}
-			hookRunner={hookRunner} toolByName={toolByName} lsp={lsp} lspActiveRef={lspActiveRef} sendRef={sendRef} />
-	), { targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} })
+	render(
+		() => (
+			<RuntimeProvider runtime={runtime}>
+				<App initialSession={initialSession} />
+			</RuntimeProvider>
+		),
+		{ targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} },
+	)
 }
 
 // ----- App Component -----
 
+
 interface AppProps {
-	agent: Agent; sessionManager: SessionManager; initialSession: LoadedSession | null
-	modelId: string; model: Model<Api>; provider: KnownProvider; thinking: ThinkingLevel; theme: string; editor?: EditorConfig
-	cycleModels: Array<{ provider: KnownProvider; model: Model<Api> }>
-	configDir: string; configPath: string; codexTransport: CodexTransport
-	getApiKey: (provider: string) => string | undefined
-	customCommands: Map<string, CustomCommand>
-	hookRunner: HookRunner
-	toolByName: Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>
-	lsp: LspManager
-	/** Ref for LSP active state - App sets the callback */
-	lspActiveRef: { setActive: (v: boolean) => void }
-	/** Ref for custom tools send() - App sets the callback */
-	sendRef: SendRef
+	initialSession: LoadedSession | null
 }
 
-function App(props: AppProps) {
-	const { agent, sessionManager } = props
-	let currentProvider = props.provider, currentModelId = props.modelId, currentThinking = props.thinking
-	const [currentTheme, setCurrentTheme] = createSignal(props.theme)
-	let cycleIndex = 0, sessionStarted = false
+function App({ initialSession }: AppProps) {
+	const runtime = useRuntime()
+	const {
+		agent,
+		sessionManager,
+		hookRunner,
+		toolByName,
+		lsp,
+		lspActiveRef,
+		sendRef,
+		customCommands,
+		config,
+		codexTransport,
+		getApiKey,
+		cycleModels,
+	} = runtime
 
-	const ensureSession = () => {
-		if (!sessionStarted) {
-			sessionManager.startSession(currentProvider, currentModelId, currentThinking)
-			sessionStarted = true
-			void props.hookRunner.emit({ type: "session.start", sessionId: sessionManager.sessionId })
-		}
-	}
-
+	const [currentTheme, setCurrentTheme] = createSignal(config.theme)
 	const [messages, setMessages] = createSignal<UIMessage[]>([])
 	const [toolBlocks, setToolBlocks] = createSignal<ToolBlock[]>([])
 	const [isResponding, setIsResponding] = createSignal(false)
@@ -240,166 +97,118 @@ function App(props: AppProps) {
 	const [thinkingVisible, setThinkingVisible] = createSignal(true)
 	const [diffWrapMode, setDiffWrapMode] = createSignal<"word" | "none">("word")
 	const [concealMarkdown, setConcealMarkdown] = createSignal(true)
-	const [displayModelId, setDisplayModelId] = createSignal(props.modelId)
-	const [displayThinking, setDisplayThinking] = createSignal(props.thinking)
-	const [displayContextWindow, setDisplayContextWindow] = createSignal(props.model.contextWindow)
-	const [contextTokens, setContextTokens] = createSignal(0)
-	const [cacheStats, setCacheStats] = createSignal<{ cacheRead: number; input: number } | null>(null)
-	const [retryStatus, setRetryStatus] = createSignal<string | null>(null)
-	const [turnCount, setTurnCount] = createSignal(0)
-	const [lspActive, setLspActive] = createSignal(false)
+	const [displayModelId, setDisplayModelId] = createSignal(config.modelId)
+	const [displayThinking, setDisplayThinking] = createSignal(config.thinking)
+	const [displayContextWindow, setDisplayContextWindow] = createSignal(config.model.contextWindow)
+const [contextTokens, setContextTokens] = createSignal(0)
+const [cacheStats, setCacheStats] = createSignal<{ cacheRead: number; input: number } | null>(null)
+const [retryStatus, setRetryStatus] = createSignal<string | null>(null)
+const [turnCount, setTurnCount] = createSignal(0)
+const [lspActive, setLspActive] = createSignal(false)
+const [queueCount, setQueueCount] = createSignal(0)
+const [currentProvider, setCurrentProviderSignal] = createSignal(config.provider)
 
-	// Wire up LSP refs to state
-	props.lspActiveRef.setActive = setLspActive
+	lspActiveRef.setActive = setLspActive
 
-	const queuedMessages: string[] = []
-	const [queueCount, setQueueCount] = createSignal(0)
+	const promptQueue = createPromptQueue(setQueueCount)
 	const retryConfig = { enabled: true, maxRetries: 3, baseDelayMs: 2000 }
 	const retryablePattern = /overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error/i
 	const retryState = { attempt: 0, abortController: null as AbortController | null }
 	const streamingMessageIdRef = { current: null as string | null }
 
-	onMount(() => { if (props.initialSession) restoreSession(props.initialSession) })
+const sessionController = createSessionController({
+	initialProvider: config.provider,
+	initialModel: config.model,
+	initialModelId: config.modelId,
+	initialThinking: config.thinking,
+		agent,
+		sessionManager,
+		hookRunner,
+	toolByName,
+	setMessages: setMessages as (updater: (prev: UIMessage[]) => UIMessage[]) => void,
+	setContextTokens,
+	setDisplayProvider: setCurrentProviderSignal,
+	setDisplayModelId,
+	setDisplayThinking,
+	setDisplayContextWindow,
+		shellInjectionPrefix: SHELL_INJECTION_PREFIX,
+})
 
-	const restoreSession = (session: LoadedSession) => {
-		const { metadata, messages: sessionMessages } = session
-		const resolvedProvider = resolveProvider(metadata.provider)
-		if (resolvedProvider) {
-			const resolvedModel = resolveModel(resolvedProvider, metadata.modelId)
-			if (resolvedModel) {
-				currentProvider = resolvedProvider; currentModelId = resolvedModel.id; currentThinking = metadata.thinkingLevel
-				agent.setModel(resolvedModel); agent.setThinkingLevel(metadata.thinkingLevel)
-				setDisplayModelId(resolvedModel.id); setDisplayThinking(metadata.thinkingLevel); setDisplayContextWindow(resolvedModel.contextWindow)
-			}
-		}
-		agent.replaceMessages(sessionMessages)
+onMount(() => {
+	if (initialSession) sessionController.restoreSession(initialSession)
+})
 
-		// Rehydrate context tokens from last assistant message's usage
-		for (let i = sessionMessages.length - 1; i >= 0; i--) {
-			const msg = sessionMessages[i] as { role: string; usage?: { totalTokens?: number } }
-			if (msg.role === "assistant" && msg.usage?.totalTokens) {
-				setContextTokens(msg.usage.totalTokens)
-				break
-			}
-		}
-		// Build a map of toolCallId -> toolResult for matching
-		const toolResultMap = new Map<string, { output: string; editDiff: string | null; isError: boolean }>()
-		for (const msg of sessionMessages) {
-			if (msg.role === "toolResult") {
-				toolResultMap.set(msg.toolCallId, {
-					output: getToolText(msg),
-					editDiff: getEditDiffText(msg),
-					isError: msg.isError ?? false,
-				})
-			}
-		}
-		const uiMessages: UIMessage[] = []
-		for (const msg of sessionMessages) {
-			if (msg.role === "user") {
-				const contentText = typeof msg.content === "string" ? msg.content : extractText(msg.content as unknown[])
-				if (contentText.startsWith(SHELL_INJECTION_PREFIX)) continue
-				uiMessages.push({ id: crypto.randomUUID(), role: "user", content: contentText })
-			} else if (msg.role === "assistant") {
-				const text = extractText(msg.content as unknown[]), thinking = extractThinking(msg.content as unknown[])
-				const toolCalls = extractToolCalls(msg.content as unknown[])
-				const tools: ToolBlock[] = toolCalls.map((tc) => {
-					const result = toolResultMap.get(tc.id)
-					const meta = props.toolByName.get(tc.name)
-					return {
-						id: tc.id,
-						name: tc.name,
-						args: tc.args,
-						output: result?.output,
-						editDiff: result?.editDiff || undefined,
-						isError: result?.isError ?? false,
-						isComplete: true,
-						// Reattach tool metadata for custom rendering on restored sessions
-						label: meta?.label,
-						source: meta?.source,
-						sourcePath: meta?.sourcePath,
-						renderCall: meta?.renderCall,
-						renderResult: meta?.renderResult,
-					}
-				})
-				// Build contentBlocks from ordered API content
-				const orderedBlocks = extractOrderedBlocks(msg.content as unknown[])
-				const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
-					if (block.type === "thinking") {
-						return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
-					} else if (block.type === "text") {
-						return { type: "text" as const, text: block.text }
-					} else {
-						// toolCall - find full tool from tools array
-						const tool = tools.find((t) => t.id === block.id)
-						return {
-							type: "tool" as const,
-							tool: tool || { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
-						}
-					}
-				})
-				uiMessages.push({ id: crypto.randomUUID(), role: "assistant", content: text, thinking: thinking || undefined, isStreaming: false, tools, contentBlocks })
-			} else if ((msg as { role: string }).role === "shell") {
-				// Restore shell command messages
-				const shellMsg = msg as unknown as { command: string; output: string; exitCode: number | null; truncated: boolean; tempFilePath?: string; timestamp?: number }
-				uiMessages.push({
-					id: crypto.randomUUID(),
-					role: "shell",
-					command: shellMsg.command,
-					output: shellMsg.output,
-					exitCode: shellMsg.exitCode,
-					truncated: shellMsg.truncated,
-					tempFilePath: shellMsg.tempFilePath,
-					timestamp: shellMsg.timestamp,
-				})
-			}
-			// Skip toolResult messages - they're attached to assistant messages via toolResultMap
-		}
-		setMessages(uiMessages)
-		const sessionPath = sessionManager.listSessions().find((s) => s.id === metadata.id)?.path || ""
-		sessionManager.continueSession(sessionPath, metadata.id); sessionStarted = true
-		void props.hookRunner.emit({ type: "session.resume", sessionId: metadata.id })
-	}
+const ensureSession = () => {
+	sessionController.ensureSession()
+}
+
+let cycleIndex = cycleModels.findIndex(
+	(entry) => entry.model.id === config.modelId && entry.provider === config.provider,
+)
+if (cycleIndex < 0) cycleIndex = 0
 
 	const eventCtx: EventHandlerContext = {
 		setMessages: setMessages as (updater: (prev: UIMessage[]) => UIMessage[]) => void,
 		setToolBlocks: setToolBlocks as (updater: (prev: ToolBlock[]) => ToolBlock[]) => void,
-		setActivityState, setIsResponding, setContextTokens, setCacheStats, setRetryStatus, setTurnCount, setQueueCount,
-		queuedMessages, sessionManager, streamingMessageId: streamingMessageIdRef,
-		retryConfig, retryablePattern, retryState, agent: agent as EventHandlerContext["agent"],
-		hookRunner: props.hookRunner,
-		toolByName: props.toolByName,
+		setActivityState,
+		setIsResponding,
+		setContextTokens,
+		setCacheStats,
+		setRetryStatus,
+		setTurnCount,
+		promptQueue,
+		sessionManager,
+		streamingMessageId: streamingMessageIdRef,
+		retryConfig,
+		retryablePattern,
+		retryState,
+		agent: agent as EventHandlerContext["agent"],
+		hookRunner,
+		toolByName,
 		getContextWindow: () => displayContextWindow(),
 	}
-	const handleAgentEvent = createAgentEventHandler(eventCtx)
 
-	createEffect(() => {
-		const unsubscribe = agent.subscribe((event: AgentEvent) => { try { handleAgentEvent(event) } catch {} })
-		onCleanup(() => { unsubscribe(); handleAgentEvent.dispose() })
-	})
+	useAgentEvents({ agent, context: eventCtx })
 
 	const handleThemeChange = (name: string) => {
 		setCurrentTheme(name)
-		void updateAppConfig({ configDir: props.configDir }, { theme: name })
+		void updateAppConfig({ configDir: config.configDir, configPath: config.configPath }, { theme: name })
 	}
 
-	// Ref for exit handler - populated by MainView once renderer is available
 	const exitHandlerRef = { current: () => process.exit(0) }
-	// Ref for editor handler - populated by MainView once renderer is available
 	const editorOpenRef = { current: async () => {} }
 
 	const cmdCtx: CommandContext = {
-		agent, sessionManager, configDir: props.configDir, configPath: props.configPath,
-		cwd: process.cwd(), editor: props.editor,
-		codexTransport: props.codexTransport, getApiKey: props.getApiKey,
-		get currentProvider() { return currentProvider }, get currentModelId() { return currentModelId }, get currentThinking() { return currentThinking },
-		setCurrentProvider: (p) => { currentProvider = p }, setCurrentModelId: (id) => { currentModelId = id }, setCurrentThinking: (t) => { currentThinking = t },
-		isResponding, setIsResponding, setActivityState,
-		setMessages: setMessages as CommandContext["setMessages"], setToolBlocks: setToolBlocks as CommandContext["setToolBlocks"],
-		setContextTokens, setCacheStats, setDisplayModelId, setDisplayThinking, setDisplayContextWindow, setDiffWrapMode, setConcealMarkdown,
+		agent,
+		sessionManager,
+		configDir: config.configDir,
+		configPath: config.configPath,
+		cwd: process.cwd(),
+		editor: config.editor,
+		codexTransport,
+		getApiKey,
+		get currentProvider() { return sessionController.currentProvider() },
+		get currentModelId() { return sessionController.currentModelId() },
+		get currentThinking() { return sessionController.currentThinking() },
+		setCurrentProvider: (p) => sessionController.setCurrentProvider(p),
+		setCurrentModelId: (id) => sessionController.setCurrentModelId(id),
+		setCurrentThinking: (t) => sessionController.setCurrentThinking(t),
+		isResponding,
+		setIsResponding,
+		setActivityState,
+		setMessages: setMessages as CommandContext["setMessages"],
+		setToolBlocks: setToolBlocks as CommandContext["setToolBlocks"],
+		setContextTokens,
+		setCacheStats,
+		setDisplayModelId,
+		setDisplayThinking,
+		setDisplayContextWindow,
+		setDiffWrapMode,
+		setConcealMarkdown,
 		setTheme: handleThemeChange,
 		openEditor: () => editorOpenRef.current(),
 		onExit: () => exitHandlerRef.current(),
-		hookRunner: props.hookRunner,
+		hookRunner,
 	}
 
 	// Set of built-in command names for precedence check
@@ -490,7 +299,7 @@ function App(props: AppProps) {
 			if (result instanceof Promise ? await result : result) { if (!isEditorCommand) editorClearFn?.(); return }
 
 			// Try custom command expansion (built-ins already take precedence)
-			const expanded = tryExpandCustomCommand(trimmed, builtInCommandNames, props.customCommands)
+			const expanded = tryExpandCustomCommand(trimmed, builtInCommandNames, customCommands)
 			if (expanded !== null) {
 				// Submit expanded text as regular prompt (recursion-safe since expanded won't start with /)
 				editorClearFn?.()
@@ -499,11 +308,13 @@ function App(props: AppProps) {
 		}
 
 		if (isResponding()) {
-			queuedMessages.push(text); setQueueCount(queuedMessages.length)
+			promptQueue.push(text)
 			void agent.queueMessage({ role: "user", content: [{ type: "text", text }], timestamp: Date.now() })
-			editorClearFn?.(); return
+			editorClearFn?.()
+			return
 		}
-		editorClearFn?.(); ensureSession()
+		editorClearFn?.()
+		ensureSession()
 		sessionManager.appendMessage({ role: "user", content: [{ type: "text", text }], timestamp: Date.now() })
 		batch(() => { setMessages((prev) => appendWithCap(prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() })); setToolBlocks([]); setIsResponding(true); setActivityState("thinking") })
 		try { await agent.prompt(text) }
@@ -511,39 +322,51 @@ function App(props: AppProps) {
 	}
 
 	// Connect hook send() and custom tools send() to handleSubmit
-	props.hookRunner.setSendHandler((text) => void handleSubmit(text))
-	props.sendRef.current = (text) => void handleSubmit(text)
+	hookRunner.setSendHandler((text) => void handleSubmit(text))
+	sendRef.current = (text) => void handleSubmit(text)
 
 	const handleAbort = (): string | null => {
-		if (retryState.abortController) { retryState.abortController.abort(); retryState.abortController = null; retryState.attempt = 0; setRetryStatus(null) }
-		agent.abort(); agent.clearMessageQueue()
-		let restore: string | null = null
-		if (queuedMessages.length > 0) { restore = queuedMessages.join("\n"); queuedMessages.length = 0; setQueueCount(0) }
-		batch(() => { setIsResponding(false); setActivityState("idle") }); return restore
+		if (retryState.abortController) {
+			retryState.abortController.abort()
+			retryState.abortController = null
+			retryState.attempt = 0
+			setRetryStatus(null)
+		}
+		agent.abort()
+		agent.clearMessageQueue()
+		const restore = promptQueue.drainToText()
+		batch(() => { setIsResponding(false); setActivityState("idle") })
+		return restore
 	}
 
 	const cycleModel = () => {
-		if (props.cycleModels.length <= 1) return
-		if (isResponding()) return // Prevent mid-stream model switch
-		cycleIndex = (cycleIndex + 1) % props.cycleModels.length
-		const entry = props.cycleModels[cycleIndex]!
-		currentProvider = entry.provider; currentModelId = entry.model.id
-		agent.setModel(entry.model); setDisplayModelId(entry.model.id); setDisplayContextWindow(entry.model.contextWindow)
+		if (cycleModels.length <= 1) return
+		if (isResponding()) return
+		cycleIndex = (cycleIndex + 1) % cycleModels.length
+		const entry = cycleModels[cycleIndex]!
+		sessionController.setCurrentProvider(entry.provider)
+		sessionController.setCurrentModelId(entry.model.id)
+		agent.setModel(entry.model)
+		setDisplayModelId(entry.model.id)
+		setDisplayContextWindow(entry.model.contextWindow)
 	}
 
 	const cycleThinking = () => {
-		const next = THINKING_LEVELS[(THINKING_LEVELS.indexOf(currentThinking) + 1) % THINKING_LEVELS.length]!
-		currentThinking = next; agent.setThinkingLevel(next); setDisplayThinking(next)
+		const current = sessionController.currentThinking()
+		const next = THINKING_LEVELS[(THINKING_LEVELS.indexOf(current) + 1) % THINKING_LEVELS.length]!
+		sessionController.setCurrentThinking(next)
+		agent.setThinkingLevel(next)
+		setDisplayThinking(next)
 	}
 
 	return (
 		<ThemeProvider mode="dark" themeName={currentTheme()} onThemeChange={handleThemeChange}>
 			<MainView messages={messages()} toolBlocks={toolBlocks()} isResponding={isResponding()} activityState={activityState()}
-				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider}
+				thinkingVisible={thinkingVisible()} modelId={displayModelId()} thinking={displayThinking()} provider={currentProvider()}
 				contextTokens={contextTokens()} contextWindow={displayContextWindow()} queueCount={queueCount()} retryStatus={retryStatus()} turnCount={turnCount()} lspActive={lspActive()}
-				diffWrapMode={diffWrapMode()} concealMarkdown={concealMarkdown()} customCommands={props.customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
+				diffWrapMode={diffWrapMode()} concealMarkdown={concealMarkdown()} customCommands={customCommands} onSubmit={handleSubmit} onAbort={handleAbort}
 				onToggleThinking={() => setThinkingVisible((v) => !v)} onCycleModel={cycleModel} onCycleThinking={cycleThinking}
-				exitHandlerRef={exitHandlerRef} editorOpenRef={editorOpenRef} editor={props.editor} lsp={props.lsp} />
+				exitHandlerRef={exitHandlerRef} editorOpenRef={editorOpenRef} editor={config.editor} lsp={lsp} />
 		</ThemeProvider>
 	)
 }
@@ -568,6 +391,17 @@ function MainView(props: MainViewProps) {
 	const dimensions = useTerminalDimensions()
 	let textareaRef: TextareaRenderable | undefined
 	const lastCtrlC = { current: 0 }
+	const branch = useGitStatus()
+	const spinnerFrame = useSpinner(() => props.activityState)
+	const renderer = useRenderer()
+	const { toasts, pushToast } = useToastManager()
+	const { openBuffer, editFile } = useEditorBridge({
+		editor: props.editor,
+		renderer,
+		pushToast,
+		isResponding: () => props.isResponding,
+		onSubmit: (text) => props.onSubmit(text),
+	})
 
 	// Autocomplete
 	// Build autocomplete commands: built-ins + custom commands
@@ -624,24 +458,12 @@ function MainView(props: MainViewProps) {
 		return true
 	}
 
-	// Git branch & Spinner
-	const [branch, setBranch] = createSignal<string | null>(getCurrentBranch())
-	const [spinnerFrame, setSpinnerFrame] = createSignal(0)
-	let gitWatcher: FSWatcher | null = null, spinnerInterval: ReturnType<typeof setInterval> | null = null
-
 	onMount(() => {
 		textareaRef?.focus()
-		const gitHeadPath = findGitHeadPath(); if (gitHeadPath) try { gitWatcher = watch(gitHeadPath, () => setBranch(getCurrentBranch())) } catch {}
-	})
-	onCleanup(() => { if (gitWatcher) gitWatcher.close(); if (spinnerInterval) clearInterval(spinnerInterval) })
-	createEffect(() => {
-		if (props.activityState !== "idle") { if (!spinnerInterval) spinnerInterval = setInterval(() => setSpinnerFrame((f) => (f + 1) % 8), 200) }
-		else { if (spinnerInterval) { clearInterval(spinnerInterval); spinnerInterval = null } }
 	})
 	// Scrollbox handles sticky-follow for new output when already at bottom.
 
 	// Exit handler - cleans up renderer before exit
-	const renderer = useRenderer()
 	const exitApp = () => {
 		try {
 			renderer.destroy()
@@ -652,20 +474,6 @@ function MainView(props: MainViewProps) {
 	// Register exit handler with parent so commands can use it
 	props.exitHandlerRef.current = exitApp
 
-	// Toasts & Clipboard
-	const [toasts, setToasts] = createSignal<ToastItem[]>([])
-	const toastTimeouts = new Set<ReturnType<typeof setTimeout>>()
-	onCleanup(() => { for (const t of toastTimeouts) clearTimeout(t); toastTimeouts.clear() })
-
-	const pushToast = (toast: Omit<ToastItem, "id">, ttlMs = 2000) => {
-		const id = crypto.randomUUID()
-		setToasts((prev) => [{ id, ...toast }, ...prev].slice(0, 3))
-		const timeout = setTimeout(() => {
-			toastTimeouts.delete(timeout)
-			setToasts((prev) => prev.filter((t) => t.id !== id))
-		}, ttlMs)
-		toastTimeouts.add(timeout)
-	}
 	const copySelectionToClipboard = () => {
 		const sel = renderer.getSelection(); if (!sel) return
 		const text = sel.getSelectedText(); if (!text || text.length === 0) return
@@ -674,91 +482,24 @@ function MainView(props: MainViewProps) {
 
 	const openEditorFromTui = async () => {
 		if (!textareaRef) return
-		const editor = props.editor ?? { command: "nvim", args: [] }
 		setShowAutocomplete(false); setAutocompleteItems([])
 		textareaRef.clear()
 
-		try {
-			const content = await openExternalEditor({
-				editor,
-				cwd: process.cwd(),
-				renderer,
-				initialValue: "",
-			})
-			if (content === undefined) return
-			suppressNextAutocompleteUpdate = true
-			textareaRef.setText(content)
-			textareaRef.focus()
-			const lines = content.split("\n")
-			const lastLine = Math.max(0, lines.length - 1)
-			const lastCol = lines[lastLine]?.length ?? 0
-			textareaRef.editBuffer.setCursorToLineCol(lastLine, lastCol)
-			updateAutocomplete(content, lastLine, lastCol)
-		} catch (err) {
-			pushToast({
-				title: "Editor failed",
-				message: err instanceof Error ? err.message : String(err),
-				variant: "error",
-			}, 4000)
-		}
+		const content = await openBuffer("")
+		if (content === undefined) return
+		suppressNextAutocompleteUpdate = true
+		textareaRef.setText(content)
+		textareaRef.focus()
+		const lines = content.split("\n")
+		const lastLine = Math.max(0, lines.length - 1)
+		const lastCol = lines[lastLine]?.length ?? 0
+		textareaRef.editBuffer.setCursorToLineCol(lastLine, lastCol)
+		updateAutocomplete(content, lastLine, lastCol)
 	}
 	props.editorOpenRef.current = openEditorFromTui
 
-	const handleEditFile = async (filePath: string, line?: number) => {
-		// Don't allow while agent is responding
-		if (props.isResponding) return
-
-		const editor = props.editor ?? { command: "nvim", args: [] }
-
-		// Snapshot current content
-		let beforeContent: string
-		try {
-			beforeContent = await Bun.file(filePath).text()
-		} catch (err) {
-			pushToast({ title: `Cannot read file: ${filePath}`, variant: "error" }, 3000)
-			return
-		}
-
-		// Open editor
-		try {
-			await openFileInEditor({
-				editor,
-				filePath,
-				line,
-				cwd: process.cwd(),
-				renderer,
-			})
-		} catch (err) {
-			pushToast({ title: `Editor failed: ${err instanceof Error ? err.message : String(err)}`, variant: "error" }, 3000)
-			return
-		}
-
-		// Read after
-		let afterContent: string
-		try {
-			afterContent = await Bun.file(filePath).text()
-		} catch (err) {
-			pushToast({ title: `Cannot read file after edit: ${filePath}`, variant: "error" }, 3000)
-			return
-		}
-
-		// Compare - if unchanged, do nothing
-		if (beforeContent === afterContent) {
-			return
-		}
-
-		// Compute diff
-		const diff = createPatch(filePath, beforeContent, afterContent)
-		// Trim header lines, keep from first @@ onwards
-		const lines = diff.split("\n")
-		const hunkStart = lines.findIndex((l) => l.startsWith("@@"))
-		const diffBody = hunkStart >= 0 ? lines.slice(hunkStart).join("\n") : diff
-
-		// Queue message for next turn
-		const message = `Modified ${filePath}:\n${diffBody}`
-		props.onSubmit(message)
-
-		pushToast({ title: "Edit recorded", variant: "success" }, 1500)
+	const handleEditFile = (filePath: string, line?: number) => {
+		void editFile(filePath, line)
 	}
 
 	// Model switch detector - warn on downshifts
