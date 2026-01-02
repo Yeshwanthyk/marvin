@@ -12,8 +12,8 @@
 
 ## Progress Tracking
 - [x] Phase 1: Hook Core + Persistence Foundations
-- [ ] Phase 2: Runtime + Transport Integration
-- [ ] Phase 3: TUI UX, Commands, Renderers, Tests, and Local Hook Setup
+- [x] Phase 2: Runtime + Transport Integration
+- [x] Phase 3: TUI UX, Commands, Renderers, Tests, and Local Hook Setup
 
 ## Overview
 Expand Marvin’s hook system to support OpenCode-style plugins (chat transforms, auth/routing, session hooks) and pi-mono-style hook UX (persisted hook messages, UI prompts, hook commands). This enables supermemory injection and Gemini/Cursor auth plugins to be implemented as plain hooks in `~/.config/marvin/hooks/`.

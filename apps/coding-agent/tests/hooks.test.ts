@@ -8,6 +8,12 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { loadHooks, HookRunner, wrapToolWithHooks } from "../src/hooks/index.js"
 import type { AgentTool, AgentToolResult } from "@marvin-agents/ai"
+import { SessionManager } from "../src/session-manager.js"
+
+// Helper to create a session manager for tests
+function createTestSessionManager(configDir: string) {
+	return new SessionManager(configDir)
+}
 
 describe("hooks loader", () => {
 	let tempDir: string
@@ -120,7 +126,7 @@ describe("hooks runner", () => {
 		)
 
 		const { hooks } = await loadHooks(tempDir)
-		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir, createTestSessionManager(tempDir))
 
 		await runner.emit({ type: "app.start" })
 
@@ -139,7 +145,7 @@ describe("hooks runner", () => {
 		)
 
 		const { hooks } = await loadHooks(tempDir)
-		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir, createTestSessionManager(tempDir))
 
 		const errors: any[] = []
 		runner.onError((err) => errors.push(err))
@@ -160,7 +166,7 @@ describe("hooks runner", () => {
 		)
 
 		const { hooks } = await loadHooks(tempDir)
-		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir, createTestSessionManager(tempDir))
 
 		expect(runner.hasHandlers("app.start")).toBe(true)
 		expect(runner.hasHandlers("agent.start")).toBe(false)
@@ -195,13 +201,16 @@ describe("turn.end with usage", () => {
 		)
 
 		const { hooks } = await loadHooks(tempDir)
-		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir, createTestSessionManager(tempDir))
 
 		await runner.emit({
 			type: "turn.end",
+			sessionId: null,
 			turnIndex: 0,
 			message: mockMessage,
 			toolResults: [],
+			tokens: { input: 25000, output: 25000, total: 50000 },
+			contextLimit: 100000,
 			usage: { current: 50000, max: 100000, percent: 50 },
 		})
 
@@ -226,15 +235,18 @@ describe("turn.end with usage", () => {
 		)
 
 		const { hooks } = await loadHooks(tempDir)
-		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir, createTestSessionManager(tempDir))
 		runner.setSendHandler((text) => sentMessages.push(text))
 
 		// First turn at 50% - no compact
 		await runner.emit({
 			type: "turn.end",
+			sessionId: null,
 			turnIndex: 0,
 			message: mockMessage,
 			toolResults: [],
+			tokens: { input: 25000, output: 25000, total: 50000 },
+			contextLimit: 100000,
 			usage: { current: 50000, max: 100000, percent: 50 },
 		})
 		expect(sentMessages).toEqual([])
@@ -242,9 +254,12 @@ describe("turn.end with usage", () => {
 		// Second turn at 90% - triggers compact
 		await runner.emit({
 			type: "turn.end",
+			sessionId: null,
 			turnIndex: 1,
 			message: mockMessage,
 			toolResults: [],
+			tokens: { input: 45000, output: 45000, total: 90000 },
+			contextLimit: 100000,
 			usage: { current: 90000, max: 100000, percent: 90 },
 		})
 		expect(sentMessages).toEqual(["/compact"])
@@ -252,9 +267,12 @@ describe("turn.end with usage", () => {
 		// Third turn still high - should not trigger again
 		await runner.emit({
 			type: "turn.end",
+			sessionId: null,
 			turnIndex: 2,
 			message: mockMessage,
 			toolResults: [],
+			tokens: { input: 46000, output: 46000, total: 92000 },
+			contextLimit: 100000,
 			usage: { current: 92000, max: 100000, percent: 92 },
 		})
 		expect(sentMessages).toEqual(["/compact"])
@@ -288,7 +306,7 @@ describe("hooks send", () => {
 		)
 
 		const { hooks } = await loadHooks(tempDir)
-		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir, createTestSessionManager(tempDir))
 		runner.setSendHandler((text) => sentMessages.push(text))
 
 		await runner.emit({ type: "app.start" })
@@ -324,7 +342,7 @@ describe("tool wrapper", () => {
 		)
 
 		const { hooks } = await loadHooks(tempDir)
-		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir, createTestSessionManager(tempDir))
 
 		const mockTool: AgentTool<any, any> = {
 			name: "blocked-tool",
@@ -358,7 +376,7 @@ describe("tool wrapper", () => {
 		)
 
 		const { hooks } = await loadHooks(tempDir)
-		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir, createTestSessionManager(tempDir))
 
 		const mockTool: AgentTool<any, any> = {
 			name: "allowed-tool",
@@ -387,7 +405,7 @@ describe("tool wrapper", () => {
 		)
 
 		const { hooks } = await loadHooks(tempDir)
-		const runner = new HookRunner(hooks, process.cwd(), tempDir)
+		const runner = new HookRunner(hooks, process.cwd(), tempDir, createTestSessionManager(tempDir))
 
 		const mockTool: AgentTool<any, any> = {
 			name: "modifiable-tool",
