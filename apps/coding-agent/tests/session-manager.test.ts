@@ -28,7 +28,7 @@ describe("SessionManager", () => {
     expect(existsSync(manager.sessionPath!)).toBe(true);
   });
 
-  it("appends messages to session", () => {
+  it("appends messages to session", async () => {
     manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
     
     const userMsg: AppMessage = {
@@ -50,6 +50,9 @@ describe("SessionManager", () => {
     
     manager.appendMessage(userMsg);
     manager.appendMessage(assistantMsg);
+    
+    // Wait for async writes to complete
+    await Bun.sleep(50);
     
     // Load and verify
     const loaded = manager.loadSession(manager.sessionPath!);

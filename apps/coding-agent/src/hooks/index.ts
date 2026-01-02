@@ -26,3 +26,12 @@ export { wrapToolWithHooks, wrapToolsWithHooks } from "./tool-wrapper.js"
 
 // Hook message utilities
 export { createHookMessage, hookMessageToText } from "./hook-messages.js"
+
+// Message transformer
+export { transformMessages } from "./message-transformer.js"
+
+// Hook transport wrapper
+export { HookedTransport } from "./hook-transport.js"
+
+// Hook tool adapter
+export { createHookToolAdapter, getHookTools } from "./hook-tool-adapter.js"

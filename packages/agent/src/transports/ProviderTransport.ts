@@ -35,8 +35,9 @@ export class ProviderTransport implements AgentTransport {
 	}
 
 	private async getModelAndKey(cfg: AgentRunConfig) {
-		let apiKey: string | undefined;
-		if (this.options.getApiKey) {
+		// Use hook-provided API key first, then fallback to options
+		let apiKey = cfg.apiKey;
+		if (!apiKey && this.options.getApiKey) {
 			apiKey = await this.options.getApiKey(cfg.model.provider);
 		}
 		if (!apiKey) {
@@ -44,11 +45,16 @@ export class ProviderTransport implements AgentTransport {
 		}
 
 		let model = cfg.model;
-		if (this.options.corsProxyUrl && cfg.model.baseUrl) {
-			model = {
-				...cfg.model,
-				baseUrl: `${this.options.corsProxyUrl}/?url=${encodeURIComponent(cfg.model.baseUrl)}`,
-			};
+		// Apply hook-provided baseUrl and headers
+		if (cfg.baseUrl) {
+			model = { ...model, baseUrl: cfg.baseUrl };
+		}
+		if (cfg.headers) {
+			model = { ...model, headers: { ...(model.headers ?? {}), ...cfg.headers } };
+		}
+		// Apply CORS proxy if configured
+		if (this.options.corsProxyUrl && model.baseUrl) {
+			model = { ...model, baseUrl: `${this.options.corsProxyUrl}/?url=${encodeURIComponent(model.baseUrl)}` };
 		}
 
 		return { model, apiKey };
@@ -64,6 +70,7 @@ export class ProviderTransport implements AgentTransport {
 
 	private buildLoopConfig(model: typeof cfg.model, apiKey: string, cfg: AgentRunConfig): AgentLoopConfig {
 		return {
+			...cfg.streamOptions,
 			model,
 			reasoning: cfg.reasoning,
 			apiKey,
