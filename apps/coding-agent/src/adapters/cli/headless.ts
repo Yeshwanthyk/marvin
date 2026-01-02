@@ -48,8 +48,15 @@ export const runHeadless = async (args: HeadlessArgs) => {
 		"headless",
 	)
 
-	// Headless mode is single-shot; hooks can still inject via send(), but default is no-op.
-	runtime.hookRunner.setSendHandler(() => {})
+	// Initialize hooks with no-op handlers for headless mode (single-shot, no UI)
+	runtime.hookRunner.initialize({
+		sendHandler: () => {},
+		sendMessageHandler: () => {},
+		appendEntryHandler: (customType, data) => runtime.sessionManager.appendEntry(customType, data),
+		getSessionId: () => runtime.sessionManager.sessionId,
+		getModel: () => runtime.agent.state.model,
+		hasUI: false,
+	})
 
 	const prompt = (args.prompt ?? (await readStdin())).trim()
 	if (!prompt) {
@@ -59,6 +66,18 @@ export const runHeadless = async (args: HeadlessArgs) => {
 	}
 
 	try {
+		// Emit agent.before_start hook (hooks can inject pre-prompt messages)
+		await runtime.hookRunner.emitBeforeAgentStart(prompt)
+
+		// Emit chat.message hook (hooks can mutate user message parts)
+		const chatMessageOutput: { parts: Array<{ type: "text"; text: string }> } = {
+			parts: [{ type: "text", text: prompt }],
+		}
+		await runtime.hookRunner.emitChatMessage(
+			{ sessionId: runtime.sessionManager.sessionId, text: prompt },
+			chatMessageOutput,
+		)
+
 		await runtime.agent.prompt(prompt)
 
 		const conversation = runtime.agent.state.messages.filter((m): m is Message => {

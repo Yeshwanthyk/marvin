@@ -65,6 +65,16 @@ export async function runAcp(args: { configDir?: string; configPath?: string; mo
 		"acp",
 	)
 
+	// Initialize hooks with no-op handlers for ACP mode (no interactive UI)
+	runtime.hookRunner.initialize({
+		sendHandler: () => {},
+		sendMessageHandler: () => {},
+		appendEntryHandler: (customType, data) => runtime.sessionManager.appendEntry(customType, data),
+		getSessionId: () => runtime.sessionManager.sessionId,
+		getModel: () => state.agent?.state.model ?? null,
+		hasUI: false,
+	})
+
 	// Determine initial model from args or first in MODEL_OPTIONS
 	const initialModelId = args.model?.split(",")[0] ?? MODEL_OPTIONS[0]?.modelId ?? "claude-opus-4-5"
 

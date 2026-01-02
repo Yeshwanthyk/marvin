@@ -1,10 +1,10 @@
-import { Agent, type ThinkingLevel } from "@marvin-agents/agent-core"
+import { Agent, type AgentTransport, type ThinkingLevel } from "@marvin-agents/agent-core"
 import { getModels, getProviders, type AgentTool, type Api, type KnownProvider, type Model } from "@marvin-agents/ai"
 import { codingTools } from "@marvin-agents/base-tools"
 import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
 import { loadAppConfig, type LoadedAppConfig } from "../config.js"
 import { loadCustomCommands, type CustomCommand, type CustomCommandLoadResult } from "../custom-commands.js"
-import { wrapToolsWithHooks, type HookRunner } from "../hooks/index.js"
+import { wrapToolsWithHooks, getHookTools, HookedTransport, type HookRunner } from "../hooks/index.js"
 import { SessionManager } from "../session-manager.js"
 import { loadExtensibility, attachHookErrorLogging } from "./extensibility/index.js"
 import {
@@ -102,7 +102,7 @@ const buildCycleModels = (
 }
 
 const createAgentFactory =
-	(transport: TransportBundle["router"], tools: AgentTool<any, any>[], config: LoadedAppConfig) =>
+	(transport: AgentTransport, tools: AgentTool<any, any>[], config: LoadedAppConfig) =>
 	(options?: { model?: Model<Api>; thinking?: ThinkingLevel }) =>
 		new Agent({
 			transport,
@@ -169,9 +169,12 @@ export const createRuntime = async (
 	})
 	const lspActiveRef = { setActive: (_v: boolean) => {} }
 
+	// Build tool list: builtins + custom tools + hook-registered tools
+	const hookTools = getHookTools(extensibility.hookRunner)
 	const allTools: AgentTool<any, any>[] = [
 		...codingTools,
 		...extensibility.customTools.map((t) => t.tool),
+		...hookTools,
 	]
 
 	const tools = wrapToolsWithLspDiagnostics(
@@ -185,7 +188,9 @@ export const createRuntime = async (
 	)
 
 	const transports = createTransportBundle(loaded, defaultApiKeyResolver)
-	const createAgentInstance = createAgentFactory(transports.router, tools, loaded)
+	// Wrap router transport with hook transforms (chat.messages.transform, auth.get, model.resolve, etc.)
+	const hookedTransport = new HookedTransport(transports.router, extensibility.hookRunner)
+	const createAgentInstance = createAgentFactory(hookedTransport, tools, loaded)
 	const agent = createAgentInstance()
 
 	await extensibility.hookRunner.emit({ type: "app.start" })
