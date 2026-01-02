@@ -6,6 +6,13 @@ import { existsSync, readFileSync } from "fs"
 import { dirname, join } from "path"
 import { spawnSync } from "child_process"
 
+export const MESSAGE_CAP = 75
+
+export const appendWithCap = <T,>(arr: T[], item: T, cap = MESSAGE_CAP): T[] => {
+	const next = [...arr, item]
+	return next.length > cap ? next.slice(-cap) : next
+}
+
 // ----- Git helpers -----
 
 export function findGitHeadPath(startDir: string = process.cwd()): string | null {
