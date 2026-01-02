@@ -69,6 +69,8 @@ export type SendRef = { current: (text: string) => void }
 export interface ToolAPI {
 	/** Current working directory */
 	cwd: string
+	/** Whether running in interactive mode (TUI). False for headless/ACP modes. */
+	hasUI: boolean
 	/** Execute a command */
 	exec: (command: string, args: string[], options?: ExecOptions) => Promise<ExecResult>
 	/** Send a message to the agent (queued as user input) */

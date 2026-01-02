@@ -23,6 +23,7 @@ export const runValidate = async (args: RuntimeInitArgs = {}): Promise<void> => 
 		cwd: process.cwd(),
 		sendRef,
 		builtinTools: codingTools,
+		hasUI: false,
 	})
 
 	const issues: ValidationIssue[] = [...commandIssues, ...extensibility.validationIssues]

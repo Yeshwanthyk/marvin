@@ -13,6 +13,8 @@ export interface ExtensibilityLoadOptions {
 	cwd: string
 	sendRef: SendRef
 	builtinTools: AgentTool<any, any>[]
+	/** Whether running in interactive mode (TUI) */
+	hasUI: boolean
 }
 
 export interface ExtensibilityLoadResult {
@@ -32,6 +34,7 @@ export const loadExtensibility = async (
 		options.cwd,
 		getToolNames(options.builtinTools),
 		options.sendRef,
+		options.hasUI,
 	)
 
 	return {

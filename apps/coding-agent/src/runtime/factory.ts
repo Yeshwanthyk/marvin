@@ -147,6 +147,7 @@ export const createRuntime = async (
 		cwd,
 		sendRef,
 		builtinTools: codingTools,
+		hasUI: adapter === "tui",
 	})
 
 	const validationIssues: ValidationIssue[] = [...commandIssues, ...extensibility.validationIssues]

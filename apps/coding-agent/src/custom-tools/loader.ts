@@ -202,6 +202,7 @@ export async function loadCustomTools(
 	cwd: string,
 	builtInToolNames: string[],
 	sendRef: SendRef,
+	hasUI: boolean,
 ): Promise<CustomToolsLoadResult> {
 	const tools: LoadedCustomTool[] = []
 	const issues: ValidationIssue[] = []
@@ -210,6 +211,7 @@ export async function loadCustomTools(
 	// Shared API object - all tools get the same instance
 	const api: ToolAPI = {
 		cwd,
+		hasUI,
 		exec: (command: string, args: string[], options?: ExecOptions) => execCommand(command, args, cwd, options),
 		send: (text: string) => sendRef.current(text),
 	}
