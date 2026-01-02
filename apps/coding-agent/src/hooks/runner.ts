@@ -57,6 +57,7 @@ const noOpSessionContext: HookSessionContext = {
 	getContextLimit: () => undefined,
 	newSession: async () => ({ cancelled: true }),
 	getApiKey: async () => undefined,
+	complete: async () => ({ text: "", stopReason: "error" }),
 }
 
 /**

@@ -75,6 +75,12 @@ export interface TokenUsage {
 	total: number
 }
 
+/** Result from an LLM completion */
+export interface CompletionResult {
+	text: string
+	stopReason: "end" | "tool_use" | "max_tokens" | "aborted" | "error"
+}
+
 /** Session operations available to hooks */
 export interface HookSessionContext {
 	/** Trigger session compaction/summarization */
@@ -87,8 +93,10 @@ export interface HookSessionContext {
 	getContextLimit(): number | undefined
 	/** Create a new session, optionally linking to parent */
 	newSession(opts?: { parentSession?: string }): Promise<{ cancelled: boolean; sessionId?: string }>
-	/** Get API key for a model's provider */
+	/** Get API key for a model's provider (may not work for OAuth) */
 	getApiKey(model: Model<Api>): Promise<string | undefined>
+	/** Make an LLM completion using the app's transport (handles OAuth, etc.) */
+	complete(systemPrompt: string, userText: string): Promise<CompletionResult>
 }
 
 /** Message part (text or image) */
