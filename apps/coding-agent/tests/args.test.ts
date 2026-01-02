@@ -42,4 +42,11 @@ describe("coding-agent args", () => {
     const args4 = parseArgs(["--resume"]);
     expect(args4.resume).toBe(true);
   });
+
+  it("detects validate subcommand", () => {
+    const args = parseArgs(["validate", "--config-dir", "/tmp/config"]);
+    expect(args.command).toBe("validate");
+    expect(args.configDir).toBe("/tmp/config");
+    expect(args.prompt).toBeUndefined();
+  });
 });

@@ -23,7 +23,7 @@ describe("hooks loader", () => {
 	it("returns empty result when hooks directory does not exist", async () => {
 		const result = await loadHooks(tempDir)
 		expect(result.hooks).toHaveLength(0)
-		expect(result.errors).toHaveLength(0)
+		expect(result.issues).toHaveLength(0)
 	})
 
 	it("loads hook modules from hooks directory", async () => {
@@ -41,7 +41,7 @@ describe("hooks loader", () => {
 		expect(result.hooks).toHaveLength(1)
 		expect(result.hooks[0]?.path).toContain("test-hook.ts")
 		expect(result.hooks[0]?.handlers.get("app.start")).toHaveLength(1)
-		expect(result.errors).toHaveLength(0)
+		expect(result.issues).toHaveLength(0)
 	})
 
 	it("reports error for hooks without default export function", async () => {
@@ -55,8 +55,8 @@ describe("hooks loader", () => {
 
 		const result = await loadHooks(tempDir)
 		expect(result.hooks).toHaveLength(0)
-		expect(result.errors).toHaveLength(1)
-		expect(result.errors[0]?.error).toContain("must export a default function")
+		expect(result.issues).toHaveLength(1)
+		expect(result.issues[0]?.message).toContain("must export a default function")
 	})
 
 	it("ignores non-.ts files", async () => {
@@ -68,7 +68,7 @@ describe("hooks loader", () => {
 
 		const result = await loadHooks(tempDir)
 		expect(result.hooks).toHaveLength(0)
-		expect(result.errors).toHaveLength(0)
+		expect(result.issues).toHaveLength(0)
 	})
 
 	it("supports multiple event handlers from single hook", async () => {

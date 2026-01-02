@@ -16,8 +16,9 @@ describe("loadCustomCommands", () => {
 	})
 
 	test("returns empty map when commands dir doesn't exist", () => {
-		const result = loadCustomCommands(tempDir)
-		expect(result.size).toBe(0)
+		const { commands, issues } = loadCustomCommands(tempDir)
+		expect(commands.size).toBe(0)
+		expect(issues.length).toBe(0)
 	})
 
 	test("loads .md files from commands directory", () => {
@@ -26,13 +27,14 @@ describe("loadCustomCommands", () => {
 		writeFileSync(join(commandsDir, "review.md"), "Please review the following code:\n\n$ARGUMENTS")
 		writeFileSync(join(commandsDir, "explain.md"), "Explain this code in detail")
 
-		const result = loadCustomCommands(tempDir)
+		const { commands, issues } = loadCustomCommands(tempDir)
 
-		expect(result.size).toBe(2)
-		expect(result.has("review")).toBe(true)
-		expect(result.has("explain")).toBe(true)
-		expect(result.get("review")?.template).toContain("$ARGUMENTS")
-		expect(result.get("explain")?.description).toBe("Explain this code in detail")
+		expect(commands.size).toBe(2)
+		expect(commands.has("review")).toBe(true)
+		expect(commands.has("explain")).toBe(true)
+		expect(commands.get("review")?.template).toContain("$ARGUMENTS")
+		expect(commands.get("explain")?.description).toBe("Explain this code in detail")
+		expect(issues.length).toBe(0)
 	})
 
 	test("ignores non-.md files", () => {
@@ -42,10 +44,11 @@ describe("loadCustomCommands", () => {
 		writeFileSync(join(commandsDir, "invalid.txt"), "Invalid file")
 		writeFileSync(join(commandsDir, "also-invalid.json"), "{}")
 
-		const result = loadCustomCommands(tempDir)
+		const { commands, issues } = loadCustomCommands(tempDir)
 
-		expect(result.size).toBe(1)
-		expect(result.has("valid")).toBe(true)
+		expect(commands.size).toBe(1)
+		expect(commands.has("valid")).toBe(true)
+		expect(issues.length).toBe(0)
 	})
 
 	test("ignores files with invalid names", () => {
@@ -57,11 +60,12 @@ describe("loadCustomCommands", () => {
 		writeFileSync(join(commandsDir, "_invalid.md"), "Invalid: starts with underscore")
 		writeFileSync(join(commandsDir, "has spaces.md"), "Invalid: has spaces")
 
-		const result = loadCustomCommands(tempDir)
+		const { commands, issues } = loadCustomCommands(tempDir)
 
-		expect(result.size).toBe(2)
-		expect(result.has("valid-name")).toBe(true)
-		expect(result.has("valid_name2")).toBe(true)
+		expect(commands.size).toBe(2)
+		expect(commands.has("valid-name")).toBe(true)
+		expect(commands.has("valid_name2")).toBe(true)
+		expect(issues.length).toBe(3)
 	})
 
 	test("extracts description from first non-empty line", () => {
@@ -69,9 +73,10 @@ describe("loadCustomCommands", () => {
 		mkdirSync(commandsDir)
 		writeFileSync(join(commandsDir, "test.md"), "\n\n  First real line here\n\nMore content")
 
-		const result = loadCustomCommands(tempDir)
+		const { commands, issues } = loadCustomCommands(tempDir)
 
-		expect(result.get("test")?.description).toBe("First real line here")
+		expect(commands.get("test")?.description).toBe("First real line here")
+		expect(issues.length).toBe(0)
 	})
 
 	test("truncates long descriptions", () => {
@@ -80,11 +85,12 @@ describe("loadCustomCommands", () => {
 		const longLine = "A".repeat(100)
 		writeFileSync(join(commandsDir, "long.md"), longLine)
 
-		const result = loadCustomCommands(tempDir)
+		const { commands, issues } = loadCustomCommands(tempDir)
 
-		const desc = result.get("long")?.description || ""
+		const desc = commands.get("long")?.description || ""
 		expect(desc.length).toBeLessThanOrEqual(60)
 		expect(desc.endsWith("...")).toBe(true)
+		expect(issues.length).toBe(0)
 	})
 })
 

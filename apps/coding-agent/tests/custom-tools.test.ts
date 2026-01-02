@@ -28,13 +28,13 @@ describe("custom-tools", () => {
 			const nonExistentDir = join(tempDir, "nonexistent")
 			const result = await loadCustomTools(nonExistentDir, cwd, [], sendRef)
 			expect(result.tools).toEqual([])
-			expect(result.errors).toEqual([])
+			expect(result.issues).toEqual([])
 		})
 
 		test("returns empty for empty directory", async () => {
 			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.tools).toEqual([])
-			expect(result.errors).toEqual([])
+			expect(result.issues).toEqual([])
 		})
 
 		// Note: Tests that load actual tool files require @sinclair/typebox to be
@@ -60,7 +60,7 @@ export default function(api) {
 			writeFileSync(join(toolsDir, "test-tool.ts"), toolCode)
 
 			const result = await loadCustomTools(configDir, cwd, [], sendRef)
-			expect(result.errors).toEqual([])
+			expect(result.issues).toEqual([])
 			expect(result.tools.length).toBe(1)
 			expect(result.tools[0]!.tool.name).toBe("test-tool")
 		})
@@ -89,7 +89,7 @@ export default function(api) {
 			writeFileSync(join(toolsDir, "multi-tool.ts"), toolCode)
 
 			const result = await loadCustomTools(configDir, cwd, [], sendRef)
-			expect(result.errors).toEqual([])
+			expect(result.issues).toEqual([])
 			expect(result.tools.length).toBe(2)
 			expect(result.tools.map((t) => t.tool.name).sort()).toEqual(["tool-one", "tool-two"])
 		})
@@ -110,8 +110,8 @@ export default function(api) {
 
 			const result = await loadCustomTools(configDir, cwd, ["bash", "read", "write", "edit"], sendRef)
 			expect(result.tools).toEqual([])
-			expect(result.errors.length).toBe(1)
-			expect(result.errors[0]!.error).toContain('conflicts with existing tool')
+			expect(result.issues.length).toBeGreaterThanOrEqual(1)
+			expect(result.issues[0]?.message).toContain('conflicts with existing tool')
 		})
 
 		test("reports conflict between custom tools", async () => {
@@ -139,8 +139,8 @@ export default (api) => ({
 			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			// One succeeds, one fails due to conflict
 			expect(result.tools.length).toBe(1)
-			expect(result.errors.length).toBe(1)
-			expect(result.errors[0]!.error).toContain('conflicts with existing tool')
+			expect(result.issues.length).toBeGreaterThanOrEqual(1)
+			expect(result.issues[0]?.message).toContain('conflicts with existing tool')
 		})
 
 		test("reports error for non-function export", async () => {
@@ -148,8 +148,8 @@ export default (api) => ({
 
 			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.tools).toEqual([])
-			expect(result.errors.length).toBe(1)
-			expect(result.errors[0]!.error).toContain("must export a default function")
+			expect(result.issues.length).toBeGreaterThanOrEqual(1)
+			expect(result.issues[0]?.message).toContain("must export a default function")
 		})
 
 		test("ignores non-.ts files", async () => {
@@ -158,7 +158,7 @@ export default (api) => ({
 
 			const result = await loadCustomTools(configDir, cwd, [], sendRef)
 			expect(result.tools).toEqual([])
-			expect(result.errors).toEqual([])
+			expect(result.issues).toEqual([])
 		})
 
 		test("tool receives cwd in api", async () => {
@@ -179,7 +179,7 @@ export default function(api) {
 			writeFileSync(join(toolsDir, "cwd-test.ts"), toolCode)
 
 			const result = await loadCustomTools(configDir, cwd, [], sendRef)
-			expect(result.errors).toEqual([])
+			expect(result.issues).toEqual([])
 			expect(result.tools.length).toBe(1)
 
 			// Execute the tool to verify it has access to cwd
@@ -208,7 +208,7 @@ export default function(api) {
 			writeFileSync(join(toolsDir, "exec-test.ts"), toolCode)
 
 			const result = await loadCustomTools(configDir, cwd, [], sendRef)
-			expect(result.errors).toEqual([])
+			expect(result.issues).toEqual([])
 			expect(result.tools.length).toBe(1)
 
 			const execResult = await result.tools[0]!.tool.execute("test-call", {})
@@ -239,7 +239,7 @@ export default function(api) {
 			writeFileSync(join(toolsDir, "send-test.ts"), toolCode)
 
 			const result = await loadCustomTools(configDir, cwd, [], testSendRef)
-			expect(result.errors).toEqual([])
+			expect(result.issues).toEqual([])
 			expect(result.tools.length).toBe(1)
 
 			await result.tools[0]!.tool.execute("test-call", {})

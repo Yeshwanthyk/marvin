@@ -82,22 +82,22 @@ function createMockContext(overrides: Partial<CommandContext> = {}): CommandCont
 }
 
 describe("handleSlashCommand", () => {
-	it("returns false for non-slash commands", () => {
+	it("returns false for non-slash commands", async () => {
 		const ctx = createMockContext()
-		expect(handleSlashCommand("hello", ctx)).toBe(false)
-		expect(handleSlashCommand("", ctx)).toBe(false)
+		expect(await handleSlashCommand("hello", ctx)).toBe(false)
+		expect(await handleSlashCommand("", ctx)).toBe(false)
 	})
 
-	it("returns false for unknown slash commands", () => {
+	it("returns false for unknown slash commands", async () => {
 		const ctx = createMockContext()
-		expect(handleSlashCommand("/unknown", ctx)).toBe(false)
-		expect(handleSlashCommand("/foo bar", ctx)).toBe(false)
+		expect(await handleSlashCommand("/unknown", ctx)).toBe(false)
+		expect(await handleSlashCommand("/foo bar", ctx)).toBe(false)
 	})
 
 	describe("/clear", () => {
-		it("clears messages and resets agent", () => {
+		it("clears messages and resets agent", async () => {
 			const ctx = createMockContext()
-			const result = handleSlashCommand("/clear", ctx)
+			const result = await handleSlashCommand("/clear", ctx)
 			expect(result).toBe(true)
 			expect(ctx.agent.reset).toHaveBeenCalled()
 			expect(ctx.setMessages).toHaveBeenCalled()
@@ -107,43 +107,43 @@ describe("handleSlashCommand", () => {
 	})
 
 	describe("/thinking", () => {
-		it("changes thinking level for valid input", () => {
+		it("changes thinking level for valid input", async () => {
 			const ctx = createMockContext()
-			const result = handleSlashCommand("/thinking high", ctx)
+			const result = await handleSlashCommand("/thinking high", ctx)
 			expect(result).toBe(true)
 			expect(ctx.agent.setThinkingLevel).toHaveBeenCalledWith("high")
 			expect(ctx.setCurrentThinking).toHaveBeenCalledWith("high")
 			expect(ctx.setDisplayThinking).toHaveBeenCalledWith("high")
 		})
 
-		it("returns false for invalid thinking level", () => {
+		it("returns false for invalid thinking level", async () => {
 			const ctx = createMockContext()
-			const result = handleSlashCommand("/thinking invalid", ctx)
+			const result = await handleSlashCommand("/thinking invalid", ctx)
 			expect(result).toBe(false)
 		})
 	})
 
 	describe("/diffwrap", () => {
-		it("toggles diff wrap mode", () => {
+		it("toggles diff wrap mode", async () => {
 			const ctx = createMockContext()
-			const result = handleSlashCommand("/diffwrap", ctx)
+			const result = await handleSlashCommand("/diffwrap", ctx)
 			expect(result).toBe(true)
 			expect(ctx.setDiffWrapMode).toHaveBeenCalled()
 		})
 	})
 
 	describe("/model", () => {
-		it("shows usage when no args", () => {
+		it("shows usage when no args", async () => {
 			const ctx = createMockContext()
-			const result = handleSlashCommand("/model", ctx)
+			const result = await handleSlashCommand("/model", ctx)
 			expect(result).toBe(true)
 			// Should add a message about usage
 			expect(ctx.setMessages).toHaveBeenCalled()
 		})
 
-		it("blocks model change while responding", () => {
+		it("blocks model change while responding", async () => {
 			const ctx = createMockContext({ isResponding: () => true })
-			const result = handleSlashCommand("/model claude-3-5-sonnet-20241022", ctx)
+			const result = await handleSlashCommand("/model claude-3-5-sonnet-20241022", ctx)
 			expect(result).toBe(true)
 			// Should not change model
 			expect(ctx.agent.setModel).not.toHaveBeenCalled()
@@ -169,25 +169,25 @@ describe("handleSlashCommand", () => {
 	})
 
 	describe("/theme", () => {
-		it("lists themes when no args", () => {
+		it("lists themes when no args", async () => {
 			const ctx = createMockContext()
-			const ok = handleSlashCommand("/theme", ctx)
+			const ok = await handleSlashCommand("/theme", ctx)
 			expect(ok).toBe(true)
 			expect(ctx.setMessages).toHaveBeenCalled()
 		})
 
-		it("sets theme when valid", () => {
+		it("sets theme when valid", async () => {
 			const setTheme = mock(() => {})
 			const ctx = createMockContext({ setTheme })
-			const ok = handleSlashCommand("/theme aura", ctx)
+			const ok = await handleSlashCommand("/theme aura", ctx)
 			expect(ok).toBe(true)
 			expect(setTheme).toHaveBeenCalledWith("aura")
 		})
 
-		it("rejects unknown theme", () => {
+		it("rejects unknown theme", async () => {
 			const setTheme = mock(() => {})
 			const ctx = createMockContext({ setTheme })
-			const ok = handleSlashCommand("/theme not-a-theme", ctx)
+			const ok = await handleSlashCommand("/theme not-a-theme", ctx)
 			expect(ok).toBe(true)
 			expect(setTheme).not.toHaveBeenCalled()
 		})
@@ -197,37 +197,36 @@ describe("handleSlashCommand", () => {
 		it("uses openEditor when provided", async () => {
 			const openEditor = mock(() => {})
 			const ctx = createMockContext({ openEditor })
-			const ok = handleSlashCommand("/editor", ctx)
-			if (ok instanceof Promise) await ok
+			const ok = await handleSlashCommand("/editor", ctx)
 			expect(openEditor).toHaveBeenCalled()
 		})
 
-		it("defaults to nvim when not configured", () => {
+		it("defaults to nvim when not configured", async () => {
 			const launchEditor = mock((..._args: unknown[]) => {})
 			const ctx = createMockContext({ launchEditor })
-			const ok = handleSlashCommand("/editor", ctx)
+			const ok = await handleSlashCommand("/editor", ctx)
 			expect(ok).toBe(true)
 			expect(launchEditor).toHaveBeenCalledWith("nvim", [ctx.cwd], ctx.cwd, expect.any(Function))
 		})
 
-		it("launches configured editor with cwd", () => {
+		it("launches configured editor with cwd", async () => {
 			const launchEditor = mock((..._args: unknown[]) => {})
 			const ctx = createMockContext({
 				editor: { command: "code", args: [] },
 				launchEditor,
 			})
-			const ok = handleSlashCommand("/editor", ctx)
+			const ok = await handleSlashCommand("/editor", ctx)
 			expect(ok).toBe(true)
 			expect(launchEditor).toHaveBeenCalledWith("code", [ctx.cwd], ctx.cwd, expect.any(Function))
 		})
 
-		it("replaces {cwd} without appending", () => {
+		it("replaces {cwd} without appending", async () => {
 			const launchEditor = mock((..._args: unknown[]) => {})
 			const ctx = createMockContext({
 				editor: { command: "zed", args: ["--cwd", "{cwd}"] },
 				launchEditor,
 			})
-			const ok = handleSlashCommand("/editor", ctx)
+			const ok = await handleSlashCommand("/editor", ctx)
 			expect(ok).toBe(true)
 			expect(launchEditor).toHaveBeenCalled()
 			expect(launchEditor).toHaveBeenCalledTimes(1)
