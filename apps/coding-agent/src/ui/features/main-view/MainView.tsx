@@ -46,6 +46,10 @@ export interface MainViewProps {
 	onCycleThinking: () => void
 	exitHandlerRef: { current: () => void }
 	editorOpenRef: { current: () => Promise<void> | void }
+	setEditorTextRef: { current: (text: string) => void }
+	getEditorTextRef: { current: () => string }
+	showToastRef: { current: (title: string, message: string, variant?: "info" | "warning" | "success" | "error") => void }
+	onBeforeExit?: () => Promise<void>
 	editor?: import("../../../config.js").EditorConfig
 	lsp: LspManager
 }
@@ -155,14 +159,20 @@ export function MainView(props: MainViewProps) {
 		textareaRef?.focus()
 	})
 
-	const exitApp = () => {
+	const exitApp = async () => {
 		try {
 			renderer.destroy()
+			await props.onBeforeExit?.()
 		} finally {
 			process.exit(0)
 		}
 	}
 	props.exitHandlerRef.current = exitApp
+	props.setEditorTextRef.current = (text: string) => textareaRef?.setText(text)
+	props.getEditorTextRef.current = () => textareaRef?.plainText ?? ""
+	props.showToastRef.current = (title, message, variant = "info") => {
+		pushToast({ title, message, variant }, 3000)
+	}
 
 	const copySelectionToClipboard = () => {
 		const sel = renderer.getSelection()

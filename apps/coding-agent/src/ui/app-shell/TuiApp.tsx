@@ -5,7 +5,7 @@ import type { LoadedSession } from "../../session-manager.js"
 import { createSessionController } from "@runtime/session/session-controller.js"
 import { createPromptQueue } from "@runtime/session/prompt-queue.js"
 import { appendWithCap } from "@domain/messaging/content.js"
-import type { UIShellMessage } from "../../types.js"
+import type { UIShellMessage, UIMessage } from "../../types.js"
 import type { AppMessage } from "@marvin-agents/agent-core"
 import { runShellCommand } from "../../shell-runner.js"
 import { MainView } from "../features/main-view/MainView.js"
@@ -16,6 +16,10 @@ import { THINKING_LEVELS, type CommandContext } from "../../commands.js"
 import { slashCommands } from "../../autocomplete-commands.js"
 import { updateAppConfig } from "../../config.js"
 import { handleSlashInput } from "../features/composer/SlashCommandHandler.js"
+import { createHookMessage, createHookUIContext, type HookMessage, type HookSessionContext, type CompletionResult } from "../../hooks/index.js"
+import { completeSimple, type Message } from "@marvin-agents/ai"
+import { useModals } from "../hooks/useModals.js"
+import { ModalContainer } from "../components/modals/ModalContainer.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
 
@@ -50,6 +54,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 	})
 
 	const promptQueue = createPromptQueue((size) => store.queueCount.set(size))
+	const modals = useModals()
 
 	const sessionController = createSessionController({
 		initialProvider: config.provider,
@@ -120,6 +125,16 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 
 	const exitHandlerRef = { current: () => process.exit(0) }
 	const editorOpenRef = { current: async () => {} }
+	const setEditorTextRef = { current: (_text: string) => {} }
+	const getEditorTextRef = { current: () => "" }
+	const showToastRef = { current: (_title: string, _message: string, _variant?: "info" | "warning" | "success" | "error") => {} }
+	// Flag to skip editor clear when hooks populate the editor via setEditorText
+	const skipNextEditorClearRef = { current: false }
+
+	const handleBeforeExit = async () => {
+		// Emit shutdown hook before exiting
+		await hookRunner.emit({ type: "session.shutdown", sessionId: sessionManager.sessionId })
+	}
 
 	const cmdCtx: CommandContext = {
 		agent,
@@ -232,7 +247,11 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 				onExpand: async (expanded) => handleSubmit(expanded),
 			})
 			if (handled) {
-				editorClearFn?.()
+				// Skip clear if hook populated editor via setEditorText
+				if (!skipNextEditorClearRef.current) {
+					editorClearFn?.()
+				}
+				skipNextEditorClearRef.current = false
 				return
 			}
 		}
@@ -246,7 +265,35 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 
 		editorClearFn?.()
 		ensureSession()
-		sessionManager.appendMessage({ role: "user", content: [{ type: "text", text }], timestamp: Date.now() })
+
+		// Emit agent.before_start hook - allows hooks to inject a message before prompting
+		const beforeStartResult = await hookRunner.emitBeforeAgentStart(text)
+		if (beforeStartResult?.message) {
+			const hookMsg = createHookMessage(beforeStartResult.message)
+			if (hookMsg.display) {
+				const uiMsg: UIMessage = {
+					id: crypto.randomUUID(),
+					role: "assistant",
+					content: typeof hookMsg.content === "string"
+						? hookMsg.content
+						: hookMsg.content.map(p => p.type === "text" ? p.text : "[image]").join(""),
+					timestamp: hookMsg.timestamp,
+				}
+				store.messages.set((prev) => appendWithCap(prev, uiMsg))
+			}
+			sessionManager.appendMessage(hookMsg as unknown as AppMessage)
+		}
+
+		// Emit chat.message hook - allows hooks to inject parts into user message
+		const chatMessageOutput: { parts: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> } = {
+			parts: [{ type: "text", text }],
+		}
+		await hookRunner.emitChatMessage(
+			{ sessionId: sessionManager.sessionId, text },
+			chatMessageOutput,
+		)
+
+		sessionManager.appendMessage({ role: "user", content: chatMessageOutput.parts, timestamp: Date.now() })
 		batch(() => {
 			store.messages.set((prev) =>
 				appendWithCap(prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() }),
@@ -272,7 +319,113 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		}
 	}
 
-	hookRunner.setSendHandler((text) => void handleSubmit(text))
+	// Initialize hook runner with full context
+	const hookUIContext = createHookUIContext({
+		setEditorText: (text) => {
+			skipNextEditorClearRef.current = true
+			setEditorTextRef.current(text)
+		},
+		getEditorText: () => getEditorTextRef.current(),
+		showSelect: modals.showSelect,
+		showInput: modals.showInput,
+		showConfirm: modals.showConfirm,
+		showEditor: modals.showEditor,
+		showNotify: (message, type = "info") => showToastRef.current(type, message, type)
+	})
+
+	const hookSessionContext: HookSessionContext = {
+		summarize: async () => {
+			// Trigger compaction through the /compact command flow
+			await handleSlashInput("/compact", {
+				commandContext: cmdCtx,
+				customCommands,
+				builtInCommandNames,
+				onExpand: async (expanded) => handleSubmit(expanded),
+			})
+		},
+		toast: (title, message, variant = "info") => showToastRef.current(title, message, variant),
+		getTokenUsage: () => hookRunner["tokenUsage"],
+		getContextLimit: () => hookRunner["contextLimit"],
+		newSession: async (_opts) => {
+			// Clear current session and start fresh
+			store.messages.set([])
+			store.toolBlocks.set([])
+			store.contextTokens.set(0)
+			agent.reset()
+			void hookRunner.emit({ type: "session.clear", sessionId: null })
+			// Start a new session
+			sessionManager.startSession(
+				sessionController.currentProvider(),
+				sessionController.currentModelId(),
+				sessionController.currentThinking(),
+			)
+			return { cancelled: false, sessionId: sessionManager.sessionId ?? undefined }
+		},
+		getApiKey: async (model) => getApiKey(model.provider),
+		complete: async (systemPrompt, userText) => {
+			const model = agent.state.model
+			const apiKey = getApiKey(model.provider)
+			if (!apiKey) {
+				return { text: "", stopReason: "error" as const }
+			}
+			try {
+				const userMessage: Message = {
+					role: "user",
+					content: [{ type: "text", text: userText }],
+					timestamp: Date.now(),
+				}
+				const result = await completeSimple(model, { systemPrompt, messages: [userMessage] }, { apiKey })
+				const text = result.content
+					.filter((c): c is { type: "text"; text: string } => c.type === "text")
+					.map((c) => c.text)
+					.join("\n")
+				// Map stopReason: stop -> end, length -> max_tokens, toolUse -> tool_use
+				const stopMap: Record<string, CompletionResult["stopReason"]> = {
+					stop: "end", length: "max_tokens", toolUse: "tool_use", error: "error", aborted: "aborted"
+				}
+				return { text, stopReason: stopMap[result.stopReason] ?? "end" }
+			} catch (err) {
+				return { text: err instanceof Error ? err.message : String(err), stopReason: "error" as const }
+			}
+		},
+	}
+
+	const sendMessageHandler = <T = unknown>(
+		message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
+		triggerTurn?: boolean,
+	) => {
+		const hookMessage = createHookMessage(message)
+		// Add to UI messages if display is true
+		if (hookMessage.display) {
+			const uiMsg: UIMessage = {
+				id: crypto.randomUUID(),
+				role: "assistant", // Render hook messages as assistant for now
+				content: typeof hookMessage.content === "string"
+					? hookMessage.content
+					: hookMessage.content.map(p => p.type === "text" ? p.text : "[image]").join(""),
+				timestamp: hookMessage.timestamp,
+			}
+			store.messages.set((prev) => appendWithCap(prev, uiMsg))
+		}
+		// Persist hook message to session
+		sessionManager.appendMessage(hookMessage as unknown as AppMessage)
+		// Optionally trigger a new turn
+		if (triggerTurn) {
+			void handleSubmit(typeof hookMessage.content === "string" ? hookMessage.content : "")
+		}
+	}
+
+	hookRunner.initialize({
+		sendHandler: (text) => void handleSubmit(text),
+		sendMessageHandler,
+		appendEntryHandler: (customType, data) => sessionManager.appendEntry(customType, data),
+		getSessionId: () => sessionManager.sessionId,
+		getModel: () => agent.state.model,
+		uiContext: hookUIContext,
+		sessionContext: hookSessionContext,
+		hasUI: true,
+	})
+
 	sendRef.current = (text) => void handleSubmit(text)
 
 	const handleAbort = (): string | null => {
@@ -340,9 +493,14 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 				onCycleThinking={cycleThinking}
 				exitHandlerRef={exitHandlerRef}
 				editorOpenRef={editorOpenRef}
+				setEditorTextRef={setEditorTextRef}
+				getEditorTextRef={getEditorTextRef}
+				showToastRef={showToastRef}
+				onBeforeExit={handleBeforeExit}
 				editor={config.editor}
 				lsp={lsp}
 			/>
+			<ModalContainer modalState={modals.modalState()} onClose={modals.closeModal} />
 		</ThemeProvider>
 	)
 }
