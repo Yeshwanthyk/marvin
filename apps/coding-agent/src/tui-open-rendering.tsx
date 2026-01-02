@@ -244,10 +244,7 @@ function toolTitle(name: string, args: any): string {
 			return shortenPath(String(args?.path || args?.file_path || "…"), 35)
 		case "edit":
 			return shortenPath(String(args?.path || args?.file_path || "…"), 35)
-		case "ask_user_question": {
-			const count = Array.isArray(args?.questions) ? args.questions.length : 0
-			return count ? `${count} question${count > 1 ? "s" : ""}` : ""
-		}
+		// ask_user_question removed - use interview custom tool
 		default: {
 			const delegation = getAgentDelegationArgs(args)
 			if (delegation?.chain?.length) return `chain ${delegation.chain.length}`
