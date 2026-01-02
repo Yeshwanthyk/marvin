@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
+    "baseUrl": "src",
     "outDir": "dist",
     "declaration": true,
     "composite": true,
@@ -11,7 +12,14 @@
     "lib": ["ES2022", "DOM"],
     "jsx": "preserve",
     "jsxImportSource": "@opentui/solid",
-    "types": ["node", "bun"]
+    "types": ["node", "bun"],
+    "paths": {
+      "@adapters/*": ["adapters/*"],
+      "@runtime/*": ["runtime/*"],
+      "@domain/*": ["domain/*"],
+      "@ext/*": ["extensibility/*"],
+      "@ui/*": ["ui/*"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["dist", "node_modules"]

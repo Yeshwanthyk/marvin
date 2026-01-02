@@ -22,6 +22,7 @@ marvin "fix the types"              # With prompt
 marvin --headless "explain this"    # JSON output
 marvin -c                           # Continue last session
 marvin -r                           # Pick session to resume
+marvin validate --config-dir ~/.config/marvin   # Lint hooks/tools/commands
 ```
 
 ## Features
@@ -45,6 +46,8 @@ packages/
 ├── lsp/               # Language server integration
 └── open-tui/          # Terminal UI (SolidJS + OpenTUI)
 ```
+
+See [docs/architecture.md](docs/architecture.md) for layer diagrams, runtime flow, and extensibility details.
 
 ## Configuration
 
@@ -84,6 +87,7 @@ packages/
 --headless             JSON output, no TUI
 --config <path>        Custom config.json
 --config-dir <path>    Custom config directory
+validate               Subcommand that runs schema validation on hooks/tools/commands
 ```
 
 ## Commands

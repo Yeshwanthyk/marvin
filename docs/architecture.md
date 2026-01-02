@@ -120,6 +120,34 @@ apps/
 A typical user interaction flows through these stages:
 
 ```
+
+## Runtime Layers & Boundaries
+
+Source files under `apps/coding-agent/src` are grouped by responsibility:
+
+| Layer | Path Alias | Responsibilities |
+|-------|------------|------------------|
+| **Domain** | `@domain/*` | Pure logic (commands, messaging helpers) with no side effects. |
+| **Runtime** | `@runtime/*` | Agent factory, session services, transports, extensibility loaders. |
+| **Extensibility** | `@ext/*` | Schema definitions, validation utilities, host adapters. |
+| **UI** | `@ui/*` | Solid components, state stores, presentation only. |
+| **Adapters** | `@adapters/*` | CLI/TUI/ACP entrypoints that wire runtime into each surface. |
+
+An ESLint Boundaries rule (warn mode) blocks “uphill” imports so that, for example, domain code cannot reach into the UI or adapters. Adapters may depend on any lower layer, but the reverse is disallowed. This mirrors the containment enforced by the runtime factory and keeps APC/TUI surfaces swappable.
+
+## Slash Command Registry
+
+Slash commands now live under `src/domain/commands/` as individual modules. Each module exports a `CommandDefinition` and registers itself via `commandRegistry`. The registry normalizes aliases, prefixes, and async handlers so adapters keep using the legacy `handleSlashCommand` API while gaining per-command tests (see `commands-registry.test.ts`). Custom commands from `~/.config/marvin/commands` are still expanded after the registry runs, so existing templates remain compatible.
+
+## Extensibility Validation & CLI
+
+TypeBox schemas in `src/extensibility/schema.ts` describe the contracts for hooks, custom tools, and custom commands. Loaders call the shared validation helpers and funnel all issues back through `createRuntime`. Adapters expose the aggregated list:
+
+- **TUI**: first few issues appear as warning/error toasts plus stderr log lines.  
+- **Headless**: JSON responses include a `validationIssues` field.  
+- **CLI**: `marvin validate --config-dir ~/.config/marvin` runs the same pipeline without launching the UI and exits non-zero when blocking errors exist.
+
+Because validation happens before tools or hooks execute, users see actionable errors (path, severity, hint) without crashing the agent, and CI can enforce healthy configs via the dedicated command.
 User Input                 Agent Core                  LLM Provider
     │                          │                           │
     │  "fix the bug in x.ts"   │                           │

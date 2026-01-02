@@ -18,6 +18,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.1",
+    "eslint": "^9.39.2",
+    "eslint-plugin-boundaries": "^5.3.1",
     "typescript": "^5.5.4"
   },
   "overrides": {
