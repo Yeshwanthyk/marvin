@@ -1,7 +1,10 @@
 /**
  * Custom tool loader - discovers and loads TypeScript tool modules.
  *
- * Tools are loaded from ~/.config/marvin/tools/*.ts (non-recursive).
+ * Tools are loaded from:
+ *   - ~/.config/marvin/tools/*.ts (single-file tools)
+ *   - ~/.config/marvin/tools/<name>/index.ts (directory-based tools)
+ *
  * Uses Bun's native import() which handles TypeScript directly.
  */
 
@@ -150,21 +153,39 @@ async function loadTool(
 
 /**
  * Discover tool files from a directory.
- * Returns all .ts files in the directory (non-recursive).
+ * Finds both:
+ *   - tools/*.ts (single-file tools)
+ *   - tools/<name>/index.ts (directory-based tools with assets)
  */
 function discoverToolsInDir(dir: string): string[] {
 	if (!existsSync(dir)) {
 		return []
 	}
 
+	const paths: string[] = []
+
 	try {
 		const entries = readdirSync(dir, { withFileTypes: true })
-		return entries
-			.filter((e) => (e.isFile() || e.isSymbolicLink()) && e.name.endsWith(".ts"))
-			.map((e) => join(dir, e.name))
+
+		for (const entry of entries) {
+			if (entry.isFile() || entry.isSymbolicLink()) {
+				// Single-file tool: tools/name.ts
+				if (entry.name.endsWith(".ts")) {
+					paths.push(join(dir, entry.name))
+				}
+			} else if (entry.isDirectory()) {
+				// Directory-based tool: tools/name/index.ts
+				const indexPath = join(dir, entry.name, "index.ts")
+				if (existsSync(indexPath)) {
+					paths.push(indexPath)
+				}
+			}
+		}
 	} catch {
-		return []
+		// Ignore read errors
 	}
+
+	return paths
 }
 
 /**

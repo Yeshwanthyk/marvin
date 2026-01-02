@@ -11,7 +11,7 @@
 
 ## Progress Tracking
 - [x] Phase 1: Remove existing ask_user_question tool
-- [ ] Phase 2: Extend custom tool loader for directory-based tools
+- [x] Phase 2: Extend custom tool loader for directory-based tools
 - [ ] Phase 3: Add `hasUI` to ToolAPI
 - [ ] Phase 4: Create interview tool (port from pi-interview-tool)
 
