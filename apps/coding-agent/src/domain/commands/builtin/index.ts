@@ -4,6 +4,7 @@ import { concealCommand } from "./conceal.js"
 import { diffwrapCommand } from "./diffwrap.js"
 import { editorCommand } from "./editor.js"
 import { exitCommand } from "./exit.js"
+import { loginCommand } from "./login.js"
 import { modelCommand } from "./model.js"
 import { statusCommand } from "./status.js"
 import { themeCommand } from "./theme.js"
@@ -20,4 +21,5 @@ export const builtinCommands = [
 	modelCommand,
 	compactCommand,
 	statusCommand,
+	loginCommand,
 ]
