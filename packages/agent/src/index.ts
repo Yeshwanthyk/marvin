@@ -25,6 +25,15 @@ export {
 } from "./transports/index.js";
 // Codex CLI auth helper
 export { authenticate, loadTokens, saveTokens, clearTokens } from "./codex-auth-cli.js";
+// Anthropic OAuth auth helper
+export {
+	loadAnthropicTokens,
+	saveAnthropicTokens,
+	clearAnthropicTokens,
+	getAnthropicTokensPath,
+	type AnthropicTokenStoreOptions,
+	type AnthropicOAuthCredentials,
+} from "./anthropic-auth.js";
 // Model cycling
 export {
 	createModelCycleState,
