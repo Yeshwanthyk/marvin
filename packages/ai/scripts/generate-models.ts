@@ -578,7 +578,7 @@ async function generateModels() {
 		reasoning: true,
 		input: ["text", "image"] as ("text" | "image")[],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, // Free with subscription
-		contextWindow: 200000,
+		contextWindow: 400000,
 		maxTokens: 32000,
 	};
 
