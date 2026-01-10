@@ -2536,6 +2536,42 @@ export const MODELS = {
 			maxTokens: 16384,
 		} satisfies Model<"openai-completions">,
 	},
+	"minimax": {
+		"MiniMax-M2": {
+			id: "MiniMax-M2",
+			name: "MiniMax M2",
+			api: "anthropic-messages",
+			provider: "minimax",
+			baseUrl: "https://api.minimax.io/anthropic",
+			reasoning: true,
+			input: ["text"],
+			cost: {
+				input: 0.3,
+				output: 1.2,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+			contextWindow: 196608,
+			maxTokens: 128000,
+		} satisfies Model<"anthropic-messages">,
+		"MiniMax-M2.1": {
+			id: "MiniMax-M2.1",
+			name: "MiniMax M2.1",
+			api: "anthropic-messages",
+			provider: "minimax",
+			baseUrl: "https://api.minimax.io/anthropic",
+			reasoning: true,
+			input: ["text"],
+			cost: {
+				input: 0.3,
+				output: 1.2,
+				cacheRead: 0.03,
+				cacheWrite: 0.375,
+			},
+			contextWindow: 204800,
+			maxTokens: 131072,
+		} satisfies Model<"anthropic-messages">,
+	},
 	"opencode": {
 		"qwen3-coder": {
 			id: "qwen3-coder",

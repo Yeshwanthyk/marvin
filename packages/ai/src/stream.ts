@@ -58,6 +58,7 @@ export function getApiKey(provider: any): string | undefined {
 		openrouter: "OPENROUTER_API_KEY",
 		zai: "ZAI_API_KEY",
 		mistral: "MISTRAL_API_KEY",
+		minimax: "MINIMAX_API_KEY",
 		opencode: "ZEN_API_KEY",
 	};
 
