@@ -48,7 +48,7 @@ export const buildThinkingSummary = (full: string): { summary: string; preview: 
 	const firstLine = previewSource.split("\n")[0] || ""
 	const preview = firstLine.length <= THINKING_PREVIEW_MAX
 		? firstLine
-		: firstLine.slice(0, THINKING_PREVIEW_MAX - 1) + "…"
+		: firstLine.slice(0, THINKING_PREVIEW_MAX - 3) + "..."
 	return { summary, preview }
 }
 

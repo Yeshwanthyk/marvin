@@ -49,7 +49,7 @@ const THINKING_MAX_WIDTH = 50
 function truncateThinking(text: string): string {
 	const firstLine = text.split("\n")[0] || ""
 	if (firstLine.length <= THINKING_MAX_WIDTH) return firstLine
-	return firstLine.slice(0, THINKING_MAX_WIDTH - 1) + "…"
+	return firstLine.slice(0, THINKING_MAX_WIDTH - 3) + "..."
 }
 
 function ThinkingBlockWrapper(props: {
