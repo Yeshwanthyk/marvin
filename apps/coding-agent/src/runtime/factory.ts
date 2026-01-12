@@ -1,12 +1,13 @@
 import { Agent, type AgentTransport, type ThinkingLevel } from "@marvin-agents/agent-core"
 import { getModels, getProviders, type AgentTool, type Api, type KnownProvider, type Model } from "@marvin-agents/ai"
-import { codingTools } from "@marvin-agents/base-tools"
+import { toolRegistry } from "@marvin-agents/base-tools"
 import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
 import { loadAppConfig, type LoadedAppConfig } from "../config.js"
 import { loadCustomCommands, type CustomCommand, type CustomCommandLoadResult } from "../custom-commands.js"
 import { wrapToolsWithHooks, getHookTools, HookedTransport, type HookRunner } from "../hooks/index.js"
 import { SessionManager } from "../session-manager.js"
 import { loadExtensibility, attachHookErrorLogging } from "./extensibility/index.js"
+import { LazyToolLoader, toolProxyAsArray } from "./lazy-tool-loader.js"
 import {
 	createTransportBundle,
 	defaultApiKeyResolver,
@@ -55,17 +56,18 @@ export interface ToolRegistryEntry {
 
 const buildToolRegistry = (customTools: LoadedCustomTool[]): Map<string, ToolRegistryEntry> => {
 	const registry = new Map<string, ToolRegistryEntry>()
-	for (const tool of codingTools) {
-		registry.set(tool.name, { label: tool.label, source: "builtin" })
+	// Add builtin tools from lazy registry
+	for (const [name, def] of Object.entries(toolRegistry)) {
+		registry.set(name, { label: def.label, source: "builtin" })
 	}
 	for (const { tool, resolvedPath } of customTools) {
-		const customTool = tool as any
+		const customTool = tool as unknown
 		registry.set(tool.name, {
 			label: tool.label,
 			source: "custom",
 			sourcePath: resolvedPath,
-			renderCall: customTool.renderCall,
-			renderResult: customTool.renderResult,
+			renderCall: (customTool as { renderCall?: any }).renderCall,
+			renderResult: (customTool as { renderResult?: any }).renderResult,
 		})
 	}
 	return registry
@@ -143,11 +145,17 @@ export const createRuntime = async (
 	const cwd = process.cwd()
 	const sendRef: SendRef = { current: () => {} }
 	const sessionManager = new SessionManager(loaded.configDir)
+	
+	// Create minimal tool objects for extensibility (just needs name property)
+	const builtinToolMocks = Object.entries(toolRegistry).map(([name, def]) => ({
+		name,
+	})) as unknown as AgentTool<any, any>[]
+	
 	const extensibility = await loadExtensibility({
 		configDir: loaded.configDir,
 		cwd,
 		sendRef,
-		builtinTools: codingTools,
+		builtinTools: builtinToolMocks,
 		hasUI: adapter === "tui",
 		sessionManager,
 	})
@@ -169,16 +177,21 @@ export const createRuntime = async (
 	})
 	const lspActiveRef = { setActive: (_v: boolean) => {} }
 
-	// Build tool list: builtins + custom tools + hook-registered tools
+	// Build lazy tool loader: registry + custom tools + hook-registered tools
 	const hookTools = getHookTools(extensibility.hookRunner)
-	const allTools: AgentTool<any, any>[] = [
-		...codingTools,
-		...extensibility.customTools.map((t) => t.tool),
-		...hookTools,
-	]
+	const toolLoader = new LazyToolLoader(
+		toolRegistry,
+		extensibility.customTools.map((t) => t.tool),
+		hookTools,
+	)
 
+	// Pre-load core tools (read, bash) for fast startup
+	await toolLoader.preloadCoreTools()
+
+	// Get tools as proxy array for agent initialization
+	const toolsProxy = toolLoader.getToolsProxy()
 	const tools = wrapToolsWithLspDiagnostics(
-		wrapToolsWithHooks(allTools, extensibility.hookRunner),
+		wrapToolsWithHooks(toolProxyAsArray(toolsProxy), extensibility.hookRunner),
 		lsp,
 		{
 			cwd,
