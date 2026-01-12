@@ -466,12 +466,31 @@ function updateToolInContentBlocks(
 	updater: (tool: ToolBlock) => ToolBlock
 ): UIContentBlock[] | undefined {
 	if (!contentBlocks) return undefined
-	return contentBlocks.map((block) => {
-		if (block.type === "tool" && block.tool.id === toolId) {
-			return { ...block, tool: updater(block.tool) }
-		}
-		return block
-	})
+	for (let i = 0; i < contentBlocks.length; i++) {
+		const block = contentBlocks[i]
+		if (block.type !== "tool" || block.tool.id !== toolId) continue
+		const updated = updater(block.tool)
+		if (updated === block.tool) return contentBlocks
+		contentBlocks[i] = { ...block, tool: updated }
+		return contentBlocks
+	}
+	return contentBlocks
+}
+
+function updateToolById(
+	tools: ToolBlock[],
+	toolId: string,
+	updater: (tool: ToolBlock) => ToolBlock
+): ToolBlock[] {
+	const idx = tools.findIndex((t) => t.id === toolId)
+	if (idx === -1) return tools
+	const current = tools[idx]
+	if (!current) return tools
+	const updated = updater(current)
+	if (updated === current) return tools
+	const next = tools.slice()
+	next[idx] = updated
+	return next
 }
 
 function handleToolStart(
@@ -512,19 +531,13 @@ function handleToolUpdateImmediate(
 	event: Extract<AgentEvent, { type: "tool_execution_update" }>,
 	ctx: EventHandlerContext
 ): void {
-	const makeToolUpdater = (toolCallId: string, partialResult: typeof event.partialResult) =>
-		(t: ToolBlock) =>
-			t.id === toolCallId
-				? {
-						...t,
-						updateSeq: (t.updateSeq ?? 0) + 1,
-						output: getToolText(partialResult),
-						result: partialResult,
-					}
-				: t
-
-	const toolUpdater = makeToolUpdater(event.toolCallId, event.partialResult)
-	const updateTools = (tools: ToolBlock[]) => tools.map(toolUpdater)
+	const toolUpdater = (t: ToolBlock): ToolBlock => ({
+		...t,
+		updateSeq: (t.updateSeq ?? 0) + 1,
+		output: getToolText(event.partialResult),
+		result: event.partialResult,
+	})
+	const updateTools = (tools: ToolBlock[]) => updateToolById(tools, event.toolCallId, toolUpdater)
 
 	batch(() => {
 		ctx.setToolBlocks(updateTools)
@@ -540,20 +553,6 @@ function handleToolEnd(
 	event: Extract<AgentEvent, { type: "tool_execution_end" }>,
 	ctx: EventHandlerContext
 ): void {
-	const updateTool = (tools: ToolBlock[]) =>
-		tools.map((t) =>
-			t.id === event.toolCallId
-				? {
-						...t,
-						output: getToolText(event.result),
-						editDiff: getEditDiffText(event.result) || undefined,
-						isError: event.isError,
-						isComplete: true,
-						result: event.result,
-					}
-				: t
-		)
-
 	const toolUpdater = (t: ToolBlock): ToolBlock => ({
 		...t,
 		output: getToolText(event.result),
@@ -563,7 +562,8 @@ function handleToolEnd(
 		result: event.result,
 	})
 
-	ctx.setToolBlocks(updateTool)
+	const updateTools = (tools: ToolBlock[]) => updateToolById(tools, event.toolCallId, toolUpdater)
+	ctx.setToolBlocks(updateTools)
 
 	// Update message containing this tool - find by tool ID since streamingMessageId
 	// may be null if message_end fired before tool_execution_end
@@ -581,7 +581,7 @@ function handleToolEnd(
 		if (msg.role !== "assistant") return prev
 		const updated: UIAssistantMessage = {
 			...msg,
-			tools: updateTool(msg.tools || []),
+			tools: updateTools(msg.tools || []),
 			contentBlocks: updateToolInContentBlocks(msg.contentBlocks, event.toolCallId, toolUpdater),
 		}
 		const next = prev.slice()
