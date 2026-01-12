@@ -12,6 +12,7 @@ import type { SessionManager } from "./session-manager.js"
 import type { UIMessage, UIAssistantMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
 import {
 	appendWithCap,
+	buildThinkingSummary,
 	extractOrderedBlocks,
 	extractThinking,
 	extractText,
@@ -96,7 +97,7 @@ interface ExtractionCache {
 	textLength: number
 	// Tail of streaming text for display
 	textTail: string
-	thinking: { summary: string; full: string } | null
+	thinking: { summary: string; preview: string; full: string } | null
 	orderedBlocks: ReturnType<typeof extractOrderedBlocks>
 	// For thinking block ID generation
 	thinkingCounter: number
@@ -151,11 +152,9 @@ function extractIncremental(content: unknown[], cache: ExtractionCache): Extract
 			}
 		} else if (b.type === "thinking" && typeof b.thinking === "string") {
 			const full = b.thinking
-			const lines = full.trim().split("\n").filter((l) => l.trim().length > 20)
-			const summary = lines[0]?.trim().slice(0, 80) || full.trim().slice(0, 80)
-			const truncated = summary.length >= 80 ? summary + "..." : summary
-			thinking = { summary: truncated, full }
-			orderedBlocks.push({ type: "thinking", id: `thinking-${thinkingCounter++}`, summary: truncated, full })
+			const { summary, preview } = buildThinkingSummary(full)
+			thinking = { summary, preview, full }
+			orderedBlocks.push({ type: "thinking", id: `thinking-${thinkingCounter++}`, summary, preview, full })
 		} else if (b.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string") {
 			orderedBlocks.push({ type: "toolCall", id: b.id, name: b.name, args: b.arguments ?? {} })
 		}
@@ -201,7 +200,7 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 			// Convert ordered blocks to UIContentBlocks
 			const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
 				if (block.type === "thinking") {
-					return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
+					return { type: "thinking" as const, id: block.id, summary: block.summary, preview: block.preview, full: block.full }
 				} else if (block.type === "text") {
 					return { type: "text" as const, text: block.text }
 				} else {
@@ -439,7 +438,7 @@ function handleMessageEnd(
 	// Convert ordered blocks to UIContentBlocks, preserving order
 	const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
 		if (block.type === "thinking") {
-			return { type: "thinking" as const, id: block.id, summary: block.summary, full: block.full }
+			return { type: "thinking" as const, id: block.id, summary: block.summary, preview: block.preview, full: block.full }
 		} else if (block.type === "text") {
 			return { type: "text" as const, text: block.text }
 		} else {

@@ -129,7 +129,7 @@ export function createSessionController(options: SessionControllerOptions): Sess
 				const orderedBlocks = extractOrderedBlocks(msg.content as unknown[])
 				const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
 					if (block.type === "thinking") {
-						return { type: "thinking", id: block.id, summary: block.summary, full: block.full }
+						return { type: "thinking", id: block.id, summary: block.summary, preview: block.preview, full: block.full }
 					} else if (block.type === "text") {
 						return { type: "text", text: block.text }
 					} else {

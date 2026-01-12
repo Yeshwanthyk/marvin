@@ -55,6 +55,7 @@ function truncateThinking(text: string): string {
 function ThinkingBlockWrapper(props: {
 	id: string
 	summary: string
+	preview?: string
 	full: string
 	isExpanded: (id: string) => boolean
 	onToggle: (id: string) => void
@@ -62,7 +63,7 @@ function ThinkingBlockWrapper(props: {
 }) {
 	const { theme } = useTheme()
 	const expanded = createMemo(() => props.isExpanded(props.id))
-	const preview = () => truncateThinking(props.summary || props.full)
+	const preview = () => props.preview || truncateThinking(props.summary || props.full)
 
 	return (
 		<box paddingLeft={4} flexDirection="column">
@@ -139,11 +140,12 @@ export function buildContentItems(
 						if (thinkingVisible) {
 							const item: ContentItem = {
 								type: "thinking",
-								id: block.id,
-								summary: block.summary,
-								full: block.full,
-								isStreaming: msg.isStreaming,
-							}
+									id: block.id,
+									summary: block.summary,
+									preview: block.preview,
+									full: block.full,
+									isStreaming: msg.isStreaming,
+								}
 							items.push(
 								getCachedItem(`thinking:${msg.id}:${block.id}`, item, (a, b) =>
 									a.type === "thinking" && b.type === "thinking" &&
@@ -186,6 +188,7 @@ export function buildContentItems(
 						type: "thinking",
 						id: `thinking-${msg.id}`,
 						summary: msg.thinking.summary,
+						preview: msg.thinking.preview || truncateThinking(msg.thinking.summary || msg.thinking.full),
 						full: msg.thinking.full,
 						isStreaming: msg.isStreaming,
 					}
@@ -306,6 +309,7 @@ export function MessageList(props: MessageListProps) {
 								<ThinkingBlockWrapper
 									id={thinkingItem().id}
 									summary={thinkingItem().summary}
+									preview={thinkingItem().preview}
 									full={thinkingItem().full}
 									isExpanded={props.isThinkingExpanded}
 									onToggle={props.toggleThinkingExpanded}

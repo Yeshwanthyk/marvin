@@ -4,7 +4,7 @@
 
 /** Content block that preserves order from API response */
 export type UIContentBlock =
-	| { type: "thinking"; id: string; summary: string; full: string }
+	| { type: "thinking"; id: string; summary: string; preview: string; full: string }
 	| { type: "text"; text: string }
 	| { type: "tool"; tool: ToolBlock }
 
@@ -24,7 +24,7 @@ export interface UIAssistantMessage {
 	/** Ordered content blocks - preserves interleaving of thinking, text, tools */
 	contentBlocks?: UIContentBlock[]
 	/** @deprecated Use contentBlocks instead - kept for backward compat */
-	thinking?: { summary: string; full: string }
+	thinking?: { summary: string; preview: string; full: string }
 	isStreaming?: boolean
 	/** @deprecated Use contentBlocks instead - kept for backward compat */
 	tools?: ToolBlock[]
@@ -82,7 +82,7 @@ export interface SectionItem {
 
 export type ContentItem =
 	| { type: "user"; content: string }
-	| { type: "thinking"; id: string; summary: string; full: string; isStreaming?: boolean }
+	| { type: "thinking"; id: string; summary: string; preview: string; full: string; isStreaming?: boolean }
 	| { type: "assistant"; content: string; isStreaming?: boolean }
 	| { type: "tool"; tool: ToolBlock }
 	| { type: "section"; section: SectionItem }
