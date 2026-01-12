@@ -25,7 +25,7 @@ const ACTIVITY_FACES: Record<ActivityState, { face: string; label: string }> = {
   idle: { face: "● ‿ ●", label: "ready" },
   thinking: { face: "● ≋ ●", label: "think" },
   streaming: { face: "● ◦ ●", label: "stream" },
-  tool: { face: "● ⚙ ●", label: "run" },
+  tool: { face: "● ⏅ ●", label: "run" },
   compacting: { face: "● ≡ ●", label: "pack" },
 }
 
@@ -33,7 +33,7 @@ const ACTIVITY_FACES: Record<ActivityState, { face: string; label: string }> = {
 const ANIMATED_FACES: Partial<Record<ActivityState, string[]>> = {
   streaming: ["● ◦ ●", "● ○ ●", "● ◦ ●", "● ∘ ●"],  // mouth moves (talking)
   thinking: ["● ≋ ●", "● ~ ●", "● ≈ ●", "● ~ ●"],   // squiggly (pondering)
-  tool: ["● ⚙ ●", "● ⚙ ●", "● ◉ ●", "● ⚙ ●"],      // gear pulses
+  tool: ["● ⏅ ●", "● ⏆ ●", "● ⏅ ●", "● ⏆ ●"],      // steps running
   compacting: ["● ≡ ●", "● = ●", "● - ●", "● = ●"], // compress animation
 }
 
