@@ -1,6 +1,6 @@
 /**
  * Header - Single row, minimal by default, click to expand.
- * Left: activity + model·thinking + context + queue
+ * Left: activity + model·thinking + progress bar + queue
  * Right (expanded): branch + LSP
  */
 
@@ -20,14 +20,30 @@ const LSP_SYMBOLS: Record<LspServerId, [string, string]> = {
   "rust-analyzer": ["⛭", "⚙"],
 }
 
-/** Activity state labels */
-const ACTIVITY_LABELS: Record<ActivityState, string> = {
-  idle: "ready",
-  thinking: "think",
-  streaming: "stream",
-  tool: "run",
-  compacting: "pack",
+/** Robot face icons for each activity state */
+const ACTIVITY_FACES: Record<ActivityState, { face: string; label: string }> = {
+  idle: { face: "● ‿ ●", label: "ready" },
+  thinking: { face: "● ≋ ●", label: "think" },
+  streaming: { face: "● ◦ ●", label: "stream" },
+  tool: { face: "● ⚙ ●", label: "run" },
+  compacting: { face: "● ≡ ●", label: "pack" },
 }
+
+/** Animated faces for each active state */
+const ANIMATED_FACES: Partial<Record<ActivityState, string[]>> = {
+  streaming: ["● ◦ ●", "● ○ ●", "● ◦ ●", "● ∘ ●"],  // mouth moves (talking)
+  thinking: ["● ≋ ●", "● ~ ●", "● ≈ ●", "● ~ ●"],   // squiggly (pondering)
+  tool: ["● ⚙ ●", "● ⚙ ●", "● ◉ ●", "● ⚙ ●"],      // gear pulses
+  compacting: ["● ≡ ●", "● = ●", "● - ●", "● = ●"], // compress animation
+}
+
+/** Fixed width for activity section to prevent layout shift */
+const ACTIVITY_WIDTH = 13
+
+/** Progress bar characters */
+const PROGRESS_FILLED = "━"
+const PROGRESS_EMPTY = "┄"
+const PROGRESS_BAR_LENGTH = 8
 
 export interface HeaderProps {
   modelId: string
@@ -51,6 +67,7 @@ export function Header(props: HeaderProps) {
   const modelThinking = createMemo(() => {
     const model = props.modelId.replace(/^claude-/, "").replace(/-latest$/, "")
     if (props.thinking === "off") return model
+    // Abbreviate thinking level
     const thinkingAbbrev: Record<ThinkingLevel, string> = {
       off: "",
       minimal: "min",
@@ -62,26 +79,37 @@ export function Header(props: HeaderProps) {
     return `${model}·${thinkingAbbrev[props.thinking]}`
   })
 
-  // Activity indicator
+  // Activity with robot face
   const activity = createMemo(() => {
     if (props.retryStatus) {
-      return { indicator: "!", label: "retry", color: theme.warning }
+      return { face: "● ! ●", label: "retry", color: theme.warning }
     }
     const state = props.activityState
-    const pulse = ["·", "•", "●", "•"]
-    const indicator = state === "idle" ? "●" : pulse[props.spinnerFrame % pulse.length]
+    const base = ACTIVITY_FACES[state]
+    
+    // Animate face for active states
+    let face = base.face
+    const frames = ANIMATED_FACES[state]
+    if (frames) {
+      const frameIndex = props.spinnerFrame % frames.length
+      face = frames[frameIndex] ?? base.face
+    }
+    
     const color = state === "idle" ? theme.textMuted : theme.accent
-    return { indicator, label: ACTIVITY_LABELS[state], color }
+    return { face, label: base.label, color }
   })
 
-  // Context as tokens
-  const contextInfo = createMemo(() => {
-    if (props.contextWindow <= 0 || props.contextTokens <= 0) return null
-    const pct = (props.contextTokens / props.contextWindow) * 100
-    const fmt = (n: number) => n >= 1000 ? Math.round(n / 1000) + "k" : n.toString()
-    const display = `${fmt(props.contextTokens)}/${fmt(props.contextWindow)}`
+  // Progress bar with percentage
+  const progressBar = createMemo(() => {
+    if (props.contextWindow <= 0) return null
+    const pct = props.contextTokens > 0 
+      ? Math.min(100, (props.contextTokens / props.contextWindow) * 100)
+      : 0
+    const filled = Math.round((pct / 100) * PROGRESS_BAR_LENGTH)
+    const empty = PROGRESS_BAR_LENGTH - filled
+    const bar = PROGRESS_FILLED.repeat(filled) + PROGRESS_EMPTY.repeat(empty)
     const color = pct > 90 ? theme.error : pct > 70 ? theme.warning : pct > 40 ? theme.text : theme.success
-    return { display, color }
+    return { bar, pct: Math.round(pct), color }
   })
 
   // Queue indicator
@@ -94,6 +122,7 @@ export function Header(props: HeaderProps) {
   const shortBranch = createMemo(() => {
     const branch = props.branch
     if (!branch) return null
+    // Split by / and -, take last 2 meaningful segments
     const parts = branch.split(/[/-]/).filter(p => p.length > 0)
     if (parts.length <= 2) return branch
     return parts.slice(-2).join("-")
@@ -113,7 +142,7 @@ export function Header(props: HeaderProps) {
   const toggleExpanded = () => setExpanded((v) => !v)
 
   return (
-    <box
+<box
       flexDirection="row"
       flexShrink={0}
       paddingLeft={1}
@@ -126,20 +155,27 @@ export function Header(props: HeaderProps) {
         toggleExpanded()
       }}
     >
-      {/* Left section: Activity + Model·Thinking + Context + Queue */}
+      {/* Left section: Activity + Model·Thinking + Progress + Queue */}
       <box flexDirection="row" flexShrink={0} gap={1}>
-        {/* Activity */}
-        <text>
-          <span style={{ fg: activity().color }}>{activity().indicator}</span>
-          <span style={{ fg: theme.textMuted }}> {activity().label}</span>
-        </text>
+        {/* Activity (fixed width) */}
+        <box minWidth={ACTIVITY_WIDTH}>
+          <text>
+            <span style={{ fg: activity().color }}>{activity().face}</span>
+            <span style={{ fg: theme.textMuted }}> {activity().label}</span>
+          </text>
+        </box>
 
         {/* Model·Thinking */}
         <text fg={theme.text}>{modelThinking()}</text>
 
-        {/* Context */}
-        <Show when={contextInfo()} keyed>
-          {(ctx) => <text fg={ctx.color}>{ctx.display}</text>}
+        {/* Progress bar */}
+        <Show when={progressBar()} keyed>
+          {(prog) => (
+            <text>
+              <span style={{ fg: prog.color }}>{prog.bar}</span>
+              <span style={{ fg: theme.textMuted }}>  {prog.pct}%</span>
+            </text>
+          )}
         </Show>
 
         {/* Queue */}
