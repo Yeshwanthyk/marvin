@@ -231,67 +231,105 @@ async function executeToolCalls<T>(
 	stream: EventStream<AgentEvent, Message[]>,
 ): Promise<ToolResultMessage<T>[]> {
 	const toolCalls = assistantMessage.content.filter((c) => c.type === "toolCall");
-	const results: ToolResultMessage<any>[] = [];
 
-	for (const toolCall of toolCalls) {
-		const tool = tools?.find((t) => t.name === toolCall.name);
+	// Execute all tools in parallel
+	const executionPromises = toolCalls.map((toolCall) =>
+		executeSingleToolCall<T>(toolCall, tools, signal, stream),
+	);
 
-		stream.push({
-			type: "tool_execution_start",
-			toolCallId: toolCall.id,
-			toolName: toolCall.name,
-			args: toolCall.arguments,
-		});
+	const results = await Promise.allSettled(executionPromises);
 
-		let result: AgentToolResult<T>;
-		let isError = false;
-
-		try {
-			if (!tool) throw new Error(`Tool ${toolCall.name} not found`);
-
-			// Validate arguments using shared validation function
-			const validatedArgs = validateToolArguments(tool, toolCall);
-
-			// Execute with validated, typed arguments, passing update callback
-			result = await tool.execute(toolCall.id, validatedArgs, signal, (partialResult) => {
-				stream.push({
-					type: "tool_execution_update",
-					toolCallId: toolCall.id,
-					toolName: toolCall.name,
-					args: toolCall.arguments,
-					partialResult,
-				});
-			});
-		} catch (e) {
-			result = {
-				content: [{ type: "text", text: e instanceof Error ? e.message : String(e) }],
+	// Maintain original order and extract results
+	const toolResults: ToolResultMessage<T>[] = [];
+	for (let i = 0; i < results.length; i++) {
+		const settledResult = results[i];
+		if (settledResult.status === "fulfilled") {
+			toolResults.push(settledResult.value);
+		} else {
+			// This shouldn't happen since executeSingleToolCall catches errors
+			// but handle it just in case
+			const toolCall = toolCalls[i];
+			toolResults.push({
+				role: "toolResult",
+				toolCallId: toolCall.id,
+				toolName: toolCall.name,
+				content: [{ type: "text", text: "Tool execution failed" }],
 				details: {} as T,
-			};
-			isError = true;
+				isError: true,
+				timestamp: Date.now(),
+			});
 		}
-
-		stream.push({
-			type: "tool_execution_end",
-			toolCallId: toolCall.id,
-			toolName: toolCall.name,
-			result,
-			isError,
-		});
-
-		const toolResultMessage: ToolResultMessage<T> = {
-			role: "toolResult",
-			toolCallId: toolCall.id,
-			toolName: toolCall.name,
-			content: result.content,
-			details: result.details,
-			isError,
-			timestamp: Date.now(),
-		};
-
-		results.push(toolResultMessage);
-		stream.push({ type: "message_start", message: toolResultMessage });
-		stream.push({ type: "message_end", message: toolResultMessage });
 	}
 
-	return results;
+	return toolResults;
+}
+
+/**
+ * Execute a single tool call and return the result message.
+ * Handles all event streaming and error handling.
+ */
+async function executeSingleToolCall<T>(
+	toolCall: any,
+	tools: AgentTool<any, T>[] | undefined,
+	signal: AbortSignal | undefined,
+	stream: EventStream<AgentEvent, Message[]>,
+): Promise<ToolResultMessage<T>> {
+	const tool = tools?.find((t) => t.name === toolCall.name);
+
+	stream.push({
+		type: "tool_execution_start",
+		toolCallId: toolCall.id,
+		toolName: toolCall.name,
+		args: toolCall.arguments,
+	});
+
+	let result: AgentToolResult<T>;
+	let isError = false;
+
+	try {
+		if (!tool) throw new Error(`Tool ${toolCall.name} not found`);
+
+		// Validate arguments using shared validation function
+		const validatedArgs = validateToolArguments(tool, toolCall);
+
+		// Execute with validated, typed arguments, passing update callback
+		result = await tool.execute(toolCall.id, validatedArgs, signal, (partialResult) => {
+			stream.push({
+				type: "tool_execution_update",
+				toolCallId: toolCall.id,
+				toolName: toolCall.name,
+				args: toolCall.arguments,
+				partialResult,
+			});
+		});
+	} catch (e) {
+		result = {
+			content: [{ type: "text", text: e instanceof Error ? e.message : String(e) }],
+			details: {} as T,
+		};
+		isError = true;
+	}
+
+	stream.push({
+		type: "tool_execution_end",
+		toolCallId: toolCall.id,
+		toolName: toolCall.name,
+		result,
+		isError,
+	});
+
+	const toolResultMessage: ToolResultMessage<T> = {
+		role: "toolResult",
+		toolCallId: toolCall.id,
+		toolName: toolCall.name,
+		content: result.content,
+		details: result.details,
+		isError,
+		timestamp: Date.now(),
+	};
+
+	stream.push({ type: "message_start", message: toolResultMessage });
+	stream.push({ type: "message_end", message: toolResultMessage });
+
+	return toolResultMessage;
 }
