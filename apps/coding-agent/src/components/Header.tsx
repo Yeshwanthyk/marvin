@@ -1,10 +1,10 @@
 /**
- * Header - 2 section layout.
- * Left: project/branch + model/thinking + activity/context (with gaps)
- * Right: LSP / queue
+ * Header - Single row, minimal by default, click to expand.
+ * Left: activity + model·thinking + context + queue
+ * Right (expanded): branch + LSP
  */
 
-import { Show, createMemo } from "solid-js"
+import { Show, createMemo, createSignal } from "solid-js"
 import { useTheme } from "@marvin-agents/open-tui"
 import type { ThinkingLevel } from "@marvin-agents/agent-core"
 import type { LspManager, LspServerId } from "@marvin-agents/lsp"
@@ -20,7 +20,14 @@ const LSP_SYMBOLS: Record<LspServerId, [string, string]> = {
   "rust-analyzer": ["⛭", "⚙"],
 }
 
-const BRANCH_MAX_WIDTH = 14
+/** Activity state labels */
+const ACTIVITY_LABELS: Record<ActivityState, string> = {
+  idle: "ready",
+  thinking: "think",
+  streaming: "stream",
+  tool: "run",
+  compacting: "pack",
+}
 
 export interface HeaderProps {
   modelId: string
@@ -38,34 +45,36 @@ export interface HeaderProps {
 
 export function Header(props: HeaderProps) {
   const { theme } = useTheme()
+  const [expanded, setExpanded] = createSignal(false)
 
-  const project = createMemo(() => {
-    const cwd = process.cwd()
-    return cwd.split("/").pop() || cwd
-  })
-
-  const shortModel = createMemo(() => {
-    return props.modelId.replace(/^claude-/, "").replace(/-latest$/, "")
-  })
-
-  const thinkingLabel = createMemo(() => {
-    if (props.thinking === "off") return null
-    return props.thinking
-  })
-
-  const thinkingColor = createMemo(() => {
-    const colors: Record<ThinkingLevel, typeof theme.text> = {
-      off: theme.textMuted,
-      minimal: theme.secondary,
-      low: theme.info,
-      medium: theme.accent,
-      high: theme.primary,
-      xhigh: theme.warning,
+  // Model·thinking combined
+  const modelThinking = createMemo(() => {
+    const model = props.modelId.replace(/^claude-/, "").replace(/-latest$/, "")
+    if (props.thinking === "off") return model
+    const thinkingAbbrev: Record<ThinkingLevel, string> = {
+      off: "",
+      minimal: "min",
+      low: "low",
+      medium: "med",
+      high: "high",
+      xhigh: "xhi",
     }
-    return colors[props.thinking]
+    return `${model}·${thinkingAbbrev[props.thinking]}`
   })
 
-  // Context as tokens - color shifts with usage
+  // Activity indicator
+  const activity = createMemo(() => {
+    if (props.retryStatus) {
+      return { indicator: "!", label: "retry", color: theme.warning }
+    }
+    const state = props.activityState
+    const pulse = ["·", "•", "●", "•"]
+    const indicator = state === "idle" ? "●" : pulse[props.spinnerFrame % pulse.length]
+    const color = state === "idle" ? theme.textMuted : theme.accent
+    return { indicator, label: ACTIVITY_LABELS[state], color }
+  })
+
+  // Context as tokens
   const contextInfo = createMemo(() => {
     if (props.contextWindow <= 0 || props.contextTokens <= 0) return null
     const pct = (props.contextTokens / props.contextWindow) * 100
@@ -75,25 +84,23 @@ export function Header(props: HeaderProps) {
     return { display, color }
   })
 
-  // Scrolling branch name (airport terminal style)
-  const scrollingBranch = createMemo(() => {
-    const branch = props.branch
-    if (!branch) return null
-    if (branch.length <= BRANCH_MAX_WIDTH) return branch
-    
-    // Add padding for smooth loop
-    const padded = branch + "   " + branch
-    const scrollPos = Math.floor(props.spinnerFrame / 2) % (branch.length + 3)
-    return padded.slice(scrollPos, scrollPos + BRANCH_MAX_WIDTH)
-  })
-
+  // Queue indicator
   const queueIndicator = createMemo(() => {
     if (props.queueCount <= 0) return null
-    return "▸".repeat(props.queueCount)
+    return "▸".repeat(Math.min(props.queueCount, 5))
   })
 
+  // Shortened branch (last 2 segments)
+  const shortBranch = createMemo(() => {
+    const branch = props.branch
+    if (!branch) return null
+    const parts = branch.split(/[/-]/).filter(p => p.length > 0)
+    if (parts.length <= 2) return branch
+    return parts.slice(-2).join("-")
+  })
+
+  // LSP status
   const lspStatus = createMemo(() => {
-    void props.spinnerFrame
     const servers = props.lsp.activeServers()
     if (servers.length === 0) return null
     const uniqueIds = [...new Set(servers.map((s) => s.serverId))]
@@ -103,90 +110,77 @@ export function Header(props: HeaderProps) {
     return { symbols, errors: counts.errors, warnings: counts.warnings }
   })
 
-  // Activity with pulsing dot + label
-  const activity = createMemo(() => {
-    if (props.activityState === "idle") return null
-    const pulse = ["·", "•", "●", "•"]
-    const dot = pulse[props.spinnerFrame % pulse.length]
-    const labels: Record<ActivityState, string> = {
-      thinking: "thinking",
-      streaming: "streaming",
-      tool: "running",
-      compacting: "compacting",
-      idle: "",
-    }
-    return { dot, label: labels[props.activityState] }
-  })
+  const toggleExpanded = () => setExpanded((v) => !v)
 
   return (
-    <box flexDirection="row" flexShrink={0} paddingLeft={1} paddingRight={1} border={["bottom"]} borderColor={theme.border}>
-      {/* Left: Project/Branch + Model/Thinking + Activity/Context */}
+    <box
+      flexDirection="row"
+      flexShrink={0}
+      paddingLeft={1}
+      paddingRight={1}
+      border={["top", "bottom", "left", "right"]}
+      borderStyle="rounded"
+      borderColor={theme.border}
+      onMouseUp={(e: { isSelecting?: boolean }) => {
+        if (e.isSelecting) return
+        toggleExpanded()
+      }}
+    >
+      {/* Left section: Activity + Model·Thinking + Context + Queue */}
       <box flexDirection="row" flexShrink={0} gap={1}>
-        {/* Project / Branch */}
-        <box flexDirection="column">
-          <text fg={theme.text}>{project()}</text>
-          <Show when={scrollingBranch()} fallback={<text> </text>}>
-            <text fg={theme.secondary}>{scrollingBranch()}</text>
-          </Show>
-        </box>
+        {/* Activity */}
+        <text>
+          <span style={{ fg: activity().color }}>{activity().indicator}</span>
+          <span style={{ fg: theme.textMuted }}> {activity().label}</span>
+        </text>
 
-        {/* Model / Thinking */}
-        <box flexDirection="column">
-          <text fg={theme.text}>{shortModel()}</text>
-          <Show when={thinkingLabel()} fallback={<text> </text>}>
-            <text fg={thinkingColor()}>{thinkingLabel()}</text>
-          </Show>
-        </box>
+        {/* Model·Thinking */}
+        <text fg={theme.text}>{modelThinking()}</text>
 
-        {/* Activity / Context% */}
-        <box flexDirection="column" flexShrink={0}>
-          <Show when={props.retryStatus} fallback={
-            <Show when={activity()} keyed fallback={<text> </text>}>
-              {(act) => (
-                <text>
-                  <span style={{ fg: theme.accent }}>{act.dot}</span>
-                  <span style={{ fg: theme.textMuted }}> {act.label}</span>
-                </text>
-              )}
-            </Show>
-          }>
-            <text fg={theme.warning}>! retry</text>
-          </Show>
-          <Show when={contextInfo()} keyed fallback={<text> </text>}>
-            {(ctx) => <text fg={ctx.color}>{ctx.display}</text>}
-          </Show>
-        </box>
+        {/* Context */}
+        <Show when={contextInfo()} keyed>
+          {(ctx) => <text fg={ctx.color}>{ctx.display}</text>}
+        </Show>
+
+        {/* Queue */}
+        <Show when={queueIndicator()}>
+          <text fg={theme.warning}>{queueIndicator()}</text>
+        </Show>
       </box>
 
       {/* Spacer */}
       <box flexGrow={1} />
 
-      {/* Right: LSP / Queue */}
-      <box flexDirection="column" flexShrink={0} alignItems="flex-end" minWidth={10}>
-        <Show when={lspStatus()} keyed fallback={<text> </text>}>
-          {(lsp) => (
-            <text>
-              <span style={{ fg: props.lspActive ? theme.accent : theme.success }}>{lsp.symbols}</span>
-              <Show when={lsp.errors > 0 || lsp.warnings > 0}>
-                <span style={{ fg: theme.textMuted }}>(</span>
-                <Show when={lsp.errors > 0}>
-                  <span style={{ fg: theme.error }}>{lsp.errors}</span>
+      {/* Right section (only when expanded): Branch + LSP */}
+      <Show when={expanded()}>
+        <box flexDirection="row" flexShrink={0} gap={1}>
+          {/* Branch */}
+          <Show when={shortBranch()}>
+            <text fg={theme.secondary}>{shortBranch()}</text>
+          </Show>
+
+          {/* LSP */}
+          <Show when={lspStatus()} keyed>
+            {(lsp) => (
+              <text>
+                <span style={{ fg: props.lspActive ? theme.accent : theme.success }}>{lsp.symbols}</span>
+                <Show when={lsp.errors > 0 || lsp.warnings > 0}>
+                  <span style={{ fg: theme.textMuted }}> </span>
+                  <Show when={lsp.errors > 0}>
+                    <span style={{ fg: theme.error }}>{lsp.errors}</span>
+                  </Show>
+                  <Show when={lsp.errors > 0 && lsp.warnings > 0}>
+                    <span style={{ fg: theme.textMuted }}>/</span>
+                  </Show>
+                  <Show when={lsp.warnings > 0}>
+                    <span style={{ fg: theme.warning }}>{lsp.warnings}</span>
+                  </Show>
                 </Show>
-                <Show when={lsp.errors > 0 && lsp.warnings > 0}>
-                  <span style={{ fg: theme.textMuted }}>/</span>
-                </Show>
-                <Show when={lsp.warnings > 0}>
-                  <span style={{ fg: theme.warning }}>{lsp.warnings}</span>
-                </Show>
-                <span style={{ fg: theme.textMuted }}>)</span>
-              </Show>
-            </text>
-          )}
-        </Show>
-        <Show when={queueIndicator()} fallback={<text> </text>}>
-          <text fg={theme.warning}>{queueIndicator()}</text>
-        </Show>
-      </box>
+              </text>
+            )}
+          </Show>
+        </box>
+      </Show>
     </box>
   )
 }
