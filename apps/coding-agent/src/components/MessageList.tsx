@@ -93,6 +93,7 @@ function ThinkingBlockWrapper(props: {
 // Key format: "type:id" or "type:msgId:blockIdx"
 const itemCache = new Map<string, ContentItem>()
 let lastMessageCount = 0
+let lastFirstMessageId: string | null = null
 
 /** Get or create a cached ContentItem, preserving object identity when data matches */
 function getCachedItem<T extends ContentItem>(
@@ -118,6 +119,11 @@ export function buildContentItems(
 		itemCache.clear()
 	}
 	lastMessageCount = messages.length
+	const firstMessageId = messages.length > 0 ? messages[0].id : null
+	if (firstMessageId !== lastFirstMessageId) {
+		if (lastFirstMessageId !== null) itemCache.clear()
+		lastFirstMessageId = firstMessageId
+	}
 
 	const items: ContentItem[] = []
 	const renderedToolIds = new Set<string>()
