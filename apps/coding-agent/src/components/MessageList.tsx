@@ -162,15 +162,16 @@ export function buildContentItems(
 					} else if (block.type === "text") {
 						if (block.text) {
 							const item: ContentItem = { type: "assistant", content: block.text, isStreaming: msg.isStreaming }
-							// For streaming text, use content length in key to allow updates
-							// but still cache when length stabilizes
-							const contentKey = msg.isStreaming ? "streaming" : "final"
-							items.push(
-								getCachedItem(`text:${msg.id}:${blockIdx}:${contentKey}`, item, (a, b) =>
-									a.type === "assistant" && b.type === "assistant" &&
-									a.content === b.content && a.isStreaming === b.isStreaming
+							if (msg.isStreaming) {
+								items.push(item)
+							} else {
+								items.push(
+									getCachedItem(`text:${msg.id}:${blockIdx}:final`, item, (a, b) =>
+										a.type === "assistant" && b.type === "assistant" &&
+										a.content === b.content && a.isStreaming === b.isStreaming
+									)
 								)
-							)
+							}
 						}
 					} else if (block.type === "tool") {
 						if (!renderedToolIds.has(block.tool.id)) {
@@ -223,13 +224,16 @@ export function buildContentItems(
 
 				if (msg.content) {
 					const item: ContentItem = { type: "assistant", content: msg.content, isStreaming: msg.isStreaming }
-					const contentKey = msg.isStreaming ? "streaming" : "final"
-					items.push(
-						getCachedItem(`text:${msg.id}:${contentKey}`, item, (a, b) =>
-							a.type === "assistant" && b.type === "assistant" &&
-							a.content === b.content && a.isStreaming === b.isStreaming
+					if (msg.isStreaming) {
+						items.push(item)
+					} else {
+						items.push(
+							getCachedItem(`text:${msg.id}:final`, item, (a, b) =>
+								a.type === "assistant" && b.type === "assistant" &&
+								a.content === b.content && a.isStreaming === b.isStreaming
+							)
 						)
-					)
+					}
 				}
 			}
 
