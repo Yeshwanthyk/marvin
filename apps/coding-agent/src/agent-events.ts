@@ -98,7 +98,7 @@ interface ExtractionCache {
 	// Tail of streaming text for display
 	textTail: string
 	thinking: { summary: string; preview: string; full: string } | null
-	orderedBlocks: ReturnType<typeof extractOrderedBlocks>
+	contentBlocks: UIContentBlock[]
 	// For thinking block ID generation
 	thinkingCounter: number
 }
@@ -109,7 +109,7 @@ function createExtractionCache(): ExtractionCache {
 		textLength: 0,
 		textTail: "",
 		thinking: null,
-		orderedBlocks: [],
+		contentBlocks: [],
 		thinkingCounter: 0,
 	}
 }
@@ -129,7 +129,7 @@ function extractIncremental(content: unknown[], cache: ExtractionCache): Extract
 	let textLength = cache.textLength
 	let textTail = cache.textTail
 	let thinking = cache.thinking
-	const orderedBlocks = cache.orderedBlocks.slice() // Clone for mutation
+	const contentBlocks = cache.contentBlocks
 	let thinkingCounter = cache.thinkingCounter
 
 	for (let i = cache.lastContentLength; i < len; i++) {
@@ -141,26 +141,26 @@ function extractIncremental(content: unknown[], cache: ExtractionCache): Extract
 			textLength += b.text.length
 			textTail = appendStreamingTail(textTail, b.text)
 			// Merge with last text block or add new
-			const lastBlock = orderedBlocks[orderedBlocks.length - 1]
+			const lastBlock = contentBlocks[contentBlocks.length - 1]
 			if (lastBlock?.type === "text") {
-				(lastBlock as { type: "text"; text: string }).text = appendStreamingTail(
-					(lastBlock as { type: "text"; text: string }).text,
-					b.text
-				)
+				lastBlock.text = appendStreamingTail(lastBlock.text, b.text)
 			} else {
-				orderedBlocks.push({ type: "text", text: appendStreamingTail("", b.text) })
+				contentBlocks.push({ type: "text", text: appendStreamingTail("", b.text) })
 			}
 		} else if (b.type === "thinking" && typeof b.thinking === "string") {
 			const full = b.thinking
 			const { summary, preview } = buildThinkingSummary(full)
 			thinking = { summary, preview, full }
-			orderedBlocks.push({ type: "thinking", id: `thinking-${thinkingCounter++}`, summary, preview, full })
+			contentBlocks.push({ type: "thinking", id: `thinking-${thinkingCounter++}`, summary, preview, full })
 		} else if (b.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string") {
-			orderedBlocks.push({ type: "toolCall", id: b.id, name: b.name, args: b.arguments ?? {} })
+			contentBlocks.push({
+				type: "tool",
+				tool: { id: b.id, name: b.name, args: b.arguments ?? {}, isError: false, isComplete: false },
+			})
 		}
 	}
 
-	return { lastContentLength: len, textLength, textTail, thinking, orderedBlocks, thinkingCounter }
+	return { lastContentLength: len, textLength, textTail, thinking, contentBlocks, thinkingCounter }
 }
 
 export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHandler {
@@ -194,22 +194,8 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 
 			// Use incremental extraction - only processes new blocks
 			extractionCache = extractIncremental(content, extractionCache)
-			const { textLength, textTail, thinking, orderedBlocks } = extractionCache
+			const { textLength, textTail, thinking, contentBlocks } = extractionCache
 			updateThrottleMs = computeUpdateThrottleMs(textLength)
-
-			// Convert ordered blocks to UIContentBlocks
-			const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
-				if (block.type === "thinking") {
-					return { type: "thinking" as const, id: block.id, summary: block.summary, preview: block.preview, full: block.full }
-				} else if (block.type === "text") {
-					return { type: "text" as const, text: block.text }
-				} else {
-					return {
-						type: "tool" as const,
-						tool: { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
-					}
-				}
-			})
 
 			updateStreamingMessage(ctx, (msg) => {
 				const nextThinking = thinking || msg.thinking
