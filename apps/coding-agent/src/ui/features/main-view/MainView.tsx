@@ -354,7 +354,7 @@ export function MainView(props: MainViewProps) {
 				onKeyDown={handleKeyDown}
 				terminalWidth={() => dimensions().width}
 			/>
-			<Footer borderColor={isBashMode() ? theme.warning : theme.border} />
+			<Footer branch={branch()} bashMode={isBashMode()} />
 			<ToastViewport toasts={toasts()} />
 		</box>
 	)
