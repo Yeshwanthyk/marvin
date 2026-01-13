@@ -77,6 +77,8 @@ const defaultKeybindings = [
 	{ name: "w", ctrl: true, action: "delete-word-backward" as const },
 	{ name: "k", ctrl: true, action: "delete-to-line-end" as const },
 	{ name: "u", ctrl: true, action: "delete-to-line-start" as const },
+	{ name: "return", shift: true, action: "newline" as const },
+	{ name: "return", ctrl: true, action: "newline" as const },
 	{ name: "return", meta: true, action: "newline" as const },
 	{ name: "return", action: "submit" as const },
 	{ name: "z", super: true, action: "undo" as const },

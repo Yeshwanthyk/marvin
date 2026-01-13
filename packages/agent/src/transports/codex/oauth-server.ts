@@ -14,34 +14,47 @@ export function startLocalOAuthServer(state: string): Promise<OAuthServerInfo> {
 	let receivedCode: string | null = null;
 
 	const server = http.createServer((req, res) => {
-		const url = new URL(req.url || "", "http://localhost");
-		
-		if (url.pathname !== "/auth/callback") {
-			res.statusCode = 404;
-			res.end("Not found");
-			return;
+		try {
+			const url = new URL(req.url || "", "http://localhost");
+
+			console.log(`[OAuth] ${req.method} ${url.pathname}`);
+
+			if (url.pathname !== "/auth/callback") {
+				res.statusCode = 404;
+				res.end("Not found");
+				return;
+			}
+
+			const reqState = url.searchParams.get("state");
+			console.log(`[OAuth] State check: expected=${state.substring(0, 8)}..., received=${reqState?.substring(0, 8)}...`);
+
+			if (reqState !== state) {
+				res.statusCode = 400;
+				res.end("State mismatch");
+				return;
+			}
+
+			const code = url.searchParams.get("code");
+			if (!code) {
+				res.statusCode = 400;
+				res.end("Missing code");
+				return;
+			}
+
+			console.log(`[OAuth] ✓ Received authorization code`);
+			receivedCode = code;
+			res.setHeader("Content-Type", "text/html");
+			res.end(SUCCESS_HTML);
+		} catch (err) {
+			console.error(`[OAuth] Error handling request:`, err);
+			res.statusCode = 500;
+			res.end("Internal server error");
 		}
-		
-		if (url.searchParams.get("state") !== state) {
-			res.statusCode = 400;
-			res.end("State mismatch");
-			return;
-		}
-		
-		const code = url.searchParams.get("code");
-		if (!code) {
-			res.statusCode = 400;
-			res.end("Missing code");
-			return;
-		}
-		
-		receivedCode = code;
-		res.setHeader("Content-Type", "text/html");
-		res.end(SUCCESS_HTML);
 	});
 
 	return new Promise((resolve) => {
-		server.listen(1455, "127.0.0.1", () => {
+		server.listen(1455, "0.0.0.0", () => {
+			console.log(`[OAuth] Server listening on http://localhost:1455/auth/callback`);
 			resolve({
 				port: 1455,
 				close: () => server.close(),
@@ -56,7 +69,8 @@ export function startLocalOAuthServer(state: string): Promise<OAuthServerInfo> {
 			});
 		});
 
-		server.on("error", () => {
+		server.on("error", (err) => {
+			console.error(`[OAuth] Server error:`, err);
 			resolve({
 				port: 1455,
 				close: () => {},

@@ -45,8 +45,10 @@ export function Composer(props: ComposerProps) {
 					minHeight={1}
 					maxHeight={6}
 					keyBindings={[
-						{ name: "return", action: "submit" as const },
+						{ name: "return", shift: true, action: "newline" as const },
+						{ name: "return", ctrl: true, action: "newline" as const },
 						{ name: "return", meta: true, action: "newline" as const },
+						{ name: "return", action: "submit" as const },
 						{ name: "left", action: "move-left" as const },
 						{ name: "right", action: "move-right" as const },
 						{ name: "backspace", action: "backspace" as const },
