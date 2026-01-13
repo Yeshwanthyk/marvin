@@ -311,7 +311,6 @@ export function MainView(props: MainViewProps) {
 			<Header
 				modelId={props.modelId}
 				thinking={props.thinking}
-				branch={branch()}
 				contextTokens={props.contextTokens}
 				contextWindow={props.contextWindow}
 				queueCount={props.queueCount}

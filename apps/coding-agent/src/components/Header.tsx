@@ -48,7 +48,6 @@ const PROGRESS_BAR_LENGTH = 8
 export interface HeaderProps {
   modelId: string
   thinking: ThinkingLevel
-  branch: string | null
   contextTokens: number
   contextWindow: number
   queueCount: number
@@ -118,15 +117,6 @@ export function Header(props: HeaderProps) {
     return "▸".repeat(Math.min(props.queueCount, 5))
   })
 
-  // Shortened branch (last 2 segments)
-  const shortBranch = createMemo(() => {
-    const branch = props.branch
-    if (!branch) return null
-    // Split by / and -, take last 2 meaningful segments
-    const parts = branch.split(/[/-]/).filter(p => p.length > 0)
-    if (parts.length <= 2) return branch
-    return parts.slice(-2).join("-")
-  })
 
   // LSP status
   const lspStatus = createMemo(() => {
@@ -190,10 +180,6 @@ export function Header(props: HeaderProps) {
       {/* Right section (only when expanded): Branch + LSP */}
       <Show when={expanded()}>
         <box flexDirection="row" flexShrink={0} gap={1}>
-          {/* Branch */}
-          <Show when={shortBranch()}>
-            <text fg={theme.secondary}>{shortBranch()}</text>
-          </Show>
 
           {/* LSP */}
           <Show when={lspStatus()} keyed>
