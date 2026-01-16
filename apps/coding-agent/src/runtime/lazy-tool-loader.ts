@@ -21,7 +21,7 @@ export class LazyToolLoader {
 	 * Call this after construction but before agent runs.
 	 */
 	async preloadCoreTools(): Promise<void> {
-		await Promise.all([this.getTool("read"), this.getTool("bash")]);
+		await Promise.all([this.getTool("read"), this.getTool("bash"), this.getTool("edit"), this.getTool("write")]);
 	}
 
 	/**
