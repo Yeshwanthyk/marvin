@@ -381,14 +381,15 @@ function handleMessageStart(
 ): void {
 	// Handle queued user message being processed
 	if (event.message.role === "user") {
-		const dequeued = ctx.promptQueue.shift()
-		if (dequeued !== undefined) {
+		const text = typeof event.message.content === "string"
+			? event.message.content
+			: extractText(event.message.content as unknown[])
+
+		// Only consume from queue if this message matches the queued text
+		const peeked = ctx.promptQueue.peek()
+		if (peeked !== undefined && peeked === text) {
+			ctx.promptQueue.shift() // consume the matched message
 			ctx.sessionManager.appendMessage(event.message as AppMessage)
-
-			const text = typeof event.message.content === "string"
-				? event.message.content
-				: extractText(event.message.content as unknown[])
-
 			ctx.setMessages((prev) => appendWithCap(prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() }))
 			ctx.setActivityState("thinking")
 		}

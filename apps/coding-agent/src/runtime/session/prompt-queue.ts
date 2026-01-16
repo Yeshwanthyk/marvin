@@ -5,6 +5,7 @@ export interface PromptQueue {
 	clear: () => void
 	size: () => number
 	peekAll: () => string[]
+	peek: () => string | undefined
 }
 
 export function createPromptQueue(updateSize: (size: number) => void): PromptQueue {
@@ -35,5 +36,6 @@ export function createPromptQueue(updateSize: (size: number) => void): PromptQue
 		},
 		size: () => queue.length,
 		peekAll: () => [...queue],
+		peek: () => queue[0],
 	}
 }
