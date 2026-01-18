@@ -17,6 +17,8 @@ export interface AgentRunConfig {
 	/** Base URL override (from model.resolve hook) */
 	baseUrl?: string;
 	getQueuedMessages?: <T>() => Promise<QueuedMessage<T>[]>;
+	getSteeringMessages?: <T>() => Promise<QueuedMessage<T>[]>;
+	getFollowUpMessages?: <T>() => Promise<QueuedMessage<T>[]>;
 }
 
 /**

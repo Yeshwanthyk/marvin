@@ -2,7 +2,15 @@ import { streamSimple } from "../stream.js";
 import type { AssistantMessage, Context, Message, ToolResultMessage, UserMessage } from "../types.js";
 import { EventStream } from "../utils/event-stream.js";
 import { validateToolArguments } from "../utils/validation.js";
-import type { AgentContext, AgentEvent, AgentLoopConfig, AgentTool, AgentToolResult, QueuedMessage } from "./types.js";
+import type {
+	AgentContext,
+	AgentEvent,
+	AgentLoopConfig,
+	AgentTool,
+	AgentToolResult,
+	QueueDeliveryMode,
+	QueuedMessage,
+} from "./types.js";
 
 /**
  * Start an agent loop with a new user message.
@@ -78,9 +86,28 @@ function createAgentStream(): EventStream<AgentEvent, AgentContext["messages"]> 
 	);
 }
 
-/**
- * Shared loop logic for both agentLoop and agentLoopContinue.
- */
+interface RunLoopQueues {
+	steering: QueuedMessage[];
+	followUps: QueuedMessage[];
+	all: QueuedMessage[];
+}
+
+function classifyQueuedMessages(messages: QueuedMessage[] = []): RunLoopQueues {
+	const steering: QueuedMessage[] = [];
+	const followUps: QueuedMessage[] = [];
+	const all: QueuedMessage[] = [];
+	for (const msg of messages) {
+		all.push(msg);
+		const mode: QueueDeliveryMode = (msg.mode as QueueDeliveryMode) || "followUp";
+		if (mode === "steer") {
+			steering.push(msg);
+		} else {
+			followUps.push(msg);
+		}
+	}
+	return { steering, followUps, all };
+}
+
 async function runLoop(
 	currentContext: AgentContext,
 	newMessages: AgentContext["messages"],
@@ -91,18 +118,35 @@ async function runLoop(
 ): Promise<void> {
 	let hasMoreToolCalls = true;
 	let firstTurn = true;
-	let queuedMessages: QueuedMessage<any>[] = (await config.getQueuedMessages?.()) || [];
+	let pendingSteering: QueuedMessage[] = [];
+	let pendingFollowUps: QueuedMessage[] = [];
+	let pendingGeneral: QueuedMessage[] = [];
 
-	while (hasMoreToolCalls || queuedMessages.length > 0) {
+	const refreshQueueState = async () => {
+		const general = await config.getQueuedMessages?.();
+		const steering = await config.getSteeringMessages?.();
+		const followUps = await config.getFollowUpMessages?.();
+		const classifiedGeneral = classifyQueuedMessages(general || []);
+		const classifiedSteering = classifyQueuedMessages(steering || []);
+		const classifiedFollowUps = classifyQueuedMessages(followUps || []);
+		pendingSteering = [...classifiedGeneral.steering, ...classifiedSteering.all];
+		pendingFollowUps = [...classifiedGeneral.followUps, ...classifiedFollowUps.all];
+		pendingGeneral = classifiedGeneral.all;
+	};
+
+	await refreshQueueState();
+
+	while (hasMoreToolCalls || pendingSteering.length > 0 || pendingFollowUps.length > 0 || pendingGeneral.length > 0) {
 		if (!firstTurn) {
 			stream.push({ type: "turn_start" });
 		} else {
 			firstTurn = false;
 		}
 
-		// Process queued messages first (inject before next assistant response)
-		if (queuedMessages.length > 0) {
-			for (const { original, llm } of queuedMessages) {
+		const steeringBatch = pendingSteering;
+		pendingSteering = [];
+		if (steeringBatch.length > 0) {
+			for (const { original, llm } of steeringBatch) {
 				stream.push({ type: "message_start", message: original });
 				stream.push({ type: "message_end", message: original });
 				if (llm) {
@@ -110,7 +154,6 @@ async function runLoop(
 					newMessages.push(llm);
 				}
 			}
-			queuedMessages = [];
 		}
 
 		// Stream assistant response
@@ -138,8 +181,29 @@ async function runLoop(
 		}
 		stream.push({ type: "turn_end", message, toolResults: toolResults });
 
-		// Get queued messages after turn completes
-		queuedMessages = (await config.getQueuedMessages?.()) || [];
+		await refreshQueueState();
+		if (pendingSteering.length > 0) {
+			continue;
+		}
+
+		if (pendingGeneral.length > 0) {
+			continue;
+		}
+
+		if (pendingFollowUps.length > 0) {
+			const followUps = pendingFollowUps;
+			pendingFollowUps = [];
+			for (const { original, llm } of followUps) {
+				stream.push({ type: "message_start", message: original });
+				stream.push({ type: "message_end", message: original });
+				if (llm) {
+					currentContext.messages.push(llm);
+					newMessages.push(llm);
+				}
+			}
+			await refreshQueueState();
+			continue;
+		}
 	}
 
 	stream.push({ type: "agent_end", messages: newMessages });

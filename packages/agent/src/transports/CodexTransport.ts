@@ -104,6 +104,8 @@ export class CodexTransport implements AgentTransport {
 			fetch: this.customFetch,
 			instructions,
 			getQueuedMessages: cfg.getQueuedMessages,
+			getSteeringMessages: cfg.getSteeringMessages,
+			getFollowUpMessages: cfg.getFollowUpMessages,
 		};
 	}
 
