@@ -21,7 +21,7 @@ import {
 } from "@domain/messaging/content.js"
 import type { PromptQueue } from "./hooks/usePromptQueue.js"
 import type { HookRunner } from "./hooks/index.js"
-import type { RenderResultOptions } from "./custom-tools/types.js"
+import type { RenderResultOptions } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
 
 /** Tool metadata for UI rendering */
 export interface ToolMeta {

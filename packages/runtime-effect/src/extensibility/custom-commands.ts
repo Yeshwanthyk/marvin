@@ -7,8 +7,10 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import type { ValidationIssue } from "@ext/schema.js"
-import { validateCustomCommand, issueFromError } from "@ext/validation.js"
+import { Context, Effect, Layer } from "effect"
+import type { ValidationIssue } from "./schema.js"
+import { validateCustomCommand, issueFromError } from "./validation.js"
+import { ConfigTag } from "../config.js"
 
 export interface CustomCommand {
 	name: string
@@ -120,6 +122,26 @@ export function expandCommand(template: string, args: string): string {
 
 	return template
 }
+
+export interface CustomCommandService extends CustomCommandLoadResult {}
+
+export const CustomCommandTag = Context.GenericTag<CustomCommandService>("runtime-effect/CustomCommandService")
+
+export interface CustomCommandLayerOptions {
+	configDir?: string
+}
+
+export const CustomCommandLayer = (options?: CustomCommandLayerOptions) =>
+	Layer.effect(
+		CustomCommandTag,
+		Effect.gen(function* () {
+			const configDir =
+				options?.configDir ??
+				(yield* ConfigTag).config.configDir
+
+			return yield* Effect.sync(() => loadCustomCommands(configDir))
+		}),
+	)
 
 /**
  * Try to expand a slash command input.

@@ -3,17 +3,23 @@ import { getModels, getProviders, type AgentTool, type Api, type KnownProvider, 
 import { toolRegistry } from "@marvin-agents/base-tools"
 import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
 import { loadAppConfig, type LoadedAppConfig } from "../config.js"
-import { loadCustomCommands, type CustomCommand } from "../custom-commands.js"
+import {
+	loadCustomCommands,
+	type CustomCommand,
+} from "@marvin-agents/runtime-effect/extensibility/custom-commands.js"
 import { wrapToolsWithHooks, getHookTools, HookedTransport, type HookRunner } from "../hooks/index.js"
 import { SessionManager } from "../session-manager.js"
 import { loadExtensibility, attachHookErrorLogging } from "./extensibility/index.js"
-import { LazyToolLoader, toolProxyAsArray } from "./lazy-tool-loader.js"
+import { LazyToolLoader, toolProxyAsArray } from "@marvin-agents/runtime-effect/lazy-tool-loader.js"
 import {
 	createTransportBundle,
 	defaultApiKeyResolver,
 	type TransportBundle,
 } from "./transport/index.js"
-import type { LoadedCustomTool, SendRef } from "../custom-tools/index.js"
+import type {
+	LoadedCustomTool,
+	SendRef,
+} from "@marvin-agents/runtime-effect/extensibility/custom-tools/index.js"
 import type { ValidationIssue } from "@ext/schema.js"
 
 export type AdapterKind = "tui" | "headless" | "acp"

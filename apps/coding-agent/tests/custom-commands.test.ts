@@ -2,7 +2,11 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test"
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { loadCustomCommands, expandCommand, tryExpandCustomCommand } from "../src/custom-commands.js"
+import {
+	loadCustomCommands,
+	expandCommand,
+	tryExpandCustomCommand,
+} from "@marvin-agents/runtime-effect/extensibility/custom-commands.js"
 
 describe("loadCustomCommands", () => {
 	let tempDir: string

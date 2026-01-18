@@ -42,7 +42,7 @@ Each checklist item becomes its own commit + `bun run check` gate.
 - [x] **P1.5** Re-run `effect-solutions setup` (CLI currently lacks `setup`, so refreshed `.reference/effect/` via `git -C .reference/effect pull --ff-only`) so `.reference/effect/` is fresh; document expectations inside plan + AGENT docs.
 
 ### Phase 2 · Runtime Core Layers & Services
-- [ ] **P2.1** Flesh out `packages/runtime-effect`: Config, Transport, Tool, Agent layers already exist—extend them with hooks, custom commands, `.config/marvin` loader, LazyToolLoader parity, and DMUX instrumentation hooks.
+- [x] **P2.1** Flesh out `packages/runtime-effect`: Config, Transport, Tool, Agent layers already exist—extend them with hooks, custom commands, `.config/marvin` loader, LazyToolLoader parity, and DMUX instrumentation hooks. _(Completed via hook/custom-command relocation, new `CustomCommandLayer`/`ExtensibilityLayer`, instrumentation service, and lazy loader export on Jan 18, 2026.)_
 - [ ] **P2.2** Model queues + orchestration using Effect primitives (`Queue`, `Stream`, `ExecutionPlan` for retries/fallback). Include compaction + session persistence wiring via `SessionManagerLayer` and `HookRunner` events.
 - [ ] **P2.3** Expose typed `RuntimeContext` service(s) consumed by adapters, ensuring `.config/marvin/hooks/*` receive identical event payloads (turn/session/agent etc.).
 

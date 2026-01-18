@@ -42,7 +42,7 @@ import type {
 import type { AgentRunConfig } from "@marvin-agents/agent-core"
 import type { Api, ImageContent, Message, Model } from "@marvin-agents/ai"
 import type { ReadonlySessionManager } from "../session-manager.js"
-import type { PromptDeliveryMode } from "../runtime/session/prompt-queue.js"
+import type { PromptDeliveryMode } from "../session/prompt-queue.js"
 
 class HookHandlerError extends Error {
 	readonly _tag = "HookHandlerError"
@@ -482,7 +482,8 @@ export class HookRunner {
 			const handlers = hook.handlers.get("agent.before_start")
 			if (!handlers || handlers.length === 0) continue
 			for (const handler of handlers) {
-				const event: BeforeAgentStartEvent = { type: "agent.before_start", prompt, images }
+				const event: BeforeAgentStartEvent =
+					images !== undefined ? { type: "agent.before_start", prompt, images } : { type: "agent.before_start", prompt }
 				const { value } = await this.runHandlerEffect(
 					hook,
 					"agent.before_start",
@@ -508,15 +509,26 @@ export class HookRunner {
 		const auth: AuthGetEvent["output"] = {}
 		await this.emit({ type: "auth.get", input: { sessionId, provider: modelOutput.model.provider, modelId: modelOutput.model.id }, output: auth })
 
-		return {
+		const nextConfig: AgentRunConfig = {
 			...cfg,
 			systemPrompt: system.systemPrompt,
 			streamOptions: params.streamOptions,
 			model: modelOutput.model,
-			apiKey: auth.apiKey ?? cfg.apiKey,
-			headers: auth.headers ?? cfg.headers,
-			baseUrl: auth.baseUrl ?? cfg.baseUrl,
 		}
+
+		if (auth.apiKey !== undefined) {
+			nextConfig.apiKey = auth.apiKey
+		}
+
+		if (auth.headers !== undefined) {
+			nextConfig.headers = auth.headers
+		}
+
+		if (auth.baseUrl !== undefined) {
+			nextConfig.baseUrl = auth.baseUrl
+		}
+
+		return nextConfig
 	}
 }
 
