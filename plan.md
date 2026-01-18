@@ -53,7 +53,7 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ### Phase 3 · Hook + Session Orchestration Rewrite
 - [x] **P3.1** Rebuild hook runner on Effect: convert `apps/coding-agent/src/hooks` to use `Layer` + `Channel`, preserving ability to dynamically load TS hooks from `~/.config/marvin/hooks`. _(HookEffects Layer + Channel-backed dispatcher landed Jan 18, 2026; HookContextControllerLayer now provides Effect-scoped initialization + instrumentation for `HookRunner.initialize` so adapters can register UI/session contexts without imperative wiring.)_
 - [x] **P3.2** Integrate `.config/marvin/commands` + `.config/marvin/tools` lifecycle with new Effect services (typed `Layer` for user extensions, error reporting, DMUX-friendly logging). _(CustomCommandLayer now emits Effect-scoped instrumentation + validation events, ExtensibilityLayer reports tool inventories (names/paths) alongside hook counts, and new Bun tests cover both layers loading via injected loaders.)_
-- [ ] **P3.3** Ensure LSP manager + tool diagnostics become Effect-managed resources, enabling safe startup/shutdown and bridging to UI via event bus.
+- [x] **P3.3** Ensure LSP manager + tool diagnostics become Effect-managed resources, enabling safe startup/shutdown and bridging to UI via event bus. _(Jan 18: Added `LspLayer` + `LspServiceTag`, routed diagnostics through Effect scopes, recorded `lsp:activity` instrumentation events, and covered shutdown behavior via new Bun tests.)_
 
 ### Phase 4 · CLI & Adapter Integration
 - [x] **P4.1** Swap `apps/coding-agent/src/runtime/factory.ts` usage with new Effect runtime (likely thin adapter that composes layers and hands out resources to TUI/headless/ACP). _(Jan 18: `createRuntime` now builds `RuntimeLayer` under a managed scope, adapters/tests call the new `close()` hook, so CLI surfaces the Effect runtime end-to-end.)_
@@ -82,8 +82,8 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ---
 
 ## 6. Immediate Next Steps
-1. Stand up **P3.3** diagnostics/LSP lifecycle service (scoped Effect resources, graceful shutdown) ahead of CLI integration.
-2. Map the CLI adapter swap (Phase 4) by outlining how TUI/headless/ACP pick up `RuntimeLayer` + hook context controller.
+1. Begin removing the legacy runtime factory + transport glue (Phase 4.2) now that adapters call the Effect runtime.
+2. Update adapters (TUI/headless/ACP) and DMUX flows to use the new services for steering/session orchestration (Phase 4.3).
 3. Draft the Phase 5 DMUX/manual validation checklist so we can exercise the new runtime via `bun run marvin` once adapters switch over.
 
 _This document is the authoritative tracker. Update checkboxes + notes as phases complete._
