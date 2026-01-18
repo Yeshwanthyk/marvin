@@ -420,7 +420,8 @@ Command content here with $1 $2 $@ for argument substitution
 | Session format | JSONL with types | JSONL (simpler, no branching metadata) |
 | Branching | Full `/branch` with UI | Not implemented |
 | Compaction | Full auto + manual | Manual only |
-| Hooks | Full hook system | Simplified hooks |
+| Hooks | Full hook system | Simplified hooks (now with steering/follow-up helpers) |
+| Steering/follow-up queues | `/steer`, `/followup`, `sendUserMessage()` helpers | `/steer` + `/followup` commands, HookAPI `steer/followUp/sendUserMessage` |
 | Custom tools | Full custom tool system | Basic custom tools |
 | Modes | interactive, print, rpc | TUI, headless, ACP |
 

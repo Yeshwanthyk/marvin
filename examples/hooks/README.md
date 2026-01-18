@@ -11,6 +11,8 @@ Copy any hook to your config directory:
 ```bash
 mkdir -p ~/.config/marvin/hooks
 cp examples/hooks/git-context.ts ~/.config/marvin/hooks/
+# Steering/follow-up helpers
+cp examples/hooks/steer-followup.ts ~/.config/marvin/hooks/
 ```
 
 ## API
@@ -31,8 +33,14 @@ export default hook;
 ```
 
 - `marvin.on(event, handler)` — subscribe to events
-- `marvin.send(text)` — inject a user message into the session
+- `marvin.send(text)` — inject a user message into the session (auto-queues if busy)
+- `marvin.steer(text)` — steering sugar; interrupts if idle, queues otherwise
+- `marvin.followUp(text)` — follow-up sugar; queues when busy
+- `marvin.sendUserMessage(text, { deliverAs })` — explicit delivery control
 - `ctx.exec(cmd, args, opts)` — run subprocess, returns `{ stdout, stderr, code }`
+- `ctx.isIdle()` — check whether the agent is currently idle
+
+See `steer-followup.ts` for a command-driven example of these helpers.
 
 ## Available Events
 
@@ -46,5 +54,4 @@ export default hook;
 - `turn.end`
 - `tool.execute.before`
 - `tool.execute.after`
-
 

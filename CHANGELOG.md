@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.3] - 2026-01-18
+
+### Added
+- **Two-way steering queues**: Agent core now exposes dedicated steering/follow-up queues, parity with pi’s delivery semantics.
+- **Session APIs**: `SessionController`/Hook API gain `steer()`, `followUp()`, and `sendUserMessage({ deliverAs })` helpers plus queue restore metadata.
+- **TUI commands**: Built-in `/steer` and `/followup` commands, composer enter-while-streaming follow-up behavior, queue badges split by mode.
+- **Hook example**: `examples/hooks/steer-followup.ts` demonstrates steering/follow-up helpers.
+
+### Changed
+- Legacy `agent.queueMessage()` now aliases to follow-up with a deprecation warning.
+- Hook transports/controllers updated to propagate steering + follow-up fetchers through provider/app transports.
+- Docs updated (`apps/coding-agent/README.md`, `docs/pi.md`, examples README) to explain new delivery modes and migration steps.
+
 ## [0.2.2] - 2026-01-02
 
 ### Added

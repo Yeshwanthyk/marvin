@@ -138,6 +138,8 @@ Prefix input with `!` for quick shell commands:
 | `/editor` | Open configured editor |
 | `/compact [instructions]` | Compress context |
 | `/status` | Show session status |
+| `/steer <text>` | Interrupt current run with steering instructions |
+| `/followup <text>` | Queue follow-up text for delivery once idle |
 | `/conceal` | Toggle markdown syntax hiding |
 | `/diffwrap` | Toggle diff word-wrap |
 | `/abort` | Abort in-flight request |
@@ -255,6 +257,13 @@ Available events:
 - `agent.start`, `agent.end`
 - `turn.start`, `turn.end`
 - `tool.execute.before`, `tool.execute.after`
+
+Helpers:
+- `marvin.steer(text)` / `marvin.followUp(text)` — delivery-aware sugar (interrupt vs queue automatically)
+- `marvin.sendUserMessage(text, { deliverAs })` — explicit steering vs follow-up control
+- `ctx.isIdle()` — true when the agent is not currently streaming or running tools
+
+See `examples/hooks/steer-followup.ts` for a reference hook that exposes `/focus` and `/queue` commands.
 
 Hook context provides:
 - `ctx.exec(command, args, options)` — Run shell commands
