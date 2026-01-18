@@ -6,6 +6,7 @@
 import type { Agent } from "@marvin-agents/agent-core"
 import { getModels, type KnownProvider, type Model, type Api } from "@marvin-agents/ai"
 import { createRuntime } from "@runtime/factory.js"
+import { Effect } from "effect"
 import {
 	type JsonRpcRequest,
 	type JsonRpcNotification,
@@ -75,7 +76,7 @@ export async function runAcp(args: { configDir?: string; configPath?: string; mo
 		isIdleHandler: () => true,
 		appendEntryHandler: (customType, data) => runtime.sessionManager.appendEntry(customType, data),
 		getSessionId: () => runtime.sessionManager.sessionId,
-		getModel: () => state.agent?.state.model ?? null,
+		getModel: () => runtime.agent.state.model,
 		hasUI: false,
 	})
 
@@ -126,9 +127,18 @@ export async function runAcp(args: { configDir?: string; configPath?: string; mo
 			throw new Error(`Model not found: ${state.currentModelId}`)
 		}
 
-		// Create agent
-		const agent = runtime.createAgent({ model })
+		// Prepare runtime agent
+		const agent = runtime.agent
+		agent.abort()
+		agent.reset()
+		agent.setModel(model)
+		agent.setThinkingLevel(runtime.config.thinking)
 		state.agent = agent
+		runtime.config.provider = provider
+		runtime.config.modelId = model.id
+		runtime.config.model = model
+
+		await Effect.runPromise(runtime.sessionOrchestrator.queue.clear)
 
 		// Create update emitter
 		const emitter = createUpdateEmitter(sessionId, writeMessage)
@@ -141,8 +151,12 @@ export async function runAcp(args: { configDir?: string; configPath?: string; mo
 			const { provider: p, modelId: m } = parseModelSpec(newModelId)
 			const newModel = findModel(p, m)
 			if (!newModel) return false
-			agent.setModel(newModel)
+			const activeAgent = state.agent ?? runtime.agent
+			activeAgent.setModel(newModel)
 			state.currentModelId = newModelId
+			runtime.config.provider = p
+			runtime.config.modelId = newModel.id
+			runtime.config.model = newModel
 			return true
 		}
 
@@ -151,6 +165,7 @@ export async function runAcp(args: { configDir?: string; configPath?: string; mo
 			sessionId,
 			cwd,
 			agent,
+			sessionOrchestrator: runtime.sessionOrchestrator,
 			emitter,
 			models: MODEL_OPTIONS,
 			currentModelId: state.currentModelId,

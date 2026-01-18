@@ -1,5 +1,6 @@
 import { ThemeProvider, type ThemeMode } from "@marvin-agents/open-tui"
 import { batch, onMount } from "solid-js"
+import { Effect } from "effect"
 
 /** Detect system dark/light mode (macOS only, defaults to dark) */
 function detectThemeMode(): ThemeMode {
@@ -158,51 +159,19 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		await hookRunner.emit({ type: "session.shutdown", sessionId: sessionManager.sessionId })
 	}
 
-	const runImmediatePrompt = async (text: string) => {
+	const submitPrompt = async (text: string, mode: PromptDeliveryMode = "followUp") => {
 		const trimmed = text.trim()
 		if (!trimmed) return
 
 		ensureSession()
-
-		const beforeStartResult = await hookRunner.emitBeforeAgentStart(text)
-		if (beforeStartResult?.message) {
-			const hookMsg = createHookMessage(beforeStartResult.message)
-			if (hookMsg.display) {
-				const uiMsg: UIMessage = {
-					id: crypto.randomUUID(),
-					role: "assistant",
-					content:
-						typeof hookMsg.content === "string"
-							? hookMsg.content
-							: hookMsg.content.map((p) => (p.type === "text" ? p.text : "[image]")).join(""),
-					timestamp: hookMsg.timestamp,
-				}
-				store.messages.set((prev) => appendWithCap(prev, uiMsg))
-			}
-			sessionManager.appendMessage(hookMsg as unknown as AppMessage)
-		}
-
-		const chatMessageOutput: {
-			parts: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>
-		} = {
-			parts: [{ type: "text", text }],
-		}
-		await hookRunner.emitChatMessage(
-			{ sessionId: sessionManager.sessionId, text },
-			chatMessageOutput,
-		)
-
-		sessionManager.appendMessage({ role: "user", content: chatMessageOutput.parts, timestamp: Date.now() })
+		promptQueue.push({ text: trimmed, mode })
 		batch(() => {
-			store.messages.set((prev) =>
-				appendWithCap(prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() }),
-			)
 			store.toolBlocks.set([])
 			store.isResponding.set(true)
 			store.activityState.set("thinking")
 		})
 		try {
-			await agent.prompt(text)
+			await Effect.runPromise(runtime.sessionOrchestrator.submitPrompt(trimmed, { mode }))
 		} catch (err) {
 			batch(() => {
 				store.messages.set((prev) =>
@@ -225,7 +194,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 			await sessionController.steer(trimmed)
 			return
 		}
-		await runImmediatePrompt(trimmed)
+		await submitPrompt(trimmed, "steer")
 	}
 
 	const followUpHelper = async (text: string) => {
@@ -235,7 +204,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 			await sessionController.followUp(trimmed)
 			return
 		}
-		await runImmediatePrompt(trimmed)
+		await submitPrompt(trimmed, "followUp")
 	}
 
 	const sendUserMessageHelper = async (text: string, options?: { deliverAs?: PromptDeliveryMode }) => {
@@ -278,28 +247,30 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		setDisplayModelId: store.displayModelId.set,
 		setDisplayThinking: store.displayThinking.set,
 		setDisplayContextWindow: store.displayContextWindow.set,
-			setDiffWrapMode: store.diffWrapMode.set,
-			setConcealMarkdown: store.concealMarkdown.set,
-			setTheme: handleThemeChange,
-			openEditor: () => editorOpenRef.current(),
-			onExit: () => exitHandlerRef.current(),
-			hookRunner,
-			runImmediatePrompt,
-			steer: (text) => steerHelper(text),
-			followUp: (text) => followUpHelper(text),
-			sendUserMessage: (text, options) => sendUserMessageHelper(text, options),
-		}
+		setDiffWrapMode: store.diffWrapMode.set,
+		setConcealMarkdown: store.concealMarkdown.set,
+		setTheme: handleThemeChange,
+		openEditor: () => editorOpenRef.current(),
+		onExit: () => exitHandlerRef.current(),
+		hookRunner,
+		submitPrompt: (text, options) => submitPrompt(text, options?.mode ?? "followUp"),
+		steer: (text) => steerHelper(text),
+		followUp: (text) => followUpHelper(text),
+		sendUserMessage: (text, options) => sendUserMessageHelper(text, options),
+	}
 
 	const builtInCommandNames = new Set(slashCommands.map((c) => c.name))
 
 	const enqueueWhileResponding = (text: string, mode: PromptDeliveryMode) => {
-		const trimmed = text.trim()
-		if (!trimmed) return
-		if (mode === "steer") {
-			void sessionController.steer(trimmed)
-			return
-		}
-		void sessionController.followUp(trimmed)
+		void sendUserMessageHelper(text, { deliverAs: mode }).catch((err) => {
+			store.messages.set((prev) =>
+				appendWithCap(prev, {
+					id: crypto.randomUUID(),
+					role: "assistant",
+					content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+				}),
+			)
+		})
 	}
 
 	const handleSubmit = async (text: string, editorClearFn?: () => void) => {
@@ -388,10 +359,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		}
 
 		editorClearFn?.()
-		ensureSession()
-
-		// Emit agent.before_start hook - allows hooks to inject a message before prompting
-		await runImmediatePrompt(text)
+		await submitPrompt(text, "followUp")
 	}
 
 	// Initialize hook runner with full context
@@ -517,6 +485,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		agent.abort()
 		agent.clearMessageQueue()
 		const restore = promptQueue.drainToScript()
+		Effect.runFork(Effect.catchAll(runtime.sessionOrchestrator.drainToScript, () => Effect.succeed(null)))
 		batch(() => {
 			store.isResponding.set(false)
 			store.activityState.set("idle")

@@ -1,4 +1,5 @@
 import type { Message, TextContent } from "@marvin-agents/ai"
+import { Effect } from "effect"
 import { createRuntime, type RuntimeInitArgs } from "@runtime/factory.js"
 
 const readStdin = async (): Promise<string> => {
@@ -70,19 +71,9 @@ export const runHeadless = async (args: HeadlessArgs) => {
 	}
 
 	try {
-		// Emit agent.before_start hook (hooks can inject pre-prompt messages)
-		await runtime.hookRunner.emitBeforeAgentStart(prompt)
-
-		// Emit chat.message hook (hooks can mutate user message parts)
-		const chatMessageOutput: { parts: Array<{ type: "text"; text: string }> } = {
-			parts: [{ type: "text", text: prompt }],
-		}
-		await runtime.hookRunner.emitChatMessage(
-			{ sessionId: runtime.sessionManager.sessionId, text: prompt },
-			chatMessageOutput,
+		await Effect.runPromise(
+			runtime.sessionOrchestrator.submitPromptAndWait(prompt, { mode: "followUp" }),
 		)
-
-		await runtime.agent.prompt(prompt)
 
 		const conversation = runtime.agent.state.messages.filter((m): m is Message => {
 			const role = (m as { role?: unknown }).role

@@ -2,15 +2,18 @@
  * ACP Session - wraps Agent and emits ACP updates
  */
 
-import type { Agent, AgentEvent } from "@marvin-agents/agent-core"
+import type { Agent, AgentEvent, Attachment } from "@marvin-agents/agent-core"
 import type { UpdateEmitter } from "./updates.js"
 import type { ContentBlock, SlashCommand, ModelOption, StopReason } from "./protocol.js"
 import { textChunk, thoughtChunk, toolCall, toolCallUpdate, toolNameToKind } from "./updates.js"
+import type { SessionOrchestratorService } from "@marvin-agents/runtime-effect/session/orchestrator.js"
+import { Effect } from "effect"
 
 export interface AcpSessionConfig {
 	sessionId: string
 	cwd: string
 	agent: Agent
+	sessionOrchestrator: SessionOrchestratorService
 	emitter: UpdateEmitter
 	models: ModelOption[]
 	currentModelId: string
@@ -39,7 +42,7 @@ const AVAILABLE_COMMANDS: SlashCommand[] = [
 ]
 
 export function createAcpSession(config: AcpSessionConfig): AcpSession {
-	const { sessionId, cwd, agent, emitter, models, contextWindow } = config
+	const { sessionId, cwd, agent, emitter, models, contextWindow, sessionOrchestrator } = config
 	let currentModelId = config.currentModelId
 	let thinkingLevel = config.thinkingLevel
 	let cancelled = false
@@ -169,18 +172,22 @@ export function createAcpSession(config: AcpSessionConfig): AcpSession {
 				return "end_turn"
 			}
 
-			// Convert images to attachments format
-			const attachments = images.map((img, idx) => ({
+			// Convert images to attachment format
+			const attachments: Attachment[] = images.map((img, idx) => ({
 				id: `acp-img-${idx}`,
-				type: "image" as const,
+				type: "image",
 				content: img.data,
 				mimeType: img.mimeType,
 				fileName: `image-${idx}`,
-				size: Math.ceil(img.data.length * 0.75), // Approximate decoded size
+				size: Math.ceil(img.data.length * 0.75),
 			}))
 
-			// Send to agent
-			await agent.prompt(textContent, attachments.length > 0 ? attachments : undefined)
+			await Effect.runPromise(
+				sessionOrchestrator.submitPromptAndWait(textContent, {
+					mode: "followUp",
+					attachments: attachments.length > 0 ? attachments : undefined,
+				}),
+			)
 
 			return cancelled ? "cancelled" : "end_turn"
 		} finally {

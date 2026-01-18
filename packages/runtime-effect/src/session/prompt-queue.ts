@@ -3,12 +3,15 @@ import * as Chunk from "effect/Chunk";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+import type { Attachment } from "@marvin-agents/agent-core";
 
 export type PromptDeliveryMode = "steer" | "followUp";
 
 export interface PromptQueueItem {
   text: string;
   mode: PromptDeliveryMode;
+  attachments?: Attachment[];
+  completionId?: string;
 }
 
 export interface QueueCounts {
