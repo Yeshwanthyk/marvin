@@ -135,6 +135,22 @@ Source files under `apps/coding-agent/src` are grouped by responsibility:
 
 An ESLint Boundaries rule (warn mode) blocks “uphill” imports so that, for example, domain code cannot reach into the UI or adapters. Adapters may depend on any lower layer, but the reverse is disallowed. This mirrors the containment enforced by the runtime factory and keeps APC/TUI surfaces swappable.
 
+### Effect Runtime Components
+
+The shared runtime lives in `packages/runtime-effect` and is composed entirely with Effect `Layer`s:
+
+1. **Config + Session Layers** load `~/.config/marvin`, resolve API keys, and expose `SessionManager` (JSONL persistence, compaction metadata).
+2. **Transport + Tools + Hooks** merge provider transports, lazy tool loading, custom tools/commands, and hook runners. Hooks execute through `HookEffects`, an Effect channel that serializes hook invocations and propagates results back to the agent loop.
+3. **PromptQueueLayer** wraps `Effect.Queue` + `SubscriptionRef` so adapters can observe steer/follow-up counts and persist slash-script snapshots when aborting.
+4. **ExecutionPlanBuilderLayer** constructs `Effect.ExecutionPlan`s describing retries/fallbacks for each provider/model entry in the user’s cycle.
+5. **SessionOrchestratorLayer** drains the prompt queue, emits hook events, appends messages to the session log, executes the plan (retrying + replacing agent state on failure), and signals DMUX instrumentation. It exposes:
+   - `submitPrompt()` for asynchronous surfaces (TUI) that just enqueue work.
+   - `submitPromptAndWait()` for synchronous surfaces (headless CLI, ACP) that need completion before responding.
+   - `drainToScript()` to serialize outstanding queue items when aborting or persisting state.
+6. **RuntimeLayer** wires everything together and hands adapters a scoped `RuntimeServices` bundle (agent, orchestrator, LSP, extensibility metadata, instrumentation handles, etc.).
+
+All adapters—TUI, headless CLI, ACP, or future surfaces—call `createRuntime()` which builds `RuntimeLayer` under a managed Effect scope and returns both the services and a `close()` helper that shuts down the scope (LSP, hooks, prompt loop) deterministically.
+
 ## Slash Command Registry
 
 Slash commands now live under `src/domain/commands/` as individual modules. Each module exports a `CommandDefinition` and registers itself via `commandRegistry`. The registry normalizes aliases, prefixes, and async handlers so adapters keep using the legacy `handleSlashCommand` API while gaining per-command tests (see `commands-registry.test.ts`). Custom commands from `~/.config/marvin/commands` are still expanded after the registry runs, so existing templates remain compatible.

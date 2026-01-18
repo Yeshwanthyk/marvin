@@ -63,7 +63,7 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ### Phase 5 · Verification & Documentation
 - [x] **P5.1** Expand Vitest suites to cover new services (session manager, hook orchestration, queue scheduling with ExecutionPlan fallbacks). _(Added coverage for submitPromptAndWait + attachment routing on Jan 18.)_
 - [x] **P5.2** Run `bun run check` + targeted suites (`bun test apps/coding-agent/tests`) post-migration; capture logs for regressions. _(Latest run on Jan 18, 2026.)_
-- [ ] **P5.3** Document runtime migration in `README.md` / `docs/` (what changed, how to work with Effect). Ensure `plan.md` statuses reflect completion.
+- [x] **P5.3** Document runtime migration in `README.md` / `docs/` (what changed, how to work with Effect). _(README + docs/architecture updated Jan 18, 2026.)_
 
 ---
 

@@ -49,6 +49,17 @@ packages/
 
 See [docs/architecture.md](docs/architecture.md) for layer diagrams, runtime flow, and extensibility details.
 
+## Effect Runtime
+
+All adapters build on the Effect-powered runtime located in `packages/runtime-effect/`:
+
+- **RuntimeLayer** composes config loading, transports, custom extensions, hooks, tools, prompt queue, LSP, and instrumentation via Effect `Layer`s. Adapters call `createRuntime()` once and receive a scoped bundle of services plus a `close()` hook for clean shutdown.
+- **SessionOrchestrator** owns the prompt queue. `submitPrompt()` enqueues fire-and-forget work for long-running UIs, while `submitPromptAndWait()` blocks (headless/ACP) until retries, fallbacks, and hooks finish. Attachments (images/documents) flow through the queue so every surface benefits from the same ExecutionPlan.
+- **Execution Plans** describe retry/fallback behavior per provider + model cycle. Plans leverage `Effect.ExecutionPlan` so transient errors (429/500) trigger exponential backoff, while provider outages fall back to the next model.
+- **Instrumentation + DMUX**: each prompt lifecycle emits `dmux:log` events (start, complete, error) so DMUX or other observers can tail runtime progress without coupling to adapter state.
+
+When adding new surfaces, depend on `RuntimeServices.sessionOrchestrator` instead of calling `Agent.prompt` directly—this guarantees identical hook semantics, session persistence, and resiliency across TUI, headless CLI, ACP, or future adapters.
+
 ## Configuration
 
 `~/.config/marvin/`:
