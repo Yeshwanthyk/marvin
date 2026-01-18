@@ -27,6 +27,10 @@ const createStubContext = (): CommandContext => ({
 	setDisplayContextWindow: () => {},
 	setDiffWrapMode: () => {},
 	setConcealMarkdown: () => {},
+	runImmediatePrompt: async () => {},
+	steer: async () => {},
+	followUp: async () => {},
+	sendUserMessage: async () => {},
 })
 
 describe("CommandRegistry", () => {

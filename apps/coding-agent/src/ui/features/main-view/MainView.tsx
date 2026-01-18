@@ -1,16 +1,23 @@
 import { TextareaRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
-import { CombinedAutocompleteProvider, ToastViewport, useRenderer, useTheme, type AutocompleteItem } from "@marvin-agents/open-tui"
+import {
+	CombinedAutocompleteProvider,
+	ToastViewport,
+	copyToClipboard,
+	useRenderer,
+	useTheme,
+	type AutocompleteItem,
+} from "@marvin-agents/open-tui"
 import type { ThinkingLevel } from "@marvin-agents/agent-core"
 import type { KnownProvider } from "@marvin-agents/ai"
 import type { LspManager } from "@marvin-agents/lsp"
 import { createSignal, createEffect, Show, onMount } from "solid-js"
 import { createAutocompleteCommands } from "../../../autocomplete-commands.js"
 import type { CustomCommand } from "../../../custom-commands.js"
-import { copyToClipboard } from "../../../utils.js"
 import { Footer } from "../../../components/Footer.js"
 import { Header } from "../../../components/Header.js"
 import type { ActivityState, ToolBlock, UIMessage } from "../../../types.js"
+import type { QueueCounts } from "../../../runtime/session/prompt-queue.js"
 import { useGitStatus } from "../../../hooks/useGitStatus.js"
 import { useSpinner } from "../../../hooks/useSpinner.js"
 import { useToastManager } from "../../../hooks/useToastManager.js"
@@ -32,7 +39,7 @@ export interface MainViewProps {
 	provider: KnownProvider
 	contextTokens: number
 	contextWindow: number
-	queueCount: number
+	queueCounts: QueueCounts
 	retryStatus: string | null
 	turnCount: number
 	lspActive: boolean
@@ -313,7 +320,7 @@ export function MainView(props: MainViewProps) {
 				thinking={props.thinking}
 				contextTokens={props.contextTokens}
 				contextWindow={props.contextWindow}
-				queueCount={props.queueCount}
+				queueCounts={props.queueCounts}
 				activityState={props.activityState}
 				retryStatus={props.retryStatus}
 				lspActive={props.lspActive}

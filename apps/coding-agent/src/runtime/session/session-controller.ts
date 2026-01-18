@@ -12,6 +12,7 @@ import {
 	getToolText,
 } from "@domain/messaging/content.js"
 import { resolveProvider, resolveModel } from "@domain/commands/helpers.js"
+import type { PromptDeliveryMode, PromptQueue } from "./prompt-queue.js"
 
 export interface SessionControllerOptions {
 	initialProvider: KnownProvider
@@ -29,6 +30,7 @@ export interface SessionControllerOptions {
 	setDisplayThinking: (v: ThinkingLevel) => void
 	setDisplayContextWindow: (v: number) => void
 	shellInjectionPrefix: string
+	promptQueue?: PromptQueue
 }
 
 export interface SessionControllerState {
@@ -41,6 +43,9 @@ export interface SessionControllerState {
 	currentThinking: () => ThinkingLevel
 	setCurrentThinking: (t: ThinkingLevel) => void
 	isSessionStarted: () => boolean
+	followUp: (text: string) => Promise<void>
+	steer: (text: string) => Promise<void>
+	sendUserMessage: (text: string, options?: { deliverAs?: PromptDeliveryMode }) => Promise<void>
 }
 
 export function createSessionController(options: SessionControllerOptions): SessionControllerState {
@@ -163,6 +168,22 @@ export function createSessionController(options: SessionControllerOptions): Sess
 		void options.hookRunner.emit({ type: "session.resume", sessionId: metadata.id })
 	}
 
+	const queueUserMessage = async (text: string, mode: PromptDeliveryMode) => {
+		const trimmed = text
+		if (!trimmed) return
+		const message: AppMessage = {
+			role: "user",
+			content: [{ type: "text", text: trimmed }],
+			timestamp: Date.now(),
+		}
+		options.promptQueue?.push({ text: trimmed, mode })
+		if (mode === "steer") {
+			await options.agent.steer(message)
+		} else {
+			await options.agent.followUp(message)
+		}
+	}
+
 	return {
 		ensureSession,
 		restoreSession,
@@ -180,5 +201,8 @@ export function createSessionController(options: SessionControllerOptions): Sess
 			currentThinking = t
 		},
 		isSessionStarted: () => sessionStarted,
+		followUp: (text) => queueUserMessage(text, "followUp"),
+		steer: (text) => queueUserMessage(text, "steer"),
+		sendUserMessage: (text, options) => queueUserMessage(text, options?.deliverAs ?? "followUp"),
 	}
 }

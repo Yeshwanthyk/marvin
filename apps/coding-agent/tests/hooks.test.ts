@@ -15,7 +15,7 @@ function createTestSessionManager(configDir: string) {
 	return new SessionManager(configDir)
 }
 
-describe("hooks loader", () => {
+describe.serial("hooks loader", () => {
 	let tempDir: string
 
 	beforeEach(() => {
@@ -98,7 +98,7 @@ describe("hooks loader", () => {
 	})
 })
 
-describe("hooks runner", () => {
+describe.serial("hooks runner", () => {
 	let tempDir: string
 	let hooksDir: string
 
@@ -173,7 +173,7 @@ describe("hooks runner", () => {
 	})
 })
 
-describe("turn.end with usage", () => {
+describe.serial("turn.end with usage", () => {
 	let tempDir: string
 	let hooksDir: string
 
@@ -279,7 +279,7 @@ describe("turn.end with usage", () => {
 	})
 })
 
-describe("hooks send", () => {
+describe.serial("hooks send", () => {
 	let tempDir: string
 	let hooksDir: string
 
@@ -315,7 +315,7 @@ describe("hooks send", () => {
 	})
 })
 
-describe("tool wrapper", () => {
+describe.serial("tool wrapper", () => {
 	let tempDir: string
 	let hooksDir: string
 

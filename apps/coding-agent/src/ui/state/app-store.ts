@@ -2,6 +2,7 @@ import { createSignal, type Accessor, type Setter } from "solid-js"
 import type { ThinkingLevel } from "@marvin-agents/agent-core"
 import type { KnownProvider } from "@marvin-agents/ai"
 import type { ActivityState, ToolBlock, UIMessage } from "../../types.js"
+import type { QueueCounts } from "../../runtime/session/prompt-queue.js"
 
 interface SignalRef<T> {
 	value: Accessor<T>
@@ -30,7 +31,7 @@ export interface AppStore {
 	retryStatus: SignalRef<string | null>
 	turnCount: SignalRef<number>
 	lspActive: SignalRef<boolean>
-	queueCount: SignalRef<number>
+	queueCounts: SignalRef<QueueCounts>
 	currentProvider: SignalRef<KnownProvider>
 }
 
@@ -60,7 +61,7 @@ export const createAppStore = (config: AppStoreConfig): AppStore => {
 		retryStatus: createSignalRef<string | null>(null),
 		turnCount: createSignalRef(0),
 		lspActive: createSignalRef(false),
-		queueCount: createSignalRef(0),
+		queueCounts: createSignalRef<QueueCounts>({ steer: 0, followUp: 0 }),
 		currentProvider: createSignalRef(config.initialProvider),
 	}
 }

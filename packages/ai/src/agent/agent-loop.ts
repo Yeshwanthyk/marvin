@@ -126,12 +126,22 @@ async function runLoop(
 		const general = await config.getQueuedMessages?.();
 		const steering = await config.getSteeringMessages?.();
 		const followUps = await config.getFollowUpMessages?.();
-		const classifiedGeneral = classifyQueuedMessages(general || []);
-		const classifiedSteering = classifyQueuedMessages(steering || []);
-		const classifiedFollowUps = classifyQueuedMessages(followUps || []);
-		pendingSteering = [...classifiedGeneral.steering, ...classifiedSteering.all];
-		pendingFollowUps = [...classifiedGeneral.followUps, ...classifiedFollowUps.all];
-		pendingGeneral = classifiedGeneral.all;
+		const classifiedGeneral = classifyQueuedMessages((general || []) as QueuedMessage[]);
+		const classifiedSteering = classifyQueuedMessages((steering || []) as QueuedMessage[]);
+		const classifiedFollowUps = classifyQueuedMessages((followUps || []) as QueuedMessage[]);
+		const steeringUpdates = [...classifiedGeneral.steering, ...classifiedSteering.all];
+		const followUpUpdates = [...classifiedGeneral.followUps, ...classifiedFollowUps.all];
+		const generalUpdates = classifiedGeneral.all;
+
+		if (steeringUpdates.length > 0) {
+			pendingSteering = [...pendingSteering, ...steeringUpdates];
+		}
+		if (followUpUpdates.length > 0) {
+			pendingFollowUps = [...pendingFollowUps, ...followUpUpdates];
+		}
+		if (generalUpdates.length > 0) {
+			pendingGeneral = [...pendingGeneral, ...generalUpdates];
+		}
 	};
 
 	await refreshQueueState();
@@ -174,10 +184,23 @@ async function runLoop(
 
 		const toolResults: ToolResultMessage[] = [];
 		if (hasMoreToolCalls) {
-			// Execute tool calls
-			toolResults.push(...(await executeToolCalls(currentContext.tools, message, signal, stream)));
-			currentContext.messages.push(...toolResults);
-			newMessages.push(...toolResults);
+			const { results, interrupted } = await executeToolCalls(
+				currentContext.tools,
+				message,
+				signal,
+				stream,
+				async () => {
+					await refreshQueueState();
+					return pendingSteering.length > 0;
+				},
+			);
+			toolResults.push(...results);
+			currentContext.messages.push(...results);
+			newMessages.push(...results);
+
+			if (interrupted) {
+				hasMoreToolCalls = false;
+			}
 		}
 		stream.push({ type: "turn_end", message, toolResults: toolResults });
 
@@ -190,7 +213,7 @@ async function runLoop(
 			continue;
 		}
 
-		if (pendingFollowUps.length > 0) {
+		if (!hasMoreToolCalls && pendingFollowUps.length > 0) {
 			const followUps = pendingFollowUps;
 			pendingFollowUps = [];
 			for (const { original, llm } of followUps) {
@@ -293,39 +316,23 @@ async function executeToolCalls<T>(
 	assistantMessage: AssistantMessage,
 	signal: AbortSignal | undefined,
 	stream: EventStream<AgentEvent, Message[]>,
-): Promise<ToolResultMessage<T>[]> {
+	shouldInterrupt?: () => Promise<boolean>,
+): Promise<{ results: ToolResultMessage<T>[]; interrupted: boolean }> {
 	const toolCalls = assistantMessage.content.filter((c) => c.type === "toolCall");
-
-	// Execute all tools in parallel
-	const executionPromises = toolCalls.map((toolCall) =>
-		executeSingleToolCall<T>(toolCall, tools, signal, stream),
-	);
-
-	const results = await Promise.allSettled(executionPromises);
-
-	// Maintain original order and extract results
 	const toolResults: ToolResultMessage<T>[] = [];
-	for (let i = 0; i < results.length; i++) {
-		const settledResult = results[i];
-		if (settledResult.status === "fulfilled") {
-			toolResults.push(settledResult.value);
-		} else {
-			// This shouldn't happen since executeSingleToolCall catches errors
-			// but handle it just in case
-			const toolCall = toolCalls[i];
-			toolResults.push({
-				role: "toolResult",
-				toolCallId: toolCall.id,
-				toolName: toolCall.name,
-				content: [{ type: "text", text: "Tool execution failed" }],
-				details: {} as T,
-				isError: true,
-				timestamp: Date.now(),
-			});
+	let interrupted = false;
+
+	for (const toolCall of toolCalls) {
+		const result = await executeSingleToolCall<T>(toolCall, tools, signal, stream);
+		toolResults.push(result);
+
+		if (shouldInterrupt && (await shouldInterrupt())) {
+			interrupted = true;
+			break;
 		}
 	}
 
-	return toolResults;
+	return { results: toolResults, interrupted };
 }
 
 /**

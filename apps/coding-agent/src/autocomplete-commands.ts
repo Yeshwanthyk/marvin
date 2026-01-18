@@ -29,6 +29,8 @@ export const slashCommands: SlashCommand[] = [
   { name: 'abort', description: 'Abort in-flight request' },
   { name: 'exit', description: 'Exit' },
   { name: 'status', description: 'Show session status (model, context, turns)' },
+  { name: 'steer', description: 'Interrupt current run: /steer <text>' },
+  { name: 'followup', description: 'Queue follow-up text: /followup <text>' },
   {
     name: 'theme',
     description: 'Set theme: /theme <name> (or /theme to list)',

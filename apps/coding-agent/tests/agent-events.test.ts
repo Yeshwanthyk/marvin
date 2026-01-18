@@ -1,21 +1,27 @@
 import { describe, expect, it, mock, beforeEach } from "bun:test"
 import { createAgentEventHandler, type EventHandlerContext } from "../src/agent-events.js"
 import type { AgentEvent } from "@marvin-agents/agent-core"
+import type { PromptQueueItem } from "../src/runtime/session/prompt-queue.js"
 
 // Mock context factory
 function createMockContext(overrides: Partial<EventHandlerContext> = {}): EventHandlerContext {
 	const messages: unknown[] = []
 	const toolBlocks: unknown[] = []
 
-	const queue: string[] = []
+	const queue: PromptQueueItem[] = []
 	const promptQueue = {
-		push: mock((text: string) => {
-			queue.push(text)
+		push: mock((item: PromptQueueItem) => {
+			queue.push(item)
 		}),
 		shift: mock(() => queue.shift()),
-		drainToText: mock(() => {
+		drainToScript: mock(() => {
 			if (queue.length === 0) return null
-			const combined = queue.join("\n")
+			const combined = queue
+				.map((item) => {
+					const command = item.mode === "steer" ? "/steer" : "/followup"
+					return item.text ? `${command} ${item.text}` : command
+				})
+				.join("\n")
 			queue.length = 0
 			return combined
 		}),
@@ -24,6 +30,11 @@ function createMockContext(overrides: Partial<EventHandlerContext> = {}): EventH
 		}),
 		size: mock(() => queue.length),
 		peekAll: mock(() => [...queue]),
+		peek: mock(() => queue[0]),
+		counts: mock(() => ({
+			steer: queue.filter((q) => q.mode === "steer").length,
+			followUp: queue.filter((q) => q.mode === "followUp").length,
+		})),
 	}
 
 	return {
@@ -84,7 +95,7 @@ describe("createAgentEventHandler", () => {
 
 		it("processes queued user messages", () => {
 			const ctx = createMockContext()
-			ctx.promptQueue.push("test message")
+			ctx.promptQueue.push({ text: "test message", mode: "followUp" })
 			const handler = createAgentEventHandler(ctx)
 
 			handler({

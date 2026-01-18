@@ -15,6 +15,9 @@ export {
 	type LoadHooksResult,
 	type SendHandler,
 	type SendMessageHandler,
+	type SendUserMessageHandler,
+	type DeliveryHandler,
+	type IsIdleHandler,
 	type AppendEntryHandler,
 } from "./loader.js"
 

@@ -69,6 +69,10 @@ export async function runAcp(args: { configDir?: string; configPath?: string; mo
 	runtime.hookRunner.initialize({
 		sendHandler: () => {},
 		sendMessageHandler: () => {},
+		sendUserMessageHandler: async () => {},
+		steerHandler: async () => {},
+		followUpHandler: async () => {},
+		isIdleHandler: () => true,
 		appendEntryHandler: (customType, data) => runtime.sessionManager.appendEntry(customType, data),
 		getSessionId: () => runtime.sessionManager.sessionId,
 		getModel: () => state.agent?.state.model ?? null,

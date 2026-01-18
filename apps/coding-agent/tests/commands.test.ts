@@ -76,6 +76,11 @@ function createMockContext(overrides: Partial<CommandContext> = {}): CommandCont
 		setDisplayThinking: mock(() => {}),
 		setDisplayContextWindow: mock(() => {}),
 		setDiffWrapMode: mock(() => {}),
+		setConcealMarkdown: mock(() => {}),
+		runImmediatePrompt: mock(async () => {}),
+		steer: mock(async () => {}),
+		followUp: mock(async () => {}),
+		sendUserMessage: mock(async () => {}),
 
 		...overrides,
 	}
@@ -190,6 +195,57 @@ describe("handleSlashCommand", () => {
 			const ok = await handleSlashCommand("/theme not-a-theme", ctx)
 			expect(ok).toBe(true)
 			expect(setTheme).not.toHaveBeenCalled()
+		})
+	})
+
+	describe("/steer", () => {
+		it("queues steering when responding", async () => {
+			const steer = mock(async () => {})
+			const ctx = createMockContext({ isResponding: () => true, steer })
+			const ok = await handleSlashCommand("/steer focus now", ctx)
+			expect(ok).toBe(true)
+			expect(steer).toHaveBeenCalledWith("focus now")
+			expect(ctx.runImmediatePrompt).not.toHaveBeenCalled()
+		})
+
+		it("sends immediately when idle", async () => {
+			const runImmediatePrompt = mock(async () => {})
+			const ctx = createMockContext({ runImmediatePrompt })
+			const ok = await handleSlashCommand("/steer tighten scope", ctx)
+			expect(ok).toBe(true)
+			expect(runImmediatePrompt).toHaveBeenCalledWith("tighten scope")
+		})
+
+		it("shows usage when missing args", async () => {
+			const ctx = createMockContext()
+			const ok = await handleSlashCommand("/steer", ctx)
+			expect(ok).toBe(true)
+			expect(ctx.setMessages).toHaveBeenCalled()
+		})
+	})
+
+	describe("/followup", () => {
+		it("queues follow-up while responding", async () => {
+			const followUp = mock(async () => {})
+			const ctx = createMockContext({ isResponding: () => true, followUp })
+			const ok = await handleSlashCommand("/followup remind me later", ctx)
+			expect(ok).toBe(true)
+			expect(followUp).toHaveBeenCalledWith("remind me later")
+		})
+
+		it("sends immediately when idle", async () => {
+			const runImmediatePrompt = mock(async () => {})
+			const ctx = createMockContext({ runImmediatePrompt })
+			const ok = await handleSlashCommand("/followup once more", ctx)
+			expect(ok).toBe(true)
+			expect(runImmediatePrompt).toHaveBeenCalledWith("once more")
+		})
+
+		it("shows usage when missing text", async () => {
+			const ctx = createMockContext()
+			const ok = await handleSlashCommand("/followup  ", ctx)
+			expect(ok).toBe(true)
+			expect(ctx.setMessages).toHaveBeenCalled()
 		})
 	})
 

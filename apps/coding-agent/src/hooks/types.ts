@@ -10,6 +10,7 @@ import type { Api, ImageContent, Message, Model, SimpleStreamOptions, TextConten
 import type { Theme } from "@marvin-agents/open-tui"
 import type { JSX } from "solid-js"
 import type { ReadonlySessionManager } from "../session-manager.js"
+import type { PromptDeliveryMode } from "../runtime/session/prompt-queue.js"
 
 // ============================================================================
 // Execution Context
@@ -48,6 +49,11 @@ export interface HookEventContext {
 	hasUI: boolean
 	/** Session operations (summarize, toast, etc.) */
 	session: HookSessionContext
+	/** Delivery-aware helpers */
+	isIdle(): boolean
+	steer(text: string): Promise<void>
+	followUp(text: string): Promise<void>
+	sendUserMessage(text: string, options?: { deliverAs?: PromptDeliveryMode }): Promise<void>
 }
 
 // ============================================================================
@@ -414,6 +420,17 @@ export interface HookAPI {
 	 * If agent is idle, triggers a new agent loop.
 	 */
 	send(text: string): void
+	/**
+	 * Send a user message with explicit delivery mode.
+	 * Defaults to follow-up when agent is busy, otherwise triggers a new turn.
+	 */
+	sendUserMessage(text: string, options?: { deliverAs?: PromptDeliveryMode }): Promise<void>
+	/** Queue steering instructions or send immediately if idle. */
+	steer(text: string): Promise<void>
+	/** Queue follow-up instructions or send immediately if idle. */
+	followUp(text: string): Promise<void>
+	/** True when the agent is not currently streaming or running tools. */
+	isIdle(): boolean
 
 	/**
 	 * Send a hook message to the agent.

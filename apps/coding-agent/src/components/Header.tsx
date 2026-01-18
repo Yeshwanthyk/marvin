@@ -45,12 +45,14 @@ const PROGRESS_FILLED = "━"
 const PROGRESS_EMPTY = "┄"
 const PROGRESS_BAR_LENGTH = 8
 
+import type { QueueCounts } from "../runtime/session/prompt-queue.js"
+
 export interface HeaderProps {
   modelId: string
   thinking: ThinkingLevel
   contextTokens: number
   contextWindow: number
-  queueCount: number
+  queueCounts: QueueCounts
   activityState: ActivityState
   retryStatus: string | null
   lspActive: boolean
@@ -113,8 +115,16 @@ export function Header(props: HeaderProps) {
 
   // Queue indicator
   const queueIndicator = createMemo(() => {
-    if (props.queueCount <= 0) return null
-    return "▸".repeat(Math.min(props.queueCount, 5))
+    const { steer, followUp } = props.queueCounts
+    if (steer <= 0 && followUp <= 0) return null
+    const parts: string[] = []
+    if (steer > 0) {
+      parts.push(`⚡${steer}`)
+    }
+    if (followUp > 0) {
+      parts.push(`…${followUp}`)
+    }
+    return parts.join(" ")
   })
 
 

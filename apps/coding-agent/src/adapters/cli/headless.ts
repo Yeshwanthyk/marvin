@@ -52,6 +52,10 @@ export const runHeadless = async (args: HeadlessArgs) => {
 	runtime.hookRunner.initialize({
 		sendHandler: () => {},
 		sendMessageHandler: () => {},
+		sendUserMessageHandler: async () => {},
+		steerHandler: async () => {},
+		followUpHandler: async () => {},
+		isIdleHandler: () => true,
 		appendEntryHandler: (customType, data) => runtime.sessionManager.appendEntry(customType, data),
 		getSessionId: () => runtime.sessionManager.sessionId,
 		getModel: () => runtime.agent.state.model,

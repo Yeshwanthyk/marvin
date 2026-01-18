@@ -103,7 +103,6 @@ export class CodexTransport implements AgentTransport {
 			apiKey: "codex-oauth", // Dummy key, real auth via custom fetch
 			fetch: this.customFetch,
 			instructions,
-			getQueuedMessages: cfg.getQueuedMessages,
 			getSteeringMessages: cfg.getSteeringMessages,
 			getFollowUpMessages: cfg.getFollowUpMessages,
 		};

@@ -387,7 +387,7 @@ function handleMessageStart(
 
 		// Only consume from queue if this message matches the queued text
 		const peeked = ctx.promptQueue.peek()
-		if (peeked !== undefined && peeked === text) {
+		if (peeked !== undefined && peeked.text === text) {
 			ctx.promptQueue.shift() // consume the matched message
 			ctx.sessionManager.appendMessage(event.message as AppMessage)
 			ctx.setMessages((prev) => appendWithCap(prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() }))

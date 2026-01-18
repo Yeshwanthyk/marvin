@@ -3,7 +3,15 @@
  */
 
 import { spawn } from "node:child_process"
-import type { AppendEntryHandler, LoadedHook, SendHandler, SendMessageHandler } from "./loader.js"
+import type {
+	AppendEntryHandler,
+	DeliveryHandler,
+	IsIdleHandler,
+	LoadedHook,
+	SendHandler,
+	SendMessageHandler,
+	SendUserMessageHandler,
+} from "./loader.js"
 import type {
 	BeforeAgentStartEvent,
 	BeforeAgentStartResult,
@@ -33,6 +41,7 @@ import type {
 import type { AgentRunConfig } from "@marvin-agents/agent-core"
 import type { Api, ImageContent, Message, Model } from "@marvin-agents/ai"
 import type { ReadonlySessionManager } from "../session-manager.js"
+import type { PromptDeliveryMode } from "../runtime/session/prompt-queue.js"
 
 /** Listener for hook errors */
 export type HookErrorListener = (error: HookError) => void
@@ -124,6 +133,10 @@ export class HookRunner {
 	private modelProvider: () => Model<Api> | null
 	private tokenUsage: TokenUsage | undefined
 	private contextLimit: number | undefined
+	private sendUserMessageHandler: SendUserMessageHandler = async () => {}
+	private steerHandler: DeliveryHandler = async () => {}
+	private followUpHandler: DeliveryHandler = async () => {}
+	private isIdleHandler: IsIdleHandler = () => true
 
 	constructor(hooks: LoadedHook[], cwd: string, configDir: string, sessionManager: ReadonlySessionManager) {
 		this.hooks = hooks
@@ -144,6 +157,10 @@ export class HookRunner {
 	initialize(options: {
 		sendHandler: SendHandler
 		sendMessageHandler: SendMessageHandler
+		sendUserMessageHandler: SendUserMessageHandler
+		steerHandler: DeliveryHandler
+		followUpHandler: DeliveryHandler
+		isIdleHandler: IsIdleHandler
 		appendEntryHandler: AppendEntryHandler
 		getSessionId: () => string | null
 		getModel: () => Model<Api> | null
@@ -156,9 +173,17 @@ export class HookRunner {
 		this.uiContext = options.uiContext ?? noOpUIContext
 		this.sessionContext = options.sessionContext ?? noOpSessionContext
 		this.hasUI = options.hasUI ?? false
+		this.sendUserMessageHandler = options.sendUserMessageHandler
+		this.steerHandler = options.steerHandler
+		this.followUpHandler = options.followUpHandler
+		this.isIdleHandler = options.isIdleHandler
 		for (const hook of this.hooks) {
 			hook.setSendHandler(options.sendHandler)
 			hook.setSendMessageHandler(options.sendMessageHandler)
+			hook.setSendUserMessageHandler(options.sendUserMessageHandler)
+			hook.setSteerHandler(options.steerHandler)
+			hook.setFollowUpHandler(options.followUpHandler)
+			hook.setIsIdleHandler(options.isIdleHandler)
 			hook.setAppendEntryHandler(options.appendEntryHandler)
 		}
 	}
@@ -220,6 +245,11 @@ export class HookRunner {
 				getTokenUsage: () => this.tokenUsage,
 				getContextLimit: () => this.contextLimit,
 			},
+			isIdle: () => this.isIdleHandler(),
+			steer: (text: string) => Promise.resolve(this.steerHandler(text)),
+			followUp: (text: string) => Promise.resolve(this.followUpHandler(text)),
+			sendUserMessage: (text: string, options?: { deliverAs?: PromptDeliveryMode }) =>
+				Promise.resolve(this.sendUserMessageHandler(text, options)),
 		}
 	}
 

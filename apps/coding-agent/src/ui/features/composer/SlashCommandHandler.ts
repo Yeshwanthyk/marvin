@@ -17,7 +17,7 @@ export const handleSlashInput = async (input: string, bridge: SlashCommandBridge
 	const trimmed = input.trim()
 
 	// Parse command name and args
-	const match = trimmed.match(/^\/(\S+)(?:\s+(.*))?$/)
+	const match = trimmed.match(/^\/(\S+)(?:\s+([\s\S]*))?$/)
 	if (!match) return false
 
 	const cmdName = match[1]!

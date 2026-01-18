@@ -12,8 +12,8 @@ import type {
 	UserMessage,
 } from "@marvin-agents/ai";
 import { agentLoop, agentLoopContinue } from "@marvin-agents/ai";
-import { AssistantMessageEventStream } from "@marvin-agents/ai/dist/utils/event-stream.js";
-import { parseStreamingJson } from "@marvin-agents/ai/dist/utils/json-parse.js";
+import { AssistantMessageEventStream } from "@marvin-agents/ai/src/utils/event-stream.js";
+import { parseStreamingJson } from "@marvin-agents/ai/src/utils/json-parse.js";
 import type { ProxyAssistantMessageEvent } from "./proxy-types.js";
 import type { AgentRunConfig, AgentTransport } from "./types.js";
 
@@ -368,7 +368,6 @@ export class AppTransport implements AgentTransport {
 		return {
 			model: cfg.model,
 			reasoning: cfg.reasoning,
-			getQueuedMessages: cfg.getQueuedMessages,
 			getSteeringMessages: cfg.getSteeringMessages,
 			getFollowUpMessages: cfg.getFollowUpMessages,
 		};

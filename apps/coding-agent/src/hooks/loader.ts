@@ -8,9 +8,20 @@
 import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
-import type { HookAPI, HookEvent, HookEventType, HookFactory, HookHandler, HookMessage, HookMessageRenderer, RegisteredCommand, RegisteredTool } from "./types.js"
+import type {
+	HookAPI,
+	HookEvent,
+	HookEventType,
+	HookFactory,
+	HookHandler,
+	HookMessage,
+	HookMessageRenderer,
+	RegisteredCommand,
+	RegisteredTool,
+} from "./types.js"
 import type { ValidationIssue } from "@ext/schema.js"
 import { validateHookDescriptor, issueFromError } from "@ext/validation.js"
+import type { PromptDeliveryMode } from "../runtime/session/prompt-queue.js"
 
 /** Generic handler function type for internal storage */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,6 +35,10 @@ export type SendMessageHandler = <T = unknown>(
 	message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
 	triggerTurn?: boolean,
 ) => void
+
+export type SendUserMessageHandler = (text: string, options?: { deliverAs?: PromptDeliveryMode }) => Promise<void> | void
+export type DeliveryHandler = (text: string) => Promise<void> | void
+export type IsIdleHandler = () => boolean
 
 /** Append entry handler type for marvin.appendEntry() */
 export type AppendEntryHandler = <T = unknown>(customType: string, data?: T) => void
@@ -44,6 +59,10 @@ export interface LoadedHook {
 	setSendHandler: (handler: SendHandler) => void
 	/** Set the sendMessage handler for this hook's marvin.sendMessage() */
 	setSendMessageHandler: (handler: SendMessageHandler) => void
+	setSendUserMessageHandler: (handler: SendUserMessageHandler) => void
+	setSteerHandler: (handler: DeliveryHandler) => void
+	setFollowUpHandler: (handler: DeliveryHandler) => void
+	setIsIdleHandler: (handler: IsIdleHandler) => void
 	/** Set the appendEntry handler for this hook's marvin.appendEntry() */
 	setAppendEntryHandler: (handler: AppendEntryHandler) => void
 }
@@ -65,10 +84,18 @@ function createHookAPI(handlers: Map<HookEventType, HandlerFn[]>): {
 	tools: Map<string, RegisteredTool>
 	setSendHandler: (handler: SendHandler) => void
 	setSendMessageHandler: (handler: SendMessageHandler) => void
+	setSendUserMessageHandler: (handler: SendUserMessageHandler) => void
+	setSteerHandler: (handler: DeliveryHandler) => void
+	setFollowUpHandler: (handler: DeliveryHandler) => void
+	setIsIdleHandler: (handler: IsIdleHandler) => void
 	setAppendEntryHandler: (handler: AppendEntryHandler) => void
 } {
 	let sendHandler: SendHandler = () => {}
 	let sendMessageHandler: SendMessageHandler = () => {}
+	let sendUserMessageHandler: SendUserMessageHandler = () => {}
+	let steerHandler: DeliveryHandler = () => {}
+	let followUpHandler: DeliveryHandler = () => {}
+	let isIdleHandler: IsIdleHandler = () => true
 	let appendEntryHandler: AppendEntryHandler = () => {}
 	const messageRenderers = new Map<string, HookMessageRenderer>()
 	const commands = new Map<string, RegisteredCommand>()
@@ -82,6 +109,18 @@ function createHookAPI(handlers: Map<HookEventType, HandlerFn[]>): {
 		},
 		send(text: string): void {
 			sendHandler(text)
+		},
+		sendUserMessage(text: string, options): Promise<void> {
+			return Promise.resolve(sendUserMessageHandler(text, options))
+		},
+		steer(text: string): Promise<void> {
+			return Promise.resolve(steerHandler(text))
+		},
+		followUp(text: string): Promise<void> {
+			return Promise.resolve(followUpHandler(text))
+		},
+		isIdle(): boolean {
+			return isIdleHandler()
 		},
 		sendMessage(message, triggerTurn): void {
 			sendMessageHandler(message, triggerTurn)
@@ -107,6 +146,10 @@ function createHookAPI(handlers: Map<HookEventType, HandlerFn[]>): {
 		tools,
 		setSendHandler: (handler) => { sendHandler = handler },
 		setSendMessageHandler: (handler) => { sendMessageHandler = handler },
+		setSendUserMessageHandler: (handler) => { sendUserMessageHandler = handler },
+		setSteerHandler: (handler) => { steerHandler = handler },
+		setFollowUpHandler: (handler) => { followUpHandler = handler },
+		setIsIdleHandler: (handler) => { isIdleHandler = handler },
 		setAppendEntryHandler: (handler) => { appendEntryHandler = handler },
 	}
 }
@@ -134,6 +177,10 @@ async function loadHook(hookPath: string): Promise<{ hook: LoadedHook | null; er
 			tools,
 			setSendHandler,
 			setSendMessageHandler,
+			setSendUserMessageHandler,
+			setSteerHandler,
+			setFollowUpHandler,
+			setIsIdleHandler,
 			setAppendEntryHandler,
 		} = createHookAPI(handlers)
 
@@ -149,6 +196,10 @@ async function loadHook(hookPath: string): Promise<{ hook: LoadedHook | null; er
 				tools,
 				setSendHandler,
 				setSendMessageHandler,
+				setSendUserMessageHandler,
+				setSteerHandler,
+				setFollowUpHandler,
+				setIsIdleHandler,
 				setAppendEntryHandler,
 			},
 			error: null,

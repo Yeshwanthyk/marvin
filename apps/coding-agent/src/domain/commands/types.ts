@@ -5,6 +5,7 @@ import type { SessionManager } from "../../session-manager.js"
 import type { ActivityState, ToolBlock, UIMessage } from "../../types.js"
 import type { EditorConfig } from "../../config.js"
 import type { HookRunner } from "../../hooks/index.js"
+import type { PromptDeliveryMode } from "../../runtime/session/prompt-queue.js"
 
 export const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"]
 
@@ -47,6 +48,10 @@ export interface CommandContext {
 
 	onExit?: () => void
 	hookRunner?: HookRunner
+	runImmediatePrompt: (text: string) => Promise<void>
+	steer: (text: string) => Promise<void>
+	followUp: (text: string) => Promise<void>
+	sendUserMessage: (text: string, options?: { deliverAs?: PromptDeliveryMode }) => Promise<void>
 }
 
 export type CommandHandlerResult = boolean | Promise<boolean>

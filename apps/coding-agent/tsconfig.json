@@ -18,7 +18,11 @@
       "@runtime/*": ["runtime/*"],
       "@domain/*": ["domain/*"],
       "@ext/*": ["extensibility/*"],
-      "@ui/*": ["ui/*"]
+      "@ui/*": ["ui/*"],
+      "@marvin-agents/agent-core": ["../../packages/agent/src/index.ts"],
+      "@marvin-agents/agent-core/*": ["../../packages/agent/src/*"],
+      "@marvin-agents/ai": ["../../packages/ai/src/index.ts"],
+      "@marvin-agents/ai/src/*": ["../../packages/ai/src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],

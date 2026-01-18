@@ -74,7 +74,6 @@ export class ProviderTransport implements AgentTransport {
 			model,
 			reasoning: cfg.reasoning,
 			apiKey,
-			getQueuedMessages: cfg.getQueuedMessages,
 			getSteeringMessages: cfg.getSteeringMessages,
 			getFollowUpMessages: cfg.getFollowUpMessages,
 		};

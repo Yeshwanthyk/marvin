@@ -59,6 +59,9 @@ export interface AgentOptions {
 	queueMode?: "all" | "one-at-a-time";
 }
 
+type DeliveryMode = "steer" | "followUp";
+type DeliveryQueuedMessage<T = AppMessage> = QueuedMessage<T> & { mode?: DeliveryMode };
+
 export class Agent {
 	private _state: AgentState = {
 		systemPrompt: "",
@@ -75,7 +78,9 @@ export class Agent {
 	private abortController?: AbortController;
 	private transport: AgentTransport;
 	private messageTransformer: (messages: AppMessage[]) => Message[] | Promise<Message[]>;
-	private messageQueue: Array<QueuedMessage<AppMessage>> = [];
+	private steeringQueue: Array<DeliveryQueuedMessage<AppMessage>> = [];
+	private followUpQueue: Array<DeliveryQueuedMessage<AppMessage>> = [];
+	private queueMessageWarningIssued = false;
 	private queueMode: "all" | "one-at-a-time";
 	private runningPrompt?: Promise<void>;
 	private resolveRunningPrompt?: () => void;
@@ -129,17 +134,45 @@ export class Agent {
 		this._state.messages = [...this._state.messages, m];
 	}
 
-	async queueMessage(m: AppMessage) {
-		// Transform message and queue it for injection at next turn
+	private async enqueueQueuedMessage(
+		target: Array<DeliveryQueuedMessage<AppMessage>>,
+		mode: DeliveryMode,
+		m: AppMessage,
+	) {
 		const transformed = await this.messageTransformer([m]);
-		this.messageQueue.push({
+		target.push({
 			original: m,
-			llm: transformed[0], // undefined if filtered out
+			llm: transformed[0],
+			mode,
 		});
 	}
 
+	private warnQueueMessageDeprecation() {
+		if (this.queueMessageWarningIssued) {
+			return;
+		}
+		this.queueMessageWarningIssued = true;
+		console.warn(
+			"[marvin] Agent.queueMessage() is deprecated. Use Agent.followUp() (default) or Agent.steer() for delivery-aware routing.",
+		);
+	}
+
+	async steer(m: AppMessage) {
+		await this.enqueueQueuedMessage(this.steeringQueue, "steer", m);
+	}
+
+	async followUp(m: AppMessage) {
+		await this.enqueueQueuedMessage(this.followUpQueue, "followUp", m);
+	}
+
+	async queueMessage(m: AppMessage) {
+		this.warnQueueMessageDeprecation();
+		await this.followUp(m);
+	}
+
 	clearMessageQueue() {
-		this.messageQueue = [];
+		this.steeringQueue = [];
+		this.followUpQueue = [];
 	}
 
 	clearMessages() {
@@ -167,7 +200,7 @@ export class Agent {
 		this._state.streamMessage = null;
 		this._state.pendingToolCalls = new Set<string>();
 		this._state.error = undefined;
-		this.messageQueue = [];
+		this.clearMessageQueue();
 	}
 
 	async prompt(input: string, attachments?: Attachment[]) {
@@ -272,19 +305,28 @@ export class Agent {
 			tools: this._state.tools,
 			model,
 			reasoning,
-			getQueuedMessages: async <T>() => {
-				if (this.queueMode === "one-at-a-time") {
-					if (this.messageQueue.length > 0) {
-						const first = this.messageQueue[0];
-						this.messageQueue = this.messageQueue.slice(1);
-						return [first] as QueuedMessage<T>[];
-					}
+			getSteeringMessages: async <T>() => {
+				if (this.steeringQueue.length === 0) {
 					return [];
-				} else {
-					const queued = this.messageQueue.slice();
-					this.messageQueue = [];
-					return queued as QueuedMessage<T>[];
 				}
+				const queued = this.steeringQueue;
+				this.steeringQueue = [];
+				return queued as QueuedMessage<T>[];
+			},
+			getFollowUpMessages: async <T>() => {
+				if (this.followUpQueue.length === 0) {
+					return [];
+				}
+
+				if (this.queueMode === "one-at-a-time") {
+					const [first, ...rest] = this.followUpQueue;
+					this.followUpQueue = rest;
+					return first ? ([first] as QueuedMessage<T>[]) : [];
+				}
+
+				const queued = this.followUpQueue;
+				this.followUpQueue = [];
+				return queued as QueuedMessage<T>[];
 			},
 		};
 
