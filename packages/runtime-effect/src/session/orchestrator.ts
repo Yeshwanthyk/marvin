@@ -140,7 +140,7 @@ export const SessionOrchestratorLayer = () =>
               yield* ensureSession(sessionStateRef, sessionManager, config, hookEffects);
 
               instrumentation.record({
-                type: "dmux:log",
+                type: "tmux:log",
                 level: "info",
                 message: "prompt:process:start",
                 details: { mode: item.mode, text: item.text.slice(0, 80) },
@@ -192,7 +192,7 @@ export const SessionOrchestratorLayer = () =>
               yield* Effect.withExecutionPlan(attempt, plan.plan);
 
               instrumentation.record({
-                type: "dmux:log",
+                type: "tmux:log",
                 level: "info",
                 message: "prompt:process:complete",
                 details: { mode: item.mode },
@@ -205,7 +205,7 @@ export const SessionOrchestratorLayer = () =>
               Effect.catchAll((error) =>
                 Effect.gen(function* () {
                   instrumentation.record({
-                    type: "dmux:log",
+                    type: "tmux:log",
                     level: "error",
                     message: "prompt:process:error",
                     details: { error: error instanceof Error ? error.message : String(error) },

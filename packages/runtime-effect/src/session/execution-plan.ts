@@ -187,7 +187,7 @@ const buildExecutionPlan = (
   }));
 
   instrumentation.record({
-    type: "dmux:log",
+    type: "tmux:log",
     level: "info",
     message: "execution-plan:registered",
     details: {

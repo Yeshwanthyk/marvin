@@ -143,7 +143,7 @@ The shared runtime lives in `packages/runtime-effect` and is composed entirely w
 2. **Transport + Tools + Hooks** merge provider transports, lazy tool loading, custom tools/commands, and hook runners. Hooks execute through `HookEffects`, an Effect channel that serializes hook invocations and propagates results back to the agent loop.
 3. **PromptQueueLayer** wraps `Effect.Queue` + `SubscriptionRef` so adapters can observe steer/follow-up counts and persist slash-script snapshots when aborting.
 4. **ExecutionPlanBuilderLayer** constructs `Effect.ExecutionPlan`s describing retries/fallbacks for each provider/model entry in the user’s cycle.
-5. **SessionOrchestratorLayer** drains the prompt queue, emits hook events, appends messages to the session log, executes the plan (retrying + replacing agent state on failure), and signals DMUX instrumentation. It exposes:
+5. **SessionOrchestratorLayer** drains the prompt queue, emits hook events, appends messages to the session log, executes the plan (retrying + replacing agent state on failure), and signals tmux instrumentation. It exposes:
    - `submitPrompt()` for asynchronous surfaces (TUI) that just enqueue work.
    - `submitPromptAndWait()` for synchronous surfaces (headless CLI, ACP) that need completion before responding.
    - `drainToScript()` to serialize outstanding queue items when aborting or persisting state.

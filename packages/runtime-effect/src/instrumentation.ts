@@ -17,7 +17,7 @@ export type InstrumentationEvent =
 			type: "execution-plan:registered"
 			steps: Array<{ id: string; provider: string; modelId: string; attempts: number; isFallback: boolean }>
 	  }
-	| { type: "dmux:log"; level: "info" | "warn" | "error"; message: string; details?: Record<string, unknown> }
+	| { type: "tmux:log"; level: "info" | "warn" | "error"; message: string; details?: Record<string, unknown> }
 
 export interface InstrumentationService {
 	record: (event: InstrumentationEvent) => void

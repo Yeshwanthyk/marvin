@@ -41,14 +41,14 @@ Goal: rebuild hook + session management (`apps/coding-agent/src/hooks/*`, `Sessi
 - Replace `HookRunner` implementation with `Effect` pipelines (managed fibers per hook, typed events, structured error handling) while honoring `~/.config/marvin/hooks/*` semantics.
 - Reimplement prompt queue + retry/backoff via `Effect.Schedule` + `Queue`, ensuring features like auto-compact hook (from `~/.config/marvin/hooks/auto-compact.ts`) keep receiving the same events.
 - Provide bridging adapters for Solid UI (reactive stores) but keep heavy lifting inside Effect-managed processes.
-- Verification: concurrency-focused tests using virtual scheduler; manual DMUX session to confirm hooks respond (auto-compact, blow-sound, etc.).
+- Verification: concurrency-focused tests using virtual scheduler; manual tmux session to confirm hooks respond (auto-compact, blow-sound, etc.).
 
 ### Phase 4 · CLI Runtime Integration & Legacy Removal
 Goal: plug the new Effect runtime into `apps/coding-agent`, remove obsolete imperative runtime factory, and ensure CLI flows from config → runtime → UI exclusively via new services.
 - Rewrite `apps/coding-agent/src/runtime/factory.ts` (and submodules) to bootstrap the Effect runtime, exposing only minimal adapter needed by UI.
 - Remove or archive legacy modules: `LazyToolLoader`, direct `Agent` instantiation, manual transports, etc., once the Effect layers cover them.
 - Ensure configuration files (`apps/coding-agent/src/config.ts`, `.config/marvin/config.json`) integrate with new services.
-- Verification: `bun run marvin` interactive smoke test plus DMUX run showing new runtime handles hooks + prompts end-to-end.
+- Verification: `bun run marvin` interactive smoke test plus tmux run showing new runtime handles hooks + prompts end-to-end.
 
 ### Phase 5 · Tests, Lint, and Regression Coverage
 Goal: expand automated coverage for the new Effect architecture.

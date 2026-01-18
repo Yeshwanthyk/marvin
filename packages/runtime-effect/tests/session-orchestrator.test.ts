@@ -226,7 +226,7 @@ describe("SessionOrchestratorLayer", () => {
     expect(sessionManager.startCount).toBe(1);
     expect(sessionManager.appended[0]?.role).toBe("user");
     expect(hookRunner.beforeStart).toEqual(["build the feature"]);
-    expect(instrumentation.events.some((ev) => ev.type === "dmux:log" && ev.message === "prompt:process:complete")).toBe(
+    expect(instrumentation.events.some((ev) => ev.type === "tmux:log" && ev.message === "prompt:process:complete")).toBe(
       true,
     );
   });
