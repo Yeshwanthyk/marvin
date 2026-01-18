@@ -77,6 +77,7 @@ import {
   TransportTag,
   createApiKeyResolver,
   type ApiKeyResolver,
+  type TransportBundle,
 } from "./transports.js";
 import { LspLayer, LspServiceTag } from "./lsp.js";
 
@@ -130,6 +131,7 @@ export interface RuntimeLayerOptions extends LoadConfigOptions {
   readonly sendRef?: SendRef;
   readonly instrumentation?: InstrumentationService;
   readonly lspFactory?: typeof createLspManager;
+  readonly transportFactory?: (config: LoadedAppConfig, resolver: ApiKeyResolver) => TransportBundle;
 }
 
 interface RuntimeLayerInternalOptions extends RuntimeLayerOptions {
@@ -169,7 +171,12 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
       const sessionManagerLayer = Layer.succeed(SessionManagerTag, {
         sessionManager: new SessionManager(config.configDir),
       } satisfies SessionManagerService);
-      const transportLayer = TransportLayer(config, apiKeyResolver);
+      const transportLayer =
+        layerOptions.transportFactory
+          ? Layer.succeed(TransportTag, {
+              transport: layerOptions.transportFactory(config, apiKeyResolver),
+            })
+          : TransportLayer(config, apiKeyResolver);
       const customCommandsLayer = CustomCommandLayer({ configDir: config.configDir });
       const executionPlanLayer = ExecutionPlanBuilderLayer({
         cycle: cycleModels.map((entry) => ({ provider: entry.provider, model: entry.model }) satisfies PlanModelEntry),

@@ -144,14 +144,14 @@ Streaming:
 Goal: test SDK without real API calls.
 
 Changes:
-- [ ] Add optional transport override to `RuntimeLayerOptions`:
-  - `transportLayer?: Layer<TransportService>` or `transportFactory?: (config) => TransportBundle`
-- [ ] Provide a mock transport for tests (deterministic responses, no network).
-- [ ] SDK tests:
+- [x] Add optional transport override to `RuntimeLayerOptions`:
+  - `transportFactory?: (config, resolver) => TransportBundle`
+- [x] Provide a mock transport for tests (deterministic responses, no network).
+- [x] SDK tests:
   - `runAgent` returns deterministic response with mock transport
   - `createAgentSession` supports multi-turn
   - `runAgentStream` yields agent events in order
-- [ ] Update runtime-effect tests to cover injected transport.
+- [x] Update runtime-effect tests to cover injected transport.
 
 ### Phase 5 - Documentation Updates
 Goal: align docs with new SDK and remove legacy guidance.

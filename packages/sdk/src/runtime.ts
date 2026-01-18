@@ -14,11 +14,13 @@ import {
 } from "@marvin-agents/runtime-effect/runtime.js"
 import type { SdkError } from "./errors.js"
 import { toSdkError } from "./errors.js"
+import type { TransportFactory } from "./types.js"
 
 export interface SdkRuntimeOptions extends LoadConfigOptions {
   instrumentation?: (event: InstrumentationEvent) => void
   instrumentationSink?: (event: InstrumentationEvent) => void
   hookMessageSink?: (message: HookMessage) => void
+  transportFactory?: TransportFactory
 }
 
 export interface PromptOptions {
@@ -136,6 +138,7 @@ const createSdkRuntimeImpl = Effect.fn(function* (options: SdkRuntimeOptions) {
       ...(options.model !== undefined ? { model: options.model } : {}),
       ...(options.thinking !== undefined ? { thinking: options.thinking } : {}),
       ...(options.systemPrompt !== undefined ? { systemPrompt: options.systemPrompt } : {}),
+      ...(options.transportFactory !== undefined ? { transportFactory: options.transportFactory } : {}),
     }
 
     const layer = RuntimeLayer(runtimeOptions)

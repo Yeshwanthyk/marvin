@@ -1,10 +1,11 @@
 import type { Effect } from "effect"
 import type { AgentEvent, AppMessage, Attachment, ThinkingLevel } from "@marvin-agents/agent-core"
 import type { ToolCall, Usage } from "@marvin-agents/ai"
-import type { LoadConfigOptions } from "@marvin-agents/runtime-effect/config.js"
+import type { LoadConfigOptions, LoadedAppConfig } from "@marvin-agents/runtime-effect/config.js"
 import type { InstrumentationEvent } from "@marvin-agents/runtime-effect/instrumentation.js"
 import type { HookMessage } from "@marvin-agents/runtime-effect/hooks/types.js"
 import type { PromptDeliveryMode, PromptQueueSnapshot } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
+import type { ApiKeyResolver, TransportBundle } from "@marvin-agents/runtime-effect/transports.js"
 import type { SdkError } from "./errors.js"
 
 export interface SdkResult {
@@ -31,8 +32,11 @@ export type SdkEvent =
   | { type: "hookMessage"; message: HookMessage }
   | { type: "instrumentation"; event: InstrumentationEvent }
 
+export type TransportFactory = (config: LoadedAppConfig, resolver: ApiKeyResolver) => TransportBundle
+
 export interface SdkBaseOptions extends LoadConfigOptions {
   instrumentation?: (event: InstrumentationEvent) => void
+  transportFactory?: TransportFactory
 }
 
 export interface RunAgentOptions extends SdkBaseOptions {
