@@ -5,7 +5,16 @@
     "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@marvin-agents/agent-core": ["../agent/dist/index.d.ts"],
+      "@marvin-agents/agent-core/*": ["../agent/dist/*"],
+      "@marvin-agents/ai": ["../ai/dist/index.d.ts"],
+      "@marvin-agents/ai/*": ["../ai/dist/*"],
+      "@marvin-agents/runtime-effect": ["../runtime-effect/dist/index.d.ts"],
+      "@marvin-agents/runtime-effect/*": ["../runtime-effect/dist/*"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "tests"]

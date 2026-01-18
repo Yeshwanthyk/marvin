@@ -5,7 +5,12 @@
     "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@marvin-agents/ai": ["../ai/dist/index.d.ts"],
+      "@marvin-agents/ai/*": ["../ai/dist/*"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "tests"]

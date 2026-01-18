@@ -4,8 +4,6 @@ import type { OpenAICompletionsOptions } from "./providers/openai-completions.js
 import type { OpenAIResponsesOptions } from "./providers/openai-responses.js";
 import type { AssistantMessageEventStream } from "./utils/event-stream.js";
 
-export type { AssistantMessageEventStream } from "./utils/event-stream.js";
-
 export type Api =
 	| "openai-completions"
 	| "openai-responses"
@@ -46,7 +44,6 @@ export type KnownProvider =
 	| "openrouter"
 	| "zai"
 	| "mistral"
-	| "minimax"
 	| "opencode";
 export type Provider = KnownProvider | string;
 

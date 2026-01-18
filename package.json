@@ -24,6 +24,7 @@
   "devDependencies": {
     "@effect/language-service": "^0.69.1",
     "@types/node": "^25.0.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260118.1",
     "eslint": "^9.39.2",
     "eslint-plugin-boundaries": "^5.3.1",
     "typescript": "^5.5.4"

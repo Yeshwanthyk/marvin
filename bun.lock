@@ -13,6 +13,7 @@
       "devDependencies": {
         "@effect/language-service": "^0.69.1",
         "@types/node": "^25.0.1",
+        "@typescript/native-preview": "^7.0.0-dev.20260118.1",
         "eslint": "^9.39.2",
         "eslint-plugin-boundaries": "^5.3.1",
         "typescript": "^5.5.4",
@@ -46,14 +47,14 @@
     },
     "packages/agent": {
       "name": "@marvin-agents/agent-core",
-      "version": "0.23.3",
+      "version": "0.1.0",
       "dependencies": {
-        "@marvin-agents/ai": "file:../ai",
+        "@marvin-agents/ai": "^0.1.0",
       },
     },
     "packages/ai": {
       "name": "@marvin-agents/ai",
-      "version": "0.23.3",
+      "version": "0.1.0",
       "dependencies": {
         "@anthropic-ai/sdk": "0.71.2",
         "@google/genai": "1.31.0",
@@ -71,7 +72,7 @@
       "name": "@marvin-agents/base-tools",
       "version": "0.1.0",
       "dependencies": {
-        "@marvin-agents/ai": "file:../ai",
+        "@marvin-agents/ai": "^0.1.0",
         "@sinclair/typebox": "0.34.45",
         "diff": "^8.0.2",
         "file-type": "^21.1.1",
@@ -81,7 +82,7 @@
       "name": "@marvin-agents/lsp",
       "version": "0.1.0",
       "dependencies": {
-        "@marvin-agents/ai": "file:../ai",
+        "@marvin-agents/ai": "^0.1.0",
         "vscode-jsonrpc": "^8.2.1",
         "vscode-languageserver-types": "^3.17.5",
       },
@@ -109,10 +110,20 @@
       "version": "0.1.0",
       "dependencies": {
         "@effect/platform-node": "^0.104.0",
-        "@marvin-agents/agent-core": "file:../agent",
-        "@marvin-agents/ai": "file:../ai",
-        "@marvin-agents/base-tools": "file:../base-tools",
-        "@marvin-agents/lsp": "file:../lsp",
+        "@marvin-agents/agent-core": "^0.1.0",
+        "@marvin-agents/ai": "^0.1.0",
+        "@marvin-agents/base-tools": "^0.1.0",
+        "@marvin-agents/lsp": "^0.1.0",
+        "effect": "^3.19.14",
+      },
+    },
+    "packages/sdk": {
+      "name": "@marvin-agents/sdk",
+      "version": "0.1.0",
+      "dependencies": {
+        "@marvin-agents/agent-core": "^0.1.0",
+        "@marvin-agents/ai": "^0.1.0",
+        "@marvin-agents/runtime-effect": "^0.1.0",
         "effect": "^3.19.14",
       },
     },
@@ -326,6 +337,8 @@
 
     "@marvin-agents/runtime-effect": ["@marvin-agents/runtime-effect@workspace:packages/runtime-effect"],
 
+    "@marvin-agents/sdk": ["@marvin-agents/sdk@workspace:packages/sdk"],
+
     "@mistralai/mistralai": ["@mistralai/mistralai@1.10.0", "", { "dependencies": { "zod": "^3.20.0", "zod-to-json-schema": "^3.24.1" } }, "sha512-tdIgWs4Le8vpvPiUEWne6tK0qbVc+jMenujnvTqOjogrJUsCSQhus0tHTU1avDDh5//Rq2dFgP9mWRAdIEoBqg=="],
 
     "@msgpackr-extract/msgpackr-extract-darwin-arm64": ["@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-QZHtlVgbAdy2zAqNA9Gu1UpIuI8Xvsd1v8ic6B2pZmeFnFcMWiPLfWXh7TVw4eGEZ/C9TH281KwhVoeQUKbyjw=="],
@@ -401,6 +414,22 @@
     "@types/json-schema": ["@types/json-schema@7.0.15", "", {}, "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA=="],
 
     "@types/node": ["@types/node@25.0.3", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA=="],
+
+    "@typescript/native-preview": ["@typescript/native-preview@7.0.0-dev.20260118.1", "", { "optionalDependencies": { "@typescript/native-preview-darwin-arm64": "7.0.0-dev.20260118.1", "@typescript/native-preview-darwin-x64": "7.0.0-dev.20260118.1", "@typescript/native-preview-linux-arm": "7.0.0-dev.20260118.1", "@typescript/native-preview-linux-arm64": "7.0.0-dev.20260118.1", "@typescript/native-preview-linux-x64": "7.0.0-dev.20260118.1", "@typescript/native-preview-win32-arm64": "7.0.0-dev.20260118.1", "@typescript/native-preview-win32-x64": "7.0.0-dev.20260118.1" }, "bin": { "tsgo": "bin/tsgo.js" } }, "sha512-A+anwzt5RsbCWglYUCAgrolHO9iWLFl2NtRIwDU2IaIxTt0GsFcvaDe+IjswJGHknE0nJ7TS6DeAwjkDD/14og=="],
+
+    "@typescript/native-preview-darwin-arm64": ["@typescript/native-preview-darwin-arm64@7.0.0-dev.20260118.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-Rr9xUWiT3g104hFgMoVbVSmqK1rQd7VhxwHgNNiPLkznGSc3zewIZ5uBCA93VV2BwC1/ksodwmA1ZYW7Ae2IIg=="],
+
+    "@typescript/native-preview-darwin-x64": ["@typescript/native-preview-darwin-x64@7.0.0-dev.20260118.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-vtpp39vH6wbp/ONJigF6KM7v3TTu8BAZo7ntXPgpV0YQ5cpXlnh6gQaQyXDjzlZRl/jdr+DS/76easoXeRpsFA=="],
+
+    "@typescript/native-preview-linux-arm": ["@typescript/native-preview-linux-arm@7.0.0-dev.20260118.1", "", { "os": "linux", "cpu": "arm" }, "sha512-JpYWxan5wwdZsiZJLWvDr/8gbIThnR1orOZ9Wb8Oc6cHFpYolwnXxAoCPLVnEcAfjnC6cY7WZvY5Dn0gSQ2Asw=="],
+
+    "@typescript/native-preview-linux-arm64": ["@typescript/native-preview-linux-arm64@7.0.0-dev.20260118.1", "", { "os": "linux", "cpu": "arm64" }, "sha512-w32ohkkaBbotPHQttMwzn2l3CO139aTSmIAbDJ1GdbzacDfu1eRHyDaqJ9FpXXF9rkmQxWPIxz8OjpFGoHejQw=="],
+
+    "@typescript/native-preview-linux-x64": ["@typescript/native-preview-linux-x64@7.0.0-dev.20260118.1", "", { "os": "linux", "cpu": "x64" }, "sha512-tJuaHEFnKB+V8dkMp9quOjcYs4sbNqwocFyStUN6D6khyYyYDKoKNI68APO4WM0WJ84zMWTyvBDms5uZojftEw=="],
+
+    "@typescript/native-preview-win32-arm64": ["@typescript/native-preview-win32-arm64@7.0.0-dev.20260118.1", "", { "os": "win32", "cpu": "arm64" }, "sha512-MhLmNq0OYDRIcWui1g1XaY6tcN4GTzD2rABxwMIpdB+sOtl6YBicoSFk0fToZ+2OOUjjeGwlFzW/LDq540n3HQ=="],
+
+    "@typescript/native-preview-win32-x64": ["@typescript/native-preview-win32-x64@7.0.0-dev.20260118.1", "", { "os": "win32", "cpu": "x64" }, "sha512-NkXwyQHr/DKbp3BP8CzS4zhOIAY4CmUTYtadr5yyNsTJvuavBH9A4BKjqE/83ZRYB7O5O+n/2z1C5yl7IJp/qQ=="],
 
     "@webgpu/types": ["@webgpu/types@0.1.68", "", {}, "sha512-3ab1B59Ojb6RwjOspYLsTpCzbNB3ZaamIAxBMmvnNkiDoLTZUOBXZ9p5nAYVEkQlDdf6qAZWi1pqj9+ypiqznA=="],
 
@@ -934,10 +963,6 @@
 
     "@jimp/core/file-type": ["file-type@16.5.4", "", { "dependencies": { "readable-web-to-node-stream": "^3.0.0", "strtok3": "^6.2.4", "token-types": "^4.1.1" } }, "sha512-/yFHK0aGjFEgDJjEKP0pWCplsPFPhwyfwevf/pVxiN0tmE4L9LmwWxWukdJSHdoCli4VgQLehjJtwQBnqmsKcw=="],
 
-    "@marvin-agents/agent-core/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
-
-    "@marvin-agents/base-tools/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
-
     "@marvin-agents/coding-agent/@marvin-agents/agent-core": ["@marvin-agents/agent-core@file:packages/agent", { "dependencies": { "@marvin-agents/ai": "file:../ai" } }],
 
     "@marvin-agents/coding-agent/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
@@ -948,17 +973,7 @@
 
     "@marvin-agents/coding-agent/@marvin-agents/open-tui": ["@marvin-agents/open-tui@file:packages/open-tui", { "dependencies": { "@opentui/core": "0.1.63", "@opentui/solid": "0.1.63", "fuzzysort": "^3.1.0", "opentui-spinner": "^0.0.6", "solid-js": "1.9.9" }, "devDependencies": { "@babel/core": "^7.28.5", "@babel/preset-typescript": "^7.28.5", "@types/bun": "latest", "@types/node": "^24.0.0", "babel-preset-solid": "1.9.9" } }],
 
-    "@marvin-agents/lsp/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
-
     "@marvin-agents/open-tui/@types/node": ["@types/node@24.10.4", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-vnDVpYPMzs4wunl27jHrfmwojOGKya0xyM3sH+UE5iv5uPS6vX7UIoh6m+vQc5LGBq52HBKPIn/zcSZVzeDEZg=="],
-
-    "@marvin-agents/runtime-effect/@marvin-agents/agent-core": ["@marvin-agents/agent-core@file:packages/agent", { "dependencies": { "@marvin-agents/ai": "file:../ai" } }],
-
-    "@marvin-agents/runtime-effect/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
-
-    "@marvin-agents/runtime-effect/@marvin-agents/base-tools": ["@marvin-agents/base-tools@file:packages/base-tools", { "dependencies": { "@marvin-agents/ai": "file:../ai", "@sinclair/typebox": "0.34.45", "diff": "^8.0.2", "file-type": "^21.1.1" } }],
-
-    "@marvin-agents/runtime-effect/@marvin-agents/lsp": ["@marvin-agents/lsp@file:packages/lsp", { "dependencies": { "@marvin-agents/ai": "file:../ai", "vscode-jsonrpc": "^8.2.1", "vscode-languageserver-types": "^3.17.5" } }],
 
     "@opentui/solid/@babel/core": ["@babel/core@7.28.0", "", { "dependencies": { "@ampproject/remapping": "^2.2.0", "@babel/code-frame": "^7.27.1", "@babel/generator": "^7.28.0", "@babel/helper-compilation-targets": "^7.27.2", "@babel/helper-module-transforms": "^7.27.3", "@babel/helpers": "^7.27.6", "@babel/parser": "^7.28.0", "@babel/template": "^7.27.2", "@babel/traverse": "^7.28.0", "@babel/types": "^7.28.0", "convert-source-map": "^2.0.0", "debug": "^4.1.0", "gensync": "^1.0.0-beta.2", "json5": "^2.2.3", "semver": "^6.3.1" } }, "sha512-UlLAnTPrFdNGoFtbSXwcGFQBtQZJCNjaN6hQNP3UPvuNXT1i82N26KL3dZeIpNalWywr9IuQuncaAfUaS1g6sQ=="],
 
@@ -1010,19 +1025,13 @@
 
     "@jimp/core/file-type/token-types": ["token-types@4.2.1", "", { "dependencies": { "@tokenizer/token": "^0.3.0", "ieee754": "^1.2.1" } }, "sha512-6udB24Q737UD/SDsKAHI9FCRP7Bqc9D/MQUV02ORQg5iskjtLJlZJNdN4kKtcdtwCeWIwIHDGaUsTsCCAa8sFQ=="],
 
-    "@marvin-agents/coding-agent/@marvin-agents/agent-core/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
+    "@marvin-agents/coding-agent/@marvin-agents/agent-core/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
 
-    "@marvin-agents/coding-agent/@marvin-agents/base-tools/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
+    "@marvin-agents/coding-agent/@marvin-agents/base-tools/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
 
-    "@marvin-agents/coding-agent/@marvin-agents/lsp/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
+    "@marvin-agents/coding-agent/@marvin-agents/lsp/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
 
     "@marvin-agents/coding-agent/@marvin-agents/open-tui/@types/node": ["@types/node@24.10.4", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-vnDVpYPMzs4wunl27jHrfmwojOGKya0xyM3sH+UE5iv5uPS6vX7UIoh6m+vQc5LGBq52HBKPIn/zcSZVzeDEZg=="],
-
-    "@marvin-agents/runtime-effect/@marvin-agents/agent-core/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
-
-    "@marvin-agents/runtime-effect/@marvin-agents/base-tools/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
-
-    "@marvin-agents/runtime-effect/@marvin-agents/lsp/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
 
     "eslint/ajv/json-schema-traverse": ["json-schema-traverse@0.4.1", "", {}, "sha512-xbbCH5dCYU5T8LcEhhuh7HJ88HXuW3qsI3Y0zOZFKfZEHcpWiHU/Jxzk629Brsab/mMiHQti9wMP+845RPe3Vg=="],
 

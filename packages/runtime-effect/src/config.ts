@@ -134,10 +134,13 @@ const parseModelSpec = (raw: unknown): { provider?: KnownProvider; modelId?: str
   if (slashIndex === -1) {
     return { modelId: first };
   }
-  const providerId = first.slice(0, slashIndex).trim();
-  const modelId = first.slice(slashIndex + 1).trim();
-  const provider = getProviders().find((p) => p === providerId);
-  return { provider, modelId: modelId.length > 0 ? modelId : undefined };
+	const providerId = first.slice(0, slashIndex).trim();
+	const modelId = first.slice(slashIndex + 1).trim();
+	const provider = getProviders().find((p) => p === providerId);
+	const result: { provider?: KnownProvider; modelId?: string } = {};
+	if (provider) result.provider = provider;
+	if (modelId.length > 0) result.modelId = modelId;
+	return result;
 };
 
 const resolveEditorConfig = (raw: unknown): EditorConfig | undefined => {
