@@ -2,7 +2,7 @@
 
 ## Overview
 
-Make all `@marvin-agents/*` packages publishable to npm using the pi-mono pattern: semver deps + tsconfig paths for dev, dist entrypoints always, lockstep versioning.
+Make all `@marvin-agents/*` packages publishable to npm using the pi-mono pattern: semver deps + tsconfig paths for dev, dist entrypoints always, lockstep versioning. Keep CLI/Homebrew versioning separate.
 
 ## Current State
 
@@ -14,6 +14,8 @@ Make all `@marvin-agents/*` packages publishable to npm using the pi-mono patter
 | `@marvin-agents/agent-core` | 0.23.3 | no | `src/index.ts` | ✓ | `file:../ai` |
 | `@marvin-agents/base-tools` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai` |
 | `@marvin-agents/lsp` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai` |
+| `@marvin-agents/runtime-effect` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai`, `file:../agent`, `file:../base-tools`, `file:../lsp` |
+| `@marvin-agents/sdk` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai`, `file:../agent`, `file:../runtime-effect` |
 
 ### Key Discoveries
 
@@ -21,37 +23,43 @@ Make all `@marvin-agents/*` packages publishable to npm using the pi-mono patter
 - Opencode uses **exports rewriting** — more complex, same result
 - npm's `publishConfig` does NOT override `main`/`types`/`exports` — only registry/tag/access
 - Both references use **custom lockstep versioning**, not changesets
+- Root `tsconfig.json` is missing; only `tsconfig.base.json` exists today
 
-### Reference Implementation
+### Reference Pattern (Marvin Scope)
 
-From pi-mono's `tsconfig.json`:
+Paths mapping example for local dev:
 ```json
 {
   "compilerOptions": {
     "paths": {
-      "@mariozechner/pi-ai": ["./packages/ai/src/index.ts"],
-      "@mariozechner/pi-agent-core": ["./packages/agent/src/index.ts"]
+      "@marvin-agents/ai": ["./packages/ai/src/index.ts"],
+      "@marvin-agents/agent-core": ["./packages/agent/src/index.ts"]
     }
   }
 }
 ```
 
-From pi-mono's package.json deps:
+Semver dependency example for published packages:
 ```json
 "dependencies": {
-  "@mariozechner/pi-ai": "^0.27.6",
-  "@mariozechner/pi-agent-core": "^0.27.6"
+  "@marvin-agents/ai": "^0.1.0",
+  "@marvin-agents/agent-core": "^0.1.0"
 }
 ```
 
 ## Desired End State
 
 1. All packages publishable with `npm publish -ws --access public`
-2. Package.json deps are semver (`"^0.24.0"`), not `file:`
+2. Package.json deps are semver (`"^0.1.0"`), not `file:`
 3. TypeScript paths resolve to `src/` for local dev
 4. Entrypoints always point to `dist/`
 5. Lockstep versioning via `sync-versions.js`
-6. Hooks can `npm install @marvin-agents/ai`
+6. Hooks and SDK consumers can `npm install @marvin-agents/sdk` (and `@marvin-agents/ai`, `@marvin-agents/base-tools`)
+
+### Versioning Targets
+
+- **Library packages (npm)**: lockstep **0.1.0**.
+- **CLI binary (Homebrew/GitHub release)**: **0.3.0** (from `apps/coding-agent/package.json`).
 
 ### Verification
 
@@ -63,28 +71,32 @@ npm publish -ws --access public --dry-run
 # Test in isolated environment
 mkdir /tmp/test-marvin && cd /tmp/test-marvin
 npm init -y
-npm install @marvin-agents/ai @marvin-agents/base-tools
+npm install @marvin-agents/ai @marvin-agents/base-tools @marvin-agents/sdk
 node -e "import('@marvin-agents/ai').then(m => console.log(Object.keys(m)))"
+node -e "import('@marvin-agents/sdk').then(m => console.log(Object.keys(m)))"
 ```
 
 ## Out of Scope
 
 - `@marvin-agents/open-tui` — TUI framework, not needed for hooks/SDK
 - CI/CD automation (manual first)
-- SDK creation (separate plan)
 
 ## Distribution Strategy
 
 Because marvin uses `@opentui/core` (native dylib + tree-sitter WASM), we use a **dual distribution model**:
 
-1. **Library packages** → npm (`@marvin-agents/ai`, `@marvin-agents/base-tools`, etc.)
+1. **Library packages** → npm (`@marvin-agents/ai`, `@marvin-agents/agent-core`, `@marvin-agents/base-tools`, `@marvin-agents/lsp`, `@marvin-agents/runtime-effect`, `@marvin-agents/sdk`)
    - For hooks, custom tools, embedding in other projects
-   - Standard `npm install @marvin-agents/ai`
+   - Standard `npm install @marvin-agents/sdk` (pulls runtime-effect + core deps)
 
-2. **CLI binary** → GitHub Releases (compiled standalone executables)
+2. **CLI binary** → GitHub Releases (compiled standalone executables, version `0.3.0`)
    - Self-contained Bun binary with all deps embedded
    - Platform-specific: darwin-arm64, darwin-x64, linux-x64, linux-arm64
    - Users update via `marvin update` command
+
+3. **Homebrew** → tap in `~/Documents/personal/homebrew-tools`
+   - Formula uses GitHub release tarballs and checksums
+   - Install via `brew install yeshwanthyk/tools/marvin`
 
 This differs from pi-mono (which can use `npm install -g` because pi-tui is pure JS) and follows opencode's model (native deps require compiled binaries).
 
@@ -94,7 +106,7 @@ This differs from pi-mono (which can use `npm install -g` because pi-tui is pure
 
 ### Overview
 
-Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
+Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-effect`, and `sdk`.
 
 ### Prerequisites
 
@@ -143,7 +155,47 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
 }
 ```
 
-#### 3. Update base-tools package.json
+#### 3. Create tsconfig.build.json for runtime-effect
+
+**File**: `packages/runtime-effect/tsconfig.build.json` (new)
+
+**Add**:
+```json
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"declaration": true,
+		"declarationMap": true,
+		"sourceMap": true
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts", "tests"]
+}
+```
+
+#### 4. Create tsconfig.build.json for sdk
+
+**File**: `packages/sdk/tsconfig.build.json` (new)
+
+**Add**:
+```json
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"declaration": true,
+		"declarationMap": true,
+		"sourceMap": true
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts", "tests"]
+}
+```
+
+#### 5. Update base-tools package.json
 
 **File**: `packages/base-tools/package.json`
 
@@ -172,7 +224,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
 ```json
 {
   "name": "@marvin-agents/base-tools",
-  "version": "0.23.3",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -194,7 +246,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@marvin-agents/ai": "^0.23.3",
+    "@marvin-agents/ai": "^0.1.0",
     "@sinclair/typebox": "^0.34.41",
     "diff": "^8.0.2",
     "file-type": "^21.1.1"
@@ -215,11 +267,11 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
 
 **Key changes**:
 - Removed `private: true`
-- Version synced to `0.23.3`
+- Version synced to `0.1.0`
 - Entrypoints point to `dist/`
-- Dep changed from `file:../ai` to `^0.23.3`
+- Dep changed from `file:../ai` to `^0.1.0`
 
-#### 4. Update lsp package.json
+#### 6. Update lsp package.json
 
 **File**: `packages/lsp/package.json`
 
@@ -247,7 +299,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
 ```json
 {
   "name": "@marvin-agents/lsp",
-  "version": "0.23.3",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -269,7 +321,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@marvin-agents/ai": "^0.23.3",
+    "@marvin-agents/ai": "^0.1.0",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageserver-types": "^3.17.5"
   },
@@ -287,7 +339,161 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
 }
 ```
 
-#### 5. Update ai package.json entrypoints
+#### 7. Update runtime-effect package.json
+
+**File**: `packages/runtime-effect/package.json`
+
+**Before**:
+```json
+{
+  "name": "@marvin-agents/runtime-effect",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "effect": "^3.19.14",
+    "@effect/platform-node": "^0.104.0",
+    "@marvin-agents/agent-core": "file:../agent",
+    "@marvin-agents/ai": "file:../ai",
+    "@marvin-agents/base-tools": "file:../base-tools",
+    "@marvin-agents/lsp": "file:../lsp"
+  }
+}
+```
+
+**After**:
+```json
+{
+  "name": "@marvin-agents/runtime-effect",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "effect": "^3.19.14",
+    "@effect/platform-node": "^0.104.0",
+    "@marvin-agents/agent-core": "^0.1.0",
+    "@marvin-agents/ai": "^0.1.0",
+    "@marvin-agents/base-tools": "^0.1.0",
+    "@marvin-agents/lsp": "^0.1.0"
+  },
+  "keywords": ["ai", "agent", "effect", "runtime"],
+  "author": "Yesh Yendamuri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yeshwanthyk/marvin.git",
+    "directory": "packages/runtime-effect"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+```
+
+#### 8. Update sdk package.json
+
+**File**: `packages/sdk/package.json`
+
+**Before**:
+```json
+{
+  "name": "@marvin-agents/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "@marvin-agents/agent-core": "file:../agent",
+    "@marvin-agents/ai": "file:../ai",
+    "@marvin-agents/runtime-effect": "file:../runtime-effect",
+    "effect": "^3.19.14"
+  }
+}
+```
+
+**After**:
+```json
+{
+  "name": "@marvin-agents/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test tests",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@marvin-agents/agent-core": "^0.1.0",
+    "@marvin-agents/ai": "^0.1.0",
+    "@marvin-agents/runtime-effect": "^0.1.0",
+    "effect": "^3.19.14"
+  },
+  "keywords": ["ai", "agent", "sdk", "effect"],
+  "author": "Yesh Yendamuri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yeshwanthyk/marvin.git",
+    "directory": "packages/sdk"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+```
+
+#### 9. Update ai package.json entrypoints
 
 **File**: `packages/ai/package.json`
 **Lines**: 5-7
@@ -313,7 +519,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
   "files": [
 ```
 
-#### 6. Update agent-core package.json
+#### 10. Update agent-core package.json
 
 **File**: `packages/agent/package.json`
 **Lines**: 5-12
@@ -345,7 +551,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
   ],
 ```
 
-#### 7. Update agent-core dependency to semver
+#### 11. Update agent-core dependency to semver
 
 **File**: `packages/agent/package.json`
 
@@ -359,7 +565,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools` and `lsp`.
 **After**:
 ```json
   "dependencies": {
-    "@marvin-agents/ai": "^0.23.3"
+    "@marvin-agents/ai": "^0.1.0"
   }
 ```
 
@@ -371,6 +577,8 @@ cd packages/ai && npm run build && ls dist/index.js
 cd packages/agent && npm run build && ls dist/index.js
 cd packages/base-tools && npm run build && ls dist/index.js
 cd packages/lsp && npm run build && ls dist/index.js
+cd packages/runtime-effect && npm run build && ls dist/index.js
+cd packages/sdk && npm run build && ls dist/index.js
 ```
 
 ### Rollback
@@ -411,7 +619,11 @@ Add tsconfig paths so TypeScript resolves `@marvin-agents/*` to local `src/` dur
       "@marvin-agents/base-tools": ["./packages/base-tools/src/index.ts"],
       "@marvin-agents/base-tools/*": ["./packages/base-tools/src/*"],
       "@marvin-agents/lsp": ["./packages/lsp/src/index.ts"],
-      "@marvin-agents/lsp/*": ["./packages/lsp/src/*"]
+      "@marvin-agents/lsp/*": ["./packages/lsp/src/*"],
+      "@marvin-agents/runtime-effect": ["./packages/runtime-effect/src/index.ts"],
+      "@marvin-agents/runtime-effect/*": ["./packages/runtime-effect/src/*"],
+      "@marvin-agents/sdk": ["./packages/sdk/src/index.ts"],
+      "@marvin-agents/sdk/*": ["./packages/sdk/src/*"]
     }
   },
   "include": [
@@ -441,10 +653,11 @@ Add tsconfig paths so TypeScript resolves `@marvin-agents/*` to local `src/` dur
 **After**:
 ```json
   "dependencies": {
-    "@marvin-agents/agent-core": "^0.23.3",
-    "@marvin-agents/ai": "^0.23.3",
-    "@marvin-agents/base-tools": "^0.23.3",
-    "@marvin-agents/lsp": "^0.23.3",
+    "@marvin-agents/agent-core": "^0.1.0",
+    "@marvin-agents/ai": "^0.1.0",
+    "@marvin-agents/base-tools": "^0.1.0",
+    "@marvin-agents/lsp": "^0.1.0",
+    "@marvin-agents/runtime-effect": "^0.1.0",
     "@marvin-agents/open-tui": "file:../../packages/open-tui",
 ```
 
@@ -505,7 +718,7 @@ const packagesDir = join(process.cwd(), 'packages');
 const appsDir = join(process.cwd(), 'apps');
 
 // Packages to sync (excludes open-tui)
-const SYNC_PACKAGES = ['ai', 'agent', 'base-tools', 'lsp'];
+const SYNC_PACKAGES = ['ai', 'agent', 'base-tools', 'lsp', 'runtime-effect', 'sdk'];
 
 // Read package.json files
 function readPkg(dir) {
@@ -608,7 +821,7 @@ if (totalUpdates === 0) {
     "test": "bun scripts/test-all.ts",
     "check": "bun run typecheck && bun run test",
     "build": "cd apps/coding-agent && bun scripts/build.ts",
-    "build:packages": "npm run build -w @marvin-agents/ai && npm run build -w @marvin-agents/agent-core && npm run build -w @marvin-agents/base-tools && npm run build -w @marvin-agents/lsp",
+    "build:packages": "npm run build -w @marvin-agents/ai && npm run build -w @marvin-agents/agent-core && npm run build -w @marvin-agents/base-tools && npm run build -w @marvin-agents/lsp && npm run build -w @marvin-agents/runtime-effect && npm run build -w @marvin-agents/sdk",
     "marvin": "bun apps/coding-agent/src/index.ts",
     "sync-versions": "node scripts/sync-versions.js",
     "version:patch": "npm version patch -ws --no-git-tag-version && npm run sync-versions",
@@ -684,12 +897,17 @@ npm install @marvin-agents/base-tools
 ## Usage
 
 ```typescript
-import { codingTools, readTool, bashTool } from '@marvin-agents/base-tools';
+import { createToolRegistry, createReadTool } from '@marvin-agents/base-tools';
 
-// Use all tools
-const tools = codingTools;
+const cwd = process.cwd();
 
-// Or individual tools
+// Load from registry
+const registry = createToolRegistry(cwd);
+const readTool = await registry.read.load();
+
+// Or create directly
+const directReadTool = createReadTool(cwd);
+
 const result = await readTool.execute('id', { path: './file.ts' });
 ```
 
@@ -728,10 +946,66 @@ const tools = wrapToolsWithLspDiagnostics(baseTools, lsp, { cwd });
 MIT
 ```
 
+#### 3. Create README for runtime-effect
+
+**File**: `packages/runtime-effect/README.md` (new)
+
+**Add**:
+```markdown
+# @marvin-agents/runtime-effect
+
+Effect-powered runtime layer for Marvin agents (config, hooks, tools, LSP, sessions).
+
+## Installation
+
+```bash
+npm install @marvin-agents/runtime-effect
+```
+
+## Usage
+
+```typescript
+import { RuntimeLayer } from "@marvin-agents/runtime-effect/runtime";
+```
+
+## License
+
+MIT
+```
+
+#### 4. Create README for sdk
+
+**File**: `packages/sdk/README.md` (new)
+
+**Add**:
+```markdown
+# @marvin-agents/sdk
+
+Headless SDK for running Marvin agents using the Effect runtime.
+
+## Installation
+
+```bash
+npm install @marvin-agents/sdk
+```
+
+## Usage
+
+```typescript
+import { runAgent } from "@marvin-agents/sdk";
+
+const result = await runAgent({ prompt: "Hello", cwd: process.cwd() });
+```
+
+## License
+
+MIT
+```
+
 ### Success Criteria
 
 ```bash
-ls packages/base-tools/README.md packages/lsp/README.md
+ls packages/base-tools/README.md packages/lsp/README.md packages/runtime-effect/README.md packages/sdk/README.md
 ```
 
 ---
@@ -763,7 +1037,7 @@ npm run check
 npm run publish:dry
 ```
 
-Verify output shows all 4 packages would be published.
+Verify output shows all 6 packages would be published.
 
 #### 3. Publish
 
@@ -771,11 +1045,11 @@ Verify output shows all 4 packages would be published.
 npm run publish:packages
 ```
 
-#### 4. Tag release
+#### 4. Tag npm package release
 
 ```bash
 VERSION=$(node -p "require('./packages/ai/package.json').version")
-git tag -a "v${VERSION}" -m "Release v${VERSION}"
+git tag -a "packages-v${VERSION}" -m "Packages v${VERSION}"
 git push origin main --tags
 ```
 
@@ -787,12 +1061,16 @@ npm view @marvin-agents/ai
 npm view @marvin-agents/agent-core
 npm view @marvin-agents/base-tools
 npm view @marvin-agents/lsp
+npm view @marvin-agents/runtime-effect
+npm view @marvin-agents/sdk
 
 # Installable
 mkdir /tmp/test && cd /tmp/test
 npm init -y
 npm install @marvin-agents/ai @marvin-agents/base-tools
+npm install @marvin-agents/sdk
 node -e "import('@marvin-agents/ai').then(m => console.log('OK:', Object.keys(m).length, 'exports'))"
+node -e "import('@marvin-agents/sdk').then(m => console.log('OK:', Object.keys(m).length, 'exports'))"
 ```
 
 ---
@@ -1123,6 +1401,7 @@ Add build script for all platforms and GitHub Actions workflow for releases.
 ### Prerequisites
 
 - [ ] Phase 7 complete
+- [ ] `apps/coding-agent/package.json` version set to **0.3.0**
 
 ### Changes
 
@@ -1347,15 +1626,100 @@ ls dist/*.tar.gz
 
 # Release process:
 # 1. npm run version:patch
-# 2. git add -A && git commit -m "chore: release $(node -p \"require('./packages/ai/package.json').version\")"
-# 3. git tag v$(node -p "require('./packages/ai/package.json').version")
+# 2. git add -A && git commit -m "chore: packages $(node -p \"require('./packages/ai/package.json').version\")"
+# 3. git tag packages-v$(node -p "require('./packages/ai/package.json').version")
 # 4. git push origin main --tags
-# 5. GitHub Actions builds and creates release
+# 5. Bump CLI version in apps/coding-agent/package.json (0.3.0 target)
+# 6. git add -A && git commit -m "chore: marvin $(node -p \"require('./apps/coding-agent/package.json').version\")"
+# 7. git tag v$(node -p "require('./apps/coding-agent/package.json').version")
+# 8. git push origin main --tags
+# 9. GitHub Actions builds and creates release (binary)
 ```
 
 ---
 
-## Phase 9: Auto-Update on Startup (Optional)
+## Phase 9: Homebrew Tap Update
+
+### Overview
+
+Publish the `marvin` binary via Homebrew using your tap repo at `~/Documents/personal/homebrew-tools`.
+
+### Prerequisites
+
+- [ ] Phase 8 complete
+- [ ] GitHub release exists for CLI version (`apps/coding-agent/package.json`)
+- [ ] Release assets include all target tarballs
+
+### Steps
+
+#### 1. Compute SHA256 for release assets
+
+```bash
+cd dist
+shasum -a 256 marvin-darwin-arm64.tar.gz
+shasum -a 256 marvin-darwin-x64.tar.gz
+shasum -a 256 marvin-linux-x64.tar.gz
+shasum -a 256 marvin-linux-arm64.tar.gz
+```
+
+#### 2. Create or update formula
+
+**File**: `~/Documents/personal/homebrew-tools/Formula/marvin.rb`
+
+Template (mirror quickdiff style):
+```ruby
+class Marvin < Formula
+  desc "AI coding agent CLI and TUI"
+  homepage "https://github.com/Yeshwanthyk/marvin"
+  license "MIT"
+
+  version "0.3.0"
+
+  on_macos do
+    url "https://github.com/Yeshwanthyk/marvin/releases/download/v0.3.0/marvin-darwin-arm64.tar.gz"
+    sha256 "<DARWIN_ARM64_SHA>"
+  end
+
+  on_linux do
+    url "https://github.com/Yeshwanthyk/marvin/releases/download/v0.3.0/marvin-linux-x64.tar.gz"
+    sha256 "<LINUX_X64_SHA>"
+  end
+
+  def install
+    bin.install "marvin"
+  end
+
+  test do
+    system "#{bin}/marvin", "--version"
+  end
+end
+```
+
+#### 3. Commit + push tap
+
+```bash
+cd ~/Documents/personal/homebrew-tools
+git add Formula/marvin.rb
+git commit -m "marvin 0.3.0"
+git push
+```
+
+#### 4. Test install
+
+```bash
+brew tap yeshwanthyk/tools https://github.com/Yeshwanthyk/homebrew-tools
+brew install yeshwanthyk/tools/marvin
+marvin --version
+```
+
+### Success Criteria
+
+- `brew install yeshwanthyk/tools/marvin` succeeds
+- `marvin --version` prints `0.3.0`
+
+---
+
+## Phase 10: Auto-Update on Startup (Optional)
 
 ### Overview
 
@@ -1452,22 +1816,34 @@ bun run check
 ### Releasing (Library + CLI)
 
 ```bash
-# 1. Bump version (all packages together)
+# 1. Bump library packages (lockstep)
 npm run version:patch  # or minor/major
 
-# 2. Commit
+# 2. Commit library bump
 git add -A
-git commit -m "chore: release $(node -p "require('./packages/ai/package.json').version")"
+git commit -m "chore: packages $(node -p "require('./packages/ai/package.json').version")"
 
 # 3. Publish library packages to npm
 npm run publish:packages
 
-# 4. Tag and push (triggers binary build)
+# 4. Tag packages
 VERSION=$(node -p "require('./packages/ai/package.json').version")
-git tag -a "v${VERSION}" -m "Release v${VERSION}"
+git tag -a "packages-v${VERSION}" -m "Packages v${VERSION}"
 git push origin main --tags
 
-# 5. GitHub Actions builds binaries and creates release
+# 5. Bump CLI version (0.3.0 target)
+# Edit apps/coding-agent/package.json
+
+# 6. Commit CLI bump
+git add -A
+git commit -m "chore: marvin $(node -p "require('./apps/coding-agent/package.json').version")"
+
+# 7. Tag CLI release (triggers binary build)
+CLI_VERSION=$(node -p "require('./apps/coding-agent/package.json').version")
+git tag -a "v${CLI_VERSION}" -m "Release v${CLI_VERSION}"
+git push origin main --tags
+
+# 8. GitHub Actions builds binaries and creates release
 ```
 
 ### User Installation
