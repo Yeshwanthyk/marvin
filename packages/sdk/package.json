@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsc -p tsconfig.build.json",
+		"build": "tsc -b tsconfig.build.json --force",
     "test": "bun test tests",
     "prepublishOnly": "npm run clean && npm run build"
   },

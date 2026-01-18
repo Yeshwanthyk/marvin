@@ -19,7 +19,7 @@
 	"scripts": {
 		"clean": "rm -rf dist",
 		"generate-models": "npx tsx scripts/generate-models.ts",
-		"build": "npm run generate-models && tsgo -p tsconfig.build.json",
+		"build": "npm run generate-models && tsgo -b tsconfig.build.json --force",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"dev:tsc": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"check": "biome check --write . && tsgo --noEmit",
