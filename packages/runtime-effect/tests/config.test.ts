@@ -90,4 +90,48 @@ describe("loadAppConfig", () => {
       await rm(projectDir, { recursive: true, force: true });
     }
   });
+
+  it("accepts comma-separated model list and uses first entry", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-model-list-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-model-list-"));
+    try {
+      const model = getAnthropicModel();
+      const configPath = await writeConfig(configDir, model.id);
+
+      const config = await loadAppConfig({
+        configDir,
+        configPath,
+        cwd: projectDir,
+        model: `${model.id},${model.id}`,
+      });
+
+      expect(config.modelId).toBe(model.id);
+      expect(config.provider).toBe("anthropic");
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts provider-prefixed model list entries", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-model-prefix-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-model-prefix-"));
+    try {
+      const model = getAnthropicModel();
+      const configPath = await writeConfig(configDir, model.id);
+
+      const config = await loadAppConfig({
+        configDir,
+        configPath,
+        cwd: projectDir,
+        model: `anthropic/${model.id},${model.id}`,
+      });
+
+      expect(config.modelId).toBe(model.id);
+      expect(config.provider).toBe("anthropic");
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
 });
