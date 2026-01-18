@@ -80,6 +80,7 @@ describe("RuntimeLayer", () => {
       expect(services.config.modelId).toBe(temp.model.id);
       expect(services.agent).toBeInstanceOf(Agent);
       expect(typeof services.sessionOrchestrator.submitPrompt).toBe("function");
+      expect(typeof services.sessionOrchestrator.submitPromptAndWait).toBe("function");
       expect(typeof services.promptQueue.enqueue).toBe("function");
       expect(Array.isArray(services.cycleModels)).toBe(true);
     } finally {

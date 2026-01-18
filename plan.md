@@ -58,11 +58,11 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ### Phase 4 · CLI & Adapter Integration
 - [x] **P4.1** Swap `apps/coding-agent/src/runtime/factory.ts` usage with new Effect runtime (likely thin adapter that composes layers and hands out resources to TUI/headless/ACP). _(Jan 18: `createRuntime` now builds `RuntimeLayer` under a managed scope, adapters/tests call the new `close()` hook, so CLI surfaces the Effect runtime end-to-end.)_
 - [x] **P4.2** Remove legacy modules replaced by Effect equivalents (`lazy-tool-loader`, `runtime/transport`, manual queue helpers) and migrate tests. _(Jan 18: deleted the `@runtime` shim modules, pointed all queue/extensibility imports at `packages/runtime-effect`, and kept CLI + tests green.)_
-- [ ] **P4.3** Update CLI adapters (headless, TUI, ACP) to consume the new services; validate DMUX + `.config/marvin` flows.
+- [x] **P4.3** Update CLI adapters (headless, TUI, ACP) to consume the new services; validate DMUX + `.config/marvin` flows. _(Jan 18: headless + ACP now drive SessionOrchestrator via `submitPromptAndWait`, attachments supported end-to-end.)_
 
 ### Phase 5 · Verification & Documentation
-- [ ] **P5.1** Expand Vitest suites to cover new services (session manager, hook orchestration, queue scheduling with ExecutionPlan fallbacks).
-- [ ] **P5.2** Run `bun run check` + targeted suites (`bun test apps/coding-agent/tests`) post-migration; capture logs for regressions.
+- [x] **P5.1** Expand Vitest suites to cover new services (session manager, hook orchestration, queue scheduling with ExecutionPlan fallbacks). _(Added coverage for submitPromptAndWait + attachment routing on Jan 18.)_
+- [x] **P5.2** Run `bun run check` + targeted suites (`bun test apps/coding-agent/tests`) post-migration; capture logs for regressions. _(Latest run on Jan 18, 2026.)_
 - [ ] **P5.3** Document runtime migration in `README.md` / `docs/` (what changed, how to work with Effect). Ensure `plan.md` statuses reflect completion.
 
 ---

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import * as Runtime from "effect/Runtime";
 import { getModels, type Api, type Model, type KnownProvider } from "@marvin-agents/ai";
-import type { AppMessage } from "@marvin-agents/agent-core";
+import type { AppMessage, Attachment } from "@marvin-agents/agent-core";
 import { SessionOrchestratorLayer, SessionOrchestratorTag } from "../src/session/orchestrator.js";
 import { PromptQueueLayer } from "../src/session/prompt-queue.js";
 import { ExecutionPlanBuilderLayer, type ExecutionPlanBuilderOptions } from "../src/session/execution-plan.js";
@@ -43,6 +43,7 @@ class TestAgent {
   callCount = 0;
   failuresBeforeSuccess = 0;
   replaceSnapshots: AppMessage[][] = [];
+  attachmentsReceived: Attachment[][] = [];
 
   constructor(model: Model<Api>) {
     this.state = {
@@ -64,9 +65,10 @@ class TestAgent {
     this.replaceSnapshots.push(messages.slice());
   }
 
-  async prompt(text: string) {
+  async prompt(text: string, attachments?: Attachment[]) {
     this.callCount++;
     this.prompts.push(text);
+    this.attachmentsReceived.push(attachments ? [...attachments] : []);
     if (this.callCount <= this.failuresBeforeSuccess) {
       throw new Error("planned failure");
     }
@@ -261,5 +263,54 @@ describe("SessionOrchestratorLayer", () => {
     expect(agent.callCount).toBe(2);
     expect(agent.modelsUsed).toEqual([anthropicModel.id, openAiModel.id]);
     expect(agent.replaceSnapshots).toHaveLength(1);
+  });
+
+  it("awaits prompt completion via submitPromptAndWait", async () => {
+    const agent = new TestAgent(anthropicModel);
+    const sessionManager = new TestSessionManager();
+    const hookRunner = new TestHookRunner();
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({ agent, sessionManager, hookRunner, instrumentation });
+
+    await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPromptAndWait("blocking call");
+      }),
+    );
+
+    expect(agent.callCount).toBe(1);
+    expect(agent.prompts).toEqual(["blocking call"]);
+  });
+
+  it("forwards attachments to the agent", async () => {
+    const agent = new TestAgent(anthropicModel);
+    const sessionManager = new TestSessionManager();
+    const hookRunner = new TestHookRunner();
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({ agent, sessionManager, hookRunner, instrumentation });
+
+    const attachments: Attachment[] = [
+      {
+        id: "img-1",
+        type: "image",
+        fileName: "shot.png",
+        mimeType: "image/png",
+        size: 10,
+        content: "data",
+      },
+    ];
+
+    await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPrompt("need vision", { attachments });
+        yield* waitForAgentCalls(agent, 1);
+      }),
+    );
+
+    expect(agent.attachmentsReceived[0]).toEqual(attachments);
   });
 });

@@ -77,7 +77,7 @@ function createMockContext(overrides: Partial<CommandContext> = {}): CommandCont
 		setDisplayContextWindow: mock(() => {}),
 		setDiffWrapMode: mock(() => {}),
 		setConcealMarkdown: mock(() => {}),
-		runImmediatePrompt: mock(async () => {}),
+		submitPrompt: mock(async () => {}),
 		steer: mock(async () => {}),
 		followUp: mock(async () => {}),
 		sendUserMessage: mock(async () => {}),
@@ -205,15 +205,15 @@ describe("handleSlashCommand", () => {
 			const ok = await handleSlashCommand("/steer focus now", ctx)
 			expect(ok).toBe(true)
 			expect(steer).toHaveBeenCalledWith("focus now")
-			expect(ctx.runImmediatePrompt).not.toHaveBeenCalled()
+			expect(ctx.submitPrompt).not.toHaveBeenCalled()
 		})
 
 		it("sends immediately when idle", async () => {
-			const runImmediatePrompt = mock(async () => {})
-			const ctx = createMockContext({ runImmediatePrompt })
+			const submitPrompt = mock(async () => {})
+			const ctx = createMockContext({ submitPrompt })
 			const ok = await handleSlashCommand("/steer tighten scope", ctx)
 			expect(ok).toBe(true)
-			expect(runImmediatePrompt).toHaveBeenCalledWith("tighten scope")
+			expect(submitPrompt).toHaveBeenCalledWith("tighten scope", { mode: "steer" })
 		})
 
 		it("shows usage when missing args", async () => {
@@ -234,11 +234,11 @@ describe("handleSlashCommand", () => {
 		})
 
 		it("sends immediately when idle", async () => {
-			const runImmediatePrompt = mock(async () => {})
-			const ctx = createMockContext({ runImmediatePrompt })
+			const submitPrompt = mock(async () => {})
+			const ctx = createMockContext({ submitPrompt })
 			const ok = await handleSlashCommand("/followup once more", ctx)
 			expect(ok).toBe(true)
-			expect(runImmediatePrompt).toHaveBeenCalledWith("once more")
+			expect(submitPrompt).toHaveBeenCalledWith("once more", { mode: "followUp" })
 		})
 
 		it("shows usage when missing text", async () => {
