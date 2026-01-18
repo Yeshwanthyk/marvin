@@ -3,7 +3,7 @@ import { getModels, getProviders, type AgentTool, type Api, type KnownProvider, 
 import { toolRegistry } from "@marvin-agents/base-tools"
 import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
 import { loadAppConfig, type LoadedAppConfig } from "../config.js"
-import { loadCustomCommands, type CustomCommand, type CustomCommandLoadResult } from "../custom-commands.js"
+import { loadCustomCommands, type CustomCommand } from "../custom-commands.js"
 import { wrapToolsWithHooks, getHookTools, HookedTransport, type HookRunner } from "../hooks/index.js"
 import { SessionManager } from "../session-manager.js"
 import { loadExtensibility, attachHookErrorLogging } from "./extensibility/index.js"

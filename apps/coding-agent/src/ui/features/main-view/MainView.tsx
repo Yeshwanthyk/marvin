@@ -11,7 +11,7 @@ import {
 import type { ThinkingLevel } from "@marvin-agents/agent-core"
 import type { KnownProvider } from "@marvin-agents/ai"
 import type { LspManager } from "@marvin-agents/lsp"
-import { createSignal, createEffect, Show, onMount } from "solid-js"
+import { createSignal, createEffect, onMount } from "solid-js"
 import { createAutocompleteCommands } from "../../../autocomplete-commands.js"
 import type { CustomCommand } from "../../../custom-commands.js"
 import { Footer } from "../../../components/Footer.js"

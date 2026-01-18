@@ -29,6 +29,7 @@ type _CheckExhaustive = ApiOptionsMap extends Record<Api, StreamOptions>
 			]
 	: ["ApiOptionsMap doesn't extend Record<KnownApi, StreamOptions>"];
 const _exhaustive: _CheckExhaustive = true;
+void _exhaustive;
 
 // Helper type to get options for a specific API
 export type OptionsForApi<TApi extends Api> = ApiOptionsMap[TApi];

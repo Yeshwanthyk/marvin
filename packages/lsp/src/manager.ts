@@ -125,7 +125,7 @@ export function createLspManager(options: LspManagerOptions): LspManager {
 
   function activeServers(): LspServerStatus[] {
     const result: LspServerStatus[] = []
-    for (const [key, client] of clients.entries()) {
+    for (const client of clients.values()) {
       result.push({ serverId: client.serverId as LspServerId, root: client.root })
     }
     return result

@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDir": "../..",
     "baseUrl": "src",
     "outDir": "dist",
     "declaration": true,
@@ -19,12 +19,24 @@
       "@domain/*": ["domain/*"],
       "@ext/*": ["extensibility/*"],
       "@ui/*": ["ui/*"],
-      "@marvin-agents/agent-core": ["../../packages/agent/src/index.ts"],
-      "@marvin-agents/agent-core/*": ["../../packages/agent/src/*"],
-      "@marvin-agents/ai": ["../../packages/ai/src/index.ts"],
-      "@marvin-agents/ai/src/*": ["../../packages/ai/src/*"]
+      "@marvin-agents/agent-core": ["../../../packages/agent/src/index.ts"],
+      "@marvin-agents/agent-core/*": ["../../../packages/agent/src/*"],
+      "@marvin-agents/base-tools": ["../../../packages/base-tools/src/index.ts"],
+      "@marvin-agents/base-tools/*": ["../../../packages/base-tools/src/*"],
+      "@marvin-agents/lsp": ["../../../packages/lsp/src/index.ts"],
+      "@marvin-agents/lsp/*": ["../../../packages/lsp/src/*"],
+      "@marvin-agents/ai": ["../../../packages/ai/src/index.ts"],
+      "@marvin-agents/ai/src/*": ["../../../packages/ai/src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "../../packages/agent/src/**/*.ts",
+    "../../packages/ai/src/**/*.ts",
+    "../../packages/base-tools/src/**/*.ts",
+    "../../packages/lsp/src/**/*.ts",
+    "package.json"
+  ],
   "exclude": ["dist", "node_modules"]
 }

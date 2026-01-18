@@ -10,10 +10,8 @@ import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import type {
 	HookAPI,
-	HookEvent,
 	HookEventType,
 	HookFactory,
-	HookHandler,
 	HookMessage,
 	HookMessageRenderer,
 	RegisteredCommand,

@@ -76,14 +76,12 @@ const safeCwd = (cwd: string): string => {
 };
 
 export class SessionManager {
-  private configDir: string;
   private cwd: string;
   private sessionDir: string;
   private currentSessionPath: string | null = null;
   private currentSessionId: string | null = null;
 
   constructor(configDir: string = join(process.env.HOME || '', '.config', 'marvin')) {
-    this.configDir = configDir;
     this.cwd = process.cwd();
     this.sessionDir = join(configDir, 'sessions', safeCwd(this.cwd));
   }

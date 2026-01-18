@@ -27,12 +27,10 @@ export interface CodexTransportOptions {
 type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export class CodexTransport implements AgentTransport {
-	private options: CodexTransportOptions;
 	private customFetch: FetchFn;
 	private instructionsCache: Record<string, string> = {};
 
 	constructor(options: CodexTransportOptions) {
-		this.options = options;
 		this.customFetch = createCodexFetch({
 			getTokens: options.getTokens,
 			setTokens: options.setTokens,

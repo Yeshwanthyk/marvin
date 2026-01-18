@@ -7,16 +7,21 @@
     "test": "bun scripts/test-all.ts",
     "check": "bun run typecheck && bun run test",
     "build": "cd apps/coding-agent && bun scripts/build.ts",
-    "marvin": "bun apps/coding-agent/src/index.ts"
+    "marvin": "bun apps/coding-agent/src/index.ts",
+    "prepare": "effect-language-service patch"
   },
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "dependencies": {
-    "@sinclair/typebox": "0.34.45"
+    "@effect/cli": "^0.73.0",
+    "@effect/platform-node": "^0.104.0",
+    "@sinclair/typebox": "0.34.45",
+    "effect": "^3.19.14"
   },
   "devDependencies": {
+    "@effect/language-service": "^0.69.1",
     "@types/node": "^25.0.1",
     "eslint": "^9.39.2",
     "eslint-plugin-boundaries": "^5.3.1",

@@ -3,7 +3,7 @@
  */
 
 import { For, Show, Switch, Match, createMemo } from "solid-js"
-import { Markdown, TextAttributes, useTheme } from "@marvin-agents/open-tui"
+import { Markdown, useTheme } from "@marvin-agents/open-tui"
 import type { UIMessage, ToolBlock, ContentItem } from "../types.js"
 import { profile } from "../profiler.js"
 import { ToolBlock as ToolBlockComponent } from "../tui-open-rendering.js"

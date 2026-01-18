@@ -5,7 +5,7 @@
  * Load from ~/.config/marvin/hooks/*.ts
  */
 
-import type { AppMessage, ThinkingLevel } from "@marvin-agents/agent-core"
+import type { AppMessage } from "@marvin-agents/agent-core"
 import type { Api, ImageContent, Message, Model, SimpleStreamOptions, TextContent, ToolResultMessage } from "@marvin-agents/ai"
 import type { Theme } from "@marvin-agents/open-tui"
 import type { JSX } from "solid-js"

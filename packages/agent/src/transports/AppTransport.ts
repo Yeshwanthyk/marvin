@@ -274,6 +274,7 @@ function streamSimpleProxy(
 								default: {
 									// Exhaustive check
 									const _exhaustiveCheck: never = proxyEvent;
+									void _exhaustiveCheck;
 									console.warn(`Unhandled event type: ${(proxyEvent as any).type}`);
 									break;
 								}
