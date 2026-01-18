@@ -20,6 +20,7 @@ import type {
 	KnownProvider,
 	Model,
 	OptionsForApi,
+	StreamOptions,
 	ReasoningEffort,
 	SimpleStreamOptions,
 } from "./types.js";
@@ -152,12 +153,23 @@ function mapOptionsForApi<TApi extends Api>(
 	options?: SimpleStreamOptions,
 	apiKey?: string,
 ): OptionsForApi<TApi> {
-	const base = {
-		temperature: options?.temperature,
-		maxTokens: options?.maxTokens || Math.min(model.maxTokens, 32000),
-		signal: options?.signal,
-		apiKey: apiKey || options?.apiKey,
+	const resolvedApiKey = apiKey ?? options?.apiKey;
+	if (!resolvedApiKey) {
+		throw new Error(`No API key for provider: ${model.provider}`);
+	}
+
+	const baseMaxTokens = options?.maxTokens ?? Math.min(model.maxTokens, 32000);
+	const base: StreamOptions & { maxTokens: number; apiKey: string } = {
+		maxTokens: baseMaxTokens,
+		apiKey: resolvedApiKey,
 	};
+
+	if (options?.temperature !== undefined) {
+		base.temperature = options.temperature;
+	}
+	if (options?.signal) {
+		base.signal = options.signal;
+	}
 
 	// Helper to clamp xhigh to high for providers that don't support it
 	const clampReasoning = (effort: ReasoningEffort | undefined) =>
@@ -185,19 +197,23 @@ function mapOptionsForApi<TApi extends Api>(
 			} satisfies AnthropicOptions;
 		}
 
-		case "openai-completions":
+		case "openai-completions": {
+			const reasoningEffort = options?.reasoning;
 			return {
 				...base,
-				reasoningEffort: options?.reasoning,
+				...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
 			} satisfies OpenAICompletionsOptions;
+		}
 
-		case "openai-responses":
+		case "openai-responses": {
+			const reasoningEffort = options?.reasoning;
 			return {
 				...base,
-				reasoningEffort: options?.reasoning,
-				fetch: options?.fetch,
-				instructions: options?.instructions,
+				...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+				...(options?.fetch ? { fetch: options.fetch } : {}),
+				...(options?.instructions !== undefined ? { instructions: options.instructions } : {}),
 			} satisfies OpenAIResponsesOptions;
+		}
 
 		case "google-generative-ai": {
 			// Explicitly disable thinking when reasoning is not specified

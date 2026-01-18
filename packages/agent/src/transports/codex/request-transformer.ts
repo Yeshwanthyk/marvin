@@ -17,18 +17,20 @@ export function transformRequestBody(
 	reasoning?: ReasoningEffort,
 ): CodexRequestBody {
 	const model = normalizeModel(body.model);
-	
-	return {
+	const transformed: CodexRequestBody = {
 		...body,
 		model,
 		store: false,
 		stream: true,
 		instructions,
-		input: body.input ? filterInput(body.input) : undefined,
 		reasoning: { effort: reasoning ?? "medium", summary: "auto" },
 		text: { verbosity: "medium" },
 		include: ["reasoning.encrypted_content"],
-		max_output_tokens: undefined,
-		max_completion_tokens: undefined,
 	};
+
+	if (body.input) {
+		transformed.input = filterInput(body.input);
+	}
+
+	return transformed;
 }

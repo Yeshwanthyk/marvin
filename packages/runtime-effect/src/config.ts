@@ -68,11 +68,16 @@ export const loadAgentsConfig = async (): Promise<AgentsConfig> => {
   if (global) parts.push(global.content);
   if (project) parts.push(project.content);
 
-  return {
-    global,
-    project,
+  const config: AgentsConfig = {
     combined: parts.join("\n\n---\n\n"),
   };
+  if (global) {
+    config.global = global;
+  }
+  if (project) {
+    config.project = project;
+  }
+  return config;
 };
 
 const isThinkingLevel = (value: unknown): value is ThinkingLevel =>

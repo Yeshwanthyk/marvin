@@ -64,7 +64,7 @@ function streamSimpleProxy(
 		}
 
 		try {
-			const response = await fetch(`${proxyUrl}/api/stream`, {
+			const fetchInit: RequestInit = {
 				method: "POST",
 				headers: {
 					Authorization: `Bearer ${options.authToken}`,
@@ -80,8 +80,12 @@ function streamSimpleProxy(
 						// Don't send apiKey or signal - those are added server-side
 					},
 				}),
-				signal: options.signal,
-			});
+			};
+			if (options.signal) {
+				fetchInit.signal = options.signal;
+			}
+
+			const response = await fetch(`${proxyUrl}/api/stream`, fetchInit);
 
 			if (!response.ok) {
 				let errorMessage = `Proxy error: ${response.status} ${response.statusText}`;
@@ -162,7 +166,9 @@ function streamSimpleProxy(
 								case "text_end": {
 									const content = partial.content[proxyEvent.contentIndex];
 									if (content?.type === "text") {
-										content.textSignature = proxyEvent.contentSignature;
+										if (proxyEvent.contentSignature !== undefined) {
+											content.textSignature = proxyEvent.contentSignature;
+										}
 										event = {
 											type: "text_end",
 											contentIndex: proxyEvent.contentIndex,
@@ -202,7 +208,9 @@ function streamSimpleProxy(
 								case "thinking_end": {
 									const content = partial.content[proxyEvent.contentIndex];
 									if (content?.type === "thinking") {
-										content.thinkingSignature = proxyEvent.contentSignature;
+										if (proxyEvent.contentSignature !== undefined) {
+											content.thinkingSignature = proxyEvent.contentSignature;
+										}
 										event = {
 											type: "thinking_end",
 											contentIndex: proxyEvent.contentIndex,
@@ -366,12 +374,21 @@ export class AppTransport implements AgentTransport {
 	}
 
 	private buildLoopConfig(cfg: AgentRunConfig): AgentLoopConfig {
-		return {
+		const loopConfig: AgentLoopConfig = {
 			model: cfg.model,
-			reasoning: cfg.reasoning,
-			getSteeringMessages: cfg.getSteeringMessages,
-			getFollowUpMessages: cfg.getFollowUpMessages,
 		};
+
+		if (cfg.reasoning) {
+			loopConfig.reasoning = cfg.reasoning;
+		}
+		if (cfg.getSteeringMessages) {
+			loopConfig.getSteeringMessages = cfg.getSteeringMessages;
+		}
+		if (cfg.getFollowUpMessages) {
+			loopConfig.getFollowUpMessages = cfg.getFollowUpMessages;
+		}
+
+		return loopConfig;
 	}
 
 	async *run(messages: Message[], userMessage: Message, cfg: AgentRunConfig, signal?: AbortSignal) {

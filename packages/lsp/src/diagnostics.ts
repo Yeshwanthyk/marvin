@@ -103,5 +103,15 @@ export function summarizeDiagnostics(input: {
     projectWarnings += counts.warnings
   }
 
-  return { fileText, projectText, fileCounts, projectCounts: { errors: projectErrors, warnings: projectWarnings } }
+  const summary: DiagnosticSummary = {
+    fileCounts,
+    projectCounts: { errors: projectErrors, warnings: projectWarnings },
+  }
+  if (fileText) {
+    summary.fileText = fileText
+  }
+  if (projectText) {
+    summary.projectText = projectText
+  }
+  return summary
 }

@@ -1,6 +1,6 @@
 import type { ImageContent, Message, QueuedMessage, ReasoningEffort, TextContent } from "@marvin-agents/ai";
 import { getModel } from "@marvin-agents/ai";
-import type { AgentTransport } from "./transports/types.js";
+import type { AgentRunConfig, AgentTransport } from "./transports/types.js";
 import type { AgentEvent, AgentState, AppMessage, Attachment, ThinkingLevel } from "./types.js";
 
 /**
@@ -72,18 +72,17 @@ export class Agent {
 		isStreaming: false,
 		streamMessage: null,
 		pendingToolCalls: new Set<string>(),
-		error: undefined,
 	};
 	private listeners = new Set<(e: AgentEvent) => void>();
-	private abortController?: AbortController;
+	private abortController: AbortController | undefined;
 	private transport: AgentTransport;
 	private messageTransformer: (messages: AppMessage[]) => Message[] | Promise<Message[]>;
 	private steeringQueue: Array<DeliveryQueuedMessage<AppMessage>> = [];
 	private followUpQueue: Array<DeliveryQueuedMessage<AppMessage>> = [];
 	private queueMessageWarningIssued = false;
 	private queueMode: "all" | "one-at-a-time";
-	private runningPrompt?: Promise<void>;
-	private resolveRunningPrompt?: () => void;
+	private runningPrompt: Promise<void> | undefined;
+	private resolveRunningPrompt: (() => void) | undefined;
 
 	constructor(opts: AgentOptions) {
 		this._state = { ...this._state, ...opts.initialState };
@@ -199,7 +198,7 @@ export class Agent {
 		this._state.isStreaming = false;
 		this._state.streamMessage = null;
 		this._state.pendingToolCalls = new Set<string>();
-		this._state.error = undefined;
+		delete this._state.error;
 		this.clearMessageQueue();
 	}
 
@@ -291,7 +290,7 @@ export class Agent {
 		this.abortController = new AbortController();
 		this._state.isStreaming = true;
 		this._state.streamMessage = null;
-		this._state.error = undefined;
+		delete this._state.error;
 
 		const reasoning: ReasoningEffort | undefined =
 			this._state.thinkingLevel === "off"
@@ -300,11 +299,11 @@ export class Agent {
 					? "low"
 					: this._state.thinkingLevel;
 
-		const cfg = {
+		const cfg: AgentRunConfig = {
 			systemPrompt: this._state.systemPrompt,
 			tools: this._state.tools,
 			model,
-			reasoning,
+			...(reasoning ? { reasoning } : {}),
 			getSteeringMessages: async <T>() => {
 				if (this.steeringQueue.length === 0) {
 					return [];

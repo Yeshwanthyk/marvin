@@ -1,4 +1,5 @@
 import type { AgentTool, AgentToolResult } from "@marvin-agents/ai"
+import type { Diagnostic } from "vscode-languageserver-types"
 import path from "node:path"
 import type { LspManager, LspDiagnosticCaps } from "./types.js"
 import { summarizeDiagnostics } from "./diagnostics.js"
@@ -40,13 +41,24 @@ export function wrapToolsWithLspDiagnostics(
 
         opts.onCheckStart?.()
         try {
-          await lsp.touchFile(absPath, { waitForDiagnostics: true, signal }).catch(() => {})
+          const touchOpts: { waitForDiagnostics: boolean; signal?: AbortSignal } = { waitForDiagnostics: true }
+          if (signal) {
+            touchOpts.signal = signal
+          }
+          await lsp.touchFile(absPath, touchOpts).catch(() => {})
         } finally {
           opts.onCheckEnd?.()
         }
         const diagnosticsByFile = await lsp.diagnostics().catch(() => ({}))
 
-        const summary = summarizeDiagnostics({ diagnosticsByFile, filePath: absPath, caps: opts.caps })
+        const summaryInput: { diagnosticsByFile: Record<string, Diagnostic[]>; filePath: string; caps?: Partial<LspDiagnosticCaps> } = {
+          diagnosticsByFile,
+          filePath: absPath,
+        }
+        if (opts.caps) {
+          summaryInput.caps = opts.caps
+        }
+        const summary = summarizeDiagnostics(summaryInput)
         const extra = [summary.fileText, summary.projectText].filter(Boolean).join("\n")
 
         if (!extra) return result

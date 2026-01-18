@@ -256,12 +256,13 @@ async function streamAssistantResponse(
 				return m;
 			}
 		}),
-		tools: context.tools, // AgentTool extends Tool, so this works
+		...(context.tools ? { tools: context.tools } : {}),
 	};
 
 	// Use custom stream function if provided, otherwise use default streamSimple
 	const streamFunction = streamFn || streamSimple;
-	const response = await streamFunction(config.model, processedContext, { ...config, signal });
+	const streamOptions = signal ? { ...config, signal } : config;
+	const response = await streamFunction(config.model, processedContext, streamOptions);
 
 	let partialMessage: AssistantMessage | null = null;
 	let addedPartial = false;

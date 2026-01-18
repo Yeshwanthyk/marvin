@@ -147,7 +147,7 @@ export const createRuntime = async (
 	const sessionManager = new SessionManager(loaded.configDir)
 	
 	// Create minimal tool objects for extensibility (just needs name property)
-	const builtinToolMocks = Object.entries(toolRegistry).map(([name, def]) => ({
+	const builtinToolMocks = Object.keys(toolRegistry).map((name) => ({
 		name,
 	})) as unknown as AgentTool<any, any>[]
 	

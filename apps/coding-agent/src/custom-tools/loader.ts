@@ -117,7 +117,6 @@ async function execCommand(command: string, args: string[], cwd: string, options
  */
 async function loadTool(
 	toolPath: string,
-	cwd: string,
 	api: ToolAPI,
 ): Promise<{ tools: LoadedCustomTool[] | null; error: string | null }> {
 	const resolvedPath = resolve(toolPath)
@@ -220,7 +219,7 @@ export async function loadCustomTools(
 	const paths = discoverToolsInDir(toolsDir)
 
 	for (const toolPath of paths) {
-		const { tools: loadedTools, error } = await loadTool(toolPath, cwd, api)
+		const { tools: loadedTools, error } = await loadTool(toolPath, api)
 
 		if (error) {
 			issues.push(issueFromError("tool", toolPath, error))

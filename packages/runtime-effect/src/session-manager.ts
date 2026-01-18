@@ -142,8 +142,10 @@ export class SessionManager implements ReadonlySessionManager {
       type: "custom",
       timestamp: Date.now(),
       customType,
-      data,
     };
+    if (data !== undefined) {
+      entry.data = data;
+    }
 
     appendFile(this.currentSessionPath, `${JSON.stringify(entry)}\n`, (err) => {
       if (err) console.error("Session write error:", err.message);

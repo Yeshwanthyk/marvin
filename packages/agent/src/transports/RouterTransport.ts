@@ -12,7 +12,7 @@ export interface RouterTransportOptions {
  * Routes to correct transport based on model.provider
  */
 export class RouterTransport implements AgentTransport {
-	private codex?: AgentTransport;
+	private codex: AgentTransport | undefined;
 	private provider: AgentTransport;
 
 	constructor(options: RouterTransportOptions) {

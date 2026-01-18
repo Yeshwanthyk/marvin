@@ -43,27 +43,39 @@ export function parseAuthorizationInput(input: string): ParsedAuthInput {
 	const value = (input || "").trim();
 	if (!value) return {};
 
+	const fromParams = (code: string | null, state: string | null): ParsedAuthInput => {
+		const result: ParsedAuthInput = {};
+		if (code !== null) {
+			result.code = code;
+		}
+		if (state !== null) {
+			result.state = state;
+		}
+		return result;
+	};
+
 	try {
 		const url = new URL(value);
-		return {
-			code: url.searchParams.get("code") ?? undefined,
-			state: url.searchParams.get("state") ?? undefined,
-		};
+		return fromParams(url.searchParams.get("code"), url.searchParams.get("state"));
 	} catch {
 		// Not a URL, try other formats
 	}
 
 	if (value.includes("#")) {
 		const [code, state] = value.split("#", 2);
-		return { code, state };
+		const result: ParsedAuthInput = {};
+		if (code !== undefined) {
+			result.code = code;
+		}
+		if (state !== undefined) {
+			result.state = state;
+		}
+		return result;
 	}
 
 	if (value.includes("code=")) {
 		const params = new URLSearchParams(value);
-		return {
-			code: params.get("code") ?? undefined,
-			state: params.get("state") ?? undefined,
-		};
+		return fromParams(params.get("code"), params.get("state"));
 	}
 
 	return { code: value };
