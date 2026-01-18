@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@marvin-agents/ai": ["./packages/ai/src/index.ts"],
+      "@marvin-agents/ai/*": ["./packages/ai/src/*"],
+      "@marvin-agents/agent-core": ["./packages/agent/src/index.ts"],
+      "@marvin-agents/agent-core/*": ["./packages/agent/src/*"],
+      "@marvin-agents/base-tools": ["./packages/base-tools/src/index.ts"],
+      "@marvin-agents/base-tools/*": ["./packages/base-tools/src/*"],
+      "@marvin-agents/lsp": ["./packages/lsp/src/index.ts"],
+      "@marvin-agents/lsp/*": ["./packages/lsp/src/*"],
+      "@marvin-agents/runtime-effect": ["./packages/runtime-effect/src/index.ts"],
+      "@marvin-agents/runtime-effect/*": ["./packages/runtime-effect/src/*"],
+      "@marvin-agents/sdk": ["./packages/sdk/src/index.ts"],
+      "@marvin-agents/sdk/*": ["./packages/sdk/src/*"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*",
+    "packages/*/test/**/*",
+    "apps/*/src/**/*"
+  ]
+}

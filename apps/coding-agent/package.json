@@ -11,10 +11,11 @@
     "build": "bun scripts/build.ts"
   },
   "dependencies": {
-    "@marvin-agents/agent-core": "file:../../packages/agent",
-    "@marvin-agents/ai": "file:../../packages/ai",
-    "@marvin-agents/base-tools": "file:../../packages/base-tools",
-    "@marvin-agents/lsp": "file:../../packages/lsp",
+    "@marvin-agents/agent-core": "^0.1.0",
+    "@marvin-agents/ai": "^0.1.0",
+    "@marvin-agents/base-tools": "^0.1.0",
+    "@marvin-agents/lsp": "^0.1.0",
+    "@marvin-agents/runtime-effect": "^0.1.0",
     "@marvin-agents/open-tui": "file:../../packages/open-tui",
     "@opentui/core": "0.1.63",
     "@opentui/solid": "0.1.63",
