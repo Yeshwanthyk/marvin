@@ -4,7 +4,7 @@
 - Created: 2025-01-28
 - Updated: 2026-01-18
 - Owner: yesh
-- Status: draft (rewritten for Effect runtime)
+- Status: completed (2026-01-18)
 - Package manager: bun
 
 ## Constraints
