@@ -21,7 +21,7 @@ import { runShellCommand } from "../../shell-runner.js"
 import { MainView } from "../features/main-view/MainView.js"
 import { createAppStore } from "../state/app-store.js"
 import { useAgentEvents } from "../../hooks/useAgentEvents.js"
-import type { EventHandlerContext } from "../../agent-events.js"
+import type { EventHandlerContext, ToolMeta } from "../../agent-events.js"
 import { THINKING_LEVELS, type CommandContext } from "../../commands.js"
 import { slashCommands } from "../../autocomplete-commands.js"
 import { updateAppConfig } from "../../config.js"
@@ -55,6 +55,17 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		validationIssues,
 	} = runtime
 
+	const toolMetaByName = new Map<string, ToolMeta>()
+	for (const [name, entry] of toolByName.entries()) {
+		toolMetaByName.set(name, {
+			label: entry.label,
+			source: entry.source,
+			sourcePath: entry.sourcePath,
+			renderCall: entry.renderCall as ToolMeta["renderCall"],
+			renderResult: entry.renderResult as ToolMeta["renderResult"],
+		})
+	}
+
 	const store = createAppStore({
 		initialTheme: config.theme,
 		initialModelId: config.modelId,
@@ -74,7 +85,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		agent,
 		sessionManager,
 		hookRunner,
-		toolByName,
+		toolByName: toolMetaByName,
 		setMessages: store.messages.set,
 		setContextTokens: store.contextTokens.set,
 		setDisplayProvider: store.currentProvider.set,
@@ -123,7 +134,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		retryState,
 		agent: agent as EventHandlerContext["agent"],
 		hookRunner,
-		toolByName,
+		toolByName: toolMetaByName,
 		getContextWindow: () => store.displayContextWindow.value(),
 	}
 

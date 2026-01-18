@@ -116,6 +116,6 @@ export const runHeadless = async (args: HeadlessArgs) => {
 		)
 		process.exitCode = 1
 	} finally {
-		await runtime.lsp.shutdown().catch(() => {})
+		await runtime.close().catch(() => {})
 	}
 }

@@ -56,7 +56,7 @@ Each checklist item becomes its own commit + `bun run check` gate.
 - [ ] **P3.3** Ensure LSP manager + tool diagnostics become Effect-managed resources, enabling safe startup/shutdown and bridging to UI via event bus.
 
 ### Phase 4 · CLI & Adapter Integration
-- [ ] **P4.1** Swap `apps/coding-agent/src/runtime/factory.ts` usage with new Effect runtime (likely thin adapter that composes layers and hands out resources to TUI/headless/ACP).
+- [x] **P4.1** Swap `apps/coding-agent/src/runtime/factory.ts` usage with new Effect runtime (likely thin adapter that composes layers and hands out resources to TUI/headless/ACP). _(Jan 18: `createRuntime` now builds `RuntimeLayer` under a managed scope, adapters/tests call the new `close()` hook, so CLI surfaces the Effect runtime end-to-end.)_
 - [ ] **P4.2** Remove legacy modules replaced by Effect equivalents (`lazy-tool-loader`, `runtime/transport`, manual queue helpers) and migrate tests.
 - [ ] **P4.3** Update CLI adapters (headless, TUI, ACP) to consume the new services; validate DMUX + `.config/marvin` flows.
 

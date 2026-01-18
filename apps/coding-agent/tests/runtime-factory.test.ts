@@ -19,7 +19,7 @@ describe("runtime factory", () => {
 		const runtime = await createRuntime({ configDir: config.configDir, configPath: config.configPath }, "headless")
 		runtimes.push({
 			cleanup: async () => {
-				await runtime.lsp.shutdown().catch(() => {})
+				await runtime.close().catch(() => {})
 				config.cleanup()
 			},
 		})
@@ -38,7 +38,7 @@ describe("runtime factory", () => {
 		const runtime = await createRuntime({ configDir: config.configDir, configPath: config.configPath }, "headless")
 		runtimes.push({
 			cleanup: async () => {
-				await runtime.lsp.shutdown().catch(() => {})
+				await runtime.close().catch(() => {})
 				config.cleanup()
 			},
 		})

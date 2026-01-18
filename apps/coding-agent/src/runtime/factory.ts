@@ -1,239 +1,63 @@
-import { Agent, type AgentTransport, type ThinkingLevel } from "@marvin-agents/agent-core"
-import { getModels, getProviders, type AgentTool, type Api, type KnownProvider, type Model } from "@marvin-agents/ai"
-import { toolRegistry } from "@marvin-agents/base-tools"
-import { createLspManager, wrapToolsWithLspDiagnostics, type LspManager } from "@marvin-agents/lsp"
-import { loadAppConfig, type LoadedAppConfig } from "../config.js"
+import { Context, Effect, Exit, Layer, Scope } from "effect";
 import {
-	loadCustomCommands,
-	type CustomCommand,
-} from "@marvin-agents/runtime-effect/extensibility/custom-commands.js"
-import { wrapToolsWithHooks, getHookTools, HookedTransport, type HookRunner } from "../hooks/index.js"
-import { SessionManager } from "../session-manager.js"
-import { loadExtensibility, attachHookErrorLogging } from "./extensibility/index.js"
-import { LazyToolLoader, toolProxyAsArray } from "@marvin-agents/runtime-effect/lazy-tool-loader.js"
-import {
-	createTransportBundle,
-	defaultApiKeyResolver,
-	type TransportBundle,
-} from "./transport/index.js"
-import type {
-	LoadedCustomTool,
-	SendRef,
-} from "@marvin-agents/runtime-effect/extensibility/custom-tools/index.js"
-import type { ValidationIssue } from "@ext/schema.js"
+  RuntimeLayer,
+  RuntimeServicesTag,
+  type AdapterKind,
+  type RuntimeLayerOptions,
+  type RuntimeServices,
+} from "@marvin-agents/runtime-effect/runtime.js";
+import type { LoadConfigOptions } from "@marvin-agents/runtime-effect/config.js";
 
-export type AdapterKind = "tui" | "headless" | "acp"
+export type RuntimeInitArgs = LoadConfigOptions;
 
-export interface RuntimeInitArgs {
-	configDir?: string
-	configPath?: string
-	provider?: string
-	model?: string
-	thinking?: ThinkingLevel
-}
+export type RuntimeContext = RuntimeServices & {
+  /**
+   * Explicitly shuts down the runtime scope, allowing services like the LSP
+   * manager to flush state before the process exits.
+   */
+  close: () => Promise<void>;
+};
 
-export interface RuntimeContext {
-	adapter: AdapterKind
-	agent: Agent
-	createAgent: (options?: { model?: Model<Api>; thinking?: ThinkingLevel }) => Agent
-	sessionManager: SessionManager
-	hookRunner: HookRunner
-	customCommands: Map<string, CustomCommand>
-	toolByName: Map<string, ToolRegistryEntry>
-	lsp: LspManager
-	lspActiveRef: { setActive: (value: boolean) => void }
-	sendRef: SendRef
-	config: LoadedAppConfig
-	cycleModels: Array<{ provider: KnownProvider; model: Model<Api> }>
-	getApiKey: (provider: string) => string | undefined
-	transport: TransportBundle["router"]
-	providerTransport: TransportBundle["provider"]
-	codexTransport: TransportBundle["codex"]
-	validationIssues: ValidationIssue[]
-}
-
-export interface ToolRegistryEntry {
-	label: string
-	source: "builtin" | "custom"
-	sourcePath?: string
-	renderCall?: any
-	renderResult?: any
-}
-
-const buildToolRegistry = (customTools: LoadedCustomTool[]): Map<string, ToolRegistryEntry> => {
-	const registry = new Map<string, ToolRegistryEntry>()
-	// Add builtin tools from lazy registry
-	for (const [name, def] of Object.entries(toolRegistry)) {
-		registry.set(name, { label: def.label, source: "builtin" })
-	}
-	for (const { tool, resolvedPath } of customTools) {
-		const customTool = tool as unknown
-		registry.set(tool.name, {
-			label: tool.label,
-			source: "custom",
-			sourcePath: resolvedPath,
-			renderCall: (customTool as { renderCall?: any }).renderCall,
-			renderResult: (customTool as { renderResult?: any }).renderResult,
-		})
-	}
-	return registry
-}
-
-const buildCycleModels = (
-	modelSpec: string | undefined,
-	loaded: LoadedAppConfig,
-): Array<{ provider: KnownProvider; model: Model<Api> }> => {
-	type ModelEntry = { provider: KnownProvider; model: Model<Api> }
-	const entries: ModelEntry[] = []
-	const modelIds = modelSpec?.split(",").map((s) => s.trim()).filter(Boolean) || [loaded.modelId]
-
-	for (const id of modelIds) {
-		if (id.includes("/")) {
-			const [provStr, modelStr] = id.split("/")
-			const prov = getProviders().find((p) => p === provStr) as KnownProvider | undefined
-			if (!prov) continue
-			const model = getModels(prov).find((m) => m.id === modelStr)
-			if (model) entries.push({ provider: prov, model })
-		} else {
-			for (const prov of getProviders()) {
-				const model = getModels(prov as KnownProvider).find((m) => m.id === id)
-				if (model) {
-					entries.push({ provider: prov as KnownProvider, model })
-					break
-				}
-			}
-		}
-	}
-
-	if (entries.length === 0) entries.push({ provider: loaded.provider, model: loaded.model })
-	return entries
-}
-
-const createAgentFactory =
-	(transport: AgentTransport, tools: AgentTool<any, any>[], config: LoadedAppConfig) =>
-	(options?: { model?: Model<Api>; thinking?: ThinkingLevel }) =>
-		new Agent({
-			transport,
-			initialState: {
-				systemPrompt: config.systemPrompt,
-				model: options?.model ?? config.model,
-				thinkingLevel: options?.thinking ?? config.thinking,
-				tools,
-			},
-		})
-
-const parseModelArgs = (args?: RuntimeInitArgs) => {
-	const firstModelRaw = args?.model?.split(",")[0]?.trim()
-	let firstProvider = args?.provider
-	let firstModel = firstModelRaw
-	if (firstModelRaw?.includes("/")) {
-		const [p, m] = firstModelRaw.split("/")
-		firstProvider = p
-		firstModel = m
-	}
-	return { firstProvider, firstModel }
-}
+const toLayerOptions = (args: RuntimeInitArgs | undefined, adapter: AdapterKind): RuntimeLayerOptions => ({
+  adapter,
+  configDir: args?.configDir,
+  configPath: args?.configPath,
+  provider: args?.provider,
+  model: args?.model,
+  thinking: args?.thinking,
+});
 
 export const createRuntime = async (
-	args: RuntimeInitArgs = {},
-	adapter: AdapterKind = "tui",
+  args: RuntimeInitArgs = {},
+  adapter: AdapterKind = "tui",
 ): Promise<RuntimeContext> => {
-	const { firstProvider, firstModel } = parseModelArgs(args)
-	const loaded = await loadAppConfig({
-		configDir: args.configDir,
-		configPath: args.configPath,
-		provider: firstProvider,
-		model: firstModel,
-		thinking: args.thinking,
-	})
+  const layer = RuntimeLayer(toLayerOptions(args, adapter)) as Layer.Layer<RuntimeServices, never, never>;
 
-	const { commands: customCommands, issues: commandIssues } = loadCustomCommands(loaded.configDir)
-	const cwd = process.cwd()
-	const sendRef: SendRef = { current: () => {} }
-	const sessionManager = new SessionManager(loaded.configDir)
-	
-	// Create minimal tool objects for extensibility (just needs name property)
-	const builtinToolMocks = Object.keys(toolRegistry).map((name) => ({
-		name,
-	})) as unknown as AgentTool<any, any>[]
-	
-	const extensibility = await loadExtensibility({
-		configDir: loaded.configDir,
-		cwd,
-		sendRef,
-		builtinTools: builtinToolMocks,
-		hasUI: adapter === "tui",
-		sessionManager,
-	})
+  const setupEffect = Effect.gen(function* () {
+    const scope = yield* Scope.make();
+    const context = yield* Layer.buildWithScope(layer, scope);
+    const services = Context.get(context, RuntimeServicesTag);
+    return { services, scope };
+  });
 
-	const validationIssues: ValidationIssue[] = [...commandIssues, ...extensibility.validationIssues]
-	for (const issue of validationIssues) {
-		if (issue.severity === "error") {
-			process.stderr.write(`[${issue.kind}] ${issue.path}: ${issue.message}\n`)
-		}
-	}
+  const { services, scope } = await Effect.runPromise(setupEffect);
 
-	attachHookErrorLogging(extensibility.hookRunner, (message) => process.stderr.write(`${message}\n`))
+  let closed = false;
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    process.removeListener("exit", exitHandler);
+    await Effect.runPromise(Scope.close(scope, Exit.void));
+  };
 
-	const lsp = createLspManager({
-		cwd,
-		configDir: loaded.configDir,
-		enabled: loaded.lsp.enabled,
-		autoInstall: loaded.lsp.autoInstall,
-	})
-	const lspActiveRef = { setActive: (_v: boolean) => {} }
+  const exitHandler = () => {
+    void close();
+  };
 
-	// Build lazy tool loader: registry + custom tools + hook-registered tools
-	const hookTools = getHookTools(extensibility.hookRunner)
-	const toolLoader = new LazyToolLoader(
-		toolRegistry,
-		extensibility.customTools.map((t) => t.tool),
-		hookTools,
-	)
+  process.once("exit", exitHandler);
 
-	// Pre-load core tools (read, bash) for fast startup
-	await toolLoader.preloadCoreTools()
-
-	// Get tools as proxy array for agent initialization
-	const toolsProxy = toolLoader.getToolsProxy()
-	const tools = wrapToolsWithLspDiagnostics(
-		wrapToolsWithHooks(toolProxyAsArray(toolsProxy), extensibility.hookRunner),
-		lsp,
-		{
-			cwd,
-			onCheckStart: () => lspActiveRef.setActive(true),
-			onCheckEnd: () => lspActiveRef.setActive(false),
-		},
-	)
-
-	const transports = createTransportBundle(loaded, defaultApiKeyResolver)
-	// Wrap router transport with hook transforms (chat.messages.transform, auth.get, model.resolve, etc.)
-	const hookedTransport = new HookedTransport(transports.router, extensibility.hookRunner)
-	const createAgentInstance = createAgentFactory(hookedTransport, tools, loaded)
-	const agent = createAgentInstance()
-
-	await extensibility.hookRunner.emit({ type: "app.start" })
-
-	const toolByName = buildToolRegistry(extensibility.customTools)
-	const cycleModels = buildCycleModels(args.model, loaded)
-
-	return {
-		adapter,
-		agent,
-		createAgent: createAgentInstance,
-		sessionManager,
-		hookRunner: extensibility.hookRunner,
-		customCommands,
-		toolByName,
-		lsp,
-		lspActiveRef,
-		sendRef,
-		config: loaded,
-		cycleModels,
-		getApiKey: defaultApiKeyResolver,
-		transport: transports.router,
-		providerTransport: transports.provider,
-		codexTransport: transports.codex,
-		validationIssues,
-	}
-}
+  return {
+    ...services,
+    close,
+  };
+};
