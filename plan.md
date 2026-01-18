@@ -48,7 +48,7 @@ Each checklist item becomes its own commit + `bun run check` gate.
   - [x] **P2.2b — ExecutionPlanBuilder:** Define configurable retry/fallback plans per provider/model (Anthropic primary, OpenAI fallback, etc.), hooking into `SessionManager` for compaction metadata and to DMUX instrumentation for visibility. _(Delivered Jan 18, 2026 via `packages/runtime-effect/src/session/execution-plan.ts`, `ExecutionPlanBuilderLayer`, `ExecutionPlanStepTag`, and new Vitest coverage in `packages/runtime-effect/tests/execution-plan.test.ts`.)_
   - [x] **P2.2c — SessionOrchestratorLayer:** Added `packages/runtime-effect/src/session/orchestrator.ts` plus service exports so the Effect runtime now drains `PromptQueue`, emits hook lifecycle signals (session start, DMUX logging), and wraps agent prompts with `ExecutionPlan` retries/fallbacks guarded by `SessionManager`.
   - [x] **P2.2d — Coverage:** Extended `packages/runtime-effect/tests/session-orchestrator.test.ts` to assert queue draining + fallback retries and updated `bun run check` logs in this plan as the verification artifact for DMUX-friendly orchestration.
-- [ ] **P2.3** Expose typed `RuntimeContext` service(s) consumed by adapters, ensuring `.config/marvin/hooks/*` receive identical event payloads (turn/session/agent etc.).
+- [x] **P2.3** Added `packages/runtime-effect/src/runtime.ts` + `RuntimeLayer` so adapters can pull a full `RuntimeServices` bundle (agent, hook runner, session manager, prompt queue, orchestrator, transports, LSP, custom commands) built entirely via Effect layers. Covered by a new Bun test that instantiates the layer against a temporary config and asserts the resulting services.
 
 ### Phase 3 · Hook + Session Orchestration Rewrite
 - [ ] **P3.1** Rebuild hook runner on Effect: convert `apps/coding-agent/src/hooks` to use `Layer` + `Channel`, preserving ability to dynamically load TS hooks from `~/.config/marvin/hooks`.
@@ -82,8 +82,8 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ---
 
 ## 6. Immediate Next Steps
-1. Start **P2.3 RuntimeContext**: design the adapter-facing context tags/services that replace `apps/coding-agent/src/runtime/factory.ts`.
-2. Define integration plan for **Phase 3 hook/session orchestration** so HookRunner + LSP lifecycles migrate to Effect fibers without regressing `.config/marvin` behaviors.
-3. Draft DMUX/manual validation checklist (Phase 5) covering `bun run marvin` smoke tests once adapters begin consuming the new runtime.
+1. Kick off **P3.1 Hook runner migration** by mapping existing `HookRunner.initialize`/UI contracts to Effect layers + Channels.
+2. Formalize `.config/marvin` extensibility lifecycle under Effect (Phase 3.2), including custom commands/tools validation + DMUX logging.
+3. Start drafting the Phase 5 DMUX/manual validation checklist so we can exercise the new runtime via `bun run marvin` once adapters switch over.
 
 _This document is the authoritative tracker. Update checkboxes + notes as phases complete._
