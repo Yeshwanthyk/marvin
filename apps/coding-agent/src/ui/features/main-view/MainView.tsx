@@ -17,7 +17,7 @@ import type { CustomCommand } from "@marvin-agents/runtime-effect/extensibility/
 import { Footer } from "../../../components/Footer.js"
 import { Header } from "../../../components/Header.js"
 import type { ActivityState, ToolBlock, UIMessage } from "../../../types.js"
-import type { QueueCounts } from "../../../runtime/session/prompt-queue.js"
+import type { QueueCounts } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
 import { useGitStatus } from "../../../hooks/useGitStatus.js"
 import { useSpinner } from "../../../hooks/useSpinner.js"
 import { useToastManager } from "../../../hooks/useToastManager.js"

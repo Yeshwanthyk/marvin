@@ -13,7 +13,7 @@ function detectThemeMode(): ThemeMode {
 import { useRuntime } from "../../runtime/context.js"
 import type { LoadedSession } from "../../session-manager.js"
 import { createSessionController } from "@runtime/session/session-controller.js"
-import { createPromptQueue, type PromptDeliveryMode } from "@runtime/session/prompt-queue.js"
+import { createPromptQueue, type PromptDeliveryMode } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
 import { appendWithCap } from "@domain/messaging/content.js"
 import type { UIShellMessage, UIMessage } from "../../types.js"
 import type { AppMessage } from "@marvin-agents/agent-core"
