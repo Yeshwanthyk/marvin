@@ -157,9 +157,9 @@ Changes:
 Goal: align docs with new SDK and remove legacy guidance.
 
 Changes:
-- [ ] Update `docs/architecture.md` and `docs/walkthrough.md` to reference SDK built on Effect runtime.
-- [ ] Update `guides/sdk-migration-guide.html` and other SDK docs to remove `codingTools` backward-compat notes.
-- [ ] Add `docs/sdk.md` with:
+- [x] Update `docs/architecture.md` and `docs/walkthrough.md` to reference SDK built on Effect runtime.
+- [x] Update `guides/sdk-migration-guide.html` and other SDK docs to remove `codingTools` backward-compat notes.
+- [x] Add `docs/sdk.md` with:
   - minimal examples for `runAgent`, `createAgentSession`, streaming
   - notes on config dir overrides and hook loading
   - LSP default behavior in SDK

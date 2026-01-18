@@ -25,36 +25,35 @@ if (args.headless) {
 
 **Key files:**
 - `args.ts` — CLI argument parsing
-- `tui-app.tsx` — Interactive TUI entry point
-- `headless.ts` — Non-interactive single-prompt execution
+- `adapters/tui/*` — Interactive TUI entry point
+- `adapters/cli/headless.ts` — Non-interactive single-prompt execution
 
-### 2. TUI Initialization: `apps/coding-agent/src/tui-app.tsx`
+### 2. SDK Entry: `packages/sdk`
+
+The SDK exposes a small surface area built on the Effect runtime:
+
+- `runAgent` / `runAgentEffect`
+- `createAgentSession` / `createAgentSessionEffect`
+- `runAgentStream`
+
+See `docs/sdk.md` for usage examples and option details.
+
+### 3. TUI Initialization: `apps/coding-agent/src/adapters/tui`
 
 The TUI mode sets up the reactive terminal application:
 
 ```
 runTuiOpen()
     │
-    ├─► loadAppConfig() ─────────────────► Config from ~/.config/marvin/
+    ├─► createRuntime() ────────────────► Builds RuntimeLayer (runtime-effect)
     │
-    ├─► loadCustomCommands() ────────────► Slash commands from commands/
+    ├─► RuntimeLayer ───────────────────► Config + transports + tools + hooks + LSP
     │
-    ├─► loadHooks() ─────────────────────► User hooks from hooks/
+    ├─► SessionOrchestrator ───────────► Prompt queue + execution plan
     │
-    ├─► loadCustomTools() ───────────────► User tools from tools/
+    ├─► Setup event handlers ───────────► agent.subscribe(handleEvent)
     │
-    ├─► createLspManager() ──────────────► LSP integration
-    │
-    ├─► Wrap tools ──────────────────────► hooks → LSP → base tools
-    │   └─► wrapToolsWithLspDiagnostics(wrapToolsWithHooks(allTools, hookRunner), lsp)
-    │
-    ├─► Create Transports ───────────────► ProviderTransport, CodexTransport, RouterTransport
-    │
-    ├─► Create Agent ────────────────────► State machine with transport
-    │
-    ├─► Setup event handlers ────────────► agent.subscribe(handleEvent)
-    │
-    └─► render(<TuiApp />) ──────────────► SolidJS terminal rendering
+    └─► render(<TuiApp />) ─────────────► SolidJS terminal rendering
 ```
 
 **What to look at:**
@@ -63,27 +62,25 @@ runTuiOpen()
 - **Transport setup** (lines ~120-140): RouterTransport routes between ProviderTransport and CodexTransport
 - **Agent creation** (lines ~140-160): Agent with transport, initial state
 
-### 3. Headless Mode: `apps/coding-agent/src/headless.ts`
+### 4. Headless Mode: `apps/coding-agent/src/adapters/cli/headless.ts`
 
 Simpler path for scripted execution:
 
 ```
 runHeadless()
     │
-    ├─► Same config/tools/hooks loading
+    ├─► createRuntime() ────────────────► RuntimeLayer (headless)
     │
-    ├─► Create agent (no TUI)
+    ├─► submitPromptAndWait() ─────────► SessionOrchestrator
     │
-    ├─► Single prompt() call
+    ├─► Collect messages, format output
     │
-    ├─► Collect events, format output
-    │
-    └─► Exit with code based on success
+    └─► Close runtime scope
 ```
 
 ## Configuration Loading
 
-### Config Chain: `apps/coding-agent/src/config.ts`
+### Config Chain: `packages/runtime-effect/src/config.ts`
 
 ```
 loadAppConfig()
@@ -99,7 +96,7 @@ loadAppConfig()
     │   └─ lsp: { enabled: true, autoInstall: true }
     │
     ├─► Load agents config (AGENTS.md)
-    │   └─ Combines system + agents prompts
+    │   └─ Combines system + agents prompts (cwd-aware)
     │
     └─► Return LoadedAppConfig
 ```
@@ -108,7 +105,7 @@ loadAppConfig()
 - `AppConfigFile` — Raw JSON structure
 - `LoadedAppConfig` — Resolved with defaults, model object
 
-### Hooks Loading: `apps/coding-agent/src/hooks/loader.ts`
+### Hooks Loading: `packages/runtime-effect/src/hooks`
 
 ```
 loadHooks(configDir)
@@ -124,7 +121,7 @@ loadHooks(configDir)
     └─► Return { hooks, errors }
 ```
 
-### Custom Tools: `apps/coding-agent/src/custom-tools/loader.ts`
+### Custom Tools: `packages/runtime-effect/src/extensibility/custom-tools`
 
 ```
 loadCustomTools(configDir, cwd, existingToolNames)
@@ -458,10 +455,10 @@ const LANGUAGE_ID_BY_EXT = {
 
 ```
 apps/coding-agent/src/
-├── tui-app.tsx              Main app component
-├── components/
-│   ├── MessageList.tsx      Scrollable message container
-│   └── Footer.tsx           Status bar with model/context
+├── adapters/                CLI/TUI/ACP entrypoints
+├── ui/app-shell/TuiApp.tsx  Main app shell
+├── ui/components/           TUI components
+├── ui/state/                App state stores
 ├── session-picker.tsx       Session selection dialog
 ├── tui-open-rendering.tsx   Tool block components
 ├── agent-events.ts          Event → UI state mapping
@@ -539,30 +536,38 @@ createKeyboardHandler(opts)
 
 ## Session Management
 
-### SessionManager: `apps/coding-agent/src/session-manager.ts`
+### SessionManager: `packages/runtime-effect/src/session-manager.ts` (re-exported by `apps/coding-agent/src/session-manager.ts`)
 
 ```
 SessionManager
     │
     ├─► Storage
-    │   └─ ~/.local/share/marvin/sessions/*.json
+    │   └─ ~/.config/marvin/sessions/--<cwd>--/*.jsonl
     │
-    ├─► startSession(provider, model, thinking)
+    ├─► startSession(provider, modelId, thinkingLevel)
     │   ├─ Generate session ID
-    │   ├─ Create file with metadata
+    │   ├─ Create JSONL file with metadata
     │   └─ Set as current session
+    │
+    ├─► continueSession(path, sessionId)
+    │   └─ Use existing session file
     │
     ├─► loadSession(path)
     │   ├─ Read session file
-    │   ├─ Populate agent.replaceMessages()
-    │   └─ Return session metadata
+    │   └─ Return metadata + messages
     │
     ├─► loadLatest()
     │   └─ Find most recent session for current cwd
     │
     ├─► appendMessage(message)
     │   ├─ Add to current session
-    │   └─ Write to disk (debounced)
+    │   └─ Append JSONL entry
+    │
+    ├─► appendEntry(customType, data)
+    │   └─ Append custom JSONL entry
+    │
+    ├─► updateCompactionState(state)
+    │   └─ Update metadata line in place
     │
     └─► listSessions()
         └─ Scan directory, sort by date
@@ -570,66 +575,80 @@ SessionManager
 
 ## Hook System
 
-### HookRunner: `apps/coding-agent/src/hooks/runner.ts`
+### HookRunner: `packages/runtime-effect/src/hooks/runner.ts` (re-exported by `apps/coding-agent/src/hooks/index.ts`)
 
 ```
 HookRunner
     │
     ├─► handlers: Map<eventType, handler[]>
     │
-    ├─► register(hookDefinition)
-    │   └─ Hook calls marvin.on(event, handler)
-    │       └─ handlers.get(event).push(handler)
+    ├─► initialize(options)
+    │   ├─ Wire send/steer/followUp handlers
+    │   ├─ Provide UI + session contexts
+    │   └─ Set appendEntry + message renderers
     │
     ├─► emit(event)
-    │   │
-    │   ├─► Get handlers for event.type
-    │   │
-    │   ├─► Run each handler with event + context
-    │   │   └─ ctx: { exec, cwd, configDir }
-    │   │
-    │   └─► Collect and merge results
-    │       ├─ tool.execute.before: { block?, reason? }
-    │       └─ tool.execute.after: { content?, details? }
+    │   └─ Run handlers; errors reported via onError
     │
-    ├─► messageCallback
-    │   └─ Set by TUI to handle marvin.send()
+    ├─► emitToolExecuteBefore(event)
+    │   └─ Can block execution or replace input
+    │
+    ├─► emitToolExecuteAfter(event)
+    │   └─ Can modify result (runs on errors too)
+    │
+    ├─► getMessageRenderer/getRegisteredCommands/getRegisteredTools
     │
     └─► onError(callback)
-        └─ Subscribe to runtime errors
+        └─ Subscribe to hook errors
 ```
 
-### Tool Wrapper: `apps/coding-agent/src/hooks/tool-wrapper.ts`
+### Tool Wrapper: `packages/runtime-effect/src/hooks/tool-wrapper.ts`
 
 ```typescript
 function wrapToolsWithHooks(tools, runner) {
   return tools.map(tool => ({
     ...tool,
     execute: async (toolCallId, params, signal, onUpdate) => {
-      // Before hook - can block
-      const beforeResult = await runner.emit({
+      const sessionId = runner.getSessionId();
+      const beforeResult = await runner.emitToolExecuteBefore({
         type: "tool.execute.before",
+        sessionId,
         toolName: tool.name,
+        toolCallId,
         input: params
       });
-      
+
       if (beforeResult?.block) {
-        return { content: [{ type: "text", text: beforeResult.reason }] };
+        throw new Error(beforeResult.reason ?? "Tool blocked by hook");
       }
-      
-      // Execute tool
-      const result = await tool.execute(toolCallId, params, signal, onUpdate);
-      
-      // After hook - can modify
-      const afterResult = await runner.emit({
-        type: "tool.execute.after",
-        toolName: tool.name,
-        input: params,
-        content: result.content,
-        details: result.details
-      });
-      
-      return afterResult ?? result;
+
+      const effectiveParams = beforeResult?.input ?? params;
+      try {
+        const result = await tool.execute(toolCallId, effectiveParams, signal, onUpdate);
+        const afterResult = await runner.emitToolExecuteAfter({
+          type: "tool.execute.after",
+          sessionId,
+          toolName: tool.name,
+          toolCallId,
+          input: effectiveParams,
+          content: result.content,
+          details: result.details,
+          isError: false
+        });
+        return afterResult ? { content: afterResult.content ?? result.content, details: afterResult.details ?? result.details } : result;
+      } catch (err) {
+        await runner.emitToolExecuteAfter({
+          type: "tool.execute.after",
+          sessionId,
+          toolName: tool.name,
+          toolCallId,
+          input: effectiveParams,
+          content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }],
+          details: undefined,
+          isError: true
+        });
+        throw err;
+      }
     }
   }));
 }
@@ -751,10 +770,20 @@ apps/coding-agent/tests/
 ├── config.test.ts            Config loading
 ├── custom-commands.test.ts   Custom command loading
 ├── custom-tools.test.ts      Custom tool loading
-├── hooks.test.ts             Hook system
-├── session-manager.test.ts   Session persistence
+├── hooks.test.ts             Hook system (runtime-effect re-export)
+├── session-manager.test.ts   Session persistence (runtime-effect re-export)
 ├── tool-ui-contracts.test.ts Tool UI rendering
 └── utils.test.ts             Utility functions
+
+packages/runtime-effect/tests/
+├── config.test.ts            Config defaults + overrides
+├── execution-plan.test.ts    Execution planning behavior
+├── hook-effects.test.ts      Hook effect helpers
+├── hook-context-controller.test.ts
+├── lsp-layer.test.ts         LSP layer wiring
+├── prompt-queue.test.ts      Prompt queue semantics
+├── runtime-layer.test.ts     Runtime assembly
+└── session-orchestrator.test.ts
 
 packages/agent/test/
 ├── agent.test.ts             Agent state machine
@@ -774,6 +803,11 @@ packages/lsp/tests/
 
 packages/open-tui/tests/
 └── index.test.ts             Component tests
+
+packages/sdk/tests/
+├── run-agent.test.ts         runAgent usage
+├── session.test.ts           createAgentSession
+└── stream.test.ts            runAgentStream
 ```
 
 ### Running Tests
@@ -784,6 +818,12 @@ bun run test
 
 # Specific package
 bun test packages/ai/test
+
+# SDK package
+bun test packages/sdk
+
+# Runtime-effect package
+bun test packages/runtime-effect
 
 # Specific file
 bun test apps/coding-agent/tests/config.test.ts
@@ -809,9 +849,9 @@ bun test --watch
 
 ### Adding a New Hook Event
 
-1. Add event type in `apps/coding-agent/src/hooks/types.ts`
+1. Add event type in `packages/runtime-effect/src/hooks/types.ts`
 2. Update `HookEventMap` union type
-3. Emit from appropriate location (agent-events.ts, tool-wrapper.ts)
+3. Emit from appropriate location (runtime-effect hook runner/tool wrapper/session orchestrator)
 4. Document in README
 
 ### Adding a Slash Command
