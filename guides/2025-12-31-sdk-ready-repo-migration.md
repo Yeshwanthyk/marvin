@@ -18,7 +18,7 @@
 - [Milestone 6: packages/sdk](#milestone-6-create-packagessdk)
 - [Milestone 7: packages/open-tui](#milestone-7-migrate-packagesopen-tui-if-keeping-the-cli)
 - [Milestone 8: apps/coding-agent](#milestone-8-migrate-appscoding-agent-and-dogfood-sdk)
-- [Milestone 9: Legacy Compatibility](#milestone-9-legacy-compatibility-optional)
+- [Milestone 9: Legacy compatibility (removed)](#milestone-9-legacy-compatibility-removed)
 - [Testing Strategy](#testing-strategy)
 - [Troubleshooting](#troubleshooting-quick-hits)
 
@@ -1935,66 +1935,17 @@ export function createEditTool(cwd: CwdLike): AgentTool<typeof schema, EditDetai
 export const editTool = createEditTool(undefined);
 ```
 
-#### 4.4 Add `createCodingTools` helper
+#### 4.4 Use `createToolRegistry` only (no legacy helper)
 
-Update the main index to export both defaults and factories:
+Do not add `createCodingTools` or export default tool singletons. Keep the index focused on factories and the cwd-scoped registry:
 
 ```typescript
 // packages/base-tools/src/index.ts
-// Individual tool exports
-export { readTool, createReadTool, type ReadDetails } from "./tools/read.js";
-export { writeTool, createWriteTool, type WriteDetails } from "./tools/write.js";
-export { editTool, createEditTool, type EditDetails } from "./tools/edit.js";
-export { bashTool, createBashTool, type BashDetails } from "./tools/bash.js";
-
-// Path utilities
-export { 
-  expandPath, 
-  resolveReadPath,
-  resolvePathFromCwd,
-  resolveReadPathFromCwd,
-  toCwdResolver,
-  type CwdLike,
-  type CwdResolver,
-} from "./tools/path-utils.js";
-
-// Default tools array (uses process.cwd())
-import { readTool } from "./tools/read.js";
-import { writeTool } from "./tools/write.js";
-import { editTool } from "./tools/edit.js";
-import { bashTool } from "./tools/bash.js";
-import type { AgentTool } from "@merlin-agents/ai";
-import type { CwdLike } from "./tools/path-utils.js";
-
-export const codingTools: AgentTool<any, any>[] = [readTool, bashTool, editTool, writeTool];
-
-/**
- * Creates a set of coding tools bound to a specific working directory.
- * 
- * @param cwd - The working directory for all tools
- * @returns Array of [read, bash, edit, write] tools
- * 
- * @example
- * // Bind tools to a specific project
- * const tools = createCodingTools("/path/to/project");
- * 
- * // Bind tools dynamically
- * const tools = createCodingTools(() => getCurrentProject().path);
- */
-export function createCodingTools(cwd: CwdLike): AgentTool<any, any>[] {
-  // Import factories here to avoid circular dependencies
-  const { createReadTool } = require("./tools/read.js");
-  const { createWriteTool } = require("./tools/write.js");
-  const { createEditTool } = require("./tools/edit.js");
-  const { createBashTool } = require("./tools/bash.js");
-
-  return [
-    createReadTool(cwd),
-    createBashTool(cwd),
-    createEditTool(cwd),
-    createWriteTool(cwd),
-  ];
-}
+export { createToolRegistry, type ToolDef, type ToolRegistry } from "./tool-registry.js";
+export { createReadTool } from "./tools/read.js";
+export { createWriteTool } from "./tools/write.js";
+export { createEditTool } from "./tools/edit.js";
+export { createBashTool } from "./tools/bash.js";
 ```
 
 #### 4.5 Add unit tests
@@ -2112,8 +2063,8 @@ describe("resolveReadPathFromCwd", () => {
 ### Watch out for
 
 - **Never capture `process.cwd()` at module import time** - always use `toCwdResolver` to defer resolution
-- The factories are the primary API for SDK users - the default exports are for backwards compatibility
-- Keep the `codingTools` array export - existing code depends on it
+- Factories + `createToolRegistry` are the only supported API surface.
+- Do not export legacy tool arrays or default tool instances.
 
 ---
 
@@ -2571,252 +2522,16 @@ function resolveModel(provider: KnownProvider, modelIdRaw: string | undefined): 
 }
 ```
 
-#### 6.3 Implement the SDK agent factory
+#### 6.3 Use the Effect SDK surface
 
-Create `packages/sdk/src/merlin-agent.ts`:
+This repo uses `@marvin-agents/sdk` built on `packages/runtime-effect`. Do not implement a custom agent factory
+inside the SDK; use the provided surface instead.
 
-```typescript
-// packages/sdk/src/merlin-agent.ts
-import { Agent, ProviderTransport, CodexTransport, RouterTransport } from "@merlin-agents/agent-core";
-import { createCodingTools } from "@merlin-agents/base-tools";
-import { createLspManager, wrapToolsWithLspDiagnostics } from "@merlin-agents/lsp";
-import type { AgentTool, Model, Api } from "@merlin-agents/ai";
-import type { ThinkingLevel } from "@merlin-agents/agent-core";
-import { loadAppConfig, type LoadedAppConfig } from "./config.js";
+- `runAgent` / `runAgentEffect`
+- `createAgentSession` / `createAgentSessionEffect`
+- `runAgentStream`
 
-// ============================================================
-// Types
-// ============================================================
-
-export interface MerlinAgentOptions {
-  /**
-   * Working directory for file tools and config loading.
-   * Default: process.cwd()
-   */
-  cwd?: string;
-
-  /**
-   * Config directory (where config.json lives).
-   * Default: ~/.config/merlin
-   */
-  configDir?: string;
-
-  /**
-   * Explicit config file path. Overrides configDir.
-   */
-  configPath?: string;
-
-  /**
-   * LLM provider override (e.g., "anthropic", "openai", "codex").
-   */
-  provider?: string;
-
-  /**
-   * Model ID override.
-   */
-  model?: string;
-
-  /**
-   * Thinking level override.
-   */
-  thinking?: ThinkingLevel;
-
-  /**
-   * Tools to use. Can be:
-   * - An array of tools (replaces defaults)
-   * - A function that receives default tools and returns modified tools
-   * 
-   * Default: createCodingTools(cwd)
-   */
-  tools?: AgentTool<any, any>[] | ((defaults: AgentTool<any, any>[]) => AgentTool<any, any>[]);
-
-  /**
-   * Custom transport. If provided, bypasses default transport creation.
-   * Use this for custom LLM integrations.
-   */
-  transport?: AgentTransport;
-
-  /**
-   * LSP configuration.
-   * - false: disable LSP
-   * - { enabled: true, autoInstall?: boolean }: enable LSP
-   * 
-   * Default: Uses config file settings
-   */
-  lsp?: false | { enabled: true; autoInstall?: boolean };
-
-  /**
-   * Function to retrieve API keys for providers.
-   * Default: Reads from environment variables (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
-   */
-  getApiKey?: (provider: string) => Promise<string | undefined>;
-
-  /**
-   * Codex token management (for OpenAI Codex provider).
-   * Only needed if using the codex provider.
-   */
-  codex?: {
-    getTokens: () => Promise<{ access: string; refresh: string; expires: number } | null>;
-    setTokens: (tokens: { access: string; refresh: string; expires: number }) => Promise<void>;
-    clearTokens: () => Promise<void>;
-  };
-}
-
-export interface MerlinAgent {
-  /**
-   * The underlying Agent instance.
-   */
-  agent: Agent;
-
-  /**
-   * The loaded configuration.
-   */
-  config: LoadedAppConfig;
-
-  /**
-   * Shuts down the agent, including any LSP processes.
-   * Call this when done to clean up resources.
-   */
-  close: () => Promise<void>;
-}
-
-// ============================================================
-// Factory
-// ============================================================
-
-/**
- * Creates a Merlin agent with sensible defaults.
- * 
- * This is the main entry point for embedding Merlin in other applications.
- * 
- * @example Basic usage
- * ```typescript
- * const { agent, close } = await createMerlinAgent({
- *   cwd: "/path/to/project",
- * });
- * 
- * // Use the agent
- * await agent.prompt("Hello!");
- * 
- * // Clean up
- * await close();
- * ```
- * 
- * @example With custom tools
- * ```typescript
- * const { agent, close } = await createMerlinAgent({
- *   cwd: "/path/to/project",
- *   tools: (defaults) => [...defaults, myCustomTool],
- * });
- * ```
- */
-export async function createMerlinAgent(
-  options: MerlinAgentOptions = {}
-): Promise<MerlinAgent> {
-  const cwd = options.cwd ?? process.cwd();
-  
-  // Load configuration
-  const config = await loadAppConfig({
-    cwd,
-    configDir: options.configDir,
-    configPath: options.configPath,
-    provider: options.provider,
-    model: options.model,
-    thinking: options.thinking,
-  });
-
-  // Resolve LSP settings
-  const lspSettings = options.lsp === false
-    ? { enabled: false, autoInstall: false }
-    : options.lsp ?? config.lsp;
-
-  // Create tools
-  const defaultTools = createCodingTools(cwd);
-  let tools: AgentTool<any, any>[];
-  
-  if (typeof options.tools === "function") {
-    tools = options.tools(defaultTools);
-  } else if (options.tools) {
-    tools = options.tools;
-  } else {
-    tools = defaultTools;
-  }
-
-  // Create LSP manager (if enabled)
-  let lspManager: LspManager | null = null;
-  if (lspSettings.enabled) {
-    lspManager = createLspManager({
-      cwd,
-      configDir: config.configDir,
-      enabled: true,
-      autoInstall: lspSettings.autoInstall,
-    });
-    tools = wrapToolsWithLspDiagnostics(tools, lspManager, { cwd });
-  }
-
-  // Create transport
-  const transport = options.transport ?? createDefaultTransport(options, config);
-
-  // Create agent
-  const agent = new Agent({
-    transport,
-    initialState: {
-      systemPrompt: config.systemPrompt,
-      model: config.model,
-      thinkingLevel: config.thinking,
-      tools,
-    },
-  });
-
-  // Return wrapped agent with close function
-  return {
-    agent,
-    config,
-    close: async () => {
-      if (lspManager) {
-        await lspManager.stop();
-      }
-    },
-  };
-}
-
-function createDefaultTransport(
-  options: MerlinAgentOptions,
-  config: LoadedAppConfig
-): AgentTransport {
-  const getApiKey = options.getApiKey ?? defaultGetApiKey;
-
-  const providerTransport = new ProviderTransport({ getApiKey });
-
-  // Only create Codex transport if tokens are provided
-  let codexTransport: CodexTransport | undefined;
-  if (options.codex) {
-    codexTransport = new CodexTransport({
-      getTokens: options.codex.getTokens,
-      setTokens: options.codex.setTokens,
-      clearTokens: options.codex.clearTokens,
-      cacheDir: path.join(config.configDir, "..", ".merlin", "cache"),
-    });
-  }
-
-  return new RouterTransport({
-    provider: providerTransport,
-    codex: codexTransport,
-  });
-}
-
-async function defaultGetApiKey(provider: string): Promise<string | undefined> {
-  const envMap: Record<string, string> = {
-    anthropic: "ANTHROPIC_API_KEY",
-    openai: "OPENAI_API_KEY",
-    google: "GOOGLE_API_KEY",
-    xai: "XAI_API_KEY",
-  };
-  
-  const envVar = envMap[provider];
-  return envVar ? process.env[envVar] : undefined;
-}
-```
+See `docs/sdk.md` for examples.
 
 #### 6.4 Re-export SDK surface
 
@@ -2845,7 +2560,7 @@ export {
 // Re-export key types from dependencies
 export type { Agent, ThinkingLevel } from "@merlin-agents/agent-core";
 export type { AgentTool, AgentToolResult, TextContent, ImageContent, Model, Api, KnownProvider } from "@merlin-agents/ai";
-export { createCodingTools, codingTools } from "@merlin-agents/base-tools";
+export { createToolRegistry, createReadTool, createWriteTool, createEditTool, createBashTool } from "@merlin-agents/base-tools";
 ```
 
 #### 6.5 Update root typecheck script
@@ -3327,90 +3042,9 @@ const ACP_AGENT_INFO = {
 
 ---
 
-## Milestone 9: Legacy compatibility (optional)
+## Milestone 9: Legacy compatibility (removed)
 
-### Goal
-
-Offer a smooth path for existing marvin users to migrate into the merlin config layout.
-
-### Verification
-
-- [ ] `rg "marvin"` in new repo only returns intentional legacy paths.
-- [ ] Running `merlin migrate` (if added) copies config without deleting old directory.
-
-### Steps
-
-#### 9.1 Add legacy config detection (SDK-level)
-
-In `packages/sdk/src/config.ts`:
-
-```typescript
-// Check for legacy config on startup
-export async function checkLegacyConfig(): Promise<{
-  hasLegacy: boolean;
-  legacyPath: string | null;
-  message: string | null;
-}> {
-  const merlinConfig = path.join(os.homedir(), '.config', 'merlin');
-  const marvinConfig = path.join(os.homedir(), '.config', 'marvin');
-  
-  const hasMerlin = existsSync(merlinConfig);
-  const hasMarvin = existsSync(marvinConfig);
-  
-  if (!hasMerlin && hasMarvin) {
-    return {
-      hasLegacy: true,
-      legacyPath: marvinConfig,
-      message: `Found legacy config at ${marvinConfig}. Run 'merlin migrate' to copy to ${merlinConfig}.`,
-    };
-  }
-  
-  return { hasLegacy: false, legacyPath: null, message: null };
-}
-```
-
-#### 9.2 Add explicit migration command (CLI-level)
-
-Add to `apps/coding-agent/src/index.ts`:
-
-```typescript
-if (args.migrate) {
-  await runMigrate();
-  return;
-}
-
-async function runMigrate() {
-  const merlinConfig = path.join(os.homedir(), '.config', 'merlin');
-  const marvinConfig = path.join(os.homedir(), '.config', 'marvin');
-  
-  if (!existsSync(marvinConfig)) {
-    console.log("No legacy config found at", marvinConfig);
-    return;
-  }
-  
-  if (existsSync(merlinConfig)) {
-    console.log("Merlin config already exists at", merlinConfig);
-    console.log("Manual migration needed. Legacy config:", marvinConfig);
-    return;
-  }
-  
-  // Copy directory
-  console.log(`Copying ${marvinConfig} to ${merlinConfig}...`);
-  await cp(marvinConfig, merlinConfig, { recursive: true });
-  console.log("Migration complete!");
-  console.log("Note: Original config preserved at", marvinConfig);
-}
-```
-
-#### 9.3 Keep token migration in Codex auth helper
-
-Already handled in Milestone 3 - the `loadTokens` function checks legacy paths.
-
-### Watch out for
-
-- **Never auto-migrate on startup** - always require explicit command
-- **Never delete legacy config** - copy only, let users delete manually
-- Show clear messages about what's happening
+Legacy compatibility is out of scope for this repo. Do not add legacy config detection, migration commands, or legacy token paths.
 
 ---
 

@@ -210,7 +210,7 @@ kbd { display: inline-block; min-width: 20px; padding: 3px 8px; background: var(
 </div>
 
 <div class="wrap">
-<nav class="toc" id="toc"><div class="toc-title">Contents</div><ul class="toc-list"><li class="toc-item toc-l1"><span class="toc-dot" data-section="1"></span><a href="#h-sdk-ready-merlin-repo-migration-implementation-guide-1" class="toc-link" data-section="1">SDK-ready merlin repo migration implementation guide</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="2"></span><a href="#h-table-of-contents-2" class="toc-link" data-section="2">Table of Contents</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="3"></span><a href="#h-background-and-context-3" class="toc-link" data-section="3">Background and context</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="4"></span><a href="#h-why-we-are-doing-this-4" class="toc-link" data-section="4">Why we are doing this</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="5"></span><a href="#h-naming-baseline-assumed-in-this-guide-5" class="toc-link" data-section="5">Naming baseline (assumed in this guide)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="6"></span><a href="#h-what-quotsdk-readyquot-means-here-6" class="toc-link" data-section="6">What &amp;quot;SDK-ready&amp;quot; means here</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="7"></span><a href="#h-how-the-current-system-works-mental-model-7" class="toc-link" data-section="7">How the current system works (mental model)</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="8"></span><a href="#h-package-layering-8" class="toc-link" data-section="8">Package layering</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="9"></span><a href="#h-tool-pipeline-tui-and-headless-9" class="toc-link" data-section="9">Tool pipeline (TUI and headless)</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="10"></span><a href="#h-mode-entrypoints-10" class="toc-link" data-section="10">Mode entrypoints</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="11"></span><a href="#h-key-coupling-issues-to-remove-for-sdk-readiness-11" class="toc-link" data-section="11">Key coupling issues to remove for SDK readiness</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="12"></span><a href="#h-key-files-to-understand-read-these-in-the-old-repo-12" class="toc-link" data-section="12">Key files to understand (read these in the old repo)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="13"></span><a href="#h-core-files-quick-reference-13" class="toc-link" data-section="13">Core Files - Quick Reference</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="14"></span><a href="#h-deep-dive-packagesbase-tools-14" class="toc-link" data-section="14">Deep Dive: packages/base-tools</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="15"></span><a href="#h-path-utilsts-current-implementation-15" class="toc-link" data-section="15">path-utils.ts - Current Implementation</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="16"></span><a href="#h-readts-current-implementation-16" class="toc-link" data-section="16">read.ts - Current Implementation</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="17"></span><a href="#h-bashts-current-implementation-17" class="toc-link" data-section="17">bash.ts - Current Implementation</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="18"></span><a href="#h-deep-dive-appscoding-agentsrcconfigts-18" class="toc-link" data-section="18">Deep Dive: apps/coding-agent/src/config.ts</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="19"></span><a href="#h-deep-dive-codex-instructions-cache-19" class="toc-link" data-section="19">Deep Dive: Codex Instructions Cache</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="20"></span><a href="#h-deep-dive-token-storage-20" class="toc-link" data-section="20">Deep Dive: Token Storage</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="21"></span><a href="#h-deep-dive-session-manager-21" class="toc-link" data-section="21">Deep Dive: Session Manager</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="22"></span><a href="#h-patterns-to-follow-22" class="toc-link" data-section="22">Patterns to follow</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="23"></span><a href="#h-agenttool-pattern-schema-execute-abort-handling-23" class="toc-link" data-section="23">AgentTool pattern (schema + execute + abort handling)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="24"></span><a href="#h-hook-wiring-pattern-register-events-call-send-24" class="toc-link" data-section="24">Hook wiring pattern (register events, call send)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="25"></span><a href="#h-transport-composition-pattern-25" class="toc-link" data-section="25">Transport composition pattern</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="26"></span><a href="#h-milestone-0-migration-prep-and-guardrails-26" class="toc-link" data-section="26">Milestone 0: Migration prep and guardrails</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="27"></span><a href="#h-goal-27" class="toc-link" data-section="27">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="28"></span><a href="#h-verification-28" class="toc-link" data-section="28">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="29"></span><a href="#h-steps-29" class="toc-link" data-section="29">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="30"></span><a href="#h-01-lock-naming-baseline-merlin-from-day-one-30" class="toc-link" data-section="30">1 Lock naming baseline (merlin from day one)</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="31"></span><a href="#h-02-freeze-the-baseline-31" class="toc-link" data-section="31">2 Freeze the baseline</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="32"></span><a href="#h-03-create-an-audit-checklist-32" class="toc-link" data-section="32">3 Create an audit checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="33"></span><a href="#h-watch-out-for-33" class="toc-link" data-section="33">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="34"></span><a href="#h-milestone-1-root-infrastructure-in-the-new-repo-34" class="toc-link" data-section="34">Milestone 1: Root infrastructure in the new repo</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="35"></span><a href="#h-goal-35" class="toc-link" data-section="35">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="36"></span><a href="#h-verification-36" class="toc-link" data-section="36">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="37"></span><a href="#h-file-checklist-37" class="toc-link" data-section="37">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="38"></span><a href="#h-steps-38" class="toc-link" data-section="38">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="39"></span><a href="#h-11-copy-root-packagejson-39" class="toc-link" data-section="39">1 Copy root package.json</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="40"></span><a href="#h-12-copy-bunfigtoml-40" class="toc-link" data-section="40">2 Copy bunfig.toml</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="41"></span><a href="#h-13-copy-tsconfigbasejson-41" class="toc-link" data-section="41">3 Copy tsconfig.base.json</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="42"></span><a href="#h-14-copy-testsetupts-42" class="toc-link" data-section="42">4 Copy test/setup.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="43"></span><a href="#h-15-copy-scriptstest-allts-43" class="toc-link" data-section="43">5 Copy scripts/test-all.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="44"></span><a href="#h-16-copy-gitignore-44" class="toc-link" data-section="44">6 Copy .gitignore</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="45"></span><a href="#h-watch-out-for-45" class="toc-link" data-section="45">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="46"></span><a href="#h-milestone-2-migrate-packagesai-46" class="toc-link" data-section="46">Milestone 2: Migrate packages/ai</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="47"></span><a href="#h-goal-47" class="toc-link" data-section="47">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="48"></span><a href="#h-what-this-package-does-48" class="toc-link" data-section="48">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="49"></span><a href="#h-verification-49" class="toc-link" data-section="49">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="50"></span><a href="#h-file-checklist-50" class="toc-link" data-section="50">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="51"></span><a href="#h-steps-51" class="toc-link" data-section="51">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="52"></span><a href="#h-21-copy-the-entire-package-52" class="toc-link" data-section="52">1 Copy the entire package</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="53"></span><a href="#h-22-update-packagejson-53" class="toc-link" data-section="53">2 Update package.json</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="54"></span><a href="#h-23-understand-the-key-types-54" class="toc-link" data-section="54">3 Understand the key types</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="55"></span><a href="#h-24-verify-model-generation-workflow-55" class="toc-link" data-section="55">4 Verify model generation workflow</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="56"></span><a href="#h-watch-out-for-56" class="toc-link" data-section="56">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="57"></span><a href="#h-milestone-3-migrate-packagesagent-57" class="toc-link" data-section="57">Milestone 3: Migrate packages/agent</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="58"></span><a href="#h-goal-58" class="toc-link" data-section="58">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="59"></span><a href="#h-what-this-package-does-59" class="toc-link" data-section="59">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="60"></span><a href="#h-verification-60" class="toc-link" data-section="60">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="61"></span><a href="#h-file-checklist-61" class="toc-link" data-section="61">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="62"></span><a href="#h-steps-62" class="toc-link" data-section="62">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="63"></span><a href="#h-31-copy-the-package-and-update-metadata-63" class="toc-link" data-section="63">1 Copy the package and update metadata</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="64"></span><a href="#h-32-make-codex-instruction-caching-configurable-64" class="toc-link" data-section="64">2 Make Codex instruction caching configurable</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="65"></span><a href="#h-33-update-codextransport-to-pass-cachedir-65" class="toc-link" data-section="65">3 Update CodexTransport to pass cacheDir</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="66"></span><a href="#h-34-update-codex-auth-cli-defaults-66" class="toc-link" data-section="66">4 Update Codex auth CLI defaults</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="67"></span><a href="#h-watch-out-for-67" class="toc-link" data-section="67">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="68"></span><a href="#h-milestone-4-migrate-packagesbase-tools-and-make-tools-cwd-aware-68" class="toc-link" data-section="68">Milestone 4: Migrate packages/base-tools and make tools cwd-aware</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="69"></span><a href="#h-goal-69" class="toc-link" data-section="69">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="70"></span><a href="#h-what-this-package-does-70" class="toc-link" data-section="70">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="71"></span><a href="#h-verification-71" class="toc-link" data-section="71">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="72"></span><a href="#h-file-checklist-72" class="toc-link" data-section="72">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="73"></span><a href="#h-steps-73" class="toc-link" data-section="73">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="74"></span><a href="#h-41-update-package-metadata-74" class="toc-link" data-section="74">1 Update package metadata</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="75"></span><a href="#h-42-extend-path-utilities-with-cwd-helpers-75" class="toc-link" data-section="75">2 Extend path utilities with cwd helpers</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="76"></span><a href="#h-43-add-tool-factories-76" class="toc-link" data-section="76">3 Add tool factories</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="77"></span><a href="#h-44-add-createcodingtools-helper-77" class="toc-link" data-section="77">4 Add createCodingTools helper</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="78"></span><a href="#h-45-add-unit-tests-78" class="toc-link" data-section="78">5 Add unit tests</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="79"></span><a href="#h-watch-out-for-79" class="toc-link" data-section="79">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="80"></span><a href="#h-milestone-5-migrate-packageslsp-80" class="toc-link" data-section="80">Milestone 5: Migrate packages/lsp</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="81"></span><a href="#h-goal-81" class="toc-link" data-section="81">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="82"></span><a href="#h-what-this-package-does-82" class="toc-link" data-section="82">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="83"></span><a href="#h-verification-83" class="toc-link" data-section="83">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="84"></span><a href="#h-file-checklist-84" class="toc-link" data-section="84">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="85"></span><a href="#h-steps-85" class="toc-link" data-section="85">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="86"></span><a href="#h-51-copy-and-update-metadata-86" class="toc-link" data-section="86">1 Copy and update metadata</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="87"></span><a href="#h-52-audit-cwd-usage-in-tool-wrapperts-87" class="toc-link" data-section="87">2 Audit cwd usage in tool-wrapper.ts</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="88"></span><a href="#h-watch-out-for-88" class="toc-link" data-section="88">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="89"></span><a href="#h-milestone-6-create-packagessdk-89" class="toc-link" data-section="89">Milestone 6: Create packages/sdk</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="90"></span><a href="#h-goal-90" class="toc-link" data-section="90">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="91"></span><a href="#h-what-this-package-does-91" class="toc-link" data-section="91">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="92"></span><a href="#h-verification-92" class="toc-link" data-section="92">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="93"></span><a href="#h-file-structure-93" class="toc-link" data-section="93">File structure</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="94"></span><a href="#h-steps-94" class="toc-link" data-section="94">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="95"></span><a href="#h-61-create-the-package-skeleton-95" class="toc-link" data-section="95">1 Create the package skeleton</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="96"></span><a href="#h-62-move-config-logic-into-sdk-96" class="toc-link" data-section="96">2 Move config logic into SDK</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="97"></span><a href="#h-63-implement-the-sdk-agent-factory-97" class="toc-link" data-section="97">3 Implement the SDK agent factory</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="98"></span><a href="#h-64-re-export-sdk-surface-98" class="toc-link" data-section="98">4 Re-export SDK surface</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="99"></span><a href="#h-65-update-root-typecheck-script-99" class="toc-link" data-section="99">5 Update root typecheck script</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="100"></span><a href="#h-watch-out-for-100" class="toc-link" data-section="100">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="101"></span><a href="#h-milestone-7-migrate-packagesopen-tui-if-keeping-the-cli-101" class="toc-link" data-section="101">Milestone 7: Migrate packages/open-tui (if keeping the CLI)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="102"></span><a href="#h-goal-102" class="toc-link" data-section="102">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="103"></span><a href="#h-verification-103" class="toc-link" data-section="103">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="104"></span><a href="#h-file-checklist-104" class="toc-link" data-section="104">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="105"></span><a href="#h-steps-105" class="toc-link" data-section="105">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="106"></span><a href="#h-71-update-package-metadata-106" class="toc-link" data-section="106">1 Update package metadata</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="107"></span><a href="#h-72-audit-combinedautocompleteprovider-107" class="toc-link" data-section="107">2 Audit CombinedAutocompleteProvider</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="108"></span><a href="#h-73-rename-the-built-in-default-theme-108" class="toc-link" data-section="108">3 Rename the built-in default theme</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="109"></span><a href="#h-watch-out-for-109" class="toc-link" data-section="109">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="110"></span><a href="#h-milestone-8-migrate-appscoding-agent-and-dogfood-sdk-110" class="toc-link" data-section="110">Milestone 8: Migrate apps/coding-agent and dogfood SDK</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="111"></span><a href="#h-goal-111" class="toc-link" data-section="111">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="112"></span><a href="#h-verification-112" class="toc-link" data-section="112">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="113"></span><a href="#h-file-checklist-113" class="toc-link" data-section="113">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="114"></span><a href="#h-steps-114" class="toc-link" data-section="114">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="115"></span><a href="#h-81-update-packagejson-115" class="toc-link" data-section="115">1 Update package.json</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="116"></span><a href="#h-82-update-buildts-116" class="toc-link" data-section="116">2 Update build.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="117"></span><a href="#h-83-apply-rename-sweep-in-indexts-117" class="toc-link" data-section="117">3 Apply rename sweep in index.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="118"></span><a href="#h-84-update-profilerts-118" class="toc-link" data-section="118">4 Update profiler.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="119"></span><a href="#h-85-update-theme-namests-119" class="toc-link" data-section="119">5 Update theme-names.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="120"></span><a href="#h-86-update-hooksloaderts-120" class="toc-link" data-section="120">6 Update hooks/loader.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="121"></span><a href="#h-87-update-custom-toolsloaderts-121" class="toc-link" data-section="121">7 Update custom-tools/loader.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="122"></span><a href="#h-88-update-hookstypests-122" class="toc-link" data-section="122">8 Update hooks/types.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="123"></span><a href="#h-89-convert-configts-to-re-export-123" class="toc-link" data-section="123">9 Convert config.ts to re-export</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="124"></span><a href="#h-810-update-headlessts-to-use-sdk-124" class="toc-link" data-section="124">10 Update headless.ts to use SDK</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="125"></span><a href="#h-811-update-session-managerts-125" class="toc-link" data-section="125">11 Update session-manager.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="126"></span><a href="#h-812-update-examples-126" class="toc-link" data-section="126">12 Update examples</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="127"></span><a href="#h-813-update-acpindexts-127" class="toc-link" data-section="127">13 Update acp/index.ts</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="128"></span><a href="#h-watch-out-for-128" class="toc-link" data-section="128">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="129"></span><a href="#h-milestone-9-legacy-compatibility-optional-129" class="toc-link" data-section="129">Milestone 9: Legacy compatibility (optional)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="130"></span><a href="#h-goal-130" class="toc-link" data-section="130">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="131"></span><a href="#h-verification-131" class="toc-link" data-section="131">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="132"></span><a href="#h-steps-132" class="toc-link" data-section="132">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="133"></span><a href="#h-91-add-legacy-config-detection-sdk-level-133" class="toc-link" data-section="133">1 Add legacy config detection (SDK-level)</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="134"></span><a href="#h-92-add-explicit-migration-command-cli-level-134" class="toc-link" data-section="134">2 Add explicit migration command (CLI-level)</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="135"></span><a href="#h-93-keep-token-migration-in-codex-auth-helper-135" class="toc-link" data-section="135">3 Keep token migration in Codex auth helper</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="136"></span><a href="#h-watch-out-for-136" class="toc-link" data-section="136">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="137"></span><a href="#h-testing-strategy-137" class="toc-link" data-section="137">Testing strategy</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="138"></span><a href="#h-package-level-checks-138" class="toc-link" data-section="138">Package-level checks</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="139"></span><a href="#h-sdk-manual-checks-139" class="toc-link" data-section="139">SDK manual checks</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="140"></span><a href="#h-cli-manual-checks-140" class="toc-link" data-section="140">CLI manual checks</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="141"></span><a href="#h-troubleshooting-quick-hits-141" class="toc-link" data-section="141">Troubleshooting quick hits</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="142"></span><a href="#h-typescript-errors-142" class="toc-link" data-section="142">TypeScript Errors</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="143"></span><a href="#h-runtime-errors-143" class="toc-link" data-section="143">Runtime Errors</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="144"></span><a href="#h-build-errors-144" class="toc-link" data-section="144">Build Errors</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="145"></span><a href="#h-beyond-the-basics-optional-enhancements-145" class="toc-link" data-section="145">Beyond the basics (optional enhancements)</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="146"></span><a href="#h-quick-reference-146" class="toc-link" data-section="146">Quick reference</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="147"></span><a href="#h-commands-you-will-use-147" class="toc-link" data-section="147">Commands you will use</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="148"></span><a href="#h-files-you-will-touch-most-148" class="toc-link" data-section="148">Files you will touch most</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="149"></span><a href="#h-useful-references-in-the-old-repo-149" class="toc-link" data-section="149">Useful references in the old repo</a></li></ul></nav>
+<nav class="toc" id="toc"><div class="toc-title">Contents</div><ul class="toc-list"><li class="toc-item toc-l1"><span class="toc-dot" data-section="1"></span><a href="#h-sdk-ready-merlin-repo-migration-implementation-guide-1" class="toc-link" data-section="1">SDK-ready merlin repo migration implementation guide</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="2"></span><a href="#h-table-of-contents-2" class="toc-link" data-section="2">Table of Contents</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="3"></span><a href="#h-background-and-context-3" class="toc-link" data-section="3">Background and context</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="4"></span><a href="#h-why-we-are-doing-this-4" class="toc-link" data-section="4">Why we are doing this</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="5"></span><a href="#h-naming-baseline-assumed-in-this-guide-5" class="toc-link" data-section="5">Naming baseline (assumed in this guide)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="6"></span><a href="#h-what-quotsdk-readyquot-means-here-6" class="toc-link" data-section="6">What &amp;quot;SDK-ready&amp;quot; means here</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="7"></span><a href="#h-how-the-current-system-works-mental-model-7" class="toc-link" data-section="7">How the current system works (mental model)</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="8"></span><a href="#h-package-layering-8" class="toc-link" data-section="8">Package layering</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="9"></span><a href="#h-tool-pipeline-tui-and-headless-9" class="toc-link" data-section="9">Tool pipeline (TUI and headless)</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="10"></span><a href="#h-mode-entrypoints-10" class="toc-link" data-section="10">Mode entrypoints</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="11"></span><a href="#h-key-coupling-issues-to-remove-for-sdk-readiness-11" class="toc-link" data-section="11">Key coupling issues to remove for SDK readiness</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="12"></span><a href="#h-key-files-to-understand-read-these-in-the-old-repo-12" class="toc-link" data-section="12">Key files to understand (read these in the old repo)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="13"></span><a href="#h-core-files-quick-reference-13" class="toc-link" data-section="13">Core Files - Quick Reference</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="14"></span><a href="#h-deep-dive-packagesbase-tools-14" class="toc-link" data-section="14">Deep Dive: packages/base-tools</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="15"></span><a href="#h-path-utilsts-current-implementation-15" class="toc-link" data-section="15">path-utils.ts - Current Implementation</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="16"></span><a href="#h-readts-current-implementation-16" class="toc-link" data-section="16">read.ts - Current Implementation</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="17"></span><a href="#h-bashts-current-implementation-17" class="toc-link" data-section="17">bash.ts - Current Implementation</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="18"></span><a href="#h-deep-dive-appscoding-agentsrcconfigts-18" class="toc-link" data-section="18">Deep Dive: apps/coding-agent/src/config.ts</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="19"></span><a href="#h-deep-dive-codex-instructions-cache-19" class="toc-link" data-section="19">Deep Dive: Codex Instructions Cache</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="20"></span><a href="#h-deep-dive-token-storage-20" class="toc-link" data-section="20">Deep Dive: Token Storage</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="21"></span><a href="#h-deep-dive-session-manager-21" class="toc-link" data-section="21">Deep Dive: Session Manager</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="22"></span><a href="#h-patterns-to-follow-22" class="toc-link" data-section="22">Patterns to follow</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="23"></span><a href="#h-agenttool-pattern-schema-execute-abort-handling-23" class="toc-link" data-section="23">AgentTool pattern (schema + execute + abort handling)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="24"></span><a href="#h-hook-wiring-pattern-register-events-call-send-24" class="toc-link" data-section="24">Hook wiring pattern (register events, call send)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="25"></span><a href="#h-transport-composition-pattern-25" class="toc-link" data-section="25">Transport composition pattern</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="26"></span><a href="#h-milestone-0-migration-prep-and-guardrails-26" class="toc-link" data-section="26">Milestone 0: Migration prep and guardrails</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="27"></span><a href="#h-goal-27" class="toc-link" data-section="27">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="28"></span><a href="#h-verification-28" class="toc-link" data-section="28">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="29"></span><a href="#h-steps-29" class="toc-link" data-section="29">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="30"></span><a href="#h-01-lock-naming-baseline-merlin-from-day-one-30" class="toc-link" data-section="30">1 Lock naming baseline (merlin from day one)</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="31"></span><a href="#h-02-freeze-the-baseline-31" class="toc-link" data-section="31">2 Freeze the baseline</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="32"></span><a href="#h-03-create-an-audit-checklist-32" class="toc-link" data-section="32">3 Create an audit checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="33"></span><a href="#h-watch-out-for-33" class="toc-link" data-section="33">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="34"></span><a href="#h-milestone-1-root-infrastructure-in-the-new-repo-34" class="toc-link" data-section="34">Milestone 1: Root infrastructure in the new repo</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="35"></span><a href="#h-goal-35" class="toc-link" data-section="35">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="36"></span><a href="#h-verification-36" class="toc-link" data-section="36">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="37"></span><a href="#h-file-checklist-37" class="toc-link" data-section="37">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="38"></span><a href="#h-steps-38" class="toc-link" data-section="38">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="39"></span><a href="#h-11-copy-root-packagejson-39" class="toc-link" data-section="39">1 Copy root package.json</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="40"></span><a href="#h-12-copy-bunfigtoml-40" class="toc-link" data-section="40">2 Copy bunfig.toml</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="41"></span><a href="#h-13-copy-tsconfigbasejson-41" class="toc-link" data-section="41">3 Copy tsconfig.base.json</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="42"></span><a href="#h-14-copy-testsetupts-42" class="toc-link" data-section="42">4 Copy test/setup.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="43"></span><a href="#h-15-copy-scriptstest-allts-43" class="toc-link" data-section="43">5 Copy scripts/test-all.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="44"></span><a href="#h-16-copy-gitignore-44" class="toc-link" data-section="44">6 Copy .gitignore</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="45"></span><a href="#h-watch-out-for-45" class="toc-link" data-section="45">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="46"></span><a href="#h-milestone-2-migrate-packagesai-46" class="toc-link" data-section="46">Milestone 2: Migrate packages/ai</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="47"></span><a href="#h-goal-47" class="toc-link" data-section="47">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="48"></span><a href="#h-what-this-package-does-48" class="toc-link" data-section="48">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="49"></span><a href="#h-verification-49" class="toc-link" data-section="49">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="50"></span><a href="#h-file-checklist-50" class="toc-link" data-section="50">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="51"></span><a href="#h-steps-51" class="toc-link" data-section="51">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="52"></span><a href="#h-21-copy-the-entire-package-52" class="toc-link" data-section="52">1 Copy the entire package</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="53"></span><a href="#h-22-update-packagejson-53" class="toc-link" data-section="53">2 Update package.json</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="54"></span><a href="#h-23-understand-the-key-types-54" class="toc-link" data-section="54">3 Understand the key types</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="55"></span><a href="#h-24-verify-model-generation-workflow-55" class="toc-link" data-section="55">4 Verify model generation workflow</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="56"></span><a href="#h-watch-out-for-56" class="toc-link" data-section="56">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="57"></span><a href="#h-milestone-3-migrate-packagesagent-57" class="toc-link" data-section="57">Milestone 3: Migrate packages/agent</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="58"></span><a href="#h-goal-58" class="toc-link" data-section="58">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="59"></span><a href="#h-what-this-package-does-59" class="toc-link" data-section="59">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="60"></span><a href="#h-verification-60" class="toc-link" data-section="60">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="61"></span><a href="#h-file-checklist-61" class="toc-link" data-section="61">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="62"></span><a href="#h-steps-62" class="toc-link" data-section="62">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="63"></span><a href="#h-31-copy-the-package-and-update-metadata-63" class="toc-link" data-section="63">1 Copy the package and update metadata</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="64"></span><a href="#h-32-make-codex-instruction-caching-configurable-64" class="toc-link" data-section="64">2 Make Codex instruction caching configurable</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="65"></span><a href="#h-33-update-codextransport-to-pass-cachedir-65" class="toc-link" data-section="65">3 Update CodexTransport to pass cacheDir</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="66"></span><a href="#h-34-update-codex-auth-cli-defaults-66" class="toc-link" data-section="66">4 Update Codex auth CLI defaults</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="67"></span><a href="#h-watch-out-for-67" class="toc-link" data-section="67">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="68"></span><a href="#h-milestone-4-migrate-packagesbase-tools-and-make-tools-cwd-aware-68" class="toc-link" data-section="68">Milestone 4: Migrate packages/base-tools and make tools cwd-aware</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="69"></span><a href="#h-goal-69" class="toc-link" data-section="69">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="70"></span><a href="#h-what-this-package-does-70" class="toc-link" data-section="70">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="71"></span><a href="#h-verification-71" class="toc-link" data-section="71">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="72"></span><a href="#h-file-checklist-72" class="toc-link" data-section="72">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="73"></span><a href="#h-steps-73" class="toc-link" data-section="73">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="74"></span><a href="#h-41-update-package-metadata-74" class="toc-link" data-section="74">1 Update package metadata</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="75"></span><a href="#h-42-extend-path-utilities-with-cwd-helpers-75" class="toc-link" data-section="75">2 Extend path utilities with cwd helpers</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="76"></span><a href="#h-43-add-tool-factories-76" class="toc-link" data-section="76">3 Add tool factories</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="77"></span><a href="#h-44-add-createcodingtools-helper-77" class="toc-link" data-section="77">4 Use createToolRegistry only (no legacy helper)</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="78"></span><a href="#h-45-add-unit-tests-78" class="toc-link" data-section="78">5 Add unit tests</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="79"></span><a href="#h-watch-out-for-79" class="toc-link" data-section="79">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="80"></span><a href="#h-milestone-5-migrate-packageslsp-80" class="toc-link" data-section="80">Milestone 5: Migrate packages/lsp</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="81"></span><a href="#h-goal-81" class="toc-link" data-section="81">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="82"></span><a href="#h-what-this-package-does-82" class="toc-link" data-section="82">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="83"></span><a href="#h-verification-83" class="toc-link" data-section="83">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="84"></span><a href="#h-file-checklist-84" class="toc-link" data-section="84">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="85"></span><a href="#h-steps-85" class="toc-link" data-section="85">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="86"></span><a href="#h-51-copy-and-update-metadata-86" class="toc-link" data-section="86">1 Copy and update metadata</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="87"></span><a href="#h-52-audit-cwd-usage-in-tool-wrapperts-87" class="toc-link" data-section="87">2 Audit cwd usage in tool-wrapper.ts</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="88"></span><a href="#h-watch-out-for-88" class="toc-link" data-section="88">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="89"></span><a href="#h-milestone-6-create-packagessdk-89" class="toc-link" data-section="89">Milestone 6: Create packages/sdk</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="90"></span><a href="#h-goal-90" class="toc-link" data-section="90">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="91"></span><a href="#h-what-this-package-does-91" class="toc-link" data-section="91">What this package does</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="92"></span><a href="#h-verification-92" class="toc-link" data-section="92">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="93"></span><a href="#h-file-structure-93" class="toc-link" data-section="93">File structure</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="94"></span><a href="#h-steps-94" class="toc-link" data-section="94">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="95"></span><a href="#h-61-create-the-package-skeleton-95" class="toc-link" data-section="95">1 Create the package skeleton</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="96"></span><a href="#h-62-move-config-logic-into-sdk-96" class="toc-link" data-section="96">2 Move config logic into SDK</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="97"></span><a href="#h-63-implement-the-sdk-agent-factory-97" class="toc-link" data-section="97">3 Implement the SDK agent factory</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="98"></span><a href="#h-64-re-export-sdk-surface-98" class="toc-link" data-section="98">4 Re-export SDK surface</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="99"></span><a href="#h-65-update-root-typecheck-script-99" class="toc-link" data-section="99">5 Update root typecheck script</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="100"></span><a href="#h-watch-out-for-100" class="toc-link" data-section="100">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="101"></span><a href="#h-milestone-7-migrate-packagesopen-tui-if-keeping-the-cli-101" class="toc-link" data-section="101">Milestone 7: Migrate packages/open-tui (if keeping the CLI)</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="102"></span><a href="#h-goal-102" class="toc-link" data-section="102">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="103"></span><a href="#h-verification-103" class="toc-link" data-section="103">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="104"></span><a href="#h-file-checklist-104" class="toc-link" data-section="104">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="105"></span><a href="#h-steps-105" class="toc-link" data-section="105">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="106"></span><a href="#h-71-update-package-metadata-106" class="toc-link" data-section="106">1 Update package metadata</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="107"></span><a href="#h-72-audit-combinedautocompleteprovider-107" class="toc-link" data-section="107">2 Audit CombinedAutocompleteProvider</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="108"></span><a href="#h-73-rename-the-built-in-default-theme-108" class="toc-link" data-section="108">3 Rename the built-in default theme</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="109"></span><a href="#h-watch-out-for-109" class="toc-link" data-section="109">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="110"></span><a href="#h-milestone-8-migrate-appscoding-agent-and-dogfood-sdk-110" class="toc-link" data-section="110">Milestone 8: Migrate apps/coding-agent and dogfood SDK</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="111"></span><a href="#h-goal-111" class="toc-link" data-section="111">Goal</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="112"></span><a href="#h-verification-112" class="toc-link" data-section="112">Verification</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="113"></span><a href="#h-file-checklist-113" class="toc-link" data-section="113">File checklist</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="114"></span><a href="#h-steps-114" class="toc-link" data-section="114">Steps</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="115"></span><a href="#h-81-update-packagejson-115" class="toc-link" data-section="115">1 Update package.json</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="116"></span><a href="#h-82-update-buildts-116" class="toc-link" data-section="116">2 Update build.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="117"></span><a href="#h-83-apply-rename-sweep-in-indexts-117" class="toc-link" data-section="117">3 Apply rename sweep in index.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="118"></span><a href="#h-84-update-profilerts-118" class="toc-link" data-section="118">4 Update profiler.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="119"></span><a href="#h-85-update-theme-namests-119" class="toc-link" data-section="119">5 Update theme-names.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="120"></span><a href="#h-86-update-hooksloaderts-120" class="toc-link" data-section="120">6 Update hooks/loader.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="121"></span><a href="#h-87-update-custom-toolsloaderts-121" class="toc-link" data-section="121">7 Update custom-tools/loader.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="122"></span><a href="#h-88-update-hookstypests-122" class="toc-link" data-section="122">8 Update hooks/types.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="123"></span><a href="#h-89-convert-configts-to-re-export-123" class="toc-link" data-section="123">9 Convert config.ts to re-export</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="124"></span><a href="#h-810-update-headlessts-to-use-sdk-124" class="toc-link" data-section="124">10 Update headless.ts to use SDK</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="125"></span><a href="#h-811-update-session-managerts-125" class="toc-link" data-section="125">11 Update session-manager.ts</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="126"></span><a href="#h-812-update-examples-126" class="toc-link" data-section="126">12 Update examples</a></li><li class="toc-item toc-l4"><span class="toc-dot" data-section="127"></span><a href="#h-813-update-acpindexts-127" class="toc-link" data-section="127">13 Update acp/index.ts</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="128"></span><a href="#h-watch-out-for-128" class="toc-link" data-section="128">Watch out for</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="129"></span><a href="#h-milestone-9-legacy-compatibility-optional-129" class="toc-link" data-section="129">Milestone 9: Legacy compatibility (removed)</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="137"></span><a href="#h-testing-strategy-137" class="toc-link" data-section="137">Testing strategy</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="138"></span><a href="#h-package-level-checks-138" class="toc-link" data-section="138">Package-level checks</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="139"></span><a href="#h-sdk-manual-checks-139" class="toc-link" data-section="139">SDK manual checks</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="140"></span><a href="#h-cli-manual-checks-140" class="toc-link" data-section="140">CLI manual checks</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="141"></span><a href="#h-troubleshooting-quick-hits-141" class="toc-link" data-section="141">Troubleshooting quick hits</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="142"></span><a href="#h-typescript-errors-142" class="toc-link" data-section="142">TypeScript Errors</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="143"></span><a href="#h-runtime-errors-143" class="toc-link" data-section="143">Runtime Errors</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="144"></span><a href="#h-build-errors-144" class="toc-link" data-section="144">Build Errors</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="145"></span><a href="#h-beyond-the-basics-optional-enhancements-145" class="toc-link" data-section="145">Beyond the basics (optional enhancements)</a></li><li class="toc-item toc-l2"><span class="toc-dot" data-section="146"></span><a href="#h-quick-reference-146" class="toc-link" data-section="146">Quick reference</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="147"></span><a href="#h-commands-you-will-use-147" class="toc-link" data-section="147">Commands you will use</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="148"></span><a href="#h-files-you-will-touch-most-148" class="toc-link" data-section="148">Files you will touch most</a></li><li class="toc-item toc-l3"><span class="toc-dot" data-section="149"></span><a href="#h-useful-references-in-the-old-repo-149" class="toc-link" data-section="149">Useful references in the old repo</a></li></ul></nav>
 <main class="content">
   <header class="doc-header">
     <h1 class="doc-title">SDK-Ready Merlin Migration Guide</h1>
@@ -2065,67 +2065,13 @@ export function createEditTool(cwd: CwdLike): AgentTool&lt;typeof schema, EditDe
 // Default export uses process.cwd()
 export const editTool = createEditTool(undefined);</code></pre></figure></p>
 
-<h4 id="h-44-add-createcodingtools-helper-77" data-section="77"><span class="section-num">77</span>4.4 Add <code>createCodingTools</code> helper</h4>
-
-<p>Update the main index to export both defaults and factories:</p>
-
-<p><figure class="code-block" data-listing="45"><div class="code-bar"><span class="code-lang">typescript</span><button class="code-copy">copy</button></div><pre class="language-typescript"><code class="language-typescript">// packages/base-tools/src/index.ts
-// Individual tool exports
-export { readTool, createReadTool, type ReadDetails } from &quot;./tools/read.js&quot;;
-export { writeTool, createWriteTool, type WriteDetails } from &quot;./tools/write.js&quot;;
-export { editTool, createEditTool, type EditDetails } from &quot;./tools/edit.js&quot;;
-export { bashTool, createBashTool, type BashDetails } from &quot;./tools/bash.js&quot;;
-
-// Path utilities
-export { 
-  expandPath, 
-  resolveReadPath,
-  resolvePathFromCwd,
-  resolveReadPathFromCwd,
-  toCwdResolver,
-  type CwdLike,
-  type CwdResolver,
-} from &quot;./tools/path-utils.js&quot;;
-
-// Default tools array (uses process.cwd())
-import { readTool } from &quot;./tools/read.js&quot;;
-import { writeTool } from &quot;./tools/write.js&quot;;
-import { editTool } from &quot;./tools/edit.js&quot;;
-import { bashTool } from &quot;./tools/bash.js&quot;;
-import type { AgentTool } from &quot;@merlin-agents/ai&quot;;
-import type { CwdLike } from &quot;./tools/path-utils.js&quot;;
-
-export const codingTools: AgentTool&lt;any, any&gt;[] = [readTool, bashTool, editTool, writeTool];
-
-/**
- * Creates a set of coding tools bound to a specific working directory.
- * 
- * @param cwd - The working directory for all tools
- * @returns Array of [read, bash, edit, write] tools
- * 
- * @example
- * // Bind tools to a specific project
- * const tools = createCodingTools(&quot;/path/to/project&quot;);
- * 
- * // Bind tools dynamically
- * const tools = createCodingTools(() =&gt; getCurrentProject().path);
- */
-export function createCodingTools(cwd: CwdLike): AgentTool&lt;any, any&gt;[] {
-  // Import factories here to avoid circular dependencies
-  const { createReadTool } = require(&quot;./tools/read.js&quot;);
-  const { createWriteTool } = require(&quot;./tools/write.js&quot;);
-  const { createEditTool } = require(&quot;./tools/edit.js&quot;);
-  const { createBashTool } = require(&quot;./tools/bash.js&quot;);
-
-  return [
-    createReadTool(cwd),
-    createBashTool(cwd),
-    createEditTool(cwd),
-    createWriteTool(cwd),
-  ];
-}</code></pre></figure></p>
-
-<h4 id="h-45-add-unit-tests-78" data-section="78"><span class="section-num">78</span>4.5 Add unit tests</h4>
+<h4 id="h-44-add-createcodingtools-helper-77" data-section="77"><span class="section-num">77</span>4.4 Use <code>createToolRegistry</code> only (no legacy helper)</h4><p>Do not add <code>createCodingTools</code> or export default tool singletons. Keep the index focused on factories and the cwd-scoped registry.</p><p><figure class="code-block" data-listing="44"><div class="code-bar"><span class="code-lang">typescript</span><button class="code-copy">copy</button></div><pre class="language-typescript"><code class="language-typescript">// packages/base-tools/src/index.ts
+export { createToolRegistry, type ToolDef, type ToolRegistry } from "./tool-registry.js";
+export { createReadTool } from "./tools/read.js";
+export { createWriteTool } from "./tools/write.js";
+export { createEditTool } from "./tools/edit.js";
+export { createBashTool } from "./tools/bash.js";
+</code></pre></figure></p><h4 id="h-45-add-unit-tests-78" data-section="78"><span class="section-num">78</span>4.5 Add unit tests</h4>
 
 <p>Create <code>packages/base-tools/tests/path-utils.test.ts</code>:</p>
 
@@ -2240,7 +2186,7 @@ describe(&quot;resolveReadPathFromCwd&quot;, () =&gt; {
 <ul>
 <li><strong>Never capture <code>process.cwd()</code> at module import time</strong> - always use <code>toCwdResolver</code> to defer resolution</li>
 <li>The factories are the primary API for SDK users - the default exports are for backwards compatibility</li>
-<li>Keep the <code>codingTools</code> array export - existing code depends on it</li>
+<li>Do not export legacy tool arrays; use the tool registry + factories instead</li>
 </ul>
 
 <hr>
@@ -2691,235 +2637,7 @@ function resolveModel(provider: KnownProvider, modelIdRaw: string | undefined): 
   return models.find(m =&gt; m.id === modelIdRaw);
 }</code></pre></figure></p>
 
-<h4 id="h-63-implement-the-sdk-agent-factory-97" data-section="97"><span class="section-num">97</span>6.3 Implement the SDK agent factory</h4>
-
-<p>Create <code>packages/sdk/src/merlin-agent.ts</code>:</p>
-
-<p><figure class="code-block" data-listing="54"><div class="code-bar"><span class="code-lang">typescript</span><button class="code-copy">copy</button></div><pre class="language-typescript"><code class="language-typescript">// packages/sdk/src/merlin-agent.ts
-import { Agent, ProviderTransport, CodexTransport, RouterTransport } from &quot;@merlin-agents/agent-core&quot;;
-import { createCodingTools } from &quot;@merlin-agents/base-tools&quot;;
-import { createLspManager, wrapToolsWithLspDiagnostics } from &quot;@merlin-agents/lsp&quot;;
-import type { AgentTool, Model, Api } from &quot;@merlin-agents/ai&quot;;
-import type { ThinkingLevel } from &quot;@merlin-agents/agent-core&quot;;
-import { loadAppConfig, type LoadedAppConfig } from &quot;./config.js&quot;;
-
-// ============================================================
-// Types
-// ============================================================
-
-export interface MerlinAgentOptions {
-  /**
-   * Working directory for file tools and config loading.
-   * Default: process.cwd()
-   */
-  cwd?: string;
-
-  /**
-   * Config directory (where config.json lives).
-   * Default: ~/.config/merlin
-   */
-  configDir?: string;
-
-  /**
-   * Explicit config file path. Overrides configDir.
-   */
-  configPath?: string;
-
-  /**
-   * LLM provider override (e.g., &quot;anthropic&quot;, &quot;openai&quot;, &quot;codex&quot;).
-   */
-  provider?: string;
-
-  /**
-   * Model ID override.
-   */
-  model?: string;
-
-  /**
-   * Thinking level override.
-   */
-  thinking?: ThinkingLevel;
-
-  /**
-   * Tools to use. Can be:
-   * - An array of tools (replaces defaults)
-   * - A function that receives default tools and returns modified tools
-   * 
-   * Default: createCodingTools(cwd)
-   */
-  tools?: AgentTool&lt;any, any&gt;[] | ((defaults: AgentTool&lt;any, any&gt;[]) =&gt; AgentTool&lt;any, any&gt;[]);
-
-  /**
-   * Custom transport. If provided, bypasses default transport creation.
-   * Use this for custom LLM integrations.
-   */
-  transport?: AgentTransport;
-
-  /**
-   * LSP configuration.
-   * - false: disable LSP
-   * - { enabled: true, autoInstall?: boolean }: enable LSP
-   * 
-   * Default: Uses config file settings
-   */
-  lsp?: false | { enabled: true; autoInstall?: boolean };
-
-  /**
-   * Function to retrieve API keys for providers.
-   * Default: Reads from environment variables (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.)
-   */
-  getApiKey?: (provider: string) =&gt; Promise&lt;string | undefined&gt;;
-
-  /**
-   * Codex token management (for OpenAI Codex provider).
-   * Only needed if using the codex provider.
-   */
-  codex?: {
-    getTokens: () =&gt; Promise&lt;{ access: string; refresh: string; expires: number } | null&gt;;
-    setTokens: (tokens: { access: string; refresh: string; expires: number }) =&gt; Promise&lt;void&gt;;
-    clearTokens: () =&gt; Promise&lt;void&gt;;
-  };
-}
-
-export interface MerlinAgent {
-  /**
-   * The underlying Agent instance.
-   */
-  agent: Agent;
-
-  /**
-   * The loaded configuration.
-   */
-  config: LoadedAppConfig;
-
-  /**
-   * Shuts down the agent, including any LSP processes.
-   * Call this when done to clean up resources.
-   */
-  close: () =&gt; Promise&lt;void&gt;;
-}
-
-// ============================================================
-// Factory
-// ============================================================
-
-/**
- * Creates a Merlin agent with sensible defaults.
- * 
- * This is the main entry point for embedding Merlin in other applications.
- * 
- * @example Basic usage
- *</code></pre></figure>typescript<br> </em> const { agent, close } = await createMerlinAgent({<br> <em>   cwd: &quot;/path/to/project&quot;,<br> </em> });<br> <em> <br> </em> // Use the agent<br> <em> await agent.prompt(&quot;Hello!&quot;);<br> </em> <br> <em> // Clean up<br> </em> await close();<br> <em> <figure class="code-block" data-listing="55"><div class="code-bar"><span class="code-lang">text</span><button class="code-copy">copy</button></div><pre><code>* 
- * @example With custom tools
- *</code></pre></figure>typescript<br> </em> const { agent, close } = await createMerlinAgent({<br> <em>   cwd: &quot;/path/to/project&quot;,<br> </em>   tools: (defaults) =&gt; [...defaults, myCustomTool],<br> <em> });<br> </em> <figure class="code-block" data-listing="56"><div class="code-bar"><span class="code-lang">text</span><button class="code-copy">copy</button></div><pre><code>*/
-export async function createMerlinAgent(
-  options: MerlinAgentOptions = {}
-): Promise&lt;MerlinAgent&gt; {
-  const cwd = options.cwd ?? process.cwd();
-  
-  // Load configuration
-  const config = await loadAppConfig({
-    cwd,
-    configDir: options.configDir,
-    configPath: options.configPath,
-    provider: options.provider,
-    model: options.model,
-    thinking: options.thinking,
-  });
-
-  // Resolve LSP settings
-  const lspSettings = options.lsp === false
-    ? { enabled: false, autoInstall: false }
-    : options.lsp ?? config.lsp;
-
-  // Create tools
-  const defaultTools = createCodingTools(cwd);
-  let tools: AgentTool&lt;any, any&gt;[];
-  
-  if (typeof options.tools === &quot;function&quot;) {
-    tools = options.tools(defaultTools);
-  } else if (options.tools) {
-    tools = options.tools;
-  } else {
-    tools = defaultTools;
-  }
-
-  // Create LSP manager (if enabled)
-  let lspManager: LspManager | null = null;
-  if (lspSettings.enabled) {
-    lspManager = createLspManager({
-      cwd,
-      configDir: config.configDir,
-      enabled: true,
-      autoInstall: lspSettings.autoInstall,
-    });
-    tools = wrapToolsWithLspDiagnostics(tools, lspManager, { cwd });
-  }
-
-  // Create transport
-  const transport = options.transport ?? createDefaultTransport(options, config);
-
-  // Create agent
-  const agent = new Agent({
-    transport,
-    initialState: {
-      systemPrompt: config.systemPrompt,
-      model: config.model,
-      thinkingLevel: config.thinking,
-      tools,
-    },
-  });
-
-  // Return wrapped agent with close function
-  return {
-    agent,
-    config,
-    close: async () =&gt; {
-      if (lspManager) {
-        await lspManager.stop();
-      }
-    },
-  };
-}
-
-function createDefaultTransport(
-  options: MerlinAgentOptions,
-  config: LoadedAppConfig
-): AgentTransport {
-  const getApiKey = options.getApiKey ?? defaultGetApiKey;
-
-  const providerTransport = new ProviderTransport({ getApiKey });
-
-  // Only create Codex transport if tokens are provided
-  let codexTransport: CodexTransport | undefined;
-  if (options.codex) {
-    codexTransport = new CodexTransport({
-      getTokens: options.codex.getTokens,
-      setTokens: options.codex.setTokens,
-      clearTokens: options.codex.clearTokens,
-      cacheDir: path.join(config.configDir, &quot;..&quot;, &quot;.merlin&quot;, &quot;cache&quot;),
-    });
-  }
-
-  return new RouterTransport({
-    provider: providerTransport,
-    codex: codexTransport,
-  });
-}
-
-async function defaultGetApiKey(provider: string): Promise&lt;string | undefined&gt; {
-  const envMap: Record&lt;string, string&gt; = {
-    anthropic: &quot;ANTHROPIC_API_KEY&quot;,
-    openai: &quot;OPENAI_API_KEY&quot;,
-    google: &quot;GOOGLE_API_KEY&quot;,
-    xai: &quot;XAI_API_KEY&quot;,
-  };
-  
-  const envVar = envMap[provider];
-  return envVar ? process.env[envVar] : undefined;
-}</code></pre></figure></p>
-
-<h4 id="h-64-re-export-sdk-surface-98" data-section="98"><span class="section-num">98</span>6.4 Re-export SDK surface</h4>
+<h4 id="h-63-implement-the-sdk-agent-factory-97" data-section="97"><span class="section-num">97</span>6.3 Use the Effect SDK surface</h4><p>This repo uses <code>@marvin-agents/sdk</code> built on <code>packages/runtime-effect</code>. Do not implement a custom agent factory inside the SDK; use the provided surface instead.</p><ul><li><code>runAgent</code> / <code>runAgentEffect</code></li><li><code>createAgentSession</code> / <code>createAgentSessionEffect</code></li><li><code>runAgentStream</code></li></ul><p>See <code>docs/sdk.md</code> for examples.</p><h4 id="h-64-re-export-sdk-surface-98" data-section="98"><span class="section-num">98</span>6.4 Re-export SDK surface</h4>
 
 <p>Create <code>packages/sdk/src/index.ts</code>:</p>
 
@@ -2945,7 +2663,7 @@ export {
 // Re-export key types from dependencies
 export type { Agent, ThinkingLevel } from &quot;@merlin-agents/agent-core&quot;;
 export type { AgentTool, AgentToolResult, TextContent, ImageContent, Model, Api, KnownProvider } from &quot;@merlin-agents/ai&quot;;
-export { createCodingTools, codingTools } from &quot;@merlin-agents/base-tools&quot;;</code></pre></figure></p>
+export { createToolRegistry, createReadTool, createWriteTool, createEditTool, createBashTool } from &quot;@merlin-agents/base-tools&quot;;</code></pre></figure></p>
 
 <h4 id="h-65-update-root-typecheck-script-99" data-section="99"><span class="section-num">99</span>6.5 Update root typecheck script</h4>
 
@@ -3383,92 +3101,7 @@ const ACP_AGENT_INFO = {
 
 <hr>
 
-<h2 id="h-milestone-9-legacy-compatibility-optional-129" data-section="129"><span class="section-num">129</span>Milestone 9: Legacy compatibility (optional)</h2>
-
-<h3 id="h-goal-130" data-section="130"><span class="section-num">130</span>Goal</h3>
-
-<p>Offer a smooth path for existing marvin users to migrate into the merlin config layout.</p>
-
-<h3 id="h-verification-131" data-section="131"><span class="section-num">131</span>Verification</h3>
-
-<li class="task"><span class="checkbox">[ ]</span> <code>rg &quot;marvin&quot;</code> in new repo only returns intentional legacy paths.</li>
-<li class="task"><span class="checkbox">[ ]</span> Running <code>merlin migrate</code> (if added) copies config without deleting old directory.</li>
-
-<h3 id="h-steps-132" data-section="132"><span class="section-num">132</span>Steps</h3>
-
-<h4 id="h-91-add-legacy-config-detection-sdk-level-133" data-section="133"><span class="section-num">133</span>9.1 Add legacy config detection (SDK-level)</h4>
-
-<p>In <code>packages/sdk/src/config.ts</code>:</p>
-
-<p><figure class="code-block" data-listing="78"><div class="code-bar"><span class="code-lang">typescript</span><button class="code-copy">copy</button></div><pre class="language-typescript"><code class="language-typescript">// Check for legacy config on startup
-export async function checkLegacyConfig(): Promise&lt;{
-  hasLegacy: boolean;
-  legacyPath: string | null;
-  message: string | null;
-}&gt; {
-  const merlinConfig = path.join(os.homedir(), '.config', 'merlin');
-  const marvinConfig = path.join(os.homedir(), '.config', 'marvin');
-  
-  const hasMerlin = existsSync(merlinConfig);
-  const hasMarvin = existsSync(marvinConfig);
-  
-  if (!hasMerlin &amp;&amp; hasMarvin) {
-    return {
-      hasLegacy: true,
-      legacyPath: marvinConfig,
-      message: `Found legacy config at ${marvinConfig}. Run 'merlin migrate' to copy to ${merlinConfig}.`,
-    };
-  }
-  
-  return { hasLegacy: false, legacyPath: null, message: null };
-}</code></pre></figure></p>
-
-<h4 id="h-92-add-explicit-migration-command-cli-level-134" data-section="134"><span class="section-num">134</span>9.2 Add explicit migration command (CLI-level)</h4>
-
-<p>Add to <code>apps/coding-agent/src/index.ts</code>:</p>
-
-<p><figure class="code-block" data-listing="79"><div class="code-bar"><span class="code-lang">typescript</span><button class="code-copy">copy</button></div><pre class="language-typescript"><code class="language-typescript">if (args.migrate) {
-  await runMigrate();
-  return;
-}
-
-async function runMigrate() {
-  const merlinConfig = path.join(os.homedir(), '.config', 'merlin');
-  const marvinConfig = path.join(os.homedir(), '.config', 'marvin');
-  
-  if (!existsSync(marvinConfig)) {
-    console.log(&quot;No legacy config found at&quot;, marvinConfig);
-    return;
-  }
-  
-  if (existsSync(merlinConfig)) {
-    console.log(&quot;Merlin config already exists at&quot;, merlinConfig);
-    console.log(&quot;Manual migration needed. Legacy config:&quot;, marvinConfig);
-    return;
-  }
-  
-  // Copy directory
-  console.log(`Copying ${marvinConfig} to ${merlinConfig}...`);
-  await cp(marvinConfig, merlinConfig, { recursive: true });
-  console.log(&quot;Migration complete!&quot;);
-  console.log(&quot;Note: Original config preserved at&quot;, marvinConfig);
-}</code></pre></figure></p>
-
-<h4 id="h-93-keep-token-migration-in-codex-auth-helper-135" data-section="135"><span class="section-num">135</span>9.3 Keep token migration in Codex auth helper</h4>
-
-<p>Already handled in Milestone 3 - the <code>loadTokens</code> function checks legacy paths.</p>
-
-<h3 id="h-watch-out-for-136" data-section="136"><span class="section-num">136</span>Watch out for</h3>
-
-<ul>
-<li><strong>Never auto-migrate on startup</strong> - always require explicit command</li>
-<li><strong>Never delete legacy config</strong> - copy only, let users delete manually</li>
-<li>Show clear messages about what's happening</li>
-</ul>
-
-<hr>
-
-<h2 id="h-testing-strategy-137" data-section="137"><span class="section-num">137</span>Testing strategy</h2>
+<h2 id="h-milestone-9-legacy-compatibility-optional-129" data-section="129"><span class="section-num">129</span>Milestone 9: Legacy compatibility (removed)</h2><p>Legacy compatibility is out of scope for this repo. Do not add legacy config detection, migration commands, or legacy token paths.</p><h2 id="h-testing-strategy-137" data-section="137"><span class="section-num">137</span>Testing strategy</h2>
 
 <h3 id="h-package-level-checks-138" data-section="138"><span class="section-num">138</span>Package-level checks</h3>
 

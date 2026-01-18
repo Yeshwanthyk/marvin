@@ -13,7 +13,7 @@ import {
   type KnownProvider,
   type Model,
 } from "@marvin-agents/ai";
-import { toolRegistry } from "@marvin-agents/base-tools";
+import { createToolRegistry, type ToolRegistry } from "@marvin-agents/base-tools";
 import {
   createLspManager,
   wrapToolsWithLspDiagnostics,
@@ -43,7 +43,7 @@ import {
 import type { ValidationIssue } from "./extensibility/schema.js";
 import type { LoadedCustomTool, SendRef } from "./extensibility/custom-tools/index.js";
 import { ConfigTag, loadAppConfig, type LoadConfigOptions, type LoadedAppConfig } from "./config.js";
-import { LazyToolLoader, toolProxyAsArray } from "./lazy-tool-loader.js";
+import { LazyToolLoader } from "./lazy-tool-loader.js";
 import {
   PromptQueueLayer,
   PromptQueueTag,
@@ -77,6 +77,7 @@ import {
   TransportTag,
   createApiKeyResolver,
   type ApiKeyResolver,
+  type TransportBundle,
 } from "./transports.js";
 import { LspLayer, LspServiceTag } from "./lsp.js";
 
@@ -117,7 +118,7 @@ export const RuntimeServicesTag = Context.GenericTag<RuntimeServices>("runtime-e
 
 interface ToolRuntimeService {
   readonly loader: LazyToolLoader;
-  readonly tools: AgentTool<any, any>[];
+  readonly tools: AgentTool[];
   readonly toolByName: Map<string, ToolRegistryEntry>;
 }
 
@@ -130,6 +131,7 @@ export interface RuntimeLayerOptions extends LoadConfigOptions {
   readonly sendRef?: SendRef;
   readonly instrumentation?: InstrumentationService;
   readonly lspFactory?: typeof createLspManager;
+  readonly transportFactory?: (config: LoadedAppConfig, resolver: ApiKeyResolver) => TransportBundle;
 }
 
 interface RuntimeLayerInternalOptions extends RuntimeLayerOptions {
@@ -137,10 +139,10 @@ interface RuntimeLayerInternalOptions extends RuntimeLayerOptions {
   cwd: string;
   hasUI: boolean;
   sendRef: SendRef;
-  instrumentationLayer: Layer.Layer<never, never, InstrumentationService>;
+  instrumentationLayer: Layer.Layer<InstrumentationService, never, never>;
 }
 
-export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
+export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<RuntimeServices, unknown, never> => {
   const adapter = options?.adapter ?? "tui";
   const cwd = options?.cwd ?? process.cwd();
   const hasUI = options?.hasUI ?? adapter === "tui";
@@ -159,7 +161,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
     instrumentationLayer,
   };
 
-  return Layer.unwrapEffect(
+  const layerEffect: Effect.Effect<Layer.Layer<RuntimeServices, unknown, never>, unknown, never> =
     Effect.gen(function* () {
       const config = yield* Effect.tryPromise(() => loadAppConfig(layerOptions));
       const apiKeyResolver = createApiKeyResolver(config.configDir);
@@ -169,15 +171,21 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
       const sessionManagerLayer = Layer.succeed(SessionManagerTag, {
         sessionManager: new SessionManager(config.configDir),
       } satisfies SessionManagerService);
-      const transportLayer = TransportLayer(config, apiKeyResolver);
+      const transportLayer =
+        layerOptions.transportFactory
+          ? Layer.succeed(TransportTag, {
+              transport: layerOptions.transportFactory(config, apiKeyResolver),
+            })
+          : TransportLayer(config, apiKeyResolver);
       const customCommandsLayer = CustomCommandLayer({ configDir: config.configDir });
       const executionPlanLayer = ExecutionPlanBuilderLayer({
         cycle: cycleModels.map((entry) => ({ provider: entry.provider, model: entry.model }) satisfies PlanModelEntry),
       });
+      const toolRegistry = createToolRegistry(layerOptions.cwd);
       const extensibilityLayer = ExtensibilityLayer({
         cwd: layerOptions.cwd,
         sendRef: layerOptions.sendRef,
-        builtinTools: Object.keys(toolRegistry).map((name) => ({ name })) as AgentTool<any, any>[],
+        builtinToolNames: Object.keys(toolRegistry),
         hasUI: layerOptions.hasUI,
       });
       const hookContextLayer = HookContextControllerLayer;
@@ -189,6 +197,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
       });
       const toolRuntimeLayer = createToolRuntimeLayer({
         cwd: layerOptions.cwd,
+        toolRegistry,
       });
       const agentFactoryLayer = createAgentFactoryLayer();
       const runtimeServicesLayer = createRuntimeServicesLayer({
@@ -198,7 +207,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
         cycleModels,
       });
 
-      const baseProviders = Layer.mergeAll(configLayer, layerOptions.instrumentationLayer);
+      const baseProviders = Layer.merge(configLayer, layerOptions.instrumentationLayer);
       const withSessionManager = Layer.provideMerge(sessionManagerLayer, baseProviders);
       const withTransport = Layer.provideMerge(transportLayer, withSessionManager);
       const withCommands = Layer.provideMerge(customCommandsLayer, withTransport);
@@ -211,12 +220,13 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
       const withToolRuntime = Layer.provideMerge(toolRuntimeLayer, withLsp);
       const withAgentFactory = Layer.provideMerge(agentFactoryLayer, withToolRuntime);
       const withOrchestrator = Layer.provideMerge(SessionOrchestratorLayer(), withAgentFactory);
-      return Layer.provideMerge(runtimeServicesLayer, withOrchestrator);
-    }),
-  );
+      return Layer.provide(runtimeServicesLayer, withOrchestrator);
+    });
+
+  return Layer.unwrapEffect(layerEffect);
 };
 
-const createToolRuntimeLayer = (options: { cwd: string }) =>
+const createToolRuntimeLayer = (options: { cwd: string; toolRegistry: ToolRegistry }) =>
   Layer.effect(
     ToolRuntimeTag,
     Effect.gen(function* () {
@@ -224,14 +234,14 @@ const createToolRuntimeLayer = (options: { cwd: string }) =>
       const lspService = yield* LspServiceTag;
 
       const loader = new LazyToolLoader(
-        toolRegistry,
+        options.toolRegistry,
         customTools.map((entry) => entry.tool),
         getHookTools(hookRunner),
       );
       yield* Effect.promise(() => loader.preloadCoreTools());
 
       const tools = wrapToolsWithLspDiagnostics(
-        wrapToolsWithHooks(toolProxyAsArray(loader.getToolsProxy()), hookRunner),
+        wrapToolsWithHooks(loader.getToolsProxy().toArray(), hookRunner),
         lspService.manager,
         {
           cwd: options.cwd,
@@ -243,7 +253,7 @@ const createToolRuntimeLayer = (options: { cwd: string }) =>
       return {
         loader,
         tools,
-        toolByName: buildToolRegistry(customTools),
+        toolByName: buildToolRegistry(options.toolRegistry, customTools),
       } satisfies ToolRuntimeService;
     }),
   );
@@ -344,7 +354,10 @@ const createRuntimeServicesLayer = (options: {
     }),
   );
 
-const buildToolRegistry = (customTools: LoadedCustomTool[]): Map<string, ToolRegistryEntry> => {
+const buildToolRegistry = (
+  toolRegistry: ToolRegistry,
+  customTools: LoadedCustomTool[],
+): Map<string, ToolRegistryEntry> => {
   const registry = new Map<string, ToolRegistryEntry>();
 
   for (const [name, def] of Object.entries(toolRegistry)) {
@@ -352,13 +365,12 @@ const buildToolRegistry = (customTools: LoadedCustomTool[]): Map<string, ToolReg
   }
 
   for (const entry of customTools) {
-    const tool = entry.tool as { renderCall?: unknown; renderResult?: unknown };
     registry.set(entry.tool.name, {
       label: entry.tool.label,
       source: "custom",
       sourcePath: entry.resolvedPath,
-      renderCall: tool.renderCall,
-      renderResult: tool.renderResult,
+      renderCall: entry.tool.renderCall,
+      renderResult: entry.tool.renderResult,
     });
   }
 

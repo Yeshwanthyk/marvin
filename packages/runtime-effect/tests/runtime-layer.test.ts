@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { Agent } from "@marvin-agents/agent-core";
+import { Agent, CodexTransport, ProviderTransport, RouterTransport } from "@marvin-agents/agent-core";
 import { getModels } from "@marvin-agents/ai";
 import type { LspManager } from "@marvin-agents/lsp";
 import { Effect, Layer } from "effect";
@@ -83,6 +83,40 @@ describe("RuntimeLayer", () => {
       expect(typeof services.sessionOrchestrator.submitPromptAndWait).toBe("function");
       expect(typeof services.promptQueue.enqueue).toBe("function");
       expect(Array.isArray(services.cycleModels)).toBe(true);
+    } finally {
+      await rm(temp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("uses custom transport factory when provided", async () => {
+    const temp = await createTempConfig();
+    const providerTransport = new ProviderTransport({ getApiKey: () => "test" });
+    const codexTransport = new CodexTransport({
+      getTokens: async () => null,
+      setTokens: async () => {},
+      clearTokens: async () => {},
+    });
+    const routerTransport = new RouterTransport({ provider: providerTransport, codex: codexTransport });
+
+    try {
+      const services = await runLayer(
+        RuntimeLayer({
+          adapter: "headless",
+          configDir: temp.dir,
+          configPath: temp.configPath,
+          instrumentation: { record: () => {} },
+          lspFactory: () => stubLspManager(),
+          transportFactory: (_config, _resolver) => ({
+            provider: providerTransport,
+            codex: codexTransport,
+            router: routerTransport,
+          }),
+        }),
+      );
+
+      expect(services.providerTransport).toBe(providerTransport);
+      expect(services.codexTransport).toBe(codexTransport);
+      expect(services.transport).toBe(routerTransport);
     } finally {
       await rm(temp.dir, { recursive: true, force: true });
     }

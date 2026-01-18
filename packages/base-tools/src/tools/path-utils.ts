@@ -1,4 +1,5 @@
 import { accessSync, constants } from "node:fs";
+import { isAbsolute, resolve as resolvePath } from "node:path";
 import * as os from "node:os";
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
@@ -32,17 +33,27 @@ export function expandPath(filePath: string): string {
 	return normalized;
 }
 
-export function resolveReadPath(filePath: string): string {
+export function resolvePathFromCwd(cwd: string, filePath: string): string {
 	const expanded = expandPath(filePath);
-
-	if (fileExists(expanded)) {
+	if (isAbsolute(expanded)) {
 		return expanded;
 	}
+	return resolvePath(cwd, expanded);
+}
 
-	const macOSVariant = tryMacOSScreenshotPath(expanded);
-	if (macOSVariant !== expanded && fileExists(macOSVariant)) {
+export function resolveReadPathFromCwd(cwd: string, filePath: string): string {
+	const expanded = expandPath(filePath);
+
+	const candidate = isAbsolute(expanded) ? expanded : resolvePath(cwd, expanded);
+
+	if (fileExists(candidate)) {
+		return candidate;
+	}
+
+	const macOSVariant = tryMacOSScreenshotPath(candidate);
+	if (macOSVariant !== candidate && fileExists(macOSVariant)) {
 		return macOSVariant;
 	}
 
-	return expanded;
+	return candidate;
 }

@@ -5,7 +5,6 @@ import {
 	customToolSchema,
 	hookDescriptorSchema,
 	type CustomCommandManifest,
-	type CustomToolDescriptor,
 	type HookDescriptor,
 	type ValidationIssue,
 	type ValidationKind,
@@ -85,7 +84,7 @@ export const validateCustomCommand = (manifest: CustomCommandManifest, path: str
 	return validateWithSchema(customCommandSchema, manifest, { kind: "command", path })
 }
 
-export const validateCustomTool = (descriptor: CustomToolDescriptor, path: string): ValidationIssue[] => {
+export const validateCustomTool = (descriptor: unknown, path: string): ValidationIssue[] => {
 	return validateWithSchema(customToolSchema, descriptor, { kind: "tool", path })
 }
 

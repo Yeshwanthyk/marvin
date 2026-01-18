@@ -81,7 +81,9 @@ export interface ToolAPI {
  * Factory function that creates one or more tools.
  * Default export from tool modules.
  */
-export type CustomToolFactory = (api: ToolAPI) => AgentTool | AgentTool[] | Promise<AgentTool | AgentTool[]>
+export type CustomToolFactory = (
+	api: ToolAPI,
+) => CustomAgentTool | CustomAgentTool[] | Promise<CustomAgentTool | CustomAgentTool[]>
 
 /**
  * A loaded custom tool with its source path.
@@ -92,7 +94,7 @@ export interface LoadedCustomTool {
 	/** Resolved absolute path */
 	resolvedPath: string
 	/** The loaded tool */
-	tool: AgentTool
+	tool: CustomAgentTool
 }
 
 /**

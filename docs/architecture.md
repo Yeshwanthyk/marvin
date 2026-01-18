@@ -4,7 +4,7 @@ This document explains the system design, data flow, and component interactions 
 
 ## High-Level Overview
 
-Marvin supports multiple UI surfaces that share the same core agent infrastructure:
+Marvin supports multiple UI surfaces that share the same core agent infrastructure, plus a headless SDK built on the Effect runtime:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -75,7 +75,7 @@ Marvin supports multiple UI surfaces that share the same core agent infrastructu
 |---------|---------------|-----------|--------------|---------------|
 | **TUI** | In-process | Local | open-tui (terminal) | Direct function calls |
 | **Desktop** | Sidecar process | Local | SolidJS (webview) | JSON-RPC over stdio |
-| **Headless** | In-process | Local | None (stdout) | N/A |
+| **Headless** | In-process | Local | None (stdout) | Runtime-effect / SDK |
 
 All variants have **full local filesystem access** via the base tools. The desktop app is NOT a client-server architecture—the sidecar runs locally with the same capabilities as the TUI.
 
@@ -88,7 +88,8 @@ packages/
 ├── base-tools/    @marvin-agents/base-tools - read, write, edit, bash tools
 ├── lsp/           @marvin-agents/lsp - Language server protocol integration
 ├── open-tui/      @marvin-agents/open-tui - TUI components (terminal)
-└── desktop-ui/    @marvin-agents/desktop-ui - Web UI components (desktop)
+├── runtime-effect @marvin-agents/runtime-effect - Effect runtime composition
+└── sdk/           @marvin-agents/sdk - Headless SDK on runtime-effect
 
 apps/
 ├── coding-agent/  @marvin-agents/coding-agent - Terminal CLI/TUI
@@ -107,12 +108,15 @@ apps/
               │            │                │
               └────────────┼────────────────┘
                            │
-         ┌─────────────────┼─────────────────┐
-         ▼                 ▼                 ▼
-   apps/coding-agent  apps/desktop     (headless mode)
-         │                 │
-         ▼                 ▼
-   open-tui (terminal)  desktop-ui (web)
+                  @marvin-agents/
+                   runtime-effect
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+   apps/coding-agent  apps/desktop   @marvin-agents/sdk
+         │                 │               │
+         ▼                 ▼               ▼
+   open-tui (terminal)  desktop-ui (web)  headless SDK
 ```
 
 ## Request Flow
@@ -149,7 +153,7 @@ The shared runtime lives in `packages/runtime-effect` and is composed entirely w
    - `drainToScript()` to serialize outstanding queue items when aborting or persisting state.
 6. **RuntimeLayer** wires everything together and hands adapters a scoped `RuntimeServices` bundle (agent, orchestrator, LSP, extensibility metadata, instrumentation handles, etc.).
 
-All adapters—TUI, headless CLI, ACP, or future surfaces—call `createRuntime()` which builds `RuntimeLayer` under a managed Effect scope and returns both the services and a `close()` helper that shuts down the scope (LSP, hooks, prompt loop) deterministically.
+All adapters—TUI, headless CLI, ACP, or future surfaces—call `createRuntime()` which builds `RuntimeLayer` under a managed Effect scope and returns both the services and a `close()` helper that shuts down the scope (LSP, hooks, prompt loop) deterministically. The SDK (`@marvin-agents/sdk`) wraps the same runtime and exposes `runAgent`, session, and streaming APIs without bypassing Effect.
 
 ## Slash Command Registry
 
@@ -388,7 +392,7 @@ Tools are wrapped in multiple layers for interception and enhancement:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│        wrapToolsWithHooks() (apps/coding-agent/src/hooks)       │
+│     wrapToolsWithHooks() (packages/runtime-effect/src/hooks)    │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  1. Emit tool.execute.before                              │  │
 │  │  2. Check if hook returned { block: true }                │  │
@@ -484,17 +488,23 @@ Hooks allow users to intercept and extend agent behavior:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│        HookRunner (apps/coding-agent/src/hooks/runner.ts)       │
+│     HookRunner (packages/runtime-effect/src/hooks/runner.ts)    │
 ├─────────────────────────────────────────────────────────────────┤
 │  handlers: Map<eventType, handler[]>                            │
-│  messageCallback: (text) => void                                │
+│  ui/session context providers                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  emit(event) → Promise<result>                                  │
-│    Runs all handlers for event type                             │
-│    Collects and merges results                                  │
+│  initialize(options)                                            │
+│    Wires send/steer/followUp handlers and UI/session context    │
 │                                                                 │
-│  register(hookAPI)                                              │
-│    Called by hook factory with marvin.on(), marvin.send()       │
+│  emit(event) → Promise<void>                                    │
+│    Runs all handlers for event type                             │
+│                                                                 │
+│  emitToolExecuteBefore/After                                    │
+│    Can block, modify input, or mutate tool results              │
+│                                                                 │
+│  getMessageRenderer / getRegisteredCommands / getRegisteredTools│
+│                                                                 │
+│  onError(listener)                                              │
 └─────────────────────────────────────────────────────────────────┘
 
 Hook Loading:
@@ -508,14 +518,18 @@ Hook Loading:
 HookAPI:
 ────────
 
-marvin.on(event, handler)   Subscribe to lifecycle events
-marvin.send(text)           Inject message into conversation
-ctx.exec(cmd, args)         Execute shell command
-ctx.cwd                     Current working directory
-ctx.configDir               Config directory path
+marvin.on(event, handler)     Subscribe to lifecycle events
+marvin.send(text)             Inject assistant message
+marvin.sendMessage(...)       Persist hook message + optional display
+marvin.registerMessageRenderer(type, renderer)
+ctx.exec(cmd, args)           Execute shell command
+ctx.cwd                       Current working directory
+ctx.configDir                 Config directory path
+ctx.session                   Session helpers (summarize, toast, tokens)
+ctx.ui                        UI helpers (confirm/input/select/editor)
 ```
 
-### Hook Event Types (apps/coding-agent/src/hooks/types.ts)
+### Hook Event Types (packages/runtime-effect/src/hooks/types.ts)
 
 ```
 App Startup
@@ -648,7 +662,7 @@ The desktop app uses a sidecar architecture where the agent runs in a separate B
 │  │                         Bun Sidecar Process                           │  │
 │  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
 │  │  │  Agent + ProviderTransport + RouterTransport + CodexTransport   │  │  │
-│  │  │  codingTools (read, write, edit, bash) + Custom Tools           │  │  │
+│  │  │  Built-in tools (read, write, edit, bash) + Custom Tools        │  │  │
 │  │  │  HookRunner + LSP Manager + SessionManager + Config             │  │  │
 │  │  └─────────────────────────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
@@ -894,21 +908,25 @@ Line 2+ (messages):
 {"type":"message","timestamp":1705312205000,"message":{"role":"assistant","content":[...]}}
 {"type":"message","timestamp":1705312210000,"message":{"role":"toolResult","toolCallId":"...","content":[...]}}
 
-SessionManager (apps/coding-agent/src/session-manager.ts):
+SessionManager (packages/runtime-effect/src/session-manager.ts):
 ──────────────────────────────────────────────────────────
 
-startSession(provider, model, thinking)
+startSession(provider, modelId, thinkingLevel)
   → Creates new session file
-  → Emits session.start hook
+  → Returns session id
 
-loadSession(id)
-  → Reads session file
-  → Populates agent state
-  → Emits session.resume hook
+continueSession(path, sessionId)
+  → Points at existing session file
+
+loadSession(path)
+  → Reads JSONL session file
+  → Returns metadata + messages
 
 appendMessage(message)
-  → Appends to current session
-  → Writes to disk (debounced)
+  → Appends JSONL entry asynchronously
+
+appendEntry(customType, data)
+  → Appends custom JSONL entry
 
 listSessions()
   → Returns available sessions for picker

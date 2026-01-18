@@ -2,8 +2,7 @@ import type { AgentTool } from "@marvin-agents/ai";
 import { Type } from "@sinclair/typebox";
 import { constants } from "fs";
 import { access, readFile, writeFile } from "fs/promises";
-import { resolve as resolvePath } from "path";
-import { expandPath } from "./path-utils.js";
+import { resolvePathFromCwd } from "./path-utils.js";
 
 /** Max lines for diff generation - beyond this, show truncated */
 const MAX_DIFF_LINES = 200;
@@ -115,7 +114,7 @@ const editSchema = Type.Object({
 	newText: Type.String({ description: "New text to replace the old text with" }),
 });
 
-export const editTool: AgentTool<typeof editSchema> = {
+export const createEditTool = (cwd: string): AgentTool<typeof editSchema> => ({
 	name: "edit",
 	label: "edit",
 	description:
@@ -126,7 +125,7 @@ export const editTool: AgentTool<typeof editSchema> = {
 		{ path, oldText, newText }: { path: string; oldText: string; newText: string },
 		signal?: AbortSignal,
 	) => {
-		const absolutePath = resolvePath(expandPath(path));
+		const absolutePath = resolvePathFromCwd(cwd, path);
 
 		return new Promise<{
 			content: Array<{ type: "text"; text: string }>;
@@ -235,16 +234,17 @@ export const editTool: AgentTool<typeof editSchema> = {
 						],
 						details: { diff: buildTargetedDiff(path, content, index, oldText, newText) },
 					});
-				} catch (error: any) {
+				} catch (error) {
 					if (signal) {
 						signal.removeEventListener("abort", onAbort);
 					}
 
 					if (!aborted) {
-						reject(error);
+						const message = error instanceof Error ? error.message : String(error);
+						reject(new Error(message));
 					}
 				}
 			})();
 		});
 	},
-};
+});

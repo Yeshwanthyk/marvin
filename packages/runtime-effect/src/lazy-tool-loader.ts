@@ -1,14 +1,13 @@
 import type { AgentTool } from "@marvin-agents/ai";
 import type { ToolDef } from "@marvin-agents/base-tools";
-import type { TSchema } from "@sinclair/typebox";
 
 /**
  * Lazily loads tools from registry + manages custom/hook tools.
  * Pre-loads core tools (read, bash) on instantiation for fast startup.
  */
 export class LazyToolLoader {
-	private loaded = new Map<string, AgentTool<TSchema>>();
-	private loading = new Map<string, Promise<AgentTool<TSchema>>>();
+	private loaded = new Map<string, AgentTool>();
+	private loading = new Map<string, Promise<AgentTool>>();
 
 	constructor(
 		private registry: Record<string, ToolDef>,
@@ -28,15 +27,17 @@ export class LazyToolLoader {
 	 * Get a tool, loading lazily if not yet loaded.
 	 * Returns null if tool doesn't exist.
 	 */
-	async getTool(name: string): Promise<AgentTool<TSchema> | null> {
+	async getTool(name: string): Promise<AgentTool | null> {
 		// Check already loaded
-		if (this.loaded.has(name)) {
-			return this.loaded.get(name)!;
+		const cached = this.loaded.get(name);
+		if (cached) {
+			return cached;
 		}
 
 		// Check currently loading (avoid duplicate loads)
-		if (this.loading.has(name)) {
-			return this.loading.get(name)!;
+		const inflight = this.loading.get(name);
+		if (inflight) {
+			return inflight;
 		}
 
 		// Check custom tools (always available, no loading needed)
@@ -53,7 +54,7 @@ export class LazyToolLoader {
 
 		const promise = def
 			.load()
-			.then((tool: AgentTool<TSchema>) => {
+			.then((tool) => {
 				this.loaded.set(name, tool);
 				this.loading.delete(name);
 				return tool;
@@ -132,12 +133,8 @@ export class ToolProxyArray {
 	map<T>(fn: (tool: AgentTool) => T): T[] {
 		return this.loader.getLoadedTools().map(fn);
 	}
-}
 
-/**
- * Type assertion helper for agent-loop and other code that expects an array.
- * The proxy implements enough array methods to work with existing code.
- */
-export function toolProxyAsArray(proxy: ToolProxyArray): AgentTool[] {
-	return proxy as any;
+	toArray(): AgentTool[] {
+		return this.loader.getLoadedTools();
+	}
 }

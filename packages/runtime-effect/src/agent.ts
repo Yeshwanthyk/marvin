@@ -9,7 +9,7 @@ export interface AgentFactoryService {
   readonly bootstrapAgent: Agent;
   readonly createAgent: (options?: { model?: Model<Api>; thinking?: ThinkingLevel }) => Agent;
   readonly transport: AgentTransport;
-  readonly tools: AgentTool<any, any>[];
+  readonly tools: AgentTool[];
 }
 
 export const AgentFactoryTag = Context.GenericTag<AgentFactoryService>("runtime-effect/AgentFactory");

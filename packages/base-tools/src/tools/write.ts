@@ -1,22 +1,22 @@
 import type { AgentTool } from "@marvin-agents/ai";
 import { Type } from "@sinclair/typebox";
 import { mkdir, writeFile } from "fs/promises";
-import { dirname, resolve as resolvePath } from "path";
-import { expandPath } from "./path-utils.js";
+import { dirname } from "path";
+import { resolvePathFromCwd } from "./path-utils.js";
 
 const writeSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to write (relative or absolute)" }),
 	content: Type.String({ description: "Content to write to the file" }),
 });
 
-export const writeTool: AgentTool<typeof writeSchema> = {
+export const createWriteTool = (cwd: string): AgentTool<typeof writeSchema> => ({
 	name: "write",
 	label: "write",
 	description:
 		"Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.",
 	parameters: writeSchema,
 	execute: async (_toolCallId: string, { path, content }: { path: string; content: string }, signal?: AbortSignal) => {
-		const absolutePath = resolvePath(expandPath(path));
+		const absolutePath = resolvePathFromCwd(cwd, path);
 		const dir = dirname(absolutePath);
 
 		return new Promise<{ content: Array<{ type: "text"; text: string }>; details: undefined }>((resolve, reject) => {
@@ -66,17 +66,18 @@ export const writeTool: AgentTool<typeof writeSchema> = {
 						content: [{ type: "text", text: `Successfully wrote ${content.length} bytes to ${path}` }],
 						details: undefined,
 					});
-				} catch (error: any) {
+				} catch (error) {
 					// Clean up abort handler
 					if (signal) {
 						signal.removeEventListener("abort", onAbort);
 					}
 
 					if (!aborted) {
-						reject(error);
+						const message = error instanceof Error ? error.message : String(error);
+						reject(new Error(message));
 					}
 				}
 			})();
 		});
 	},
-};
+});

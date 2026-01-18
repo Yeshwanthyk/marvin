@@ -1,33 +1,44 @@
 import type { AgentTool } from "@marvin-agents/ai";
-import type { TSchema } from "@sinclair/typebox";
 
 export interface ToolDef {
 	name: string;
 	label: string;
-	// Using TSchema as upper bound since specific schemas vary
-	// but all tools conform to AgentTool interface
-	load: () => Promise<AgentTool<TSchema>>;
+	load: () => Promise<AgentTool>;
 }
 
-export const toolRegistry: Record<string, ToolDef> = {
+export type ToolRegistry = Record<string, ToolDef>;
+
+export const createToolRegistry = (cwd: string): ToolRegistry => ({
 	read: {
 		name: "read",
 		label: "Read",
-		load: () => import("./tools/read.js").then((m) => m.readTool as unknown as AgentTool<TSchema>),
+		load: async () => {
+			const { createReadTool } = await import("./tools/read.js");
+			return createReadTool(cwd);
+		},
 	},
 	bash: {
 		name: "bash",
 		label: "Bash",
-		load: () => import("./tools/bash.js").then((m) => m.bashTool as unknown as AgentTool<TSchema>),
+		load: async () => {
+			const { createBashTool } = await import("./tools/bash.js");
+			return createBashTool(cwd);
+		},
 	},
 	edit: {
 		name: "edit",
 		label: "Edit",
-		load: () => import("./tools/edit.js").then((m) => m.editTool as unknown as AgentTool<TSchema>),
+		load: async () => {
+			const { createEditTool } = await import("./tools/edit.js");
+			return createEditTool(cwd);
+		},
 	},
 	write: {
 		name: "write",
 		label: "Write",
-		load: () => import("./tools/write.js").then((m) => m.writeTool as unknown as AgentTool<TSchema>),
+		load: async () => {
+			const { createWriteTool } = await import("./tools/write.js");
+			return createWriteTool(cwd);
+		},
 	},
-};
+});

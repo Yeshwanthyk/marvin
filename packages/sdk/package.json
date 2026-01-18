@@ -1,0 +1,22 @@
+{
+  "name": "@marvin-agents/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "@marvin-agents/agent-core": "file:../agent",
+    "@marvin-agents/ai": "file:../ai",
+    "@marvin-agents/runtime-effect": "file:../runtime-effect",
+    "effect": "^3.19.14"
+  }
+}

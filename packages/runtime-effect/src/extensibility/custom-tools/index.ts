@@ -2,7 +2,7 @@
  * Custom tools module exports.
  */
 
-export { loadCustomTools, getToolNames } from "./loader.js"
+export { loadCustomTools } from "./loader.js"
 export type {
 	CustomAgentTool,
 	CustomToolFactory,

@@ -1,16 +1,16 @@
 import type { AgentTool } from "@marvin-agents/ai";
-import { toolRegistry } from "@marvin-agents/base-tools";
+import { createToolRegistry, type ToolRegistry } from "@marvin-agents/base-tools";
 import { Context, Effect, Layer } from "effect";
 
 export interface ToolService {
-  readonly registry: typeof toolRegistry;
-  readonly loadBuiltinTools: () => Effect.Effect<AgentTool<any, any>[], Error>;
+  readonly registry: ToolRegistry;
+  readonly loadBuiltinTools: () => Effect.Effect<AgentTool[], Error>;
 }
 
-const loadToolsEffect = (): Effect.Effect<AgentTool<any, any>[], Error> =>
+const loadToolsEffect = (registry: ToolRegistry): Effect.Effect<AgentTool[], Error> =>
   Effect.tryPromise(async () => {
-    const tools: AgentTool<any, any>[] = [];
-    for (const def of Object.values(toolRegistry)) {
+    const tools: AgentTool[] = [];
+    for (const def of Object.values(registry)) {
       const tool = await def.load();
       tools.push(tool);
     }
@@ -19,7 +19,10 @@ const loadToolsEffect = (): Effect.Effect<AgentTool<any, any>[], Error> =>
 
 export const ToolServiceTag = Context.GenericTag<ToolService>("runtime-effect/ToolService");
 
-export const ToolLayer = Layer.succeed(ToolServiceTag, {
-  registry: toolRegistry,
-  loadBuiltinTools: () => loadToolsEffect(),
-});
+export const ToolLayer = (cwd: string) => {
+  const registry = createToolRegistry(cwd);
+  return Layer.succeed(ToolServiceTag, {
+    registry,
+    loadBuiltinTools: () => loadToolsEffect(registry),
+  });
+};

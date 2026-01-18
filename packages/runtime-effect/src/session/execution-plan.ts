@@ -19,7 +19,9 @@ export const defaultAttempts: ExecutionPlanAttempts = {
   fallback: 2,
 };
 
-const defaultSchedule = Schedule.exponential(Duration.millis(100), 2);
+type ExecutionPlanSchedule = Schedule.Schedule<unknown, unknown, never>;
+
+const defaultSchedule: ExecutionPlanSchedule = Schedule.exponential(Duration.millis(100), 2);
 
 const NETWORK_ERROR_PATTERNS = [
   "ECONNRESET",
@@ -134,7 +136,7 @@ export interface BuiltExecutionPlan {
     provides: ExecutionPlanStepContext;
     input: unknown;
     error: never;
-    requirements: any;
+    requirements: never;
   }>;
   readonly steps: ExecutionPlanStepDescriptor[];
 }
@@ -142,7 +144,7 @@ export interface BuiltExecutionPlan {
 export interface ExecutionPlanBuilderOptions {
   readonly cycle?: ReadonlyArray<PlanModelEntry>;
   readonly attempts?: Partial<ExecutionPlanAttempts>;
-  readonly schedule?: Schedule.Schedule<any, unknown, any>;
+  readonly schedule?: ExecutionPlanSchedule;
 }
 
 export interface ExecutionPlanBuilderService {
@@ -168,7 +170,7 @@ const mergeAttempts = (
 
 const buildExecutionPlan = (
   cycle: ReadonlyArray<PlanModelEntry>,
-  schedule: Schedule.Schedule<any, unknown, any>,
+  schedule: ExecutionPlanSchedule,
   attempts: ExecutionPlanAttempts,
   instrumentation: InstrumentationService,
 ): BuiltExecutionPlan => {
