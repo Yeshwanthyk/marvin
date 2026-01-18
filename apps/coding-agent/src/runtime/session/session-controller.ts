@@ -12,7 +12,7 @@ import {
 	getToolText,
 } from "@domain/messaging/content.js"
 import { resolveProvider, resolveModel } from "@domain/commands/helpers.js"
-import type { PromptDeliveryMode, PromptQueue } from "./prompt-queue.js"
+import type { PromptDeliveryMode, PromptQueue } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
 
 export interface SessionControllerOptions {
 	initialProvider: KnownProvider

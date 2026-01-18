@@ -1,6 +1,9 @@
 import type { CommandContext } from "../../../commands.js"
 import { handleSlashCommand } from "../../../commands.js"
-import { tryExpandCustomCommand, type CustomCommand } from "../../../custom-commands.js"
+import {
+	tryExpandCustomCommand,
+	type CustomCommand,
+} from "@marvin-agents/runtime-effect/extensibility/custom-commands.js"
 
 export interface SlashCommandBridge {
 	commandContext: CommandContext

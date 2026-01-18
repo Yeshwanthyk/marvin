@@ -103,19 +103,23 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 										});
 									}
 								}
+								const newBlock: TextContent | ThinkingContent = isThinking
+									? { type: "thinking", thinking: "" }
+									: { type: "text", text: "" };
+								currentBlock = newBlock;
+								output.content.push(newBlock);
 								if (isThinking) {
-									currentBlock = { type: "thinking", thinking: "", thinkingSignature: undefined };
-									output.content.push(currentBlock);
 									stream.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
 								} else {
-									currentBlock = { type: "text", text: "" };
-									output.content.push(currentBlock);
 									stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
 								}
 							}
+							if (!currentBlock) continue;
 							if (currentBlock.type === "thinking") {
 								currentBlock.thinking += part.text;
-								currentBlock.thinkingSignature = part.thoughtSignature;
+								if (part.thoughtSignature) {
+									currentBlock.thinkingSignature = part.thoughtSignature;
+								}
 								stream.push({
 									type: "thinking_delta",
 									contentIndex: blockIndex(),
@@ -258,9 +262,10 @@ function createClient(model: Model<"google-generative-ai">, apiKey?: string): Go
 		}
 		apiKey = process.env.GEMINI_API_KEY;
 	}
+	const httpOptions = model.headers ? { headers: model.headers } : undefined;
 	return new GoogleGenAI({
 		apiKey,
-		httpOptions: model.headers ? { headers: model.headers } : undefined,
+		...(httpOptions ? { httpOptions } : {}),
 	});
 }
 
@@ -280,19 +285,22 @@ function buildParams(
 	}
 
 	const config: GenerateContentConfig = {
-		...(Object.keys(generationConfig).length > 0 && generationConfig),
+		...(Object.keys(generationConfig).length > 0 ? generationConfig : {}),
 		...(context.systemPrompt && { systemInstruction: sanitizeSurrogates(context.systemPrompt) }),
-		...(context.tools && context.tools.length > 0 && { tools: convertTools(context.tools) }),
 	};
 
-	if (context.tools && context.tools.length > 0 && options.toolChoice) {
-		config.toolConfig = {
-			functionCallingConfig: {
-				mode: mapToolChoice(options.toolChoice),
-			},
-		};
-	} else {
-		config.toolConfig = undefined;
+	if (context.tools && context.tools.length > 0) {
+		const googleTools = convertTools(context.tools);
+		if (googleTools) {
+			config.tools = googleTools;
+		}
+		if (options.toolChoice) {
+			config.toolConfig = {
+				functionCallingConfig: {
+					mode: mapToolChoice(options.toolChoice),
+				},
+			};
+		}
 	}
 
 	if (options.thinking?.enabled && model.reasoning) {
@@ -360,8 +368,8 @@ function convertMessages(model: Model<"google-generative-ai">, context: Context)
 				} else if (block.type === "thinking") {
 					const thinkingPart: Part = {
 						thought: true,
-						thoughtSignature: block.thinkingSignature,
 						text: sanitizeSurrogates(block.thinking),
+						...(block.thinkingSignature ? { thoughtSignature: block.thinkingSignature } : {}),
 					};
 					parts.push(thinkingPart);
 				} else if (block.type === "toolCall") {

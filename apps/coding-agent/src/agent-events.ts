@@ -21,7 +21,7 @@ import {
 } from "@domain/messaging/content.js"
 import type { PromptQueue } from "./hooks/usePromptQueue.js"
 import type { HookRunner } from "./hooks/index.js"
-import type { RenderResultOptions } from "./custom-tools/types.js"
+import type { RenderResultOptions } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
 
 /** Tool metadata for UI rendering */
 export interface ToolMeta {
@@ -81,7 +81,6 @@ const UPDATE_THROTTLE_SLOW_MS = 180
 const UPDATE_THROTTLE_SLOWEST_MS = 220
 const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
 const STREAMING_TAIL_CHARS = 4000
-const MESSAGE_CAP = 75 // Max messages in UI for performance
 
 function computeUpdateThrottleMs(textLength: number): number {
 	if (textLength > 12000) return UPDATE_THROTTLE_SLOWEST_MS

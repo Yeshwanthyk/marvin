@@ -1,12 +1,12 @@
 import { toolRegistry } from "@marvin-agents/base-tools"
 import type { AgentTool } from "@marvin-agents/ai"
 import { loadAppConfig } from "../../config.js"
-import { loadCustomCommands } from "../../custom-commands.js"
+import { loadCustomCommands } from "@marvin-agents/runtime-effect/extensibility/custom-commands.js"
 import type { RuntimeInitArgs } from "@runtime/factory.js"
-import { loadExtensibility } from "@runtime/extensibility/index.js"
+import { loadExtensibility } from "@marvin-agents/runtime-effect/extensibility/index.js"
 import { formatValidationIssue, hasBlockingIssues } from "@ext/validation.js"
 import type { ValidationIssue } from "@ext/schema.js"
-import type { SendRef } from "../../custom-tools/types.js"
+import type { SendRef } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
 import { SessionManager } from "../../session-manager.js"
 
 export const runValidate = async (args: RuntimeInitArgs = {}): Promise<void> => {

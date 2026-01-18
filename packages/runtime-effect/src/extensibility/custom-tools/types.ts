@@ -3,9 +3,9 @@
  */
 
 import type { AgentTool, AgentToolResult } from "@marvin-agents/ai"
-import type { Theme } from "@marvin-agents/open-tui"
 import type { JSX } from "solid-js"
-import type { ValidationIssue } from "@ext/schema.js"
+import type { ValidationIssue } from "../schema.js"
+import type { HookTheme } from "../../hooks/types.js"
 
 /**
  * Options passed to custom tool result renderers.
@@ -29,9 +29,9 @@ export type SessionEvent =
  */
 export interface CustomAgentTool<TDetails = any> extends AgentTool<any, TDetails> {
 	/** Custom header/call rendering */
-	renderCall?: (args: any, theme: Theme) => JSX.Element
+	renderCall?: (args: any, theme: HookTheme) => JSX.Element
 	/** Custom result rendering */
-	renderResult?: (result: AgentToolResult<TDetails>, opts: RenderResultOptions, theme: Theme) => JSX.Element
+	renderResult?: (result: AgentToolResult<TDetails>, opts: RenderResultOptions, theme: HookTheme) => JSX.Element
 	/** Session lifecycle hook */
 	onSession?: (ev: SessionEvent) => void | Promise<void>
 	/** Cleanup on app exit */

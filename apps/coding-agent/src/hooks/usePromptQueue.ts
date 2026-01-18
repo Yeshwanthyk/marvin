@@ -4,4 +4,4 @@ export {
 	type PromptQueueItem,
 	type PromptDeliveryMode,
 	type QueueCounts,
-} from "@runtime/session/prompt-queue.js"
+} from "@marvin-agents/runtime-effect/session/prompt-queue.js"

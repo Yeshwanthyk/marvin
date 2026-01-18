@@ -135,7 +135,7 @@ export const readTool: AgentTool<typeof readSchema> = {
 								const nextOffset = startLine + userLimitedLines + 1;
 
 								outputText = truncation.content;
-								outputText += `\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue]`;
+								outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}. ${remaining} more lines remain; use offset=${nextOffset} to continue]`;
 							} else {
 								// No truncation, no user limit exceeded
 								outputText = truncation.content;

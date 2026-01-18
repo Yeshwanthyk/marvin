@@ -18,7 +18,7 @@ export const steerCommand: CommandDefinition = {
 			return true
 		}
 
-		await ctx.runImmediatePrompt(text)
+		await ctx.submitPrompt(text, { mode: "steer" })
 		return true
 	},
 }

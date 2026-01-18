@@ -27,7 +27,7 @@ const createStubContext = (): CommandContext => ({
 	setDisplayContextWindow: () => {},
 	setDiffWrapMode: () => {},
 	setConcealMarkdown: () => {},
-	runImmediatePrompt: async () => {},
+	submitPrompt: async () => {},
 	steer: async () => {},
 	followUp: async () => {},
 	sendUserMessage: async () => {},

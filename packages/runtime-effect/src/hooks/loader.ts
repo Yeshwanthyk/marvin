@@ -10,18 +10,16 @@ import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import type {
 	HookAPI,
-	HookEvent,
 	HookEventType,
 	HookFactory,
-	HookHandler,
 	HookMessage,
 	HookMessageRenderer,
 	RegisteredCommand,
 	RegisteredTool,
 } from "./types.js"
-import type { ValidationIssue } from "@ext/schema.js"
-import { validateHookDescriptor, issueFromError } from "@ext/validation.js"
-import type { PromptDeliveryMode } from "../runtime/session/prompt-queue.js"
+import type { ValidationIssue } from "../extensibility/schema.js"
+import { validateHookDescriptor, issueFromError } from "../extensibility/validation.js"
+import type { PromptDeliveryMode } from "../session/prompt-queue.js"
 
 /** Generic handler function type for internal storage */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

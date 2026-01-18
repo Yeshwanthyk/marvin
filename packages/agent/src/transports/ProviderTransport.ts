@@ -69,14 +69,23 @@ export class ProviderTransport implements AgentTransport {
 	}
 
 	private buildLoopConfig(model: typeof cfg.model, apiKey: string, cfg: AgentRunConfig): AgentLoopConfig {
-		return {
-			...cfg.streamOptions,
+		const loopConfig: AgentLoopConfig = {
+			...(cfg.streamOptions ?? {}),
 			model,
-			reasoning: cfg.reasoning,
 			apiKey,
-			getSteeringMessages: cfg.getSteeringMessages,
-			getFollowUpMessages: cfg.getFollowUpMessages,
 		};
+
+		if (cfg.reasoning) {
+			loopConfig.reasoning = cfg.reasoning;
+		}
+		if (cfg.getSteeringMessages) {
+			loopConfig.getSteeringMessages = cfg.getSteeringMessages;
+		}
+		if (cfg.getFollowUpMessages) {
+			loopConfig.getFollowUpMessages = cfg.getFollowUpMessages;
+		}
+
+		return loopConfig;
 	}
 
 	async *run(messages: Message[], userMessage: Message, cfg: AgentRunConfig, signal?: AbortSignal) {

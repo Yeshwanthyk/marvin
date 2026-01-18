@@ -31,13 +31,15 @@ async function downloadGitHubRelease(
   opts?: { signal?: AbortSignal; extractBin?: string }
 ): Promise<boolean> {
   try {
-    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, { signal: opts?.signal })
+    const releaseInit = opts?.signal ? { signal: opts.signal } : undefined
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, releaseInit)
     if (!res.ok) return false
     const release = await res.json() as GHRelease
     const asset = release.assets.find((a) => assetMatch(a.name))
     if (!asset) return false
 
-    const dlRes = await fetch(asset.browser_download_url, { signal: opts?.signal })
+    const downloadInit = opts?.signal ? { signal: opts.signal } : undefined
+    const dlRes = await fetch(asset.browser_download_url, downloadInit)
     if (!dlRes.ok || !dlRes.body) return false
 
     const destDir = path.dirname(destPath)
@@ -260,12 +262,19 @@ export async function ensureSpawnSpec(serverId: LspServerId, opts: { configDir: 
         : process.platform === "linux" ? "unknown-linux-gnu"
         : null
 
-      const download = () => platform ? downloadGitHubRelease(
-        "rust-lang/rust-analyzer",
-        (name) => name.startsWith(`rust-analyzer-${arch}-${platform}`) && name.endsWith(".gz"),
-        localBin,
-        { signal: opts.signal }
-      ) : Promise.resolve(false)
+      const download = () => {
+        if (!platform) return Promise.resolve(false)
+        const dlOpts: { signal?: AbortSignal } = {}
+        if (opts.signal) {
+          dlOpts.signal = opts.signal
+        }
+        return downloadGitHubRelease(
+          "rust-lang/rust-analyzer",
+          (name) => name.startsWith(`rust-analyzer-${arch}-${platform}`) && name.endsWith(".gz"),
+          localBin,
+          dlOpts
+        )
+      }
 
       // 1. Use cached binary, update in background if stale (check once per session)
       if (await fileExists(localBin)) {
@@ -299,12 +308,19 @@ export async function ensureSpawnSpec(serverId: LspServerId, opts: { configDir: 
         : process.platform === "linux" ? "linux"
         : null
 
-      const download = () => platform ? downloadGitHubRelease(
-        "biomejs/biome",
-        (name) => name === `biome-${platform}-${arch}`,
-        localBin,
-        { signal: opts.signal }
-      ) : Promise.resolve(false)
+      const download = () => {
+        if (!platform) return Promise.resolve(false)
+        const dlOpts: { signal?: AbortSignal } = {}
+        if (opts.signal) {
+          dlOpts.signal = opts.signal
+        }
+        return downloadGitHubRelease(
+          "biomejs/biome",
+          (name) => name === `biome-${platform}-${arch}`,
+          localBin,
+          dlOpts
+        )
+      }
 
       if (await fileExists(localBin)) {
         if (!checkedStale.has(localBin)) {
@@ -333,12 +349,19 @@ export async function ensureSpawnSpec(serverId: LspServerId, opts: { configDir: 
         : process.platform === "linux" ? "unknown-linux-gnu"
         : null
 
-      const download = () => platform ? downloadGitHubRelease(
-        "astral-sh/ruff",
-        (name) => name === `ruff-${arch}-${platform}.tar.gz`,
-        localBin,
-        { signal: opts.signal, extractBin: "ruff" }
-      ) : Promise.resolve(false)
+      const download = () => {
+        if (!platform) return Promise.resolve(false)
+        const dlOpts: { signal?: AbortSignal; extractBin?: string } = { extractBin: "ruff" }
+        if (opts.signal) {
+          dlOpts.signal = opts.signal
+        }
+        return downloadGitHubRelease(
+          "astral-sh/ruff",
+          (name) => name === `ruff-${arch}-${platform}.tar.gz`,
+          localBin,
+          dlOpts
+        )
+      }
 
       if (await fileExists(localBin)) {
         if (!checkedStale.has(localBin)) {
@@ -367,12 +390,19 @@ export async function ensureSpawnSpec(serverId: LspServerId, opts: { configDir: 
         : process.platform === "linux" ? "unknown-linux-gnu"
         : null
 
-      const download = () => platform ? downloadGitHubRelease(
-        "astral-sh/ty",
-        (name) => name === `ty-${arch}-${platform}.tar.gz`,
-        localBin,
-        { signal: opts.signal, extractBin: "ty" }
-      ) : Promise.resolve(false)
+      const download = () => {
+        if (!platform) return Promise.resolve(false)
+        const dlOpts: { signal?: AbortSignal; extractBin?: string } = { extractBin: "ty" }
+        if (opts.signal) {
+          dlOpts.signal = opts.signal
+        }
+        return downloadGitHubRelease(
+          "astral-sh/ty",
+          (name) => name === `ty-${arch}-${platform}.tar.gz`,
+          localBin,
+          dlOpts
+        )
+      }
 
       if (await fileExists(localBin)) {
         if (!checkedStale.has(localBin)) {

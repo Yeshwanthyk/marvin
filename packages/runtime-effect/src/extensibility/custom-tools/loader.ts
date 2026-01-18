@@ -22,8 +22,8 @@ import type {
 	SendRef,
 	ToolAPI,
 } from "./types.js"
-import type { ValidationIssue, ValidationSeverity } from "@ext/schema.js"
-import { validateCustomTool, issueFromError } from "@ext/validation.js"
+import type { ValidationIssue, ValidationSeverity } from "../schema.js"
+import { validateCustomTool, issueFromError } from "../validation.js"
 
 const createToolIssue = (path: string, message: string, severity: ValidationSeverity = "error"): ValidationIssue => ({
 	kind: "tool",
@@ -117,7 +117,6 @@ async function execCommand(command: string, args: string[], cwd: string, options
  */
 async function loadTool(
 	toolPath: string,
-	cwd: string,
 	api: ToolAPI,
 ): Promise<{ tools: LoadedCustomTool[] | null; error: string | null }> {
 	const resolvedPath = resolve(toolPath)
@@ -220,7 +219,7 @@ export async function loadCustomTools(
 	const paths = discoverToolsInDir(toolsDir)
 
 	for (const toolPath of paths) {
-		const { tools: loadedTools, error } = await loadTool(toolPath, cwd, api)
+		const { tools: loadedTools, error } = await loadTool(toolPath, api)
 
 		if (error) {
 			issues.push(issueFromError("tool", toolPath, error))

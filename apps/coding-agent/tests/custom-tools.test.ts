@@ -2,8 +2,11 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { loadCustomTools, getToolNames } from "../src/custom-tools/loader.js"
-import type { SendRef } from "../src/custom-tools/types.js"
+import {
+	loadCustomTools,
+	getToolNames,
+} from "@marvin-agents/runtime-effect/extensibility/custom-tools/loader.js"
+import type { SendRef } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
 
 describe("custom-tools", () => {
 	let tempDir: string

@@ -27,12 +27,10 @@ export interface CodexTransportOptions {
 type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export class CodexTransport implements AgentTransport {
-	private options: CodexTransportOptions;
 	private customFetch: FetchFn;
 	private instructionsCache: Record<string, string> = {};
 
 	constructor(options: CodexTransportOptions) {
-		this.options = options;
 		this.customFetch = createCodexFetch({
 			getTokens: options.getTokens,
 			setTokens: options.setTokens,
@@ -97,15 +95,24 @@ export class CodexTransport implements AgentTransport {
 
 		const instructions = await this.getInstructions(cfg.model.id);
 
-		return {
+		const loopConfig: AgentLoopConfig = {
 			model,
-			reasoning: cfg.reasoning,
 			apiKey: "codex-oauth", // Dummy key, real auth via custom fetch
 			fetch: this.customFetch,
 			instructions,
-			getSteeringMessages: cfg.getSteeringMessages,
-			getFollowUpMessages: cfg.getFollowUpMessages,
 		};
+
+		if (cfg.reasoning) {
+			loopConfig.reasoning = cfg.reasoning;
+		}
+		if (cfg.getSteeringMessages) {
+			loopConfig.getSteeringMessages = cfg.getSteeringMessages;
+		}
+		if (cfg.getFollowUpMessages) {
+			loopConfig.getFollowUpMessages = cfg.getFollowUpMessages;
+		}
+
+		return loopConfig;
 	}
 
 	async *run(messages: Message[], userMessage: Message, cfg: AgentRunConfig, signal?: AbortSignal) {

@@ -13,7 +13,6 @@ export function createLspManager(options: LspManagerOptions): LspManager {
   const cwd = path.resolve(options.cwd)
   const configDir = options.configDir
   const enabled = options.enabled
-  const autoInstall = options.autoInstall
 
   const clients = new Map<string, LspClient>()
   const spawning = new Map<string, Promise<LspClient | undefined>>()
@@ -45,12 +44,15 @@ export function createLspManager(options: LspManagerOptions): LspManager {
           stdio: ["pipe", "pipe", "pipe"],
         })
 
-        const client = await LspClient.create({
+        const clientConfig: Parameters<typeof LspClient.create>[0] = {
           serverId: spec.serverId,
           root,
           proc,
-          initializationOptions: spec.initializationOptions,
-        })
+        }
+        if (spec.initializationOptions) {
+          clientConfig.initializationOptions = spec.initializationOptions
+        }
+        const client = await LspClient.create(clientConfig)
 
         clients.set(key, client)
         return client
@@ -83,12 +85,11 @@ export function createLspManager(options: LspManagerOptions): LspManager {
       const key = keyFor(def.id, root)
       if (isBroken(key)) return
 
-      let spec: LspSpawnSpec | undefined
-      if (autoInstall) {
-        spec = await ensureSpawnSpec(def.id, { configDir, root, signal: opts.signal }).catch(() => undefined)
-      } else {
-        spec = await ensureSpawnSpec(def.id, { configDir, root, signal: opts.signal }).catch(() => undefined)
+      const spawnOpts: { configDir: string; root: string; signal?: AbortSignal } = { configDir, root }
+      if (opts.signal) {
+        spawnOpts.signal = opts.signal
       }
+      const spec = await ensureSpawnSpec(def.id, spawnOpts).catch(() => undefined)
       if (!spec) {
         brokenUntil.set(key, Date.now() + BROKEN_COOLDOWN_MS)
         return
@@ -125,7 +126,7 @@ export function createLspManager(options: LspManagerOptions): LspManager {
 
   function activeServers(): LspServerStatus[] {
     const result: LspServerStatus[] = []
-    for (const [key, client] of clients.entries()) {
+    for (const client of clients.values()) {
       result.push({ serverId: client.serverId as LspServerId, root: client.root })
     }
     return result

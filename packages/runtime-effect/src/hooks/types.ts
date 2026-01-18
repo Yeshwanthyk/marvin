@@ -5,12 +5,17 @@
  * Load from ~/.config/marvin/hooks/*.ts
  */
 
-import type { AppMessage, ThinkingLevel } from "@marvin-agents/agent-core"
+import type { AppMessage } from "@marvin-agents/agent-core"
 import type { Api, ImageContent, Message, Model, SimpleStreamOptions, TextContent, ToolResultMessage } from "@marvin-agents/ai"
-import type { Theme } from "@marvin-agents/open-tui"
 import type { JSX } from "solid-js"
 import type { ReadonlySessionManager } from "../session-manager.js"
-import type { PromptDeliveryMode } from "../runtime/session/prompt-queue.js"
+import type { PromptDeliveryMode } from "../session/prompt-queue.js"
+
+export interface HookTheme {
+	name?: string
+	mode?: string
+	readonly [key: string]: unknown
+}
 
 // ============================================================================
 // Execution Context
@@ -129,7 +134,7 @@ export interface RegisteredCommand {
 export type HookMessageRenderer<T = unknown> = (
 	message: HookMessage<T>,
 	options: { expanded: boolean },
-	theme: Theme
+	theme: HookTheme
 ) => JSX.Element | undefined
 
 /** Schema for hook-registered tool */

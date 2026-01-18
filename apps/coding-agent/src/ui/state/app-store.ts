@@ -2,7 +2,7 @@ import { createSignal, type Accessor, type Setter } from "solid-js"
 import type { ThinkingLevel } from "@marvin-agents/agent-core"
 import type { KnownProvider } from "@marvin-agents/ai"
 import type { ActivityState, ToolBlock, UIMessage } from "../../types.js"
-import type { QueueCounts } from "../../runtime/session/prompt-queue.js"
+import type { QueueCounts } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
 
 interface SignalRef<T> {
 	value: Accessor<T>

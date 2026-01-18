@@ -7,8 +7,11 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import type { ValidationIssue } from "@ext/schema.js"
-import { validateCustomCommand, issueFromError } from "@ext/validation.js"
+import { Context, Effect, Layer } from "effect"
+import type { ValidationIssue } from "./schema.js"
+import { validateCustomCommand, issueFromError } from "./validation.js"
+import { ConfigTag } from "../config.js"
+import { InstrumentationTag } from "../instrumentation.js"
 
 export interface CustomCommand {
 	name: string
@@ -120,6 +123,41 @@ export function expandCommand(template: string, args: string): string {
 
 	return template
 }
+
+export interface CustomCommandService extends CustomCommandLoadResult {}
+
+export const CustomCommandTag = Context.GenericTag<CustomCommandService>("runtime-effect/CustomCommandService")
+
+export interface CustomCommandLayerOptions {
+	configDir?: string
+	loader?: (configDir: string) => CustomCommandLoadResult
+}
+
+export const CustomCommandLayer = (options?: CustomCommandLayerOptions) =>
+	Layer.effect(
+		CustomCommandTag,
+		Effect.gen(function* () {
+			const configDir =
+				options?.configDir ??
+				(yield* ConfigTag).config.configDir
+
+			const instrumentation = yield* InstrumentationTag
+			const loader = options?.loader ?? loadCustomCommands
+			const result = yield* Effect.sync(() => loader(configDir))
+
+			for (const issue of result.issues) {
+				instrumentation.record({ type: "extensibility:validation-issue", issue })
+			}
+
+			instrumentation.record({
+				type: "extensibility:commands-loaded",
+				count: result.commands.size,
+				names: Array.from(result.commands.keys()),
+			})
+
+			return result
+		}),
+	)
 
 /**
  * Try to expand a slash command input.

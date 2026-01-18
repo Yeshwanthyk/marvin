@@ -18,7 +18,7 @@ export const followupCommand: CommandDefinition = {
 			return true
 		}
 
-		await ctx.runImmediatePrompt(text)
+		await ctx.submitPrompt(text, { mode: "followUp" })
 		return true
 	},
 }

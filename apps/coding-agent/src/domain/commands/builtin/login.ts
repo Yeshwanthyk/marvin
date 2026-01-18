@@ -78,10 +78,8 @@ export const loginCommand: CommandDefinition = {
 
 		try {
 			// We need to capture the URL without completing the flow
-			let authUrl = ""
 			const credentials = await loginAnthropic(
 				(url: string) => {
-					authUrl = url
 					pendingAuthUrl = url
 					openBrowser(url)
 				},

@@ -99,12 +99,16 @@ export const bashTool: AgentTool<typeof bashSchema> = {
 					const fullBuffer = Buffer.concat(chunks);
 					const fullText = fullBuffer.toString("utf-8");
 					const truncation = truncateTail(fullText);
+					const detailPayload: BashToolDetails = {};
+					if (truncation.truncated) {
+						detailPayload.truncation = truncation;
+					}
+					if (tempFilePath) {
+						detailPayload.fullOutputPath = tempFilePath;
+					}
 					onUpdate({
 						content: [{ type: "text", text: truncation.content || "" }],
-						details: {
-							truncation: truncation.truncated ? truncation : undefined,
-							fullOutputPath: tempFilePath,
-						},
+						details: Object.keys(detailPayload).length > 0 ? detailPayload : undefined,
 					});
 				}
 			};
@@ -158,26 +162,27 @@ export const bashTool: AgentTool<typeof bashSchema> = {
 				// Build details with truncation info
 				let details: BashToolDetails | undefined;
 
-				if (truncation.truncated) {
-					details = {
-						truncation,
-						fullOutputPath: tempFilePath,
-					};
+					if (truncation.truncated) {
+						details = { truncation };
+						if (tempFilePath) {
+							details.fullOutputPath = tempFilePath;
+						}
 
 					// Build actionable notice
 					const startLine = truncation.totalLines - truncation.outputLines + 1;
 					const endLine = truncation.totalLines;
 
-					if (truncation.lastLinePartial) {
-						// Edge case: last line alone > 30KB
-						const lastLineSize = formatSize(Buffer.byteLength(fullOutput.split("\n").pop() || "", "utf-8"));
-						outputText += `\n\n[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize}). Full output: ${tempFilePath}]`;
-					} else if (truncation.truncatedBy === "lines") {
-						outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}. Full output: ${tempFilePath}]`;
-					} else {
-						outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Full output: ${tempFilePath}]`;
+						const fullOutputNote = tempFilePath ? `. Full output: ${tempFilePath}` : "";
+						if (truncation.lastLinePartial) {
+							// Edge case: last line alone > 30KB
+							const lastLineSize = formatSize(Buffer.byteLength(fullOutput.split("\n").pop() || "", "utf-8"));
+							outputText += `\n\n[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize})${fullOutputNote}]`;
+						} else if (truncation.truncatedBy === "lines") {
+							outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}${fullOutputNote}]`;
+						} else {
+							outputText += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit)${fullOutputNote}]`;
+						}
 					}
-				}
 
 				if (code !== 0 && code !== null) {
 					outputText += `\n\nCommand exited with code ${code}`;

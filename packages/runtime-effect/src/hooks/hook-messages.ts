@@ -7,14 +7,19 @@ import type { TextContent } from "@marvin-agents/ai"
 export function createHookMessage<T = unknown>(
 	input: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">
 ): HookMessage<T> {
-	return {
+	const message: HookMessage<T> = {
 		role: "hookMessage",
 		customType: input.customType,
 		content: input.content,
 		display: input.display,
-		details: input.details,
 		timestamp: Date.now(),
 	}
+
+	if (input.details !== undefined) {
+		message.details = input.details
+	}
+
+	return message
 }
 
 /**

@@ -1,17 +1,16 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "moduleResolution": "Node16",
-    "lib": ["ES2022"],
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@marvin-agents/ai": ["../ai/src/index.ts"],
+      "@marvin-agents/ai/src/*": ["../ai/src/*"],
+      "@marvin-agents/ai/*": ["../ai/*"]
+    },
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "noEmit": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "../ai/src/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }

@@ -5,7 +5,8 @@ import type { SessionManager } from "../../session-manager.js"
 import type { ActivityState, ToolBlock, UIMessage } from "../../types.js"
 import type { EditorConfig } from "../../config.js"
 import type { HookRunner } from "../../hooks/index.js"
-import type { PromptDeliveryMode } from "../../runtime/session/prompt-queue.js"
+import type { PromptDeliveryMode } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
+import type { PromptSubmitOptions } from "@marvin-agents/runtime-effect/session/orchestrator.js"
 
 export const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"]
 
@@ -48,7 +49,7 @@ export interface CommandContext {
 
 	onExit?: () => void
 	hookRunner?: HookRunner
-	runImmediatePrompt: (text: string) => Promise<void>
+	submitPrompt: (text: string, options?: PromptSubmitOptions) => Promise<void>
 	steer: (text: string) => Promise<void>
 	followUp: (text: string) => Promise<void>
 	sendUserMessage: (text: string, options?: { deliverAs?: PromptDeliveryMode }) => Promise<void>

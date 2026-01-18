@@ -45,7 +45,7 @@ const PROGRESS_FILLED = "━"
 const PROGRESS_EMPTY = "┄"
 const PROGRESS_BAR_LENGTH = 8
 
-import type { QueueCounts } from "../runtime/session/prompt-queue.js"
+import type { QueueCounts } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
 
 export interface HeaderProps {
   modelId: string

@@ -50,20 +50,20 @@ const diffHunkColor = parseColor("#61afef")
 function DiffPreview(props: { text: string }): JSX.Element {
 	const { theme } = useTheme()
 
-	const coloredLines = () => props.text.split("\n").map((line, i) => {
-		let fg = theme.text
-		if (line.startsWith("+") && !line.startsWith("+++")) fg = diffAddedColor
-		else if (line.startsWith("-") && !line.startsWith("---")) fg = diffRemovedColor
-		else if (line.startsWith("@@")) fg = diffHunkColor
-		return { line, fg, key: i }
-	})
+		const coloredLines = () => props.text.split("\n").map((line) => {
+			let fg = theme.text
+			if (line.startsWith("+") && !line.startsWith("+++")) fg = diffAddedColor
+			else if (line.startsWith("-") && !line.startsWith("---")) fg = diffRemovedColor
+			else if (line.startsWith("@@")) fg = diffHunkColor
+			return { line, fg }
+		})
 
 	return (
-		<box flexDirection="column" backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
-			{coloredLines().map(({ line, fg, key }) => (
-				<text fg={fg}>{line}</text>
-			))}
-		</box>
+			<box flexDirection="column" backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+				{coloredLines().map(({ line, fg }) => (
+					<text fg={fg}>{line}</text>
+				))}
+			</box>
 	)
 }
 

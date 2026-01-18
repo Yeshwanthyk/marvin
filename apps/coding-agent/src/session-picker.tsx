@@ -3,7 +3,6 @@
  */
 
 import { render, useTerminalDimensions, useKeyboard } from "@opentui/solid"
-import { createSignal, onMount } from "solid-js"
 import { SelectList, ThemeProvider, useTheme, type SelectItem, type SelectListRef, type ThemeMode } from "@marvin-agents/open-tui"
 import type { SessionManager } from "./session-manager.js"
 

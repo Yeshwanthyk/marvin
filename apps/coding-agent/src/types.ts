@@ -48,7 +48,7 @@ export type UIMessage = UIUserMessage | UIAssistantMessage | UIShellMessage
 import type { AgentToolResult } from "@marvin-agents/ai"
 import type { Theme } from "@marvin-agents/open-tui"
 import type { JSX } from "solid-js"
-import type { RenderResultOptions } from "./custom-tools/types.js"
+import type { RenderResultOptions } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
 
 export interface ToolBlock {
 	id: string
