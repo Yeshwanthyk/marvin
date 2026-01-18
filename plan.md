@@ -44,6 +44,10 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ### Phase 2 · Runtime Core Layers & Services
 - [x] **P2.1** Flesh out `packages/runtime-effect`: Config, Transport, Tool, Agent layers already exist—extend them with hooks, custom commands, `.config/marvin` loader, LazyToolLoader parity, and DMUX instrumentation hooks. _(Completed via hook/custom-command relocation, new `CustomCommandLayer`/`ExtensibilityLayer`, instrumentation service, and lazy loader export on Jan 18, 2026.)_
 - [ ] **P2.2** Model queues + orchestration using Effect primitives (`Queue`, `Stream`, `ExecutionPlan` for retries/fallback). Include compaction + session persistence wiring via `SessionManagerLayer` and `HookRunner` events.
+  - [x] **P2.2a — PromptQueueLayer:** Implement an Effect-powered prompt queue service that wraps `Effect.Queue`, tracks steer/follow-up counts, and exposes streams for adapters + instrumentation hooks. Provide serialization helpers so `.config/marvin/sessions` can persist queued prompts on crash. _(Delivered Jan 18, 2026 via `PromptQueueLayer`, serialization helpers, and Bun tests in `packages/runtime-effect/tests/prompt-queue.test.ts`.)_
+  - **P2.2b — ExecutionPlanBuilder:** Define configurable retry/fallback plans per provider/model (Anthropic primary, OpenAI fallback, etc.), hooking into `SessionManager` for compaction metadata and to DMUX instrumentation for visibility.
+  - **P2.2c — SessionOrchestratorLayer:** Compose Agent, HookRunner, SessionManager, PromptQueue, and ExecutionPlan into a managed fiber that drains prompts, runs `ExecutionPlan` guarded requests, and emits hook/session events (`session.start`, compaction updates, queue flush notifications).
+  - **P2.2d — Coverage:** Add focused Vitest suites for PromptQueue + ExecutionPlan builder behavior (counts, drain order, fallback sequencing) and document DMUX/manual validation steps in this plan once `bun run check` passes.
 - [ ] **P2.3** Expose typed `RuntimeContext` service(s) consumed by adapters, ensuring `.config/marvin/hooks/*` receive identical event payloads (turn/session/agent etc.).
 
 ### Phase 3 · Hook + Session Orchestration Rewrite
@@ -78,8 +82,9 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ---
 
 ## 6. Immediate Next Steps
-1. Execute Phase 1 checklist (P1.1–P1.5) with commits/tests per item.
-2. Transition `packages/runtime-effect` to own runtime entrypoint + tests (Phase 2).
-3. Iterate through Phases 3–5, updating this plan and ticking boxes as work lands.
+1. Implement **P2.2b ExecutionPlanBuilder** with provider retry/fallback policies + instrumentation hooks.
+2. Wire **P2.2c SessionOrchestratorLayer** so prompts drain via ExecutionPlan + SessionManager events.
+3. Expand **P2.2d Coverage** (ExecutionPlan + orchestrator tests, DMUX checklist) and re-run `bun run check`.
+4. Once Phase 2 completes, begin **P2.3 RuntimeContext** surface prep for adapters.
 
 _This document is the authoritative tracker. Update checkboxes + notes as phases complete._

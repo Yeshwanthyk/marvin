@@ -11,7 +11,7 @@
     }
   },
   "scripts": {
-    "test": "node -e \"process.exit(0)\""
+    "test": "bun test"
   },
   "dependencies": {
     "effect": "^3.19.14",
