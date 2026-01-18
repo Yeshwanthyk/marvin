@@ -11,6 +11,7 @@ import { Context, Effect, Layer } from "effect"
 import type { ValidationIssue } from "./schema.js"
 import { validateCustomCommand, issueFromError } from "./validation.js"
 import { ConfigTag } from "../config.js"
+import { InstrumentationTag } from "../instrumentation.js"
 
 export interface CustomCommand {
 	name: string
@@ -129,6 +130,7 @@ export const CustomCommandTag = Context.GenericTag<CustomCommandService>("runtim
 
 export interface CustomCommandLayerOptions {
 	configDir?: string
+	loader?: (configDir: string) => CustomCommandLoadResult
 }
 
 export const CustomCommandLayer = (options?: CustomCommandLayerOptions) =>
@@ -139,7 +141,21 @@ export const CustomCommandLayer = (options?: CustomCommandLayerOptions) =>
 				options?.configDir ??
 				(yield* ConfigTag).config.configDir
 
-			return yield* Effect.sync(() => loadCustomCommands(configDir))
+			const instrumentation = yield* InstrumentationTag
+			const loader = options?.loader ?? loadCustomCommands
+			const result = yield* Effect.sync(() => loader(configDir))
+
+			for (const issue of result.issues) {
+				instrumentation.record({ type: "extensibility:validation-issue", issue })
+			}
+
+			instrumentation.record({
+				type: "extensibility:commands-loaded",
+				count: result.commands.size,
+				names: Array.from(result.commands.keys()),
+			})
+
+			return result
 		}),
 	)
 

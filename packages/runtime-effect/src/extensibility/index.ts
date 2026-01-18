@@ -12,6 +12,7 @@ import type { ReadonlySessionManager } from "../session-manager.js"
 import { ConfigTag } from "../config.js"
 import { SessionManagerTag } from "../session-manager.js"
 import { InstrumentationTag } from "../instrumentation.js"
+import { CustomCommandTag, type CustomCommandService } from "./custom-commands.js"
 
 export interface ExtensibilityLoadOptions {
 	configDir: string
@@ -69,6 +70,7 @@ export interface ExtensibilityLayerOptions {
 	builtinTools: AgentTool<any, any>[]
 	hasUI: boolean
 	cwd?: string
+	loader?: typeof loadExtensibility
 }
 
 export const ExtensibilityLayer = (options: ExtensibilityLayerOptions) =>
@@ -78,9 +80,14 @@ export const ExtensibilityLayer = (options: ExtensibilityLayerOptions) =>
 			const { config } = yield* ConfigTag
 			const { sessionManager } = yield* SessionManagerTag
 			const instrumentation = yield* InstrumentationTag
+			const customCommands = yield* Effect.catchAll(
+				CustomCommandTag,
+				() => Effect.succeed<CustomCommandService | null>(null),
+			)
+			const loader = options.loader ?? loadExtensibility
 
 			const result = yield* Effect.tryPromise(() =>
-				loadExtensibility({
+				loader({
 					configDir: config.configDir,
 					cwd: options.cwd ?? process.cwd(),
 					sendRef: options.sendRef,
@@ -115,10 +122,21 @@ export const ExtensibilityLayer = (options: ExtensibilityLayerOptions) =>
 				})
 			}
 
+			const commandCount = customCommands?.commands.size
 			instrumentation.record({
 				type: "extensibility:loaded",
 				hooks: result.hookCount,
 				customTools: result.customTools.length,
+				...(commandCount !== undefined ? { customCommands: commandCount } : {}),
+			})
+
+			instrumentation.record({
+				type: "extensibility:custom-tools-loaded",
+				count: result.customTools.length,
+				entries: result.customTools.map((tool) => ({
+					name: tool.tool.name,
+					path: tool.resolvedPath,
+				})),
 			})
 
 			return result

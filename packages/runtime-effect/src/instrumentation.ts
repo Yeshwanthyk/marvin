@@ -5,7 +5,13 @@ export type InstrumentationEvent =
 	| { type: "hook:error"; hookPath: string; event: string; error: string }
 	| { type: "hook:context-configured"; hasUI: boolean }
 	| { type: "extensibility:validation-issue"; issue: ValidationIssue }
-	| { type: "extensibility:loaded"; hooks: number; customTools: number }
+	| { type: "extensibility:loaded"; hooks: number; customTools: number; customCommands?: number }
+	| { type: "extensibility:commands-loaded"; count: number; names: string[] }
+	| {
+			type: "extensibility:custom-tools-loaded"
+			count: number
+			entries: Array<{ name: string; path: string }>
+	  }
 	| {
 			type: "execution-plan:registered"
 			steps: Array<{ id: string; provider: string; modelId: string; attempts: number; isFallback: boolean }>
