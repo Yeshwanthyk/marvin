@@ -5,6 +5,10 @@ export type InstrumentationEvent =
 	| { type: "hook:error"; hookPath: string; event: string; error: string }
 	| { type: "extensibility:validation-issue"; issue: ValidationIssue }
 	| { type: "extensibility:loaded"; hooks: number; customTools: number }
+	| {
+			type: "execution-plan:registered"
+			steps: Array<{ id: string; provider: string; modelId: string; attempts: number; isFallback: boolean }>
+	  }
 	| { type: "dmux:log"; level: "info" | "warn" | "error"; message: string; details?: Record<string, unknown> }
 
 export interface InstrumentationService {
