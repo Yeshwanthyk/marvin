@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@marvin-agents/agent-core": ["../agent/src/index.ts"],
+      "@marvin-agents/agent-core/*": ["../agent/src/*"],
+      "@marvin-agents/ai": ["../ai/src/index.ts"],
+      "@marvin-agents/ai/*": ["../ai/src/*"],
+      "@marvin-agents/runtime-effect": ["../runtime-effect/src/index.ts"],
+      "@marvin-agents/runtime-effect/*": ["../runtime-effect/src/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "../agent/src/**/*.ts",
+    "../ai/src/**/*.ts",
+    "../runtime-effect/src/**/*.ts"
+  ],
+  "exclude": ["dist", "node_modules"]
+}

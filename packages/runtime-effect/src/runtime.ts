@@ -137,10 +137,10 @@ interface RuntimeLayerInternalOptions extends RuntimeLayerOptions {
   cwd: string;
   hasUI: boolean;
   sendRef: SendRef;
-  instrumentationLayer: Layer.Layer<never, never, InstrumentationService>;
+  instrumentationLayer: Layer.Layer<InstrumentationService, never, never>;
 }
 
-export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
+export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<RuntimeServices, unknown, never> => {
   const adapter = options?.adapter ?? "tui";
   const cwd = options?.cwd ?? process.cwd();
   const hasUI = options?.hasUI ?? adapter === "tui";
@@ -159,7 +159,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
     instrumentationLayer,
   };
 
-  return Layer.unwrapEffect(
+  const layerEffect: Effect.Effect<Layer.Layer<RuntimeServices, unknown, never>, unknown, never> =
     Effect.gen(function* () {
       const config = yield* Effect.tryPromise(() => loadAppConfig(layerOptions));
       const apiKeyResolver = createApiKeyResolver(config.configDir);
@@ -200,7 +200,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
         cycleModels,
       });
 
-      const baseProviders = Layer.mergeAll(configLayer, layerOptions.instrumentationLayer);
+      const baseProviders = Layer.merge(configLayer, layerOptions.instrumentationLayer);
       const withSessionManager = Layer.provideMerge(sessionManagerLayer, baseProviders);
       const withTransport = Layer.provideMerge(transportLayer, withSessionManager);
       const withCommands = Layer.provideMerge(customCommandsLayer, withTransport);
@@ -213,9 +213,10 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
       const withToolRuntime = Layer.provideMerge(toolRuntimeLayer, withLsp);
       const withAgentFactory = Layer.provideMerge(agentFactoryLayer, withToolRuntime);
       const withOrchestrator = Layer.provideMerge(SessionOrchestratorLayer(), withAgentFactory);
-      return Layer.provideMerge(runtimeServicesLayer, withOrchestrator);
-    }),
-  );
+      return Layer.provide(runtimeServicesLayer, withOrchestrator);
+    });
+
+  return Layer.unwrapEffect(layerEffect);
 };
 
 const createToolRuntimeLayer = (options: { cwd: string; toolRegistry: ToolRegistry }) =>

@@ -102,39 +102,39 @@ Changes:
 Goal: implement SDK on top of runtime-effect, with strict options and minimal surface area.
 
 Package structure:
-- [ ] `packages/sdk/package.json` with dependencies:
+- [x] `packages/sdk/package.json` with dependencies:
   - `@marvin-agents/runtime-effect`
   - `effect`
   - `@marvin-agents/agent-core` (types only if needed)
-- [ ] `packages/sdk/tsconfig.json` extending root base config.
-- [ ] Root `package.json` typecheck includes `packages/sdk`.
+- [x] `packages/sdk/tsconfig.json` extending root base config.
+- [x] Root `package.json` typecheck includes `packages/sdk`.
 
 Core implementation:
-- [ ] `SdkError` tagged union (config, runtime, transport, hook).
-- [ ] `Result` helpers (no `any`, no casts).
-- [ ] Internal `createSdkRuntime(options)`:
+- [x] `SdkError` tagged union (config, runtime, transport, hook).
+- [x] `Result` helpers (no `any`, no casts).
+- [x] Internal `createSdkRuntime(options)`:
   - uses `RuntimeLayer` with `adapter: "headless"`, `hasUI: false`
   - passes `cwd`, `configDir`, `provider`, `model`, `thinking`
   - default `lsp.enabled = false`
   - optional instrumentation sink
   - returns scoped runtime + `close()` finalizer
-- [ ] `runAgentEffect`:
+- [x] `runAgentEffect`:
   - opens runtime scope
   - applies `systemPrompt` override via `runtime.agent.setSystemPrompt`
   - submits via `SessionOrchestrator.submitPromptAndWait`
   - returns `SdkResult` constructed from runtime agent state
   - closes scope on completion
-- [ ] `runAgent` wrapper returns `Result`.
+- [x] `runAgent` wrapper returns `Result`.
 
 Session API:
-- [ ] `createAgentSessionEffect`:
+- [x] `createAgentSessionEffect`:
   - opens runtime scope
   - sets system prompt once
   - returns `SdkSession` with `chat`, `snapshot`, `drainQueue`, `close`
-- [ ] `createAgentSession` Promise wrapper.
+- [x] `createAgentSession` Promise wrapper.
 
 Streaming:
-- [ ] `runAgentStream`:
+- [x] `runAgentStream`:
   - uses `Effect.Stream` internally
   - bridges agent events (`agent.subscribe`)
   - surfaces hook messages and instrumentation events
