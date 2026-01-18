@@ -11,9 +11,9 @@ const GLOBAL_AGENTS_PATHS = [
   () => path.join(os.homedir(), ".claude", "CLAUDE.md"),
 ];
 
-const PROJECT_AGENTS_PATHS = [
-  () => path.join(process.cwd(), "AGENTS.md"),
-  () => path.join(process.cwd(), "CLAUDE.md"),
+const projectAgentsPaths = (cwd: string) => [
+  () => path.join(cwd, "AGENTS.md"),
+  () => path.join(cwd, "CLAUDE.md"),
 ];
 
 const readFileIfExists = async (p: string): Promise<string | undefined> => {
@@ -46,6 +46,11 @@ export interface EditorConfig {
   args: string[];
 }
 
+export interface LspConfig {
+  enabled: boolean;
+  autoInstall: boolean;
+}
+
 export interface LoadedAppConfig {
   provider: KnownProvider;
   modelId: string;
@@ -57,12 +62,13 @@ export interface LoadedAppConfig {
   agentsConfig: AgentsConfig;
   configDir: string;
   configPath: string;
-  lsp: { enabled: boolean; autoInstall: boolean };
+  lsp: LspConfig;
 }
 
-export const loadAgentsConfig = async (): Promise<AgentsConfig> => {
+export const loadAgentsConfig = async (options?: { cwd?: string }): Promise<AgentsConfig> => {
+  const cwd = options?.cwd ?? process.cwd();
   const global = await loadFirstExisting(GLOBAL_AGENTS_PATHS);
-  const project = await loadFirstExisting(PROJECT_AGENTS_PATHS);
+  const project = await loadFirstExisting(projectAgentsPaths(cwd));
 
   const parts: string[] = [];
   if (global) parts.push(global.content);
@@ -145,12 +151,40 @@ const resolveEditorConfig = (raw: unknown): EditorConfig | undefined => {
   return undefined;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
+const readBoolean = (value: Record<string, unknown>, key: string): boolean | undefined => {
+  const raw = value[key];
+  return typeof raw === "boolean" ? raw : undefined;
+};
+
+const resolveLspConfig = (override: LspConfig | undefined, raw: unknown): LspConfig => {
+  if (override) {
+    return { enabled: override.enabled, autoInstall: override.autoInstall };
+  }
+
+  if (raw === false) {
+    return { enabled: false, autoInstall: false };
+  }
+
+  if (isRecord(raw)) {
+    const enabled = readBoolean(raw, "enabled");
+    const autoInstall = readBoolean(raw, "autoInstall");
+    return { enabled: enabled ?? true, autoInstall: autoInstall ?? true };
+  }
+
+  return { enabled: true, autoInstall: true };
+};
+
 export interface LoadConfigOptions {
+  cwd?: string;
   configDir?: string;
   configPath?: string;
   provider?: string;
   model?: string;
   thinking?: ThinkingLevel;
+  systemPrompt?: string;
+  lsp?: LspConfig;
 }
 
 export const loadAppConfig = async (options?: LoadConfigOptions): Promise<LoadedAppConfig> => {
@@ -200,23 +234,17 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
   const editorRaw = typeof nestedConfig.editor !== "undefined" ? nestedConfig.editor : rawObj.editor;
   const editor = resolveEditorConfig(editorRaw) ?? { command: "nvim", args: [] };
 
-  const agentsConfig = await loadAgentsConfig();
+  const agentsConfig = await loadAgentsConfig({ cwd: options?.cwd });
 
   const basePrompt =
-    typeof rawObj.systemPrompt === "string" && rawObj.systemPrompt.trim().length > 0
+    options?.systemPrompt ??
+    (typeof rawObj.systemPrompt === "string" && rawObj.systemPrompt.trim().length > 0
       ? rawObj.systemPrompt
-      : "You are a helpful coding agent. Use tools (read, bash, edit, write) when needed.";
+      : "You are a helpful coding agent. Use tools (read, bash, edit, write) when needed.");
 
   const systemPrompt = agentsConfig.combined ? `${basePrompt}\n\n${agentsConfig.combined}` : basePrompt;
 
-  const lspRaw = rawObj.lsp;
-  const lsp =
-    lspRaw === false
-      ? { enabled: false, autoInstall: false }
-      : {
-          enabled: typeof (lspRaw as any)?.enabled === "boolean" ? (lspRaw as any).enabled : true,
-          autoInstall: typeof (lspRaw as any)?.autoInstall === "boolean" ? (lspRaw as any).autoInstall : true,
-        };
+  const lsp = resolveLspConfig(options?.lsp, rawObj.lsp);
 
   return {
     provider,

@@ -65,13 +65,13 @@
 Goal: make runtime config and AGENTS discovery cwd-aware and SDK-friendly.
 
 Changes:
-- [ ] Add `cwd?: string` to `LoadConfigOptions` in `packages/runtime-effect/src/config.ts`.
-- [ ] Update `loadAgentsConfig` to accept `cwd` and resolve project `AGENTS.md` and `CLAUDE.md` under that cwd, not `process.cwd()`.
-- [ ] Allow `LoadConfigOptions` to override `systemPrompt` and `lsp` settings:
+- [x] Add `cwd?: string` to `LoadConfigOptions` in `packages/runtime-effect/src/config.ts`.
+- [x] Update `loadAgentsConfig` to accept `cwd` and resolve project `AGENTS.md` and `CLAUDE.md` under that cwd, not `process.cwd()`.
+- [x] Allow `LoadConfigOptions` to override `systemPrompt` and `lsp` settings:
   - `systemPrompt?: string`
   - `lsp?: { enabled: boolean; autoInstall: boolean }`
-- [ ] Update `RuntimeLayerOptions` to accept and forward these new config options.
-- [ ] Add tests for:
+- [x] Update `RuntimeLayerOptions` to accept and forward these new config options.
+- [x] Add tests for:
   - project AGENTS discovery using explicit cwd
   - systemPrompt override
   - lsp override behavior
