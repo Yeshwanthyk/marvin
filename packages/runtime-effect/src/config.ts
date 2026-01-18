@@ -123,6 +123,23 @@ const resolveModel = (provider: KnownProvider, raw: unknown): Model<Api> | undef
   return models.find((m) => m.id === raw) as Model<Api> | undefined;
 };
 
+const parseModelSpec = (raw: unknown): { provider?: KnownProvider; modelId?: string } => {
+  if (typeof raw !== "string") return {};
+  const first = raw
+    .split(",")
+    .map((value) => value.trim())
+    .find((value) => value.length > 0);
+  if (!first) return {};
+  const slashIndex = first.indexOf("/");
+  if (slashIndex === -1) {
+    return { modelId: first };
+  }
+  const providerId = first.slice(0, slashIndex).trim();
+  const modelId = first.slice(slashIndex + 1).trim();
+  const provider = getProviders().find((p) => p === providerId);
+  return { provider, modelId: modelId.length > 0 ? modelId : undefined };
+};
+
 const resolveEditorConfig = (raw: unknown): EditorConfig | undefined => {
   if (typeof raw === "string") {
     const parts = raw.trim().split(/\s+/).filter(Boolean);
@@ -202,26 +219,26 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
     (typeof nestedConfig.provider === "string" ? nestedConfig.provider : undefined) ??
     (typeof rawObj.provider === "string" ? rawObj.provider : undefined);
 
-  const provider = resolveProvider(providerRaw);
-  if (!provider) {
+  const modelSpecRaw =
+    options?.model ??
+    (typeof nestedConfig.model === "string" ? nestedConfig.model : undefined) ??
+    (typeof rawObj.model === "string" ? rawObj.model : undefined);
+  const parsedModel = parseModelSpec(modelSpecRaw);
+  const resolvedProvider = parsedModel.provider ?? resolveProvider(providerRaw);
+  if (!resolvedProvider) {
     throw new Error(
       `Invalid or missing provider. Set "provider" in ${configPath} or pass --provider. Known: ${getProviders().join(", ")}`,
     );
   }
 
-  const modelIdRaw =
-    options?.model ??
-    (typeof nestedConfig.model === "string" ? nestedConfig.model : undefined) ??
-    (typeof rawObj.model === "string" ? rawObj.model : undefined);
-
-  const model = resolveModel(provider, modelIdRaw);
+  const model = resolveModel(resolvedProvider, parsedModel.modelId);
   if (!model) {
-    const available = getModels(provider)
+    const available = getModels(resolvedProvider)
       .slice(0, 8)
       .map((m) => m.id)
       .join(", ");
     throw new Error(
-      `Invalid or missing model for provider ${provider}. Set "model" in ${configPath} or pass --model. Examples: ${available}`,
+      `Invalid or missing model for provider ${resolvedProvider}. Set "model" in ${configPath} or pass --model. Examples: ${available}`,
     );
   }
 
@@ -247,7 +264,7 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
   const lsp = resolveLspConfig(options?.lsp, rawObj.lsp);
 
   return {
-    provider,
+    provider: resolvedProvider,
     modelId: model.id,
     model,
     thinking,
