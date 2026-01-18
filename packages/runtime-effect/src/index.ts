@@ -11,4 +11,5 @@ export * from "./hooks/index.js";
 export * from "./lazy-tool-loader.js";
 export * from "./session/prompt-queue.js";
 export * from "./session/execution-plan.js";
+export * from "./session/orchestrator.js";
 export * from "./instrumentation.js";

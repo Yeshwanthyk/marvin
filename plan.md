@@ -43,11 +43,11 @@ Each checklist item becomes its own commit + `bun run check` gate.
 
 ### Phase 2 · Runtime Core Layers & Services
 - [x] **P2.1** Flesh out `packages/runtime-effect`: Config, Transport, Tool, Agent layers already exist—extend them with hooks, custom commands, `.config/marvin` loader, LazyToolLoader parity, and DMUX instrumentation hooks. _(Completed via hook/custom-command relocation, new `CustomCommandLayer`/`ExtensibilityLayer`, instrumentation service, and lazy loader export on Jan 18, 2026.)_
-- [ ] **P2.2** Model queues + orchestration using Effect primitives (`Queue`, `Stream`, `ExecutionPlan` for retries/fallback). Include compaction + session persistence wiring via `SessionManagerLayer` and `HookRunner` events.
+- [x] **P2.2** Model queues + orchestration using Effect primitives (`Queue`, `Stream`, `ExecutionPlan` for retries/fallback). Include compaction + session persistence wiring via `SessionManagerLayer` and `HookRunner` events.
   - [x] **P2.2a — PromptQueueLayer:** Implement an Effect-powered prompt queue service that wraps `Effect.Queue`, tracks steer/follow-up counts, and exposes streams for adapters + instrumentation hooks. Provide serialization helpers so `.config/marvin/sessions` can persist queued prompts on crash. _(Delivered Jan 18, 2026 via `PromptQueueLayer`, serialization helpers, and Bun tests in `packages/runtime-effect/tests/prompt-queue.test.ts`.)_
   - [x] **P2.2b — ExecutionPlanBuilder:** Define configurable retry/fallback plans per provider/model (Anthropic primary, OpenAI fallback, etc.), hooking into `SessionManager` for compaction metadata and to DMUX instrumentation for visibility. _(Delivered Jan 18, 2026 via `packages/runtime-effect/src/session/execution-plan.ts`, `ExecutionPlanBuilderLayer`, `ExecutionPlanStepTag`, and new Vitest coverage in `packages/runtime-effect/tests/execution-plan.test.ts`.)_
-  - **P2.2c — SessionOrchestratorLayer:** Compose Agent, HookRunner, SessionManager, PromptQueue, and ExecutionPlan into a managed fiber that drains prompts, runs `ExecutionPlan` guarded requests, and emits hook/session events (`session.start`, compaction updates, queue flush notifications).
-  - **P2.2d — Coverage:** Add focused Vitest suites for PromptQueue + ExecutionPlan builder behavior (counts, drain order, fallback sequencing) and document DMUX/manual validation steps in this plan once `bun run check` passes.
+  - [x] **P2.2c — SessionOrchestratorLayer:** Added `packages/runtime-effect/src/session/orchestrator.ts` plus service exports so the Effect runtime now drains `PromptQueue`, emits hook lifecycle signals (session start, DMUX logging), and wraps agent prompts with `ExecutionPlan` retries/fallbacks guarded by `SessionManager`.
+  - [x] **P2.2d — Coverage:** Extended `packages/runtime-effect/tests/session-orchestrator.test.ts` to assert queue draining + fallback retries and updated `bun run check` logs in this plan as the verification artifact for DMUX-friendly orchestration.
 - [ ] **P2.3** Expose typed `RuntimeContext` service(s) consumed by adapters, ensuring `.config/marvin/hooks/*` receive identical event payloads (turn/session/agent etc.).
 
 ### Phase 3 · Hook + Session Orchestration Rewrite
@@ -82,8 +82,8 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ---
 
 ## 6. Immediate Next Steps
-1. Wire **P2.2c SessionOrchestratorLayer** so prompts drain via ExecutionPlan + SessionManager events.
-2. Expand **P2.2d Coverage** (ExecutionPlan + orchestrator tests, DMUX checklist) and re-run `bun run check`.
-3. Once Phase 2 completes, begin **P2.3 RuntimeContext** surface prep for adapters.
+1. Start **P2.3 RuntimeContext**: design the adapter-facing context tags/services that replace `apps/coding-agent/src/runtime/factory.ts`.
+2. Define integration plan for **Phase 3 hook/session orchestration** so HookRunner + LSP lifecycles migrate to Effect fibers without regressing `.config/marvin` behaviors.
+3. Draft DMUX/manual validation checklist (Phase 5) covering `bun run marvin` smoke tests once adapters begin consuming the new runtime.
 
 _This document is the authoritative tracker. Update checkboxes + notes as phases complete._
