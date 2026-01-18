@@ -4,8 +4,18 @@
 
 import { render, useTerminalDimensions, useKeyboard } from "@opentui/solid"
 import { createSignal, onMount } from "solid-js"
-import { SelectList, ThemeProvider, useTheme, type SelectItem, type SelectListRef } from "@marvin-agents/open-tui"
+import { SelectList, ThemeProvider, useTheme, type SelectItem, type SelectListRef, type ThemeMode } from "@marvin-agents/open-tui"
 import type { SessionManager } from "./session-manager.js"
+
+/** Detect system dark/light mode (macOS only, defaults to dark) */
+function detectThemeMode(): ThemeMode {
+	try {
+		const result = Bun.spawnSync(["defaults", "read", "-g", "AppleInterfaceStyle"])
+		return result.stdout.toString().trim().toLowerCase() === "dark" ? "dark" : "light"
+	} catch {
+		return "dark"
+	}
+}
 
 interface SessionPickerProps {
 	sessions: Array<{
@@ -103,9 +113,11 @@ export async function selectSession(sessionManager: SessionManager): Promise<str
 			resolve(value)
 		}
 
+		const themeMode = detectThemeMode()
+
 		render(
 			() => (
-				<ThemeProvider mode="dark">
+				<ThemeProvider mode={themeMode}>
 					<SessionPickerApp
 						sessions={sessions}
 						onSelect={(path) => doResolve(path)}

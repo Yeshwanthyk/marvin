@@ -9,6 +9,7 @@ import { createContext, createEffect, createMemo, useContext } from "solid-js"
 import { createStore } from "solid-js/store"
 
 // Theme JSON imports
+import marvin from "../themes/marvin.json"
 import aura from "../themes/aura.json"
 import ayu from "../themes/ayu.json"
 import catppuccin from "../themes/catppuccin.json"
@@ -52,6 +53,7 @@ interface ThemeJson {
 }
 
 export const BUILTIN_THEMES: Record<string, ThemeJson> = {
+	marvin: marvin as ThemeJson,
 	aura: aura as ThemeJson,
 	ayu: ayu as ThemeJson,
 	catppuccin: catppuccin as ThemeJson,
@@ -242,78 +244,257 @@ const defaultDarkTheme: Theme = {
 }
 
 /**
- * Default light theme colors
+ * Default light theme colors - optimized for high contrast on light backgrounds
  */
 const defaultLightTheme: Theme = {
-	primary: parseColor("#df8e1d"),
-	secondary: parseColor("#1e66f5"),
-	accent: parseColor("#40a02b"),
-	error: parseColor("#d20f39"),
-	warning: parseColor("#df8e1d"),
-	success: parseColor("#40a02b"),
-	info: parseColor("#1e66f5"),
+	primary: parseColor("#b06000"),    // darker orange for better contrast
+	secondary: parseColor("#0550ae"),  // darker blue
+	accent: parseColor("#1a7f37"),     // darker green for tool labels
+	error: parseColor("#c21f3a"),
+	warning: parseColor("#9a6700"),    // darker gold/amber
+	success: parseColor("#1a7f37"),
+	info: parseColor("#0550ae"),
 
-	text: parseColor("#4c4f69"),
-	textMuted: parseColor("#9ca0b0"),
+	text: parseColor("#1f2328"),       // near-black for main text
+	textMuted: parseColor("#656d76"),  // darker gray for better readability
 
-	background: parseColor("#eff1f5"),
-	backgroundPanel: parseColor("#e6e9ef"),
-	backgroundElement: parseColor("#ccd0da"),
-	backgroundMenu: parseColor("#dce0e8"),
+	background: parseColor("#ffffff"),
+	backgroundPanel: parseColor("#f6f8fa"),
+	backgroundElement: parseColor("#eaeef2"),
+	backgroundMenu: parseColor("#f6f8fa"),
 
-	border: parseColor("#bcc0cc"),
-	borderSubtle: parseColor("#dce0e8"),
-	borderActive: parseColor("#1e66f5"),
+	border: parseColor("#d0d7de"),
+	borderSubtle: parseColor("#e6e9ef"),
+	borderActive: parseColor("#0550ae"),
 
-	selectionBg: parseColor("#bcc0cc"),
-	selectionFg: parseColor("#4c4f69"),
+	selectionBg: parseColor("#ddf4ff"),
+	selectionFg: parseColor("#1f2328"),
 
-	diffAdded: parseColor("#40a02b"),
-	diffRemoved: parseColor("#d20f39"),
-	diffContext: parseColor("#9ca0b0"),
-	diffAddedBg: parseColor("#d6f5da"),
-	diffRemovedBg: parseColor("#f6d6d9"),
+	diffAdded: parseColor("#1a7f37"),
+	diffRemoved: parseColor("#c21f3a"),
+	diffContext: parseColor("#656d76"),
+	diffAddedBg: parseColor("#dafbe1"),
+	diffRemovedBg: parseColor("#ffebe9"),
 	diffContextBg: parseColor("transparent"),
-	diffLineNumberFg: parseColor("#9ca0b0"),
+	diffLineNumberFg: parseColor("#656d76"),
 	diffLineNumberBg: parseColor("transparent"),
-	diffAddedLineNumberBg: parseColor("#d6f5da"),
-	diffRemovedLineNumberBg: parseColor("#f6d6d9"),
-	diffAddedSign: parseColor("#16a34a"),
-	diffRemovedSign: parseColor("#dc2626"),
-	diffHighlightAddedBg: parseColor("#bfe8c8"),
-	diffHighlightRemovedBg: parseColor("#e8bfc5"),
+	diffAddedLineNumberBg: parseColor("#dafbe1"),
+	diffRemovedLineNumberBg: parseColor("#ffebe9"),
+	diffAddedSign: parseColor("#1a7f37"),
+	diffRemovedSign: parseColor("#c21f3a"),
+	diffHighlightAddedBg: parseColor("#aceebb"),
+	diffHighlightRemovedBg: parseColor("#ffcecb"),
 
-	markdownText: parseColor("#4c4f69"),
-	markdownHeading: parseColor("#1e66f5"),
-	markdownLink: parseColor("#ea76cb"),
-	markdownLinkUrl: parseColor("#9ca0b0"),
-	markdownCode: parseColor("#df8e1d"),
-	markdownCodeBlock: parseColor("#4c4f69"),
-	markdownCodeBlockBorder: parseColor("#bcc0cc"),
-	markdownBlockQuote: parseColor("#9ca0b0"),
-	markdownBlockQuoteBorder: parseColor("#bcc0cc"),
-	markdownHr: parseColor("#bcc0cc"),
-	markdownListBullet: parseColor("#40a02b"),
-	markdownStrong: parseColor("#4c4f69"),
-	markdownEmph: parseColor("#df8e1d"),
-	markdownListEnumeration: parseColor("#1e66f5"),
-	markdownImage: parseColor("#ea76cb"),
-	markdownStrikethrough: parseColor("#9ca0b0"),
+	markdownText: parseColor("#1f2328"),
+	markdownHeading: parseColor("#0550ae"),
+	markdownLink: parseColor("#8250df"),      // purple for links
+	markdownLinkUrl: parseColor("#656d76"),
+	markdownCode: parseColor("#9a6700"),      // darker gold
+	markdownCodeBlock: parseColor("#1f2328"),
+	markdownCodeBlockBorder: parseColor("#d0d7de"),
+	markdownBlockQuote: parseColor("#656d76"),
+	markdownBlockQuoteBorder: parseColor("#d0d7de"),
+	markdownHr: parseColor("#d0d7de"),
+	markdownListBullet: parseColor("#1a7f37"),
+	markdownStrong: parseColor("#1f2328"),
+	markdownEmph: parseColor("#9a6700"),
+	markdownListEnumeration: parseColor("#0550ae"),
+	markdownImage: parseColor("#8250df"),
+	markdownStrikethrough: parseColor("#656d76"),
 
-	syntaxComment: parseColor("#9ca0b0"),
-	syntaxString: parseColor("#40a02b"),
-	syntaxKeyword: parseColor("#8839ef"),
-	syntaxFunction: parseColor("#1e66f5"),
-	syntaxVariable: parseColor("#4c4f69"),
-	syntaxType: parseColor("#df8e1d"),
-	syntaxNumber: parseColor("#fe640b"),
-	syntaxConstant: parseColor("#fe640b"),
-	syntaxOperator: parseColor("#4c4f69"),
-	syntaxPunctuation: parseColor("#5c5f77"),
-	syntaxProperty: parseColor("#179299"),
-	syntaxTag: parseColor("#d20f39"),
-	syntaxAttribute: parseColor("#df8e1d"),
+	syntaxComment: parseColor("#6e7781"),     // darker gray
+	syntaxString: parseColor("#0a3069"),      // dark blue for strings
+	syntaxKeyword: parseColor("#8250df"),     // purple
+	syntaxFunction: parseColor("#8250df"),    // purple for functions
+	syntaxVariable: parseColor("#1f2328"),
+	syntaxType: parseColor("#953800"),        // dark orange
+	syntaxNumber: parseColor("#0550ae"),      // blue for numbers
+	syntaxConstant: parseColor("#0550ae"),
+	syntaxOperator: parseColor("#1f2328"),
+	syntaxPunctuation: parseColor("#1f2328"),
+	syntaxProperty: parseColor("#0550ae"),
+	syntaxTag: parseColor("#1a7f37"),         // green for tags
+	syntaxAttribute: parseColor("#953800"),
 }
+
+function clamp01(value: number): number {
+	if (value < 0) return 0
+	if (value > 1) return 1
+	return value
+}
+
+function srgbToLinear(channel: number): number {
+	if (channel <= 0.04045) return channel / 12.92
+	return Math.pow((channel + 0.055) / 1.055, 2.4)
+}
+
+function relativeLuminance(color: RGBA): number {
+	const r = srgbToLinear(clamp01(color.r))
+	const g = srgbToLinear(clamp01(color.g))
+	const b = srgbToLinear(clamp01(color.b))
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function contrastRatio(a: RGBA, b: RGBA): number {
+	const l1 = relativeLuminance(a)
+	const l2 = relativeLuminance(b)
+	const lighter = Math.max(l1, l2)
+	const darker = Math.min(l1, l2)
+	return (lighter + 0.05) / (darker + 0.05)
+}
+
+function compositeOver(background: RGBA, overlay: RGBA): RGBA {
+	if (overlay.a >= 0.99) return overlay
+	if (overlay.a <= 0.01) return background
+	const inv = 1 - overlay.a
+	return RGBA.fromValues(
+		overlay.r * overlay.a + background.r * inv,
+		overlay.g * overlay.a + background.g * inv,
+		overlay.b * overlay.a + background.b * inv,
+		1,
+	)
+}
+
+function contrastAgainst(background: RGBA, foreground: RGBA): number {
+	const effective = compositeOver(background, foreground)
+	return contrastRatio(effective, background)
+}
+
+function generateGrayScale(background: RGBA, isDark: boolean): Record<number, RGBA> {
+	const grays: Record<number, RGBA> = {}
+
+	const bgR = background.r * 255
+	const bgG = background.g * 255
+	const bgB = background.b * 255
+	const luminance = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB
+
+	for (let i = 1; i <= 12; i += 1) {
+		const factor = i / 12.0
+		let newR = 0
+		let newG = 0
+		let newB = 0
+
+		if (isDark) {
+			if (luminance < 10) {
+				const grayValue = Math.floor(factor * 0.4 * 255)
+				newR = grayValue
+				newG = grayValue
+				newB = grayValue
+			} else {
+				const newLum = luminance + (255 - luminance) * factor * 0.4
+				const ratio = newLum / luminance
+				newR = Math.min(bgR * ratio, 255)
+				newG = Math.min(bgG * ratio, 255)
+				newB = Math.min(bgB * ratio, 255)
+			}
+		} else if (luminance > 245) {
+			const grayValue = Math.floor(255 - factor * 0.4 * 255)
+			newR = grayValue
+			newG = grayValue
+			newB = grayValue
+		} else {
+			const newLum = luminance * (1 - factor * 0.4)
+			const ratio = newLum / luminance
+			newR = Math.max(bgR * ratio, 0)
+			newG = Math.max(bgG * ratio, 0)
+			newB = Math.max(bgB * ratio, 0)
+		}
+
+		grays[i] = RGBA.fromInts(Math.floor(newR), Math.floor(newG), Math.floor(newB))
+	}
+
+	return grays
+}
+
+function getGray(grays: Record<number, RGBA>, index: number, fallback: RGBA): RGBA {
+	const value = grays[index]
+	return value === undefined ? fallback : value
+}
+
+function generateMutedTextColor(background: RGBA, isDark: boolean): RGBA {
+	const bgR = background.r * 255
+	const bgG = background.g * 255
+	const bgB = background.b * 255
+	const luminance = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB
+
+	let grayValue = 0
+	if (isDark) {
+		if (luminance < 10) {
+			grayValue = 180
+		} else {
+			grayValue = Math.min(Math.floor(160 + luminance * 0.3), 200)
+		}
+	} else if (luminance > 245) {
+		grayValue = 75
+	} else {
+		grayValue = Math.max(Math.floor(100 - (255 - luminance) * 0.2), 60)
+	}
+
+	return RGBA.fromInts(grayValue, grayValue, grayValue)
+}
+
+function ensureLightModeContrast(theme: Theme): Theme {
+	const effectiveBackground = theme.background.a >= 0.99 ? theme.background : defaultLightTheme.background
+	const overrides: Partial<Theme> = {}
+	const selectionBgMatchesElement = theme.selectionBg === theme.backgroundElement
+	const muted = generateMutedTextColor(effectiveBackground, false)
+
+	if (theme.background.a >= 0.99) {
+		const grays = generateGrayScale(effectiveBackground, false)
+
+		const panelFallback = getGray(grays, 2, theme.backgroundPanel)
+		const panel = contrastAgainst(effectiveBackground, theme.backgroundPanel) >= 1.04 ? theme.backgroundPanel : panelFallback
+		if (panel !== theme.backgroundPanel) overrides.backgroundPanel = panel
+
+		const elementFallback = getGray(grays, 3, theme.backgroundElement)
+		const element = contrastAgainst(effectiveBackground, theme.backgroundElement) >= 1.08 ? theme.backgroundElement : elementFallback
+		if (element !== theme.backgroundElement) overrides.backgroundElement = element
+
+		const menuFallback = getGray(grays, 3, theme.backgroundMenu)
+		const menu = contrastAgainst(effectiveBackground, theme.backgroundMenu) >= 1.08 ? theme.backgroundMenu : menuFallback
+		if (menu !== theme.backgroundMenu) overrides.backgroundMenu = menu
+
+		const borderSubtleFallback = getGray(grays, 6, theme.borderSubtle)
+		const borderSubtle = contrastAgainst(effectiveBackground, theme.borderSubtle) >= 1.12 ? theme.borderSubtle : borderSubtleFallback
+		if (borderSubtle !== theme.borderSubtle) overrides.borderSubtle = borderSubtle
+
+		const borderFallback = getGray(grays, 7, theme.border)
+		const border = contrastAgainst(effectiveBackground, theme.border) >= 1.2 ? theme.border : borderFallback
+		if (border !== theme.border) overrides.border = border
+	}
+
+	const textMuted = contrastAgainst(effectiveBackground, theme.textMuted) >= 3 ? theme.textMuted : muted
+	if (textMuted !== theme.textMuted) overrides.textMuted = textMuted
+
+	const backgroundElementOverride = overrides.backgroundElement
+	if (selectionBgMatchesElement && backgroundElementOverride !== undefined) {
+		overrides.selectionBg = backgroundElementOverride
+	}
+
+	const selectionBg = overrides.selectionBg ?? theme.selectionBg
+	const selectionTarget = compositeOver(effectiveBackground, selectionBg)
+	const currentSelection = contrastAgainst(selectionTarget, theme.selectionFg)
+	if (currentSelection < 3) {
+		const textRatio = contrastAgainst(selectionTarget, theme.text)
+		const backgroundRatio = contrastAgainst(selectionTarget, theme.background)
+		let best = theme.text
+		let bestRatio = textRatio
+		if (backgroundRatio > bestRatio) {
+			best = theme.background
+			bestRatio = backgroundRatio
+		}
+		if (bestRatio < 3) {
+			const black = RGBA.fromInts(0, 0, 0)
+			const white = RGBA.fromInts(255, 255, 255)
+			best = contrastAgainst(selectionTarget, black) >= contrastAgainst(selectionTarget, white) ? black : white
+		}
+		overrides.selectionFg = best
+	}
+
+	if (Object.keys(overrides).length === 0) return theme
+	return { ...theme, ...overrides }
+}
+
 
 export type ThemeMode = "dark" | "light"
 
@@ -360,9 +541,11 @@ function mapToThemeColors(resolved: Partial<Record<string, RGBA>>, mode: ThemeMo
 
 	// Helper to get color with fallback
 	const get = (key: string, ...fallbacks: string[]): RGBA => {
-		if (resolved[key]) return resolved[key]!
+		const direct = resolved[key]
+		if (direct !== undefined) return direct
 		for (const fb of fallbacks) {
-			if (resolved[fb]) return resolved[fb]!
+			const fallback = resolved[fb]
+			if (fallback !== undefined) return fallback
 		}
 		return base[key as keyof Theme] ?? base.text
 	}
@@ -604,17 +787,19 @@ export function ThemeProvider(props: ThemeProviderProps): JSX.Element {
 		const name = store.themeName
 		const mode = store.mode
 
-		// "marvin" is the built-in default
-		if (name === "marvin" || !BUILTIN_THEMES[name]) {
+		// Fallback to defaults for unknown themes
+		if (!BUILTIN_THEMES[name]) {
 			const base = mode === "dark" ? defaultDarkTheme : defaultLightTheme
-			return { ...base, ...props.customTheme }
+			const merged = { ...base, ...props.customTheme }
+			return mode === "light" ? ensureLightModeContrast(merged) : merged
 		}
 
-		// Resolve named theme
+		// Resolve named theme (including marvin)
 		const themeJson = BUILTIN_THEMES[name]
 		const resolved = resolveThemeJson(themeJson, mode)
 		const mapped = mapToThemeColors(resolved, mode)
-		return { ...mapped, ...props.customTheme }
+		const merged = { ...mapped, ...props.customTheme }
+		return mode === "light" ? ensureLightModeContrast(merged) : merged
 	})
 
 	// Use createMemo for syntax styles - they'll recompute when theme changes
@@ -642,7 +827,7 @@ export function ThemeProvider(props: ThemeProviderProps): JSX.Element {
 			setStore("themeName", name)
 			props.onThemeChange?.(name)
 		},
-		availableThemes: (): string[] => ["marvin", ...Object.keys(BUILTIN_THEMES)],
+		availableThemes: (): string[] => Object.keys(BUILTIN_THEMES),
 	}
 
 	return <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>

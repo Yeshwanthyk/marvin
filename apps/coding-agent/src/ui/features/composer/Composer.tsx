@@ -39,6 +39,8 @@ export function Composer(props: ComposerProps) {
 						props.textareaRef(r)
 					}}
 					placeholder=""
+					backgroundColor={props.theme.background}
+					focusedBackgroundColor={props.theme.background}
 					textColor={props.theme.text}
 					focusedTextColor={props.theme.text}
 					cursorColor={props.theme.text}

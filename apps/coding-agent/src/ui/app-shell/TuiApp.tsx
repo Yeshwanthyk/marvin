@@ -1,5 +1,15 @@
-import { ThemeProvider } from "@marvin-agents/open-tui"
+import { ThemeProvider, type ThemeMode } from "@marvin-agents/open-tui"
 import { batch, onMount } from "solid-js"
+
+/** Detect system dark/light mode (macOS only, defaults to dark) */
+function detectThemeMode(): ThemeMode {
+	try {
+		const result = Bun.spawnSync(["defaults", "read", "-g", "AppleInterfaceStyle"])
+		return result.stdout.toString().trim().toLowerCase() === "dark" ? "dark" : "light"
+	} catch {
+		return "dark"
+	}
+}
 import { useRuntime } from "../../runtime/context.js"
 import type { LoadedSession } from "../../session-manager.js"
 import { createSessionController } from "@runtime/session/session-controller.js"
@@ -465,8 +475,10 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		store.displayThinking.set(next)
 	}
 
+	const themeMode = detectThemeMode()
+
 	return (
-		<ThemeProvider mode="dark" themeName={store.theme.value()} onThemeChange={handleThemeChange}>
+		<ThemeProvider mode={themeMode} themeName={store.theme.value()} onThemeChange={handleThemeChange}>
 			<MainView
 				validationIssues={validationIssues}
 				messages={store.messages.value()}
