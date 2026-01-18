@@ -26,7 +26,9 @@
       "@marvin-agents/lsp": ["../../../packages/lsp/src/index.ts"],
       "@marvin-agents/lsp/*": ["../../../packages/lsp/src/*"],
       "@marvin-agents/ai": ["../../../packages/ai/src/index.ts"],
-      "@marvin-agents/ai/src/*": ["../../../packages/ai/src/*"]
+      "@marvin-agents/ai/src/*": ["../../../packages/ai/src/*"],
+      "@marvin-agents/runtime-effect": ["../../../packages/runtime-effect/src/index.ts"],
+      "@marvin-agents/runtime-effect/*": ["../../../packages/runtime-effect/src/*"]
     }
   },
   "include": [
@@ -36,6 +38,7 @@
     "../../packages/ai/src/**/*.ts",
     "../../packages/base-tools/src/**/*.ts",
     "../../packages/lsp/src/**/*.ts",
+    "../../packages/runtime-effect/src/**/*.ts",
     "package.json"
   ],
   "exclude": ["dist", "node_modules"]

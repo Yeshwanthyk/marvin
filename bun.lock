@@ -104,6 +104,18 @@
         "babel-preset-solid": "1.9.9",
       },
     },
+    "packages/runtime-effect": {
+      "name": "@marvin-agents/runtime-effect",
+      "version": "0.1.0",
+      "dependencies": {
+        "@effect/platform-node": "^0.104.0",
+        "@marvin-agents/agent-core": "file:../agent",
+        "@marvin-agents/ai": "file:../ai",
+        "@marvin-agents/base-tools": "file:../base-tools",
+        "@marvin-agents/lsp": "file:../lsp",
+        "effect": "^3.19.14",
+      },
+    },
   },
   "overrides": {
     "babel-preset-solid": "1.9.9",
@@ -311,6 +323,8 @@
     "@marvin-agents/lsp": ["@marvin-agents/lsp@workspace:packages/lsp"],
 
     "@marvin-agents/open-tui": ["@marvin-agents/open-tui@workspace:packages/open-tui"],
+
+    "@marvin-agents/runtime-effect": ["@marvin-agents/runtime-effect@workspace:packages/runtime-effect"],
 
     "@mistralai/mistralai": ["@mistralai/mistralai@1.10.0", "", { "dependencies": { "zod": "^3.20.0", "zod-to-json-schema": "^3.24.1" } }, "sha512-tdIgWs4Le8vpvPiUEWne6tK0qbVc+jMenujnvTqOjogrJUsCSQhus0tHTU1avDDh5//Rq2dFgP9mWRAdIEoBqg=="],
 
@@ -938,6 +952,14 @@
 
     "@marvin-agents/open-tui/@types/node": ["@types/node@24.10.4", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-vnDVpYPMzs4wunl27jHrfmwojOGKya0xyM3sH+UE5iv5uPS6vX7UIoh6m+vQc5LGBq52HBKPIn/zcSZVzeDEZg=="],
 
+    "@marvin-agents/runtime-effect/@marvin-agents/agent-core": ["@marvin-agents/agent-core@file:packages/agent", { "dependencies": { "@marvin-agents/ai": "file:../ai" } }],
+
+    "@marvin-agents/runtime-effect/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
+
+    "@marvin-agents/runtime-effect/@marvin-agents/base-tools": ["@marvin-agents/base-tools@file:packages/base-tools", { "dependencies": { "@marvin-agents/ai": "file:../ai", "@sinclair/typebox": "0.34.45", "diff": "^8.0.2", "file-type": "^21.1.1" } }],
+
+    "@marvin-agents/runtime-effect/@marvin-agents/lsp": ["@marvin-agents/lsp@file:packages/lsp", { "dependencies": { "@marvin-agents/ai": "file:../ai", "vscode-jsonrpc": "^8.2.1", "vscode-languageserver-types": "^3.17.5" } }],
+
     "@opentui/solid/@babel/core": ["@babel/core@7.28.0", "", { "dependencies": { "@ampproject/remapping": "^2.2.0", "@babel/code-frame": "^7.27.1", "@babel/generator": "^7.28.0", "@babel/helper-compilation-targets": "^7.27.2", "@babel/helper-module-transforms": "^7.27.3", "@babel/helpers": "^7.27.6", "@babel/parser": "^7.28.0", "@babel/template": "^7.27.2", "@babel/traverse": "^7.28.0", "@babel/types": "^7.28.0", "convert-source-map": "^2.0.0", "debug": "^4.1.0", "gensync": "^1.0.0-beta.2", "json5": "^2.2.3", "semver": "^6.3.1" } }, "sha512-UlLAnTPrFdNGoFtbSXwcGFQBtQZJCNjaN6hQNP3UPvuNXT1i82N26KL3dZeIpNalWywr9IuQuncaAfUaS1g6sQ=="],
 
     "@opentui/solid/@babel/preset-typescript": ["@babel/preset-typescript@7.27.1", "", { "dependencies": { "@babel/helper-plugin-utils": "^7.27.1", "@babel/helper-validator-option": "^7.27.1", "@babel/plugin-syntax-jsx": "^7.27.1", "@babel/plugin-transform-modules-commonjs": "^7.27.1", "@babel/plugin-transform-typescript": "^7.27.1" }, "peerDependencies": { "@babel/core": "^7.0.0-0" } }, "sha512-l7WfQfX0WK4M0v2RudjuQK4u99BS6yLHYEmdtVPP7lKV013zr9DygFuWNlnbvQ9LR+LS0Egz/XAvGx5U9MX0fQ=="],
@@ -988,13 +1010,19 @@
 
     "@jimp/core/file-type/token-types": ["token-types@4.2.1", "", { "dependencies": { "@tokenizer/token": "^0.3.0", "ieee754": "^1.2.1" } }, "sha512-6udB24Q737UD/SDsKAHI9FCRP7Bqc9D/MQUV02ORQg5iskjtLJlZJNdN4kKtcdtwCeWIwIHDGaUsTsCCAa8sFQ=="],
 
-    "@marvin-agents/coding-agent/@marvin-agents/agent-core/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
+    "@marvin-agents/coding-agent/@marvin-agents/agent-core/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
 
-    "@marvin-agents/coding-agent/@marvin-agents/base-tools/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
+    "@marvin-agents/coding-agent/@marvin-agents/base-tools/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
 
-    "@marvin-agents/coding-agent/@marvin-agents/lsp/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", { "dependencies": { "@anthropic-ai/sdk": "0.71.2", "@google/genai": "1.31.0", "@mistralai/mistralai": "1.10.0", "@sinclair/typebox": "0.34.45", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "chalk": "^5.6.2", "openai": "6.10.0", "partial-json": "^0.1.7", "zod-to-json-schema": "^3.24.6" } }],
+    "@marvin-agents/coding-agent/@marvin-agents/lsp/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
 
     "@marvin-agents/coding-agent/@marvin-agents/open-tui/@types/node": ["@types/node@24.10.4", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-vnDVpYPMzs4wunl27jHrfmwojOGKya0xyM3sH+UE5iv5uPS6vX7UIoh6m+vQc5LGBq52HBKPIn/zcSZVzeDEZg=="],
+
+    "@marvin-agents/runtime-effect/@marvin-agents/agent-core/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
+
+    "@marvin-agents/runtime-effect/@marvin-agents/base-tools/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
+
+    "@marvin-agents/runtime-effect/@marvin-agents/lsp/@marvin-agents/ai": ["@marvin-agents/ai@file:packages/ai", {}],
 
     "eslint/ajv/json-schema-traverse": ["json-schema-traverse@0.4.1", "", {}, "sha512-xbbCH5dCYU5T8LcEhhuh7HJ88HXuW3qsI3Y0zOZFKfZEHcpWiHU/Jxzk629Brsab/mMiHQti9wMP+845RPe3Vg=="],
 
