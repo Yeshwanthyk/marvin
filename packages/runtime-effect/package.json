@@ -1,24 +1,43 @@
 {
   "name": "@marvin-agents/runtime-effect",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts"
-    }
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "test": "bun test"
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "effect": "^3.19.14",
     "@effect/platform-node": "^0.104.0",
-    "@marvin-agents/agent-core": "file:../agent",
-    "@marvin-agents/ai": "file:../ai",
-    "@marvin-agents/base-tools": "file:../base-tools",
-    "@marvin-agents/lsp": "file:../lsp"
+    "@marvin-agents/agent-core": "^0.1.0",
+    "@marvin-agents/ai": "^0.1.0",
+    "@marvin-agents/base-tools": "^0.1.0",
+    "@marvin-agents/lsp": "^0.1.0",
+    "effect": "^3.19.14"
+  },
+  "keywords": ["ai", "agent", "effect", "runtime"],
+  "author": "Yesh Yendamuri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yeshwanthyk/marvin.git",
+    "directory": "packages/runtime-effect"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
