@@ -313,4 +313,32 @@ describe("SessionOrchestratorLayer", () => {
 
     expect(agent.attachmentsReceived[0]).toEqual(attachments);
   });
+
+  it("respects provided beforeStartResult without re-running hooks", async () => {
+    const agent = new TestAgent(anthropicModel);
+    const sessionManager = new TestSessionManager();
+    const hookRunner = new TestHookRunner();
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({ agent, sessionManager, hookRunner, instrumentation });
+
+    const beforeStartResult = {
+      message: {
+        customType: "before-start",
+        content: "Heads up",
+        display: true,
+      },
+    };
+
+    await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPrompt("preprocessed prompt", { beforeStartResult });
+        yield* waitForAgentCalls(agent, 1);
+      }),
+    );
+
+    expect(hookRunner.beforeStart).toHaveLength(0);
+    expect(sessionManager.appended.some((entry) => (entry as any).customType === "before-start")).toBe(true);
+  });
 });

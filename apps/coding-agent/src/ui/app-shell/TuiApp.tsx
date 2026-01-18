@@ -164,6 +164,34 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		if (!trimmed) return
 
 		ensureSession()
+
+		let beforeStartResult: Awaited<ReturnType<typeof hookRunner.emitBeforeAgentStart>> | undefined
+		try {
+			beforeStartResult = await hookRunner.emitBeforeAgentStart(trimmed)
+			const hookMsg = beforeStartResult?.message ? createHookMessage(beforeStartResult.message) : null
+			if (hookMsg?.display) {
+				const uiMsg: UIMessage = {
+					id: crypto.randomUUID(),
+					role: "assistant",
+					content:
+						typeof hookMsg.content === "string"
+							? hookMsg.content
+							: hookMsg.content.map((p) => (p.type === "text" ? p.text : "[image]")).join(""),
+					timestamp: hookMsg.timestamp,
+				}
+				store.messages.set((prev) => appendWithCap(prev, uiMsg))
+			}
+		} catch (err) {
+			store.messages.set((prev) =>
+				appendWithCap(prev, {
+					id: crypto.randomUUID(),
+					role: "assistant",
+					content: `Hook error: ${err instanceof Error ? err.message : String(err)}`,
+					timestamp: Date.now(),
+				}),
+			)
+		}
+
 		promptQueue.push({ text: trimmed, mode })
 		batch(() => {
 			store.toolBlocks.set([])
@@ -171,7 +199,9 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 			store.activityState.set("thinking")
 		})
 		try {
-			await Effect.runPromise(runtime.sessionOrchestrator.submitPrompt(trimmed, { mode }))
+			await Effect.runPromise(
+				runtime.sessionOrchestrator.submitPrompt(trimmed, { mode, beforeStartResult }),
+			)
 		} catch (err) {
 			batch(() => {
 				store.messages.set((prev) =>

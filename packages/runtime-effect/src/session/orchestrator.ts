@@ -8,12 +8,14 @@ import { AgentFactoryTag } from "../agent.js";
 import { ConfigTag } from "../config.js";
 import type { HookEffects } from "../hooks/effects.js";
 import { HookEffectsTag } from "../hooks/effects.js";
+import type { BeforeAgentStartResult } from "../hooks/types.js";
 import { InstrumentationTag } from "../instrumentation.js";
 import { SessionManagerTag } from "../session-manager.js";
 
 export interface PromptSubmitOptions {
   readonly mode?: PromptDeliveryMode;
   readonly attachments?: Attachment[];
+  readonly beforeStartResult?: BeforeAgentStartResult;
 }
 
 export interface SessionOrchestratorService {
@@ -126,6 +128,9 @@ export const SessionOrchestratorLayer = () =>
         if (options?.attachments !== undefined) {
           payload.attachments = options.attachments;
         }
+        if (options?.beforeStartResult !== undefined) {
+          payload.beforeStartResult = options.beforeStartResult;
+        }
         if (completionId !== undefined) {
           payload.completionId = completionId;
         }
@@ -146,9 +151,10 @@ export const SessionOrchestratorLayer = () =>
                 details: { mode: item.mode, text: item.text.slice(0, 80) },
               });
 
-              const beforeStart = yield* hookEffects.emitBeforeAgentStart(item.text);
-              if (beforeStart?.message) {
-                sessionManager.appendMessage(beforeStart.message as unknown as AppMessage);
+              const beforeStartResult =
+                item.beforeStartResult ?? (yield* hookEffects.emitBeforeAgentStart(item.text));
+              if (beforeStartResult?.message) {
+                sessionManager.appendMessage(beforeStartResult.message as unknown as AppMessage);
               }
 
               const chatMessageOutput: {
