@@ -1,9 +1,7 @@
 import { Context, Effect, Layer } from "effect"
-import type { AgentTool } from "@marvin-agents/ai"
 import { loadHooks, HookRunner, type HookError } from "../hooks/index.js"
 import {
 	loadCustomTools,
-	getToolNames,
 	type LoadedCustomTool,
 	type SendRef,
 } from "./custom-tools/index.js"
@@ -18,8 +16,7 @@ export interface ExtensibilityLoadOptions {
 	configDir: string
 	cwd: string
 	sendRef: SendRef
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	builtinTools: AgentTool<any, any>[]
+	builtinToolNames: string[]
 	/** Whether running in interactive mode (TUI) */
 	hasUI: boolean
 	/** Session manager for hook context */
@@ -42,7 +39,7 @@ export const loadExtensibility = async (
 	const { tools: customTools, issues: toolIssues } = await loadCustomTools(
 		options.configDir,
 		options.cwd,
-		getToolNames(options.builtinTools),
+		options.builtinToolNames,
 		options.sendRef,
 		options.hasUI,
 	)
@@ -67,7 +64,7 @@ export const ExtensibilityTag = Context.GenericTag<ExtensibilityService>("runtim
 
 export interface ExtensibilityLayerOptions {
 	sendRef: SendRef
-	builtinTools: AgentTool<any, any>[]
+	builtinToolNames: string[]
 	hasUI: boolean
 	cwd?: string
 	loader?: typeof loadExtensibility
@@ -91,7 +88,7 @@ export const ExtensibilityLayer = (options: ExtensibilityLayerOptions) =>
 					configDir: config.configDir,
 					cwd: options.cwd ?? process.cwd(),
 					sendRef: options.sendRef,
-					builtinTools: options.builtinTools,
+					builtinToolNames: options.builtinToolNames,
 					hasUI: options.hasUI,
 					sessionManager,
 				}),

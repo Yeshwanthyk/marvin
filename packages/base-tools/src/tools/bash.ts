@@ -26,7 +26,7 @@ interface BashToolDetails {
 	fullOutputPath?: string;
 }
 
-export const bashTool: AgentTool<typeof bashSchema> = {
+export const createBashTool = (cwd: string): AgentTool<typeof bashSchema> => ({
 	name: "bash",
 	label: "bash",
 	description: `Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
@@ -40,6 +40,7 @@ export const bashTool: AgentTool<typeof bashSchema> = {
 		return new Promise((resolve, reject) => {
 			const { shell, args } = getShellConfig();
 			const child = spawn(shell, [...args, command], {
+				cwd,
 				detached: true,
 				stdio: ["ignore", "pipe", "pipe"],
 			});
@@ -208,4 +209,4 @@ export const bashTool: AgentTool<typeof bashSchema> = {
 			}
 		});
 	},
-};
+});

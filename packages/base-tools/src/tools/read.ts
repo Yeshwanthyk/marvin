@@ -2,9 +2,8 @@ import type { AgentTool, ImageContent, TextContent } from "@marvin-agents/ai";
 import { Type } from "@sinclair/typebox";
 import { constants } from "fs";
 import { access, readFile } from "fs/promises";
-import { resolve as resolvePath } from "path";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.js";
-import { resolveReadPath } from "./path-utils.js";
+import { resolveReadPathFromCwd } from "./path-utils.js";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult, truncateHead } from "./truncate.js";
 
 const readSchema = Type.Object({
@@ -21,7 +20,7 @@ interface ReadToolDetails {
 	truncation?: TruncationResult;
 }
 
-export const readTool: AgentTool<typeof readSchema> = {
+export const createReadTool = (cwd: string): AgentTool<typeof readSchema> => ({
 	name: "read",
 	label: "read",
 	description: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp). Images are sent as attachments. Returns full file content by default — only files exceeding ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB are truncated (with instructions to continue).`,
@@ -31,7 +30,7 @@ export const readTool: AgentTool<typeof readSchema> = {
 		{ path, offset, limit }: { path: string; offset?: number; limit?: number },
 		signal?: AbortSignal,
 	) => {
-		const absolutePath = resolvePath(resolveReadPath(path));
+		const absolutePath = resolveReadPathFromCwd(cwd, path);
 
 		return new Promise<{ content: (TextContent | ImageContent)[]; details: ReadToolDetails | undefined }>(
 			(resolve, reject) => {
@@ -155,18 +154,19 @@ export const readTool: AgentTool<typeof readSchema> = {
 						}
 
 						resolve({ content, details });
-					} catch (error: any) {
+					} catch (error) {
 						// Clean up abort handler
 						if (signal) {
 							signal.removeEventListener("abort", onAbort);
 						}
 
 						if (!aborted) {
-							reject(error);
+							const message = error instanceof Error ? error.message : String(error);
+							reject(new Error(message));
 						}
 					}
 				})();
 			},
 		);
 	},
-};
+});

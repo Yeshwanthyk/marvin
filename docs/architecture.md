@@ -648,7 +648,7 @@ The desktop app uses a sidecar architecture where the agent runs in a separate B
 │  │                         Bun Sidecar Process                           │  │
 │  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
 │  │  │  Agent + ProviderTransport + RouterTransport + CodexTransport   │  │  │
-│  │  │  codingTools (read, write, edit, bash) + Custom Tools           │  │  │
+│  │  │  Built-in tools (read, write, edit, bash) + Custom Tools        │  │  │
 │  │  │  HookRunner + LSP Manager + SessionManager + Config             │  │  │
 │  │  └─────────────────────────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │

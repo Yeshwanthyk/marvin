@@ -13,7 +13,7 @@ import {
   type KnownProvider,
   type Model,
 } from "@marvin-agents/ai";
-import { toolRegistry } from "@marvin-agents/base-tools";
+import { createToolRegistry, type ToolRegistry } from "@marvin-agents/base-tools";
 import {
   createLspManager,
   wrapToolsWithLspDiagnostics,
@@ -43,7 +43,7 @@ import {
 import type { ValidationIssue } from "./extensibility/schema.js";
 import type { LoadedCustomTool, SendRef } from "./extensibility/custom-tools/index.js";
 import { ConfigTag, loadAppConfig, type LoadConfigOptions, type LoadedAppConfig } from "./config.js";
-import { LazyToolLoader, toolProxyAsArray } from "./lazy-tool-loader.js";
+import { LazyToolLoader } from "./lazy-tool-loader.js";
 import {
   PromptQueueLayer,
   PromptQueueTag,
@@ -117,7 +117,7 @@ export const RuntimeServicesTag = Context.GenericTag<RuntimeServices>("runtime-e
 
 interface ToolRuntimeService {
   readonly loader: LazyToolLoader;
-  readonly tools: AgentTool<any, any>[];
+  readonly tools: AgentTool[];
   readonly toolByName: Map<string, ToolRegistryEntry>;
 }
 
@@ -174,10 +174,11 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
       const executionPlanLayer = ExecutionPlanBuilderLayer({
         cycle: cycleModels.map((entry) => ({ provider: entry.provider, model: entry.model }) satisfies PlanModelEntry),
       });
+      const toolRegistry = createToolRegistry(layerOptions.cwd);
       const extensibilityLayer = ExtensibilityLayer({
         cwd: layerOptions.cwd,
         sendRef: layerOptions.sendRef,
-        builtinTools: Object.keys(toolRegistry).map((name) => ({ name })) as AgentTool<any, any>[],
+        builtinToolNames: Object.keys(toolRegistry),
         hasUI: layerOptions.hasUI,
       });
       const hookContextLayer = HookContextControllerLayer;
@@ -189,6 +190,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
       });
       const toolRuntimeLayer = createToolRuntimeLayer({
         cwd: layerOptions.cwd,
+        toolRegistry,
       });
       const agentFactoryLayer = createAgentFactoryLayer();
       const runtimeServicesLayer = createRuntimeServicesLayer({
@@ -216,7 +218,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
   );
 };
 
-const createToolRuntimeLayer = (options: { cwd: string }) =>
+const createToolRuntimeLayer = (options: { cwd: string; toolRegistry: ToolRegistry }) =>
   Layer.effect(
     ToolRuntimeTag,
     Effect.gen(function* () {
@@ -224,14 +226,14 @@ const createToolRuntimeLayer = (options: { cwd: string }) =>
       const lspService = yield* LspServiceTag;
 
       const loader = new LazyToolLoader(
-        toolRegistry,
+        options.toolRegistry,
         customTools.map((entry) => entry.tool),
         getHookTools(hookRunner),
       );
       yield* Effect.promise(() => loader.preloadCoreTools());
 
       const tools = wrapToolsWithLspDiagnostics(
-        wrapToolsWithHooks(toolProxyAsArray(loader.getToolsProxy()), hookRunner),
+        wrapToolsWithHooks(loader.getToolsProxy().toArray(), hookRunner),
         lspService.manager,
         {
           cwd: options.cwd,
@@ -243,7 +245,7 @@ const createToolRuntimeLayer = (options: { cwd: string }) =>
       return {
         loader,
         tools,
-        toolByName: buildToolRegistry(customTools),
+        toolByName: buildToolRegistry(options.toolRegistry, customTools),
       } satisfies ToolRuntimeService;
     }),
   );
@@ -344,7 +346,10 @@ const createRuntimeServicesLayer = (options: {
     }),
   );
 
-const buildToolRegistry = (customTools: LoadedCustomTool[]): Map<string, ToolRegistryEntry> => {
+const buildToolRegistry = (
+  toolRegistry: ToolRegistry,
+  customTools: LoadedCustomTool[],
+): Map<string, ToolRegistryEntry> => {
   const registry = new Map<string, ToolRegistryEntry>();
 
   for (const [name, def] of Object.entries(toolRegistry)) {
@@ -352,13 +357,12 @@ const buildToolRegistry = (customTools: LoadedCustomTool[]): Map<string, ToolReg
   }
 
   for (const entry of customTools) {
-    const tool = entry.tool as { renderCall?: unknown; renderResult?: unknown };
     registry.set(entry.tool.name, {
       label: entry.tool.label,
       source: "custom",
       sourcePath: entry.resolvedPath,
-      renderCall: tool.renderCall,
-      renderResult: tool.renderResult,
+      renderCall: entry.tool.renderCall,
+      renderResult: entry.tool.renderResult,
     });
   }
 

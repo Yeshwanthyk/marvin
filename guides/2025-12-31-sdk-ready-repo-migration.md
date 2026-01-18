@@ -1958,43 +1958,10 @@ export {
   type CwdResolver,
 } from "./tools/path-utils.js";
 
-// Default tools array (uses process.cwd())
-import { readTool } from "./tools/read.js";
-import { writeTool } from "./tools/write.js";
-import { editTool } from "./tools/edit.js";
-import { bashTool } from "./tools/bash.js";
-import type { AgentTool } from "@merlin-agents/ai";
-import type { CwdLike } from "./tools/path-utils.js";
+// Tool registry (cwd-scoped)
+import { createToolRegistry } from "./tool-registry.js";
 
-export const codingTools: AgentTool<any, any>[] = [readTool, bashTool, editTool, writeTool];
-
-/**
- * Creates a set of coding tools bound to a specific working directory.
- * 
- * @param cwd - The working directory for all tools
- * @returns Array of [read, bash, edit, write] tools
- * 
- * @example
- * // Bind tools to a specific project
- * const tools = createCodingTools("/path/to/project");
- * 
- * // Bind tools dynamically
- * const tools = createCodingTools(() => getCurrentProject().path);
- */
-export function createCodingTools(cwd: CwdLike): AgentTool<any, any>[] {
-  // Import factories here to avoid circular dependencies
-  const { createReadTool } = require("./tools/read.js");
-  const { createWriteTool } = require("./tools/write.js");
-  const { createEditTool } = require("./tools/edit.js");
-  const { createBashTool } = require("./tools/bash.js");
-
-  return [
-    createReadTool(cwd),
-    createBashTool(cwd),
-    createEditTool(cwd),
-    createWriteTool(cwd),
-  ];
-}
+export const toolRegistry = createToolRegistry(process.cwd());
 ```
 
 #### 4.5 Add unit tests
@@ -2113,7 +2080,7 @@ describe("resolveReadPathFromCwd", () => {
 
 - **Never capture `process.cwd()` at module import time** - always use `toCwdResolver` to defer resolution
 - The factories are the primary API for SDK users - the default exports are for backwards compatibility
-- Keep the `codingTools` array export - existing code depends on it
+- Do not export legacy tool arrays; use the tool registry + factories instead
 
 ---
 
@@ -2845,7 +2812,7 @@ export {
 // Re-export key types from dependencies
 export type { Agent, ThinkingLevel } from "@merlin-agents/agent-core";
 export type { AgentTool, AgentToolResult, TextContent, ImageContent, Model, Api, KnownProvider } from "@merlin-agents/ai";
-export { createCodingTools, codingTools } from "@merlin-agents/base-tools";
+export { createToolRegistry, createReadTool, createWriteTool, createEditTool, createBashTool } from "@merlin-agents/base-tools";
 ```
 
 #### 6.5 Update root typecheck script

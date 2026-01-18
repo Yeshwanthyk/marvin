@@ -322,7 +322,7 @@ transformForGoogle(messages)
 
 ```
 packages/base-tools/src/
-├── index.ts          Exports codingTools array
+├── index.ts          Exports tool registry + factories
 └── tools/
     ├── read.ts       File reading, image base64
     ├── write.ts      File creation/overwrite
@@ -359,7 +359,7 @@ const readTool: AgentTool<ReadParams, ReadDetails> = {
 Tools are wrapped in layers for extensibility (order matters):
 
 ```
-codingTools (base)
+built-in tools (base)
     │
     ├─► wrapToolsWithHooks(tools, hookRunner)
     │   │
@@ -721,7 +721,7 @@ FileIndex
 coding-agent can import from:
   ├─ @marvin-agents/ai (types, models, streaming)
   ├─ @marvin-agents/agent-core (Agent, transports)
-  ├─ @marvin-agents/base-tools (codingTools)
+  ├─ @marvin-agents/base-tools (tool registry + factories)
   ├─ @marvin-agents/lsp (LspManager)
   └─ @marvin-agents/open-tui (components, hooks)
 

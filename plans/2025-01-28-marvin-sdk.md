@@ -84,19 +84,19 @@ Notes:
 Goal: tools are cwd-scoped by default and registry can be built per cwd.
 
 Changes:
-- [ ] Convert base tools to factory-first exports:
+- [x] Convert base tools to factory-first exports:
   - `createReadTool(cwd)`
   - `createWriteTool(cwd)`
   - `createEditTool(cwd)`
   - `createBashTool(cwd)`
-- [ ] Replace `toolRegistry` with `createToolRegistry(cwd)` that returns a registry whose `load` closures capture cwd.
-- [ ] Remove singleton exports and `codingTools` array; update all imports to use factories or registry.
-- [ ] Update `packages/runtime-effect/src/runtime.ts`:
+- [x] Replace `toolRegistry` with `createToolRegistry(cwd)` that returns a registry whose `load` closures capture cwd.
+- [x] Remove singleton exports and `codingTools` array; update all imports to use factories or registry.
+- [x] Update `packages/runtime-effect/src/runtime.ts`:
   - Build the registry from `createToolRegistry(options.cwd)`
   - Ensure `LazyToolLoader` uses the new registry
   - Update builtin tool list to derive from registry keys
-- [ ] Update docs/guides that mention `codingTools`.
-- [ ] Add tests in `packages/base-tools/tests` for cwd-bound read/write/edit/bash.
+- [x] Update docs/guides that mention `codingTools`.
+- [x] Add tests in `packages/base-tools/tests` for cwd-bound read/write/edit/bash.
 
 ### Phase 3 - SDK Package Foundation
 Goal: implement SDK on top of runtime-effect, with strict options and minimal surface area.

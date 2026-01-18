@@ -1,5 +1,4 @@
-import { toolRegistry } from "@marvin-agents/base-tools"
-import type { AgentTool } from "@marvin-agents/ai"
+import { createToolRegistry } from "@marvin-agents/base-tools"
 import { loadAppConfig } from "../../config.js"
 import { loadCustomCommands } from "@marvin-agents/runtime-effect/extensibility/custom-commands.js"
 import type { RuntimeInitArgs } from "@runtime/factory.js"
@@ -22,16 +21,13 @@ export const runValidate = async (args: RuntimeInitArgs = {}): Promise<void> => 
 	const sendRef: SendRef = { current: () => {} }
 	const sessionManager = new SessionManager(loaded.configDir)
 	
-	// Create minimal tool objects for extensibility (just needs name property)
-	const builtinToolMocks = Object.entries(toolRegistry).map(([name]) => ({
-		name,
-	})) as unknown as AgentTool<any, any>[]
+	const builtinToolNames = Object.keys(createToolRegistry(process.cwd()))
 	
 	const extensibility = await loadExtensibility({
 		configDir: loaded.configDir,
 		cwd: process.cwd(),
 		sendRef,
-		builtinTools: builtinToolMocks,
+		builtinToolNames,
 		hasUI: false,
 		sessionManager,
 	})

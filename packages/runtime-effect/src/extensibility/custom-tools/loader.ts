@@ -12,7 +12,6 @@ import { spawn } from "node:child_process"
 import { existsSync, readdirSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
-import type { AgentTool } from "@marvin-agents/ai"
 import type {
 	CustomToolFactory,
 	CustomToolsLoadResult,
@@ -31,6 +30,9 @@ const createToolIssue = (path: string, message: string, severity: ValidationSeve
 	path,
 	message,
 })
+
+const isCustomToolFactory = (value: unknown): value is CustomToolFactory =>
+	typeof value === "function"
 
 /**
  * Execute a command and return stdout/stderr/code.
@@ -125,9 +127,9 @@ async function loadTool(
 		// Use file URL for import - Bun handles TS natively
 		const fileUrl = pathToFileURL(resolvedPath).href
 		const module = await import(fileUrl)
-		const factory = module.default as CustomToolFactory
+		const factory = module.default
 
-		if (typeof factory !== "function") {
+		if (!isCustomToolFactory(factory)) {
 			return { tools: null, error: "Tool must export a default function" }
 		}
 
@@ -242,7 +244,7 @@ export async function loadCustomTools(
 				seenNames.add(loadedTool.tool.name)
 				tools.push(loadedTool)
 
-				issues.push(...validateCustomTool(loadedTool.tool as any, toolPath))
+				issues.push(...validateCustomTool(loadedTool.tool, toolPath))
 
 				if (typeof loadedTool.tool.execute !== "function") {
 					issues.push(
@@ -271,6 +273,3 @@ export async function loadCustomTools(
 /**
  * Get built-in tool names from an array of tools.
  */
-export function getToolNames(tools: AgentTool<any, any>[]): string[] {
-	return tools.map((t) => t.name)
-}

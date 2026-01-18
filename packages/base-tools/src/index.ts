@@ -1,5 +1,11 @@
 // Re-export lazy tool registry
-export { toolRegistry, type ToolDef } from "./tool-registry.js";
+export { createToolRegistry, type ToolDef, type ToolRegistry } from "./tool-registry.js";
+
+// Tool factories
+export { createReadTool } from "./tools/read.js";
+export { createWriteTool } from "./tools/write.js";
+export { createEditTool } from "./tools/edit.js";
+export { createBashTool } from "./tools/bash.js";
 
 // Shell utilities for external use
 export { getShellConfig, killProcessTree } from "./utils/shell.js";

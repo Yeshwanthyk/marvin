@@ -2087,43 +2087,10 @@ export {
   type CwdResolver,
 } from &quot;./tools/path-utils.js&quot;;
 
-// Default tools array (uses process.cwd())
-import { readTool } from &quot;./tools/read.js&quot;;
-import { writeTool } from &quot;./tools/write.js&quot;;
-import { editTool } from &quot;./tools/edit.js&quot;;
-import { bashTool } from &quot;./tools/bash.js&quot;;
-import type { AgentTool } from &quot;@merlin-agents/ai&quot;;
-import type { CwdLike } from &quot;./tools/path-utils.js&quot;;
+// Tool registry (cwd-scoped)
+import { createToolRegistry } from &quot;./tool-registry.js&quot;;
 
-export const codingTools: AgentTool&lt;any, any&gt;[] = [readTool, bashTool, editTool, writeTool];
-
-/**
- * Creates a set of coding tools bound to a specific working directory.
- * 
- * @param cwd - The working directory for all tools
- * @returns Array of [read, bash, edit, write] tools
- * 
- * @example
- * // Bind tools to a specific project
- * const tools = createCodingTools(&quot;/path/to/project&quot;);
- * 
- * // Bind tools dynamically
- * const tools = createCodingTools(() =&gt; getCurrentProject().path);
- */
-export function createCodingTools(cwd: CwdLike): AgentTool&lt;any, any&gt;[] {
-  // Import factories here to avoid circular dependencies
-  const { createReadTool } = require(&quot;./tools/read.js&quot;);
-  const { createWriteTool } = require(&quot;./tools/write.js&quot;);
-  const { createEditTool } = require(&quot;./tools/edit.js&quot;);
-  const { createBashTool } = require(&quot;./tools/bash.js&quot;);
-
-  return [
-    createReadTool(cwd),
-    createBashTool(cwd),
-    createEditTool(cwd),
-    createWriteTool(cwd),
-  ];
-}</code></pre></figure></p>
+export const toolRegistry = createToolRegistry(process.cwd());</code></pre></figure></p>
 
 <h4 id="h-45-add-unit-tests-78" data-section="78"><span class="section-num">78</span>4.5 Add unit tests</h4>
 
@@ -2240,7 +2207,7 @@ describe(&quot;resolveReadPathFromCwd&quot;, () =&gt; {
 <ul>
 <li><strong>Never capture <code>process.cwd()</code> at module import time</strong> - always use <code>toCwdResolver</code> to defer resolution</li>
 <li>The factories are the primary API for SDK users - the default exports are for backwards compatibility</li>
-<li>Keep the <code>codingTools</code> array export - existing code depends on it</li>
+<li>Do not export legacy tool arrays; use the tool registry + factories instead</li>
 </ul>
 
 <hr>
@@ -2945,7 +2912,7 @@ export {
 // Re-export key types from dependencies
 export type { Agent, ThinkingLevel } from &quot;@merlin-agents/agent-core&quot;;
 export type { AgentTool, AgentToolResult, TextContent, ImageContent, Model, Api, KnownProvider } from &quot;@merlin-agents/ai&quot;;
-export { createCodingTools, codingTools } from &quot;@merlin-agents/base-tools&quot;;</code></pre></figure></p>
+export { createToolRegistry, createReadTool, createWriteTool, createEditTool, createBashTool } from &quot;@merlin-agents/base-tools&quot;;</code></pre></figure></p>
 
 <h4 id="h-65-update-root-typecheck-script-99" data-section="99"><span class="section-num">99</span>6.5 Update root typecheck script</h4>
 

@@ -4,7 +4,6 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
 	loadCustomTools,
-	getToolNames,
 } from "@marvin-agents/runtime-effect/extensibility/custom-tools/loader.js"
 import type { SendRef } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
 
@@ -250,17 +249,4 @@ export default function(api) {
 		})
 	})
 
-	describe("getToolNames", () => {
-		test("extracts names from tools", () => {
-			const tools = [
-				{ name: "tool-a", label: "", description: "", parameters: {}, execute: async () => ({ content: [], details: {} }) },
-				{ name: "tool-b", label: "", description: "", parameters: {}, execute: async () => ({ content: [], details: {} }) },
-			] as any
-			expect(getToolNames(tools)).toEqual(["tool-a", "tool-b"])
-		})
-
-		test("returns empty array for empty tools", () => {
-			expect(getToolNames([])).toEqual([])
-		})
-	})
 })

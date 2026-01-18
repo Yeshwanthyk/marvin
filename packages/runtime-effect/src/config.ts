@@ -234,7 +234,7 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
   const editorRaw = typeof nestedConfig.editor !== "undefined" ? nestedConfig.editor : rawObj.editor;
   const editor = resolveEditorConfig(editorRaw) ?? { command: "nvim", args: [] };
 
-  const agentsConfig = await loadAgentsConfig({ cwd: options?.cwd });
+  const agentsConfig = await loadAgentsConfig({ cwd: options?.cwd ?? process.cwd() });
 
   const basePrompt =
     options?.systemPrompt ??
