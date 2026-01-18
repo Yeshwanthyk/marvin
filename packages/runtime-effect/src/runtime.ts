@@ -20,7 +20,16 @@ import {
   type LspManager,
 } from "@marvin-agents/lsp";
 import { Context, Effect, Layer } from "effect";
-import { HookRunner, HookedTransport, getHookTools, wrapToolsWithHooks } from "./hooks/index.js";
+import {
+	HookRunner,
+	HookedTransport,
+	getHookTools,
+	wrapToolsWithHooks,
+	HookContextControllerLayer,
+	HookContextControllerTag,
+	type HookContextController,
+} from "./hooks/index.js";
+import { HookEffectsTag, createHookEffects } from "./hooks/effects.js";
 import {
   CustomCommandLayer,
   CustomCommandTag,
@@ -86,6 +95,7 @@ export interface RuntimeServices {
   readonly createAgent: AgentFactoryService["createAgent"];
   readonly sessionManager: SessionManager;
   readonly hookRunner: HookRunner;
+  readonly hookContext: HookContextController;
   readonly customCommands: Map<string, CustomCommand>;
   readonly toolByName: Map<string, ToolRegistryEntry>;
   readonly lsp: LspManager;
@@ -171,6 +181,8 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
         builtinTools: Object.keys(toolRegistry).map((name) => ({ name })) as AgentTool<any, any>[],
         hasUI: layerOptions.hasUI,
       });
+      const hookContextLayer = HookContextControllerLayer;
+      const hookEffectsLayer = createHookEffectsLayer();
       const promptQueueLayer = PromptQueueLayer;
       const toolRuntimeLayer = createToolRuntimeLayer({
         cwd: layerOptions.cwd,
@@ -191,7 +203,9 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions) => {
       const withExecutionPlan = Layer.provideMerge(executionPlanLayer, withCommands);
       const withPromptQueue = Layer.provideMerge(promptQueueLayer, withExecutionPlan);
       const withExtensibility = Layer.provideMerge(extensibilityLayer, withPromptQueue);
-      const withToolRuntime = Layer.provideMerge(toolRuntimeLayer, withExtensibility);
+      const withHookContext = Layer.provideMerge(hookContextLayer, withExtensibility);
+      const withHookEffects = Layer.provideMerge(hookEffectsLayer, withHookContext);
+      const withToolRuntime = Layer.provideMerge(toolRuntimeLayer, withHookEffects);
       const withAgentFactory = Layer.provideMerge(agentFactoryLayer, withToolRuntime);
       const withOrchestrator = Layer.provideMerge(SessionOrchestratorLayer(), withAgentFactory);
       return Layer.provideMerge(runtimeServicesLayer, withOrchestrator);
@@ -238,6 +252,15 @@ const createToolRuntimeLayer = (options: { cwd: string; lspFactory: typeof creat
         lspActiveRef,
         toolByName: buildToolRegistry(customTools),
       } satisfies ToolRuntimeService;
+    }),
+  );
+
+const createHookEffectsLayer = () =>
+  Layer.scoped(
+    HookEffectsTag,
+    Effect.gen(function* () {
+      const { hookRunner } = yield* ExtensibilityTag;
+      return yield* createHookEffects(hookRunner);
     }),
   );
 
@@ -290,6 +313,7 @@ const createRuntimeServicesLayer = (options: {
       const promptQueue = yield* PromptQueueTag;
       const sessionOrchestrator = yield* SessionOrchestratorTag;
       const agentFactory = yield* AgentFactoryTag;
+      const hookContext = yield* HookContextControllerTag;
 
       attachHookErrorLogging(hookRunner, (message) => process.stderr.write(`${message}\n`));
       yield* Effect.promise(() => hookRunner.emit({ type: "app.start" }));
@@ -307,6 +331,7 @@ const createRuntimeServicesLayer = (options: {
         createAgent: agentFactory.createAgent,
         sessionManager,
         hookRunner,
+        hookContext,
         customCommands: commands,
         toolByName: toolRuntime.toolByName,
         lsp: toolRuntime.lsp,

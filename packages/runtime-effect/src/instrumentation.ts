@@ -3,6 +3,7 @@ import type { ValidationIssue } from "./extensibility/schema.js"
 
 export type InstrumentationEvent =
 	| { type: "hook:error"; hookPath: string; event: string; error: string }
+	| { type: "hook:context-configured"; hasUI: boolean }
 	| { type: "extensibility:validation-issue"; issue: ValidationIssue }
 	| { type: "extensibility:loaded"; hooks: number; customTools: number }
 	| {

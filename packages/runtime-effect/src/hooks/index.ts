@@ -41,3 +41,11 @@ export { createHookToolAdapter, getHookTools } from "./hook-tool-adapter.js"
 
 // Hook UI context
 export { createHookUIContext, type HookUIHandlers } from "./hook-ui-context.js"
+
+// Hook context controller
+export {
+	HookContextControllerLayer,
+	HookContextControllerTag,
+	type HookContextController,
+	type HookContextHandlers,
+} from "./context-controller.js"

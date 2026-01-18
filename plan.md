@@ -51,7 +51,7 @@ Each checklist item becomes its own commit + `bun run check` gate.
 - [x] **P2.3** Added `packages/runtime-effect/src/runtime.ts` + `RuntimeLayer` so adapters can pull a full `RuntimeServices` bundle (agent, hook runner, session manager, prompt queue, orchestrator, transports, LSP, custom commands) built entirely via Effect layers. Covered by a new Bun test that instantiates the layer against a temporary config and asserts the resulting services.
 
 ### Phase 3 · Hook + Session Orchestration Rewrite
-- [ ] **P3.1** Rebuild hook runner on Effect: convert `apps/coding-agent/src/hooks` to use `Layer` + `Channel`, preserving ability to dynamically load TS hooks from `~/.config/marvin/hooks`.
+- [x] **P3.1** Rebuild hook runner on Effect: convert `apps/coding-agent/src/hooks` to use `Layer` + `Channel`, preserving ability to dynamically load TS hooks from `~/.config/marvin/hooks`. _(HookEffects Layer + Channel-backed dispatcher landed Jan 18, 2026; HookContextControllerLayer now provides Effect-scoped initialization + instrumentation for `HookRunner.initialize` so adapters can register UI/session contexts without imperative wiring.)_
 - [ ] **P3.2** Integrate `.config/marvin/commands` + `.config/marvin/tools` lifecycle with new Effect services (typed `Layer` for user extensions, error reporting, DMUX-friendly logging).
 - [ ] **P3.3** Ensure LSP manager + tool diagnostics become Effect-managed resources, enabling safe startup/shutdown and bridging to UI via event bus.
 
@@ -82,8 +82,8 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ---
 
 ## 6. Immediate Next Steps
-1. Kick off **P3.1 Hook runner migration** by mapping existing `HookRunner.initialize`/UI contracts to Effect layers + Channels.
-2. Formalize `.config/marvin` extensibility lifecycle under Effect (Phase 3.2), including custom commands/tools validation + DMUX logging.
+1. Finish **P3.2** by formalizing `.config/marvin` extensibility lifecycle under Effect (custom commands/tools validation + DMUX logging) so adapters consume typed layers instead of imperative loaders.
+2. Stand up **P3.3** diagnostics/LSP lifecycle service (scoped Effect resources, graceful shutdown) ahead of CLI integration.
 3. Start drafting the Phase 5 DMUX/manual validation checklist so we can exercise the new runtime via `bun run marvin` once adapters switch over.
 
 _This document is the authoritative tracker. Update checkboxes + notes as phases complete._
