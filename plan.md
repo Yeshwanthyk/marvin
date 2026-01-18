@@ -37,7 +37,7 @@ Each checklist item becomes its own commit + `bun run check` gate.
 ### Phase 1 · Effect Foundations & Tooling
 - [x] **P1.1** Harden dependency + lint tooling: verify `effect`, `@effect/platform-node`, `@effect/cli`, `@effect/language-service` versions, align `bun.lock`, and remove unused legacy entries if discovered.
 - [x] **P1.2** Update TypeScript configs: add recommended options to `tsconfig.base.json`, propagate per-package overrides (CLI uses bundler mode, libraries use NodeNext) per `effect-solutions show tsconfig`.
-- [ ] **P1.3** Ensure VS Code / Cursor picks workspace TypeScript & plugin via `.vscode/settings.json`.
+- [x] **P1.3** Ensure VS Code / Cursor picks workspace TypeScript & plugin via `.vscode/settings.json`.
 - [ ] **P1.4** Refresh AGENT instructions with Effect guidance (`<!-- effect-solutions:start -->` block) and create `CLAUDE.md` alias if missing.
 - [ ] **P1.5** Re-run `effect-solutions setup` (idempotent) so `.reference/effect/` is fresh; document expectations inside plan + AGENT docs.
 
