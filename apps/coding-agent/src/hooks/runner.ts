@@ -3,6 +3,7 @@
  */
 
 import { spawn } from "node:child_process"
+import { Effect } from "effect"
 import type {
 	AppendEntryHandler,
 	DeliveryHandler,
@@ -43,6 +44,13 @@ import type { Api, ImageContent, Message, Model } from "@marvin-agents/ai"
 import type { ReadonlySessionManager } from "../session-manager.js"
 import type { PromptDeliveryMode } from "../runtime/session/prompt-queue.js"
 
+class HookHandlerError extends Error {
+	readonly _tag = "HookHandlerError"
+	constructor(message: string) {
+		super(message)
+	}
+}
+
 /** Listener for hook errors */
 export type HookErrorListener = (error: HookError) => void
 
@@ -72,14 +80,23 @@ const noOpSessionContext: HookSessionContext = {
 /**
  * Execute a command and return stdout/stderr/code.
  */
-async function exec(command: string, args: string[], cwd: string, options?: ExecOptions): Promise<ExecResult> {
-	return new Promise((resolve) => {
+const execEffect = (command: string, args: string[], cwd: string, options?: ExecOptions) =>
+	Effect.async<ExecResult>((resume) => {
 		const proc = spawn(command, args, { cwd, shell: false })
 
 		let stdout = ""
 		let stderr = ""
 		let killed = false
+		let completed = false
 		let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+		const finish = (result: ExecResult) => {
+			if (completed) return
+			completed = true
+			if (timeoutId) clearTimeout(timeoutId)
+			if (options?.signal) options.signal.removeEventListener("abort", abortHandler)
+			resume(Effect.succeed(result))
+		}
 
 		const killProcess = () => {
 			if (!killed) {
@@ -91,31 +108,47 @@ async function exec(command: string, args: string[], cwd: string, options?: Exec
 			}
 		}
 
+		const abortHandler = () => {
+			killProcess()
+		}
+
 		if (options?.signal) {
-			if (options.signal.aborted) killProcess()
-			else options.signal.addEventListener("abort", killProcess, { once: true })
+			if (options.signal.aborted) {
+				abortHandler()
+			} else {
+				options.signal.addEventListener("abort", abortHandler, { once: true })
+			}
 		}
 
 		if (options?.timeout && options.timeout > 0) {
-			timeoutId = setTimeout(killProcess, options.timeout)
+			timeoutId = setTimeout(() => {
+				killProcess()
+			}, options.timeout)
 		}
 
-		proc.stdout?.on("data", (data) => { stdout += data.toString() })
-		proc.stderr?.on("data", (data) => { stderr += data.toString() })
+		proc.stdout?.on("data", (data) => {
+			stdout += data.toString()
+		})
+		proc.stderr?.on("data", (data) => {
+			stderr += data.toString()
+		})
 
 		proc.on("close", (code) => {
-			if (timeoutId) clearTimeout(timeoutId)
-			if (options?.signal) options.signal.removeEventListener("abort", killProcess)
-			resolve({ stdout, stderr, code: code ?? 0, killed })
+			finish({ stdout, stderr, code: code ?? 0, killed })
 		})
 
 		proc.on("error", () => {
-			if (timeoutId) clearTimeout(timeoutId)
-			if (options?.signal) options.signal.removeEventListener("abort", killProcess)
-			resolve({ stdout, stderr, code: 1, killed })
+			finish({ stdout, stderr, code: 1, killed })
+		})
+
+		return Effect.sync(() => {
+			if (!completed) {
+				killProcess()
+				if (timeoutId) clearTimeout(timeoutId)
+				if (options?.signal) options.signal.removeEventListener("abort", abortHandler)
+			}
 		})
 	})
-}
 
 /**
  * HookRunner executes hooks and manages event emission.
@@ -221,6 +254,34 @@ export class HookRunner {
 		}
 	}
 
+	private async runHandlerEffect<T>(
+		hook: LoadedHook,
+		eventType: HookEventType,
+		handler: () => Promise<T>,
+		options?: { swallowErrors?: boolean },
+	): Promise<{ ok: boolean; value?: T }> {
+		const swallowErrors = options?.swallowErrors ?? true
+		const effect = Effect.tryPromise({
+			try: handler,
+			catch: (error) => {
+				if (error instanceof HookHandlerError) return error
+				if (error instanceof Error) return new HookHandlerError(error.message)
+				return new HookHandlerError(typeof error === "string" ? error : String(error))
+			},
+		})
+		try {
+			const value = await Effect.runPromise(effect)
+			return { ok: true, value }
+		} catch (error) {
+			const errObj = error instanceof Error ? error : new Error(String(error))
+			this.emitError({ hookPath: hook.path, event: eventType, error: errObj.message })
+			if (swallowErrors) {
+				return { ok: false }
+			}
+			throw errObj
+		}
+	}
+
 	/** Check if any hooks have handlers for the given event type */
 	hasHandlers(eventType: HookEventType): boolean {
 		for (const hook of this.hooks) {
@@ -232,7 +293,8 @@ export class HookRunner {
 
 	private createContext(): HookEventContext {
 		return {
-			exec: (command: string, args: string[], options?: ExecOptions) => exec(command, args, this.cwd, options),
+			exec: (command: string, args: string[], options?: ExecOptions) =>
+				Effect.runPromise(execEffect(command, args, this.cwd, options)),
 			cwd: this.cwd,
 			configDir: this.configDir,
 			sessionId: this.sessionIdProvider(),
@@ -265,12 +327,7 @@ export class HookRunner {
 			if (!handlers || handlers.length === 0) continue
 
 			for (const handler of handlers) {
-				try {
-					await handler(event, ctx)
-				} catch (err) {
-					const message = err instanceof Error ? err.message : String(err)
-					this.emitError({ hookPath: hook.path, event: event.type, error: message })
-				}
+				await this.runHandlerEffect(hook, event.type, () => Promise.resolve(handler(event, ctx)))
 			}
 		}
 	}
@@ -288,8 +345,13 @@ export class HookRunner {
 			if (!handlers || handlers.length === 0) continue
 
 			for (const handler of handlers) {
-				// No timeout for tool.execute.before - user prompts can take time
-				const result = await handler(event, ctx) as ToolExecuteBeforeResult | undefined
+				const { value } = await this.runHandlerEffect(
+					hook,
+					"tool.execute.before",
+					() => Promise.resolve(handler(event, ctx) as ToolExecuteBeforeResult | undefined),
+					{ swallowErrors: false },
+				)
+				const result = value as ToolExecuteBeforeResult | undefined
 
 				if (result?.block) {
 					return result
@@ -312,20 +374,19 @@ export class HookRunner {
 			const handlers = hook.handlers.get("tool.execute.after")
 			if (!handlers || handlers.length === 0) continue
 
-			for (const handler of handlers) {
-				try {
-					const handlerResult = await handler(event, ctx) as ToolExecuteAfterResult | undefined
+				for (const handler of handlers) {
+					const { value } = await this.runHandlerEffect(
+						hook,
+						"tool.execute.after",
+					() => Promise.resolve(handler(event, ctx) as ToolExecuteAfterResult | undefined),
+					)
+					const handlerResult = value as ToolExecuteAfterResult | undefined
 
 					if (handlerResult) {
-						result = handlerResult
-						// Update event with modifications for chaining
-						if (handlerResult.content) event.content = handlerResult.content
-						if (handlerResult.details !== undefined) event.details = handlerResult.details
-						if (handlerResult.isError !== undefined) event.isError = handlerResult.isError
-					}
-				} catch (err) {
-					const message = err instanceof Error ? err.message : String(err)
-					this.emitError({ hookPath: hook.path, event: event.type, error: message })
+					result = handlerResult
+					if (handlerResult.content) event.content = handlerResult.content
+					if (handlerResult.details !== undefined) event.details = handlerResult.details
+					if (handlerResult.isError !== undefined) event.isError = handlerResult.isError
 				}
 			}
 		}
@@ -396,11 +457,13 @@ export class HookRunner {
 			if (!handlers || handlers.length === 0) continue
 			for (const handler of handlers) {
 				const event: ChatMessagesTransformEvent = { type: "chat.messages.transform", messages: current }
-				try {
-					await handler(event, this.createContext())
+				const { ok } = await this.runHandlerEffect(
+					hook,
+					"chat.messages.transform",
+					() => Promise.resolve(handler(event, this.createContext())),
+				)
+				if (ok) {
 					current = event.messages
-				} catch (err) {
-					this.emitError({ hookPath: hook.path, event: "chat.messages.transform", error: String(err) })
 				}
 			}
 		}
@@ -420,12 +483,12 @@ export class HookRunner {
 			if (!handlers || handlers.length === 0) continue
 			for (const handler of handlers) {
 				const event: BeforeAgentStartEvent = { type: "agent.before_start", prompt, images }
-				try {
-					const handlerResult = await handler(event, this.createContext()) as BeforeAgentStartResult | undefined
-					if (handlerResult?.message && !result) result = handlerResult
-				} catch (err) {
-					this.emitError({ hookPath: hook.path, event: "agent.before_start", error: String(err) })
-				}
+				const { value } = await this.runHandlerEffect(
+					hook,
+					"agent.before_start",
+					() => Promise.resolve(handler(event, this.createContext()) as BeforeAgentStartResult | undefined),
+				)
+				if (value?.message && !result) result = value
 			}
 		}
 		return result
