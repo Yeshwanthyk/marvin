@@ -5,10 +5,10 @@ import { PromptQueueTag, type PromptQueueService } from "./prompt-queue.js";
 import { ExecutionPlanBuilderTag, ExecutionPlanStepTag } from "./execution-plan.js";
 import { AgentFactoryTag } from "../agent.js";
 import { ConfigTag } from "../config.js";
-import { ExtensibilityTag } from "../extensibility/index.js";
+import type { HookEffects } from "../hooks/effects.js";
+import { HookEffectsTag } from "../hooks/effects.js";
 import { InstrumentationTag } from "../instrumentation.js";
 import { SessionManagerTag } from "../session-manager.js";
-import type { HookRunner } from "../hooks/index.js";
 
 export interface SessionOrchestratorService {
   readonly queue: PromptQueueService;
@@ -38,7 +38,7 @@ const ensureSession = (
   stateRef: Ref.Ref<SessionState>,
   sessionManager: import("../session-manager.js").SessionManager,
   config: import("../config.js").LoadedAppConfig,
-  hookRunner: HookRunner,
+  hookEffects: HookEffects,
 ) =>
   Effect.flatMap(
     Ref.get(stateRef),
@@ -47,9 +47,7 @@ const ensureSession = (
         ? Effect.succeed(undefined)
         : Effect.gen(function* () {
             sessionManager.startSession(config.provider, config.modelId, config.thinking);
-            yield* runPromiseEffect(() =>
-              hookRunner.emit({ type: "session.start", sessionId: sessionManager.sessionId }),
-            );
+            yield* hookEffects.emit({ type: "session.start", sessionId: sessionManager.sessionId });
             yield* Ref.set(stateRef, { hasStarted: true });
           }),
   );
@@ -62,7 +60,7 @@ export const SessionOrchestratorLayer = () =>
       const { defaultPlan, build } = yield* ExecutionPlanBuilderTag;
       const agentFactory = yield* AgentFactoryTag;
       const { config } = yield* ConfigTag;
-      const { hookRunner } = yield* ExtensibilityTag;
+      const hookEffects = yield* HookEffectsTag;
       const { sessionManager } = yield* SessionManagerTag;
       const instrumentation = yield* InstrumentationTag;
 
@@ -75,7 +73,7 @@ export const SessionOrchestratorLayer = () =>
         Effect.flatMap(queue.take, (item) =>
           Effect.gen(function* () {
             const agent = yield* Ref.get(agentRef);
-            yield* ensureSession(sessionStateRef, sessionManager, config, hookRunner);
+            yield* ensureSession(sessionStateRef, sessionManager, config, hookEffects);
 
             instrumentation.record({
               type: "dmux:log",
@@ -84,7 +82,7 @@ export const SessionOrchestratorLayer = () =>
               details: { mode: item.mode, text: item.text.slice(0, 80) },
             });
 
-            const beforeStart = yield* runPromiseEffect(() => hookRunner.emitBeforeAgentStart(item.text));
+            const beforeStart = yield* hookEffects.emitBeforeAgentStart(item.text);
             if (beforeStart?.message) {
               sessionManager.appendMessage(beforeStart.message as unknown as AppMessage);
             }
@@ -94,8 +92,9 @@ export const SessionOrchestratorLayer = () =>
             } = {
               parts: [{ type: "text", text: item.text }],
             };
-            yield* runPromiseEffect(() =>
-              hookRunner.emitChatMessage({ sessionId: sessionManager.sessionId, text: item.text }, chatMessageOutput),
+            yield* hookEffects.emitChatMessage(
+              { sessionId: sessionManager.sessionId, text: item.text },
+              chatMessageOutput,
             );
 
             sessionManager.appendMessage({

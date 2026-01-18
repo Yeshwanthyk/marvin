@@ -11,6 +11,7 @@ import { AgentFactoryTag } from "../src/agent.js";
 import { ExtensibilityTag } from "../src/extensibility/index.js";
 import { InstrumentationTag, type InstrumentationEvent, type InstrumentationService } from "../src/instrumentation.js";
 import { SessionManagerTag } from "../src/session-manager.js";
+import { HookEffectsTag, createHookEffects } from "../src/hooks/effects.js";
 import type { HookRunner } from "../src/hooks/index.js";
 
 const anthropicModel = getModels("anthropic")[0]!;
@@ -174,12 +175,19 @@ const createTestLayer = (options: LayerOptions) => {
   const sessionManagerLayer = Layer.succeed(SessionManagerTag, {
     sessionManager: options.sessionManager as any,
   });
+  const hookEffectsLayer = Layer.scoped(
+    HookEffectsTag,
+    Effect.gen(function* () {
+      return yield* createHookEffects(options.hookRunner as unknown as HookRunner);
+    }),
+  );
   const composed = Layer.mergeAll(
     PromptQueueLayer,
     ExecutionPlanBuilderLayer(options.executionPlanOptions),
     agentFactoryLayer,
     extensibilityLayer,
     sessionManagerLayer,
+    hookEffectsLayer,
   );
   const withOrchestrator = Layer.provide(SessionOrchestratorLayer(), composed);
   return Layer.provide(withOrchestrator, Layer.mergeAll(configLayer, instrumentationLayer));
