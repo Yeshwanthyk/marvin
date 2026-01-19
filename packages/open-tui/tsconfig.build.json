@@ -4,8 +4,7 @@
     "noEmit": false,
     "rootDir": "src",
     "outDir": "dist",
-    "jsx": "react-jsx",
-    "jsxImportSource": "@opentui/solid"
+    "jsx": "preserve"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"]
 }
