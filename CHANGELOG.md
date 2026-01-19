@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.3] - 2026-01-19
+
+### Fixed
+- **Global install dependency**: Pin OpenTUI dependency to `^0.1.2` so fresh installs pull the JS-emitting build.
+
 ## [0.3.2] - 2026-01-19
 
 ### Fixed
