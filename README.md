@@ -6,10 +6,10 @@ Terminal-native coding agent. Multi-provider, extensible, LSP-aware.
 
 ```bash
 # npm (recommended)
-npm install -g @yeshwanthyk/coding-agent
+npm install -g @yeshwanthyk/coding-agent@latest && marvin
 
 # bun
-bun add -g @yeshwanthyk/coding-agent
+bun add -g @yeshwanthyk/coding-agent@latest && marvin
 
 # From source
 bun install
@@ -20,6 +20,19 @@ export PATH="$PATH:/path/to/marvin/apps/coding-agent/dist"
 # Or symlink
 ln -s /path/to/marvin/apps/coding-agent/dist/marvin ~/.local/bin/marvin
 ```
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| [`@yeshwanthyk/coding-agent`](apps/coding-agent) | Main CLI app |
+| [`@yeshwanthyk/ai`](packages/ai) | Unified LLM API with automatic model discovery and provider configuration |
+| [`@yeshwanthyk/agent-core`](packages/agent) | General-purpose agent with transport abstraction, state management, and attachment support |
+| [`@yeshwanthyk/base-tools`](packages/base-tools) | Core tools: read, write, edit, bash |
+| [`@yeshwanthyk/lsp`](packages/lsp) | Language server integration |
+| [`@yeshwanthyk/open-tui`](packages/open-tui) | OpenTUI-based Terminal UI with SolidJS reactive rendering |
+| [`@yeshwanthyk/runtime-effect`](packages/runtime-effect) | Effect-powered runtime with layers, session orchestrator, and instrumentation |
+| [`@yeshwanthyk/sdk`](packages/sdk) | SDK for building integrations |
 
 ## Usage
 
