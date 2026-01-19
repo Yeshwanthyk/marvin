@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.2] - 2026-01-19
+
+### Fixed
+- **Published CLI**: Ship compiled JS in `dist/` and rewrite internal path aliases so global installs run without module resolution errors.
+
 ## [0.3.1] - 2026-01-19
 
 ### Fixed
