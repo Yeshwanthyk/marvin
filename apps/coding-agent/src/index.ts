@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+
 import pkg from '../package.json';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -7,7 +9,7 @@ import { parseArgs } from './args.js';
 import { runHeadless } from './adapters/cli/headless.js';
 import { runValidate } from './adapters/cli/validate.js';
 import { runAcp } from './adapters/acp/index.js';
-import type { ThinkingLevel } from '@marvin-agents/agent-core';
+import type { ThinkingLevel } from '@yeshwanthyk/agent-core';
 
 declare const OTUI_TREE_SITTER_WORKER_PATH: string | undefined;
 
@@ -65,7 +67,7 @@ const runTui = async (args: {
 
   // Initialize tree-sitter parsers for code syntax highlighting
   const { addDefaultParsers } = await import("@opentui/core");
-  const { parsersConfig } = await import("@marvin-agents/open-tui");
+  const { parsersConfig } = await import("@yeshwanthyk/open-tui");
   addDefaultParsers(parsersConfig.parsers);
 
   const { runTuiOpen } = await import('./adapters/tui/app.js');

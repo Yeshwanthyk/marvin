@@ -1,5 +1,5 @@
 import { createPatch } from "diff"
-import type { CliRenderer } from "@marvin-agents/open-tui"
+import type { CliRenderer } from "@yeshwanthyk/open-tui"
 import { openExternalEditor, openFileInEditor } from "../editor.js"
 import type { EditorConfig } from "../config.js"
 

@@ -1,24 +1,167 @@
 {
-  "name": "@marvin-agents/runtime-effect",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@yeshwanthyk/runtime-effect",
+  "version": "0.1.1",
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts"
-    }
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./agent.js": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.js"
+    },
+    "./config.js": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./instrumentation.js": {
+      "types": "./dist/instrumentation.d.ts",
+      "import": "./dist/instrumentation.js"
+    },
+    "./lazy-tool-loader.js": {
+      "types": "./dist/lazy-tool-loader.d.ts",
+      "import": "./dist/lazy-tool-loader.js"
+    },
+    "./lsp.js": {
+      "types": "./dist/lsp.d.ts",
+      "import": "./dist/lsp.js"
+    },
+    "./runtime.js": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./session-manager.js": {
+      "types": "./dist/session-manager.d.ts",
+      "import": "./dist/session-manager.js"
+    },
+    "./tools.js": {
+      "types": "./dist/tools.d.ts",
+      "import": "./dist/tools.js"
+    },
+    "./transports.js": {
+      "types": "./dist/transports.d.ts",
+      "import": "./dist/transports.js"
+    },
+    "./session/execution-plan.js": {
+      "types": "./dist/session/execution-plan.d.ts",
+      "import": "./dist/session/execution-plan.js"
+    },
+    "./session/orchestrator.js": {
+      "types": "./dist/session/orchestrator.d.ts",
+      "import": "./dist/session/orchestrator.js"
+    },
+    "./session/prompt-queue.js": {
+      "types": "./dist/session/prompt-queue.d.ts",
+      "import": "./dist/session/prompt-queue.js"
+    },
+    "./extensibility/custom-commands.js": {
+      "types": "./dist/extensibility/custom-commands.d.ts",
+      "import": "./dist/extensibility/custom-commands.js"
+    },
+    "./extensibility/custom-tools/index.js": {
+      "types": "./dist/extensibility/custom-tools/index.d.ts",
+      "import": "./dist/extensibility/custom-tools/index.js"
+    },
+    "./extensibility/custom-tools/loader.js": {
+      "types": "./dist/extensibility/custom-tools/loader.d.ts",
+      "import": "./dist/extensibility/custom-tools/loader.js"
+    },
+    "./extensibility/custom-tools/types.js": {
+      "types": "./dist/extensibility/custom-tools/types.d.ts",
+      "import": "./dist/extensibility/custom-tools/types.js"
+    },
+    "./extensibility/index.js": {
+      "types": "./dist/extensibility/index.d.ts",
+      "import": "./dist/extensibility/index.js"
+    },
+    "./extensibility/schema.js": {
+      "types": "./dist/extensibility/schema.d.ts",
+      "import": "./dist/extensibility/schema.js"
+    },
+    "./extensibility/validation.js": {
+      "types": "./dist/extensibility/validation.d.ts",
+      "import": "./dist/extensibility/validation.js"
+    },
+    "./hooks/context-controller.js": {
+      "types": "./dist/hooks/context-controller.d.ts",
+      "import": "./dist/hooks/context-controller.js"
+    },
+    "./hooks/effects.js": {
+      "types": "./dist/hooks/effects.d.ts",
+      "import": "./dist/hooks/effects.js"
+    },
+    "./hooks/hook-messages.js": {
+      "types": "./dist/hooks/hook-messages.d.ts",
+      "import": "./dist/hooks/hook-messages.js"
+    },
+    "./hooks/hook-tool-adapter.js": {
+      "types": "./dist/hooks/hook-tool-adapter.d.ts",
+      "import": "./dist/hooks/hook-tool-adapter.js"
+    },
+    "./hooks/hook-transport.js": {
+      "types": "./dist/hooks/hook-transport.d.ts",
+      "import": "./dist/hooks/hook-transport.js"
+    },
+    "./hooks/hook-ui-context.js": {
+      "types": "./dist/hooks/hook-ui-context.d.ts",
+      "import": "./dist/hooks/hook-ui-context.js"
+    },
+    "./hooks/index.js": {
+      "types": "./dist/hooks/index.d.ts",
+      "import": "./dist/hooks/index.js"
+    },
+    "./hooks/loader.js": {
+      "types": "./dist/hooks/loader.d.ts",
+      "import": "./dist/hooks/loader.js"
+    },
+    "./hooks/message-transformer.js": {
+      "types": "./dist/hooks/message-transformer.d.ts",
+      "import": "./dist/hooks/message-transformer.js"
+    },
+    "./hooks/runner.js": {
+      "types": "./dist/hooks/runner.d.ts",
+      "import": "./dist/hooks/runner.js"
+    },
+    "./hooks/tool-wrapper.js": {
+      "types": "./dist/hooks/tool-wrapper.d.ts",
+      "import": "./dist/hooks/tool-wrapper.js"
+    },
+    "./hooks/types.js": {
+      "types": "./dist/hooks/types.d.ts",
+      "import": "./dist/hooks/types.js"
+    },
+    "./package.json": "./package.json"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "test": "bun test"
+    "clean": "rm -rf dist",
+		"build": "tsc -b tsconfig.build.json --force",
+    "test": "bun test",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "effect": "^3.19.14",
     "@effect/platform-node": "^0.104.0",
-    "@marvin-agents/agent-core": "file:../agent",
-    "@marvin-agents/ai": "file:../ai",
-    "@marvin-agents/base-tools": "file:../base-tools",
-    "@marvin-agents/lsp": "file:../lsp"
+    "@yeshwanthyk/agent-core": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
+    "@yeshwanthyk/base-tools": "^0.1.0",
+    "@yeshwanthyk/lsp": "^0.1.0",
+    "effect": "^3.19.14"
+  },
+  "keywords": ["ai", "agent", "effect", "runtime"],
+  "author": "Yesh Yendamuri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yeshwanthyk/marvin.git",
+    "directory": "packages/runtime-effect"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

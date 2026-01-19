@@ -1,1 +1,1 @@
-export * from "@marvin-agents/runtime-effect/config";
+export * from "@yeshwanthyk/runtime-effect/config.js";

@@ -4,7 +4,7 @@ import {
   ProviderTransport,
   RouterTransport,
   type ThinkingLevel,
-} from "@marvin-agents/agent-core";
+} from "@yeshwanthyk/agent-core";
 import {
   getModels,
   getProviders,
@@ -12,13 +12,13 @@ import {
   type Api,
   type KnownProvider,
   type Model,
-} from "@marvin-agents/ai";
-import { createToolRegistry, type ToolRegistry } from "@marvin-agents/base-tools";
+} from "@yeshwanthyk/ai";
+import { createToolRegistry, type ToolRegistry } from "@yeshwanthyk/base-tools";
 import {
   createLspManager,
   wrapToolsWithLspDiagnostics,
   type LspManager,
-} from "@marvin-agents/lsp";
+} from "@yeshwanthyk/lsp";
 import { Context, Effect, Layer } from "effect";
 import {
 	HookRunner,

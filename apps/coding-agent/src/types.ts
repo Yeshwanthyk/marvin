@@ -45,10 +45,10 @@ export interface UIShellMessage {
 
 export type UIMessage = UIUserMessage | UIAssistantMessage | UIShellMessage
 
-import type { AgentToolResult } from "@marvin-agents/ai"
-import type { Theme } from "@marvin-agents/open-tui"
+import type { AgentToolResult } from "@yeshwanthyk/ai"
+import type { Theme } from "@yeshwanthyk/open-tui"
 import type { JSX } from "solid-js"
-import type { RenderResultOptions } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
+import type { RenderResultOptions } from "@yeshwanthyk/runtime-effect/extensibility/custom-tools/types.js"
 
 export interface ToolBlock {
 	id: string

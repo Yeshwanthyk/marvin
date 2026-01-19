@@ -39,7 +39,7 @@ This guide assumes the new repo is merlin from day one. Use this mapping everywh
 
 | Old | New |
 |-----|-----|
-| Package scope: `@marvin-agents/*` | `@merlin-agents/*` |
+| Package scope: `@yeshwanthyk/*` | `@merlin-agents/*` |
 | CLI binary: `marvin` | `merlin` |
 | Config dir: `~/.config/marvin` | `~/.config/merlin` |
 | Codex cache: `~/.marvin/cache` | `~/.merlin/cache` |
@@ -2524,7 +2524,7 @@ function resolveModel(provider: KnownProvider, modelIdRaw: string | undefined): 
 
 #### 6.3 Use the Effect SDK surface
 
-This repo uses `@marvin-agents/sdk` built on `packages/runtime-effect`. Do not implement a custom agent factory
+This repo uses `@yeshwanthyk/sdk` built on `packages/runtime-effect`. Do not implement a custom agent factory
 inside the SDK; use the provided surface instead.
 
 - `runAgent` / `runAgentEffect`
@@ -3134,7 +3134,7 @@ bun run generate-models
 ```
 
 **Import path errors after rename:**
-- Check all `@marvin-agents/*` imports are changed to `@merlin-agents/*`
+- Check all `@yeshwanthyk/*` imports are changed to `@merlin-agents/*`
 - Check `file:../` paths in package.json dependencies
 
 ### Runtime Errors

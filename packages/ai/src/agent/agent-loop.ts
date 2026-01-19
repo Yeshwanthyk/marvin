@@ -270,10 +270,11 @@ async function streamAssistantResponse(
 	for await (const event of response) {
 		switch (event.type) {
 			case "start":
-				partialMessage = event.partial;
-				context.messages.push(partialMessage);
+				const startedMessage = event.partial;
+				partialMessage = startedMessage;
+				context.messages.push(startedMessage);
 				addedPartial = true;
-				stream.push({ type: "message_start", message: { ...partialMessage } });
+				stream.push({ type: "message_start", message: { ...startedMessage } });
 				break;
 
 			case "text_start":
@@ -286,9 +287,10 @@ async function streamAssistantResponse(
 			case "toolcall_delta":
 			case "toolcall_end":
 				if (partialMessage) {
-					partialMessage = event.partial;
-					context.messages[context.messages.length - 1] = partialMessage;
-					stream.push({ type: "message_update", assistantMessageEvent: event, message: { ...partialMessage } });
+					const updatedMessage = event.partial;
+					partialMessage = updatedMessage;
+					context.messages[context.messages.length - 1] = updatedMessage;
+					stream.push({ type: "message_update", assistantMessageEvent: event, message: { ...updatedMessage } });
 				}
 				break;
 

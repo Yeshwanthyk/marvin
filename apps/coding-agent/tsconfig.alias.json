@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "paths": {
+      "@adapters/*": ["adapters/*"],
+      "@runtime/*": ["runtime/*"],
+      "@domain/*": ["domain/*"],
+      "@ext/*": ["extensibility/*"],
+      "@ui/*": ["ui/*"]
+    }
+  }
+}

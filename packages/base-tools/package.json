@@ -1,17 +1,41 @@
 {
-  "name": "@marvin-agents/base-tools",
+  "name": "@yeshwanthyk/base-tools",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
-    "test": "bun test tests"
+    "clean": "rm -rf dist",
+		"build": "tsc -b tsconfig.build.json --force",
+    "test": "bun test tests",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@marvin-agents/ai": "file:../ai",
+    "@yeshwanthyk/ai": "^0.1.0",
     "@sinclair/typebox": "0.34.45",
     "diff": "^8.0.2",
     "file-type": "^21.1.1"
+  },
+  "keywords": ["ai", "agent", "tools", "coding"],
+  "author": "Yesh Yendamuri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yeshwanthyk/marvin.git",
+    "directory": "packages/base-tools"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

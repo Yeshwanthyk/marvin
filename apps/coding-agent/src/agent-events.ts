@@ -4,9 +4,9 @@
 
 import { batch } from "solid-js"
 import { profile } from "./profiler.js"
-import type { AgentEvent, AppMessage } from "@marvin-agents/agent-core"
-import type { AgentToolResult, AssistantMessage, ToolResultMessage } from "@marvin-agents/ai"
-import type { Theme } from "@marvin-agents/open-tui"
+import type { AgentEvent, AppMessage } from "@yeshwanthyk/agent-core"
+import type { AgentToolResult, AssistantMessage, ToolResultMessage } from "@yeshwanthyk/ai"
+import type { Theme } from "@yeshwanthyk/open-tui"
 import type { JSX } from "solid-js"
 import type { SessionManager } from "./session-manager.js"
 import type { UIMessage, UIAssistantMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
@@ -21,7 +21,7 @@ import {
 } from "@domain/messaging/content.js"
 import type { PromptQueue } from "./hooks/usePromptQueue.js"
 import type { HookRunner } from "./hooks/index.js"
-import type { RenderResultOptions } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
+import type { RenderResultOptions } from "@yeshwanthyk/runtime-effect/extensibility/custom-tools/types.js"
 
 /** Tool metadata for UI rendering */
 export interface ToolMeta {

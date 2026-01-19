@@ -5,8 +5,8 @@ import {
   type AdapterKind,
   type RuntimeLayerOptions,
   type RuntimeServices,
-} from "@marvin-agents/runtime-effect/runtime.js";
-import type { LoadConfigOptions } from "@marvin-agents/runtime-effect/config.js";
+} from "@yeshwanthyk/runtime-effect/runtime.js";
+import type { LoadConfigOptions } from "@yeshwanthyk/runtime-effect/config.js";
 
 export type RuntimeInitArgs = LoadConfigOptions;
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import * as Runtime from "effect/Runtime";
-import { getModels, type Model, type Api, type KnownProvider } from "@marvin-agents/ai";
+import { getModels, type Model, type Api, type KnownProvider } from "@yeshwanthyk/ai";
 import type { LoadedAppConfig } from "../src/config.js";
 import { ConfigTag } from "../src/config.js";
 import { NoopInstrumentationLayer } from "../src/instrumentation.js";

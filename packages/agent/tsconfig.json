@@ -3,9 +3,9 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@marvin-agents/ai": ["../ai/src/index.ts"],
-      "@marvin-agents/ai/src/*": ["../ai/src/*"],
-      "@marvin-agents/ai/*": ["../ai/*"]
+      "@yeshwanthyk/ai": ["../ai/src/index.ts"],
+      "@yeshwanthyk/ai/src/*": ["../ai/src/*"],
+      "@yeshwanthyk/ai/*": ["../ai/*"]
     },
     "module": "NodeNext",
     "moduleResolution": "NodeNext",

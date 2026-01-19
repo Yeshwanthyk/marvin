@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "baseUrl": "src",
+    "jsx": "preserve",
+    "paths": {
+      "@adapters/*": ["adapters/*"],
+      "@runtime/*": ["runtime/*"],
+      "@domain/*": ["domain/*"],
+      "@ext/*": ["extensibility/*"],
+      "@ui/*": ["ui/*"],
+      "@yeshwanthyk/open-tui": ["../../../packages/open-tui/dist/index.d.ts"],
+      "@yeshwanthyk/open-tui/*": ["../../../packages/open-tui/dist/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

@@ -1,11 +1,11 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { getModels, type AssistantMessage, type Message, type ToolResultMessage, type Usage } from "@marvin-agents/ai"
-import { CodexTransport, ProviderTransport, RouterTransport, type AgentRunConfig } from "@marvin-agents/agent-core"
-import type { AgentEvent } from "@marvin-agents/agent-core"
-import type { LoadedAppConfig } from "@marvin-agents/runtime-effect/config.js"
-import type { ApiKeyResolver, TransportBundle } from "@marvin-agents/runtime-effect/transports.js"
+import { getModels, type AssistantMessage, type Message, type ToolResultMessage, type Usage } from "@yeshwanthyk/ai"
+import { CodexTransport, ProviderTransport, RouterTransport, type AgentRunConfig } from "@yeshwanthyk/agent-core"
+import type { AgentEvent } from "@yeshwanthyk/agent-core"
+import type { LoadedAppConfig } from "@yeshwanthyk/runtime-effect/config.js"
+import type { ApiKeyResolver, TransportBundle } from "@yeshwanthyk/runtime-effect/transports.js"
 
 export interface TempConfig {
   dir: string

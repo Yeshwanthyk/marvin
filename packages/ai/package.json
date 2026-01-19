@@ -1,10 +1,17 @@
 {
-	"name": "@marvin-agents/ai",
-	"version": "0.23.3",
+	"name": "@yeshwanthyk/ai",
+	"version": "0.1.0",
 	"description": "Unified LLM API with automatic model discovery and provider configuration",
 	"type": "module",
-	"main": "src/index.ts",
-	"types": "src/index.ts",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
 	"files": [
 		"dist",
 		"README.md"
@@ -12,7 +19,7 @@
 	"scripts": {
 		"clean": "rm -rf dist",
 		"generate-models": "npx tsx scripts/generate-models.ts",
-		"build": "npm run generate-models && tsgo -p tsconfig.build.json",
+		"build": "npm run generate-models && tsgo -b tsconfig.build.json --force",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"dev:tsc": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"check": "biome check --write . && tsgo --noEmit",

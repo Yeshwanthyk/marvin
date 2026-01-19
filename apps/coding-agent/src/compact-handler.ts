@@ -1,6 +1,6 @@
-import type { Agent, AppMessage } from '@marvin-agents/agent-core';
-import { completeSimple, type Message, type TextContent } from '@marvin-agents/ai';
-import type { CodexTransport } from '@marvin-agents/agent-core';
+import type { Agent, AppMessage } from '@yeshwanthyk/agent-core';
+import { completeSimple, type Message, type TextContent } from '@yeshwanthyk/ai';
+import type { CodexTransport } from '@yeshwanthyk/agent-core';
 
 /**
  * Tracks file operations across messages for deterministic file list generation.

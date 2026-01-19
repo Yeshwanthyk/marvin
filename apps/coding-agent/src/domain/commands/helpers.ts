@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
-import type { Api, Model, KnownProvider } from "@marvin-agents/ai"
-import { getModels, getProviders } from "@marvin-agents/ai"
+import type { Api, Model, KnownProvider } from "@yeshwanthyk/ai"
+import { getModels, getProviders } from "@yeshwanthyk/ai"
 import type { CommandContext } from "./types.js"
 
 export const resolveProvider = (raw: string): KnownProvider | undefined => {

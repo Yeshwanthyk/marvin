@@ -4,7 +4,7 @@
 
 import { createMemo } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
-import { useTheme } from "@marvin-agents/open-tui"
+import { useTheme } from "@yeshwanthyk/open-tui"
 
 export interface FooterProps {
   branch: string | null

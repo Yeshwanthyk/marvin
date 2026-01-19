@@ -1,4 +1,4 @@
-import type { AgentTool, TextContent } from "@marvin-agents/ai"
+import type { AgentTool, TextContent } from "@yeshwanthyk/ai"
 import type { HookRunner } from "./runner.js"
 import type { RegisteredTool, HookEventContext } from "./types.js"
 

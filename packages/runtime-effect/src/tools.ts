@@ -1,5 +1,5 @@
-import type { AgentTool } from "@marvin-agents/ai";
-import { createToolRegistry, type ToolRegistry } from "@marvin-agents/base-tools";
+import type { AgentTool } from "@yeshwanthyk/ai";
+import { createToolRegistry, type ToolRegistry } from "@yeshwanthyk/base-tools";
 import { Context, Effect, Layer } from "effect";
 
 export interface ToolService {

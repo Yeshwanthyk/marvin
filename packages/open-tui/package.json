@@ -1,18 +1,27 @@
 {
-	"name": "@marvin-agents/open-tui",
-	"version": "0.1.0",
+	"name": "@yeshwanthyk/open-tui",
+	"version": "0.1.6",
 	"description": "OpenTUI-based Terminal User Interface with SolidJS reactive rendering",
 	"type": "module",
-	"main": "src/index.ts",
-	"types": "src/index.ts",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
 	"scripts": {
 		"clean": "rm -rf dist",
 		"lint": "biome check --write . && oxlint .",
 		"lint:check": "biome check . && oxlint .",
 		"typecheck": "tsc --noEmit",
+		"build": "tsc -b tsconfig.build.json --force && bun scripts/replace-jsx-runtime.js",
 		"check": "bun run lint:check && bun run typecheck",
 		"test": "bun test",
-		"demo": "bun run examples/run.ts"
+		"demo": "bun run examples/run.ts",
+		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"files": [
 		"dist/**/*",
@@ -38,8 +47,8 @@
 		"bun": ">=1.2.0"
 	},
 	"dependencies": {
-		"@opentui/core": "0.1.63",
-		"@opentui/solid": "0.1.63",
+		"@opentui/core": "0.1.74",
+		"@opentui/solid": "0.1.74",
 		"fuzzysort": "^3.1.0",
 		"opentui-spinner": "^0.0.6",
 		"solid-js": "1.9.9"

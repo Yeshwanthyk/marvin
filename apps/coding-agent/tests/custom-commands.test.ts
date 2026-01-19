@@ -6,7 +6,7 @@ import {
 	loadCustomCommands,
 	expandCommand,
 	tryExpandCustomCommand,
-} from "@marvin-agents/runtime-effect/extensibility/custom-commands.js"
+} from "@yeshwanthyk/runtime-effect/extensibility/custom-commands.js"
 
 describe("loadCustomCommands", () => {
 	let tempDir: string

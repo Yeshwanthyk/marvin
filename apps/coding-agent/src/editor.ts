@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import * as path from "node:path"
 import { spawn } from "node:child_process"
-import type { CliRenderer } from "@marvin-agents/open-tui"
+import type { CliRenderer } from "@yeshwanthyk/open-tui"
 import type { EditorConfig } from "./config.js"
 
 const CWD_PLACEHOLDER = "{cwd}"

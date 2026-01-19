@@ -2,8 +2,8 @@ import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Effect, Layer, Context } from "effect";
-import { getModels, getProviders, type Api, type KnownProvider, type Model } from "@marvin-agents/ai";
-import type { ThinkingLevel } from "@marvin-agents/agent-core";
+import { getModels, getProviders, type Api, type KnownProvider, type Model } from "@yeshwanthyk/ai";
+import type { ThinkingLevel } from "@yeshwanthyk/agent-core";
 
 const GLOBAL_AGENTS_PATHS = [
   () => path.join(os.homedir(), ".config", "marvin", "agents.md"),
@@ -134,10 +134,13 @@ const parseModelSpec = (raw: unknown): { provider?: KnownProvider; modelId?: str
   if (slashIndex === -1) {
     return { modelId: first };
   }
-  const providerId = first.slice(0, slashIndex).trim();
-  const modelId = first.slice(slashIndex + 1).trim();
-  const provider = getProviders().find((p) => p === providerId);
-  return { provider, modelId: modelId.length > 0 ? modelId : undefined };
+	const providerId = first.slice(0, slashIndex).trim();
+	const modelId = first.slice(slashIndex + 1).trim();
+	const provider = getProviders().find((p) => p === providerId);
+	const result: { provider?: KnownProvider; modelId?: string } = {};
+	if (provider) result.provider = provider;
+	if (modelId.length > 0) result.modelId = modelId;
+	return result;
 };
 
 const resolveEditorConfig = (raw: unknown): EditorConfig | undefined => {

@@ -4,8 +4,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
 	loadCustomTools,
-} from "@marvin-agents/runtime-effect/extensibility/custom-tools/loader.js"
-import type { SendRef } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
+} from "@yeshwanthyk/runtime-effect/extensibility/custom-tools/loader.js"
+import type { SendRef } from "@yeshwanthyk/runtime-effect/extensibility/custom-tools/types.js"
 
 describe("custom-tools", () => {
 	let tempDir: string

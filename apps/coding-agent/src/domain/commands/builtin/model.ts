@@ -1,4 +1,4 @@
-import { getModels, getProviders } from "@marvin-agents/ai"
+import { getModels, getProviders } from "@yeshwanthyk/ai"
 import { updateAppConfig } from "../../../config.js"
 import type { CommandDefinition } from "../types.js"
 import { addSystemMessage, resolveModel, resolveProvider } from "../helpers.js"

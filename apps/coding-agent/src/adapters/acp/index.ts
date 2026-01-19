@@ -3,8 +3,8 @@
  * JSON-RPC 2.0 over stdio
  */
 
-import type { Agent } from "@marvin-agents/agent-core"
-import { getModels, type KnownProvider, type Model, type Api } from "@marvin-agents/ai"
+import type { Agent } from "@yeshwanthyk/agent-core"
+import { getModels, type KnownProvider, type Model, type Api } from "@yeshwanthyk/ai"
 import { createRuntime } from "@runtime/factory.js"
 import { Effect } from "effect"
 import {

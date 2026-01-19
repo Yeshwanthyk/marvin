@@ -738,17 +738,17 @@ FileIndex
 
 ```
 coding-agent can import from:
-  ├─ @marvin-agents/ai (types, models, streaming)
-  ├─ @marvin-agents/agent-core (Agent, transports)
-  ├─ @marvin-agents/base-tools (tool registry + factories)
-  ├─ @marvin-agents/lsp (LspManager)
-  └─ @marvin-agents/open-tui (components, hooks)
+  ├─ @yeshwanthyk/ai (types, models, streaming)
+  ├─ @yeshwanthyk/agent-core (Agent, transports)
+  ├─ @yeshwanthyk/base-tools (tool registry + factories)
+  ├─ @yeshwanthyk/lsp (LspManager)
+  └─ @yeshwanthyk/open-tui (components, hooks)
 
 agent-core can import from:
-  └─ @marvin-agents/ai (types, agent-loop)
+  └─ @yeshwanthyk/ai (types, agent-loop)
 
 base-tools can import from:
-  └─ @marvin-agents/ai (types only)
+  └─ @yeshwanthyk/ai (types only)
 
 lsp cannot import from:
   └─ (standalone, only vscode-languageserver-types)

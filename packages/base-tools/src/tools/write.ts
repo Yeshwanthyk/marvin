@@ -1,4 +1,4 @@
-import type { AgentTool } from "@marvin-agents/ai";
+import type { AgentTool } from "@yeshwanthyk/ai";
 import { Type } from "@sinclair/typebox";
 import { mkdir, writeFile } from "fs/promises";
 import { dirname } from "path";

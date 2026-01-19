@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from "solid-js"
-import type { ToastItem } from "@marvin-agents/open-tui"
+import type { ToastItem } from "@yeshwanthyk/open-tui"
 
 export function useToastManager(limit = 3) {
 	const [toasts, setToasts] = createSignal<ToastItem[]>([])

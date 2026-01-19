@@ -1,6 +1,6 @@
 /**
  * Single source of truth for available theme names.
- * "marvin" is the built-in default, other names match BUILTIN_THEMES keys in @marvin-agents/open-tui.
+ * "marvin" is the built-in default, other names match BUILTIN_THEMES keys in @yeshwanthyk/open-tui.
  * Verified by test in autocomplete-commands.test.ts.
  */
 export const THEME_NAMES = [

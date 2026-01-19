@@ -1,5 +1,5 @@
 import type { HookMessage } from "./types.js"
-import type { TextContent } from "@marvin-agents/ai"
+import type { TextContent } from "@yeshwanthyk/ai"
 
 /**
  * Create a HookMessage with current timestamp.

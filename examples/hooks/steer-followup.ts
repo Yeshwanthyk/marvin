@@ -5,7 +5,7 @@
  *   cp examples/hooks/steer-followup.ts ~/.config/marvin/hooks/
  */
 
-import type { HookFactory } from "@marvin-agents/coding-agent/hooks"
+import type { HookFactory } from "@yeshwanthyk/coding-agent/hooks"
 
 const hook: HookFactory = (marvin) => {
 	marvin.registerCommand("focus", {

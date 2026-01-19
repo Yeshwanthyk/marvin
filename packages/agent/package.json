@@ -1,17 +1,24 @@
 {
-	"name": "@marvin-agents/agent-core",
-	"version": "0.23.3",
+	"name": "@yeshwanthyk/agent-core",
+	"version": "0.1.0",
 	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
 	"type": "module",
-	"main": "src/index.ts",
-	"types": "src/index.ts",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
 	"files": [
 		"dist",
 		"README.md"
 	],
 	"scripts": {
 		"clean": "rm -rf dist",
-		"build": "tsgo -p tsconfig.build.json",
+		"build": "tsgo -b tsconfig.build.json --force",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"check": "tsgo --noEmit",
 		"test": "node -e \"process.exit(0)\"",
@@ -19,7 +26,7 @@
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {
-		"@marvin-agents/ai": "file:../ai"
+		"@yeshwanthyk/ai": "^0.1.0"
 	},
 	"keywords": [
 		"ai",

@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@yeshwanthyk/agent-core": ["../agent/dist/index.d.ts"],
+      "@yeshwanthyk/agent-core/*": ["../agent/dist/*"],
+      "@yeshwanthyk/ai": ["../ai/dist/index.d.ts"],
+      "@yeshwanthyk/ai/*": ["../ai/dist/*"],
+      "@yeshwanthyk/runtime-effect": ["../runtime-effect/dist/index.d.ts"],
+      "@yeshwanthyk/runtime-effect/*": ["../runtime-effect/dist/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "tests"]
+}

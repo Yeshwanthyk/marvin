@@ -1,6 +1,6 @@
-import { getModel } from "@marvin-agents/ai";
+import { getModel } from "@yeshwanthyk/ai";
 import { describe, expect, it, vi, afterEach } from "vitest";
-import type { Message, QueuedMessage } from "@marvin-agents/ai";
+import type { Message, QueuedMessage } from "@yeshwanthyk/ai";
 import { Agent, ProviderTransport, type AgentRunConfig, type AgentTransport } from "../src/index.js";
 import type { AgentEvent, AppMessage } from "../src/types.js";
 

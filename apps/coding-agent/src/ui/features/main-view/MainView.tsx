@@ -7,17 +7,17 @@ import {
 	useRenderer,
 	useTheme,
 	type AutocompleteItem,
-} from "@marvin-agents/open-tui"
-import type { ThinkingLevel } from "@marvin-agents/agent-core"
-import type { KnownProvider } from "@marvin-agents/ai"
-import type { LspManager } from "@marvin-agents/lsp"
+} from "@yeshwanthyk/open-tui"
+import type { ThinkingLevel } from "@yeshwanthyk/agent-core"
+import type { KnownProvider } from "@yeshwanthyk/ai"
+import type { LspManager } from "@yeshwanthyk/lsp"
 import { createSignal, createEffect, onMount } from "solid-js"
 import { createAutocompleteCommands } from "../../../autocomplete-commands.js"
-import type { CustomCommand } from "@marvin-agents/runtime-effect/extensibility/custom-commands.js"
+import type { CustomCommand } from "@yeshwanthyk/runtime-effect/extensibility/custom-commands.js"
 import { Footer } from "../../../components/Footer.js"
 import { Header } from "../../../components/Header.js"
 import type { ActivityState, ToolBlock, UIMessage } from "../../../types.js"
-import type { QueueCounts } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
+import type { QueueCounts } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import { useGitStatus } from "../../../hooks/useGitStatus.js"
 import { useSpinner } from "../../../hooks/useSpinner.js"
 import { useToastManager } from "../../../hooks/useToastManager.js"

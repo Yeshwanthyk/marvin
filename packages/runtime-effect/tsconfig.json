@@ -4,8 +4,24 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmit": true,
-    "baseUrl": "./src"
+    "baseUrl": ".",
+    "paths": {
+      "@yeshwanthyk/agent-core": ["../agent/src/index.ts"],
+      "@yeshwanthyk/agent-core/*": ["../agent/src/*"],
+      "@yeshwanthyk/ai": ["../ai/src/index.ts"],
+      "@yeshwanthyk/ai/*": ["../ai/src/*"],
+      "@yeshwanthyk/base-tools": ["../base-tools/src/index.ts"],
+      "@yeshwanthyk/base-tools/*": ["../base-tools/src/*"],
+      "@yeshwanthyk/lsp": ["../lsp/src/index.ts"],
+      "@yeshwanthyk/lsp/*": ["../lsp/src/*"]
+    }
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "../agent/src/**/*.ts",
+    "../ai/src/**/*.ts",
+    "../base-tools/src/**/*.ts",
+    "../lsp/src/**/*.ts"
+  ],
   "exclude": ["dist", "node_modules"]
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getModels } from "@marvin-agents/ai";
+import { getModels } from "@yeshwanthyk/ai";
 import { loadAppConfig } from "../src/config.js";
 
 const getAnthropicModel = () => {

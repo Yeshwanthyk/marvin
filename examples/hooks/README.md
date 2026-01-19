@@ -20,7 +20,7 @@ cp examples/hooks/steer-followup.ts ~/.config/marvin/hooks/
 Hooks export a default function:
 
 ```ts
-import type { HookFactory } from "@marvin-agents/coding-agent/hooks";
+import type { HookFactory } from "@yeshwanthyk/coding-agent/hooks";
 
 const hook: HookFactory = (marvin) => {
   marvin.on("session.start", async (_ev, ctx) => {

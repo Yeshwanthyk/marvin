@@ -1,7 +1,7 @@
 import { appendFile, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { AppMessage, ThinkingLevel } from "@marvin-agents/agent-core";
+import type { AppMessage, ThinkingLevel } from "@yeshwanthyk/agent-core";
 import { Context, Effect, Layer } from "effect";
 
 let lastSessionTimestamp = 0;

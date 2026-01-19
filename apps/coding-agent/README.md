@@ -5,14 +5,16 @@ Terminal-native coding agent with multi-provider support, extensible tooling, an
 ## Install
 
 ```bash
-# Build binary
+# npm (recommended)
+npm install -g @yeshwanthyk/coding-agent
+
+# bun
+bun add -g @yeshwanthyk/coding-agent
+
+# From source
 cd apps/coding-agent && bun run build
-
-# Add to PATH (e.g., in ~/.zshrc)
 export PATH="$PATH:/path/to/marvin-agent/apps/coding-agent/dist"
-
-# Or symlink to a bin directory
-ln -s /path/to/marvin-agent/apps/coding-agent/dist/marvin ~/.local/bin/marvin
+# or: ln -s /path/to/marvin-agent/apps/coding-agent/dist/marvin ~/.local/bin/marvin
 ```
 
 ## Quick Start
@@ -226,7 +228,7 @@ Lifecycle hooks for automation and integrations.
 
 ```typescript
 // ~/.config/marvin/hooks/my-hook.ts
-import type { HookAPI } from "@marvin-agents/coding-agent"
+import type { HookAPI } from "@yeshwanthyk/coding-agent"
 
 export default function(marvin: HookAPI) {
   marvin.on("app.start", async (event, ctx) => {

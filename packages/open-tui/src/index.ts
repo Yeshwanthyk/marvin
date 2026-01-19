@@ -1,5 +1,5 @@
 /**
- * @marvin-agents/open-tui
+ * @yeshwanthyk/open-tui
  *
  * OpenTUI-based Terminal User Interface with SolidJS reactive rendering
  */

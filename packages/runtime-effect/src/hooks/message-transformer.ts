@@ -1,5 +1,5 @@
-import type { UserMessageWithAttachments } from "@marvin-agents/agent-core"
-import type { Message, TextContent, ImageContent } from "@marvin-agents/ai"
+import type { UserMessageWithAttachments } from "@yeshwanthyk/agent-core"
+import type { Message, TextContent, ImageContent } from "@yeshwanthyk/ai"
 import type { HookRunner } from "./runner.js"
 import type { MessagePart } from "./types.js"
 

@@ -2,7 +2,7 @@
  * Tool wrapper - wraps tools with hook callbacks for interception.
  */
 
-import type { AgentTool, AgentToolUpdateCallback } from "@marvin-agents/ai"
+import type { AgentTool, AgentToolUpdateCallback } from "@yeshwanthyk/ai"
 import type { HookRunner } from "./runner.js"
 
 /**

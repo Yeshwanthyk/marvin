@@ -12,10 +12,10 @@ import {
 	type OpenAIResponsesOptions,
 	streamOpenAIResponses,
 } from "./providers/openai-responses.js";
+import type { AssistantMessageEventStream } from "./utils/event-stream.js";
 import type {
 	Api,
 	AssistantMessage,
-	AssistantMessageEventStream,
 	Context,
 	KnownProvider,
 	Model,

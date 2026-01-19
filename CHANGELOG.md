@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.3.6] - 2026-01-19
+
+### Fixed
+- **TUI runtime output**: Emit JS (not JSX) for the CLI build and rewrite JSX runtime imports for Bun.
+
+## [0.3.5] - 2026-01-19
+
+### Fixed
+- **JSX runtime resolution**: Use Solid's `h/jsx-runtime` so Bun resolves `jsx` exports correctly in global installs.
+
+## [0.3.4] - 2026-01-19
+
+### Fixed
+- **Global install runtime**: Pull OpenTUI `^0.1.3`, which rewrites JSX runtime imports for Bun/Node compatibility.
+
+## [0.3.3] - 2026-01-19
+
+### Fixed
+- **Global install dependency**: Pin OpenTUI dependency to `^0.1.2` so fresh installs pull the JS-emitting build.
+
+## [0.3.2] - 2026-01-19
+
+### Fixed
+- **Published CLI**: Ship compiled JS in `dist/` and rewrite internal path aliases so global installs run without module resolution errors.
+
+## [0.3.1] - 2026-01-19
+
+### Fixed
+- **Global install resolution**: Publish-time tsconfig and path fallbacks now let Bun resolve internal aliases and workspace deps when installed from npm.
+
+## [0.3.0] - 2026-01-19
+
+### Added
+- **Effect runtime foundation**: Core orchestration, session handling, and SDK entrypoints now use the Effect-based runtime.
+- **SDK publish readiness**: Packages are published under the `@yeshwanthyk/*` scope for npm consumption.
+
+### Changed
+- **TUI hook visibility**: `agent.before_start` hook messages are surfaced in the UI again after the prompt path refactor.
+
 ## [0.2.3] - 2026-01-18
 
 ### Added

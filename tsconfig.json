@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@yeshwanthyk/ai": ["./packages/ai/src/index.ts"],
+      "@yeshwanthyk/ai/*": ["./packages/ai/src/*"],
+      "@yeshwanthyk/agent-core": ["./packages/agent/src/index.ts"],
+      "@yeshwanthyk/agent-core/*": ["./packages/agent/src/*"],
+      "@yeshwanthyk/base-tools": ["./packages/base-tools/src/index.ts"],
+      "@yeshwanthyk/base-tools/*": ["./packages/base-tools/src/*"],
+      "@yeshwanthyk/lsp": ["./packages/lsp/src/index.ts"],
+      "@yeshwanthyk/lsp/*": ["./packages/lsp/src/*"],
+      "@yeshwanthyk/runtime-effect": ["./packages/runtime-effect/src/index.ts"],
+      "@yeshwanthyk/runtime-effect/*": ["./packages/runtime-effect/src/*"],
+      "@yeshwanthyk/sdk": ["./packages/sdk/src/index.ts"],
+      "@yeshwanthyk/sdk/*": ["./packages/sdk/src/*"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*",
+    "packages/*/test/**/*",
+    "apps/*/src/**/*"
+  ]
+}

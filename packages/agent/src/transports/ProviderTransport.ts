@@ -5,7 +5,7 @@ import {
 	agentLoopContinue,
 	type Message,
 	type UserMessage,
-} from "@marvin-agents/ai";
+} from "@yeshwanthyk/ai";
 import type { AgentRunConfig, AgentTransport } from "./types.js";
 
 export interface ProviderTransportOptions {

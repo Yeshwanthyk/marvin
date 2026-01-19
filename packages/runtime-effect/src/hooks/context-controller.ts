@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Ref } from "effect"
-import type { Api, Model } from "@marvin-agents/ai"
+import type { Api, Model } from "@yeshwanthyk/ai"
 import type {
 	AppendEntryHandler,
 	DeliveryHandler,

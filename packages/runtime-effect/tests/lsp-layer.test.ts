@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import { Effect, Layer } from "effect"
 import * as Runtime from "effect/Runtime"
-import type { LspManager } from "@marvin-agents/lsp"
+import type { LspManager } from "@yeshwanthyk/lsp"
 import { LspLayer, LspServiceTag } from "../src/lsp.js"
 import { ConfigTag } from "../src/config.js"
 import { InstrumentationTag, type InstrumentationEvent, type InstrumentationService } from "../src/instrumentation.js"

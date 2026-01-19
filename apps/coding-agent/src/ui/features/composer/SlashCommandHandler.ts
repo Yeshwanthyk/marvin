@@ -3,7 +3,7 @@ import { handleSlashCommand } from "../../../commands.js"
 import {
 	tryExpandCustomCommand,
 	type CustomCommand,
-} from "@marvin-agents/runtime-effect/extensibility/custom-commands.js"
+} from "@yeshwanthyk/runtime-effect/extensibility/custom-commands.js"
 
 export interface SlashCommandBridge {
 	commandContext: CommandContext

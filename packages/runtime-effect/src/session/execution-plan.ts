@@ -1,6 +1,6 @@
 import { Context, Duration, Effect, ExecutionPlan, Layer, Schedule } from "effect";
 import type { ExecutionPlan as ExecutionPlanType } from "effect/ExecutionPlan";
-import type { Api, Model, KnownProvider } from "@marvin-agents/ai";
+import type { Api, Model, KnownProvider } from "@yeshwanthyk/ai";
 import { ConfigTag } from "../config.js";
 import { InstrumentationTag, type InstrumentationService } from "../instrumentation.js";
 

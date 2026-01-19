@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentTool, Api, Message, Model, QueuedMessage, ReasoningEffort, SimpleStreamOptions } from "@marvin-agents/ai";
+import type { AgentEvent, AgentTool, Api, Message, Model, QueuedMessage, ReasoningEffort, SimpleStreamOptions } from "@yeshwanthyk/ai";
 
 /**
  * The minimal configuration needed to run an agent turn.
@@ -26,7 +26,7 @@ export interface AgentRunConfig {
  * Transports handle the communication with LLM providers,
  * abstracting away the details of API calls, proxies, etc.
  *
- * Events yielded must match the @marvin-agents/ai AgentEvent types.
+ * Events yielded must match the @yeshwanthyk/ai AgentEvent types.
  */
 export interface AgentTransport {
 	/** Run with a new user message */

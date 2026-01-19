@@ -5,8 +5,8 @@
  * Load from ~/.config/marvin/hooks/*.ts
  */
 
-import type { AppMessage } from "@marvin-agents/agent-core"
-import type { Api, ImageContent, Message, Model, SimpleStreamOptions, TextContent, ToolResultMessage } from "@marvin-agents/ai"
+import type { AppMessage } from "@yeshwanthyk/agent-core"
+import type { Api, ImageContent, Message, Model, SimpleStreamOptions, TextContent, ToolResultMessage } from "@yeshwanthyk/ai"
 import type { JSX } from "solid-js"
 import type { ReadonlySessionManager } from "../session-manager.js"
 import type { PromptDeliveryMode } from "../session/prompt-queue.js"

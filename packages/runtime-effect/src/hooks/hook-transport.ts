@@ -1,5 +1,5 @@
-import type { AgentRunConfig, AgentTransport } from "@marvin-agents/agent-core"
-import type { AgentEvent, Message } from "@marvin-agents/ai"
+import type { AgentRunConfig, AgentTransport } from "@yeshwanthyk/agent-core"
+import type { AgentEvent, Message } from "@yeshwanthyk/ai"
 import type { HookRunner } from "./runner.js"
 
 /**

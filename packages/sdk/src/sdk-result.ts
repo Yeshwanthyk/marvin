@@ -1,6 +1,6 @@
-import type { AppMessage } from "@marvin-agents/agent-core"
-import type { AssistantMessage, TextContent, ToolCall } from "@marvin-agents/ai"
-import type { RuntimeServices } from "@marvin-agents/runtime-effect/runtime.js"
+import type { AppMessage } from "@yeshwanthyk/agent-core"
+import type { AssistantMessage, TextContent, ToolCall } from "@yeshwanthyk/ai"
+import type { RuntimeServices } from "@yeshwanthyk/runtime-effect/runtime.js"
 import { isRecord } from "./internal.js"
 import type { SdkResult } from "./types.js"
 

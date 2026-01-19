@@ -2,7 +2,7 @@
  * OpenTUI-native rendering components for tool output.
  */
 
-import { CodeBlock, Diff, Image, TextAttributes, useTheme, parseColor, type MouseEvent, type Theme } from "@marvin-agents/open-tui"
+import { CodeBlock, Diff, Image, TextAttributes, useTheme, parseColor, type MouseEvent, type Theme } from "@yeshwanthyk/open-tui"
 import { Show, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
 import { getToolText, getEditDiffText } from "@domain/messaging/content.js"
