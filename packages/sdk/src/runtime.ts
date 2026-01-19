@@ -25,6 +25,10 @@ export interface SdkRuntimeOptions extends LoadConfigOptions {
   maxTokens?: number
   temperature?: number
   restore?: SessionState
+  retry?: import("./types.js").RetryConfig
+  timeout?: number
+  tools?: readonly string[]
+  disableTools?: readonly string[]
 }
 
 export interface PromptOptions {
@@ -183,6 +187,23 @@ const createSdkRuntimeImpl = Effect.fn(function* (options: SdkRuntimeOptions) {
         return yield* Effect.fail(ConfigError("CONFIG_INVALID", `Unsupported session state version: ${state.version}`))
       }
       services.agent.replaceMessages(state.messages)
+    }
+
+    // Filter tools if specified
+    if (options.tools !== undefined || options.disableTools !== undefined) {
+      const currentTools = services.agent.state.tools
+      const allowlist = options.tools ? new Set(options.tools) : null
+      const blocklist = new Set(options.disableTools ?? [])
+
+      const filteredTools = currentTools.filter((tool) => {
+        // Blocklist takes precedence
+        if (blocklist.has(tool.name)) return false
+        // If allowlist specified, tool must be in it
+        if (allowlist !== null && !allowlist.has(tool.name)) return false
+        return true
+      })
+
+      services.agent.setTools(filteredTools)
     }
 
     const close = Effect.suspend(() => Scope.close(scope, Exit.void))

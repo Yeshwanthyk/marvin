@@ -6,8 +6,29 @@ import { createSdkRuntime } from "./runtime.js"
 import type { SdkError } from "./errors.js"
 import type { RunAgentStreamOptions, SdkEvent } from "./types.js"
 
-export const runAgentStream = (options: RunAgentStreamOptions): AsyncIterable<SdkEvent> => {
-  const stream = Stream.asyncPush<SdkEvent, SdkError>((emit) =>
+/**
+ * Stream variant for Effect users. Provides backpressure and composition.
+ *
+ * @example
+ * ```typescript
+ * import { Stream, Effect } from "effect"
+ *
+ * // Take first 10 events
+ * const limited = runAgentStreamEffect(opts).pipe(Stream.take(10))
+ *
+ * // Collect all events
+ * const events = await Effect.runPromise(Stream.runCollect(runAgentStreamEffect(opts)))
+ *
+ * // With timeout
+ * const withTimeout = runAgentStreamEffect(opts).pipe(
+ *   Stream.timeout(Duration.seconds(30))
+ * )
+ * ```
+ */
+export const runAgentStreamEffect = (
+  options: RunAgentStreamOptions,
+): Stream.Stream<SdkEvent, SdkError> =>
+  Stream.asyncPush<SdkEvent, SdkError>((emit) =>
     Effect.gen(function* () {
       const runtime = yield* createSdkRuntime({
         ...options,
@@ -38,5 +59,8 @@ export const runAgentStream = (options: RunAgentStreamOptions): AsyncIterable<Sd
     }),
   )
 
-  return Stream.toAsyncIterable(stream)
-}
+/**
+ * Streaming async iterable for standard JavaScript consumers.
+ */
+export const runAgentStream = (options: RunAgentStreamOptions): AsyncIterable<SdkEvent> =>
+  Stream.toAsyncIterable(runAgentStreamEffect(options))

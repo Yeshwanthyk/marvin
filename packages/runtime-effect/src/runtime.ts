@@ -19,7 +19,7 @@ import {
   wrapToolsWithLspDiagnostics,
   type LspManager,
 } from "@yeshwanthyk/lsp";
-import { Context, Effect, Layer } from "effect";
+import { Context, Duration, Effect, Layer, Schedule } from "effect";
 import {
 	HookRunner,
 	HookedTransport,
@@ -132,6 +132,12 @@ export interface RuntimeLayerOptions extends LoadConfigOptions {
   readonly instrumentation?: InstrumentationService;
   readonly lspFactory?: typeof createLspManager;
   readonly transportFactory?: (config: LoadedAppConfig, resolver: ApiKeyResolver) => TransportBundle;
+  readonly retry?: {
+    readonly primary?: number;
+    readonly fallback?: number;
+    readonly initialDelayMs?: number;
+  };
+  readonly timeout?: number;
 }
 
 interface RuntimeLayerInternalOptions extends RuntimeLayerOptions {
@@ -140,6 +146,7 @@ interface RuntimeLayerInternalOptions extends RuntimeLayerOptions {
   hasUI: boolean;
   sendRef: SendRef;
   instrumentationLayer: Layer.Layer<InstrumentationService, never, never>;
+  timeout?: number;
 }
 
 export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<RuntimeServices, unknown, never> => {
@@ -178,8 +185,20 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
             })
           : TransportLayer(config, apiKeyResolver);
       const customCommandsLayer = CustomCommandLayer({ configDir: config.configDir });
+      const buildRetryAttempts = (retry: NonNullable<typeof layerOptions.retry>) => {
+        const attempts: { primary?: number; fallback?: number } = {};
+        if (retry.primary !== undefined) attempts.primary = retry.primary;
+        if (retry.fallback !== undefined) attempts.fallback = retry.fallback;
+        return attempts;
+      };
       const executionPlanLayer = ExecutionPlanBuilderLayer({
         cycle: cycleModels.map((entry) => ({ provider: entry.provider, model: entry.model }) satisfies PlanModelEntry),
+        ...(layerOptions.retry ? {
+          attempts: buildRetryAttempts(layerOptions.retry),
+          ...(layerOptions.retry.initialDelayMs !== undefined ? {
+            schedule: Schedule.exponential(Duration.millis(layerOptions.retry.initialDelayMs), 2),
+          } : {}),
+        } : {}),
       });
       const toolRegistry = createToolRegistry(layerOptions.cwd);
       const extensibilityLayer = ExtensibilityLayer({
@@ -219,7 +238,12 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
       const withLsp = Layer.provideMerge(lspLayer, withHookEffects);
       const withToolRuntime = Layer.provideMerge(toolRuntimeLayer, withLsp);
       const withAgentFactory = Layer.provideMerge(agentFactoryLayer, withToolRuntime);
-      const withOrchestrator = Layer.provideMerge(SessionOrchestratorLayer(), withAgentFactory);
+      const withOrchestrator = Layer.provideMerge(
+        SessionOrchestratorLayer(
+          layerOptions.timeout !== undefined ? { timeout: layerOptions.timeout } : undefined,
+        ),
+        withAgentFactory,
+      );
       return Layer.provide(runtimeServicesLayer, withOrchestrator);
     });
 

@@ -1,5 +1,5 @@
 import type { Agent, AppMessage, Attachment } from "@yeshwanthyk/agent-core";
-import { Context, Deferred, Effect, Layer, Ref } from "effect";
+import { Context, Deferred, Duration, Effect, Layer, Ref } from "effect";
 import { randomUUID } from "node:crypto";
 import type { PromptDeliveryMode, PromptQueueSnapshot, PromptQueueItem } from "./prompt-queue.js";
 import { PromptQueueTag, type PromptQueueService } from "./prompt-queue.js";
@@ -65,7 +65,11 @@ const ensureSession = (
           }),
   );
 
-export const SessionOrchestratorLayer = () =>
+export interface SessionOrchestratorOptions {
+  readonly timeout?: number;
+}
+
+export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =>
   Layer.scoped(
     SessionOrchestratorTag,
     Effect.gen(function* () {
@@ -195,7 +199,11 @@ export const SessionOrchestratorLayer = () =>
                 );
               });
 
-              yield* Effect.withExecutionPlan(attempt, plan.plan);
+              const attemptMaybeWithTimeout = options?.timeout
+                ? attempt.pipe(Effect.timeout(Duration.millis(options.timeout)))
+                : attempt;
+
+              yield* Effect.withExecutionPlan(attemptMaybeWithTimeout, plan.plan);
 
               instrumentation.record({
                 type: "tmux:log",

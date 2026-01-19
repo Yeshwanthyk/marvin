@@ -10,6 +10,15 @@ import type { SdkError } from "./errors.js"
 
 export type StopReason = "complete" | "maxTokens" | "aborted" | "error"
 
+export interface RetryConfig {
+  /** Max attempts for primary model (default: 3) */
+  readonly maxAttempts?: number
+  /** Max attempts for fallback models (default: 2) */
+  readonly fallbackAttempts?: number
+  /** Initial delay in ms for exponential backoff (default: 100) */
+  readonly initialDelayMs?: number
+}
+
 export interface SdkResult {
   text: string
   messages: AppMessage[]
@@ -53,6 +62,14 @@ export interface SdkBaseOptions extends LoadConfigOptions {
   transportFactory?: TransportFactory
   maxTokens?: number
   temperature?: number
+  /** Retry configuration for transient failures */
+  retry?: RetryConfig
+  /** Request timeout in milliseconds */
+  timeout?: number
+  /** Allowlist of tool names to enable (default: all tools enabled) */
+  tools?: readonly string[]
+  /** Blocklist of tool names to disable */
+  disableTools?: readonly string[]
 }
 
 export interface RunAgentOptions extends SdkBaseOptions {

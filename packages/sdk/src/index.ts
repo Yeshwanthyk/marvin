@@ -2,6 +2,7 @@ export type { SdkError, SdkErrorTag, ConfigErrorCode, ProviderErrorCode, Request
 export { ConfigError, ProviderError, RequestError, HookError, isSdkError, toSdkError } from "./errors.js"
 export { err, ok, type Result } from "./result.js"
 export type {
+  RetryConfig,
   RunAgentOptions,
   RunAgentStreamOptions,
   SdkBaseOptions,
@@ -17,4 +18,4 @@ export type {
 } from "./types.js"
 export { runAgent, runAgentEffect } from "./run-agent.js"
 export { createAgentSession, createAgentSessionEffect } from "./session.js"
-export { runAgentStream } from "./stream.js"
+export { runAgentStream, runAgentStreamEffect } from "./stream.js"
