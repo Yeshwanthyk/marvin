@@ -21,7 +21,7 @@
     },
     "apps/coding-agent": {
       "name": "@yeshwanthyk/coding-agent",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "bin": {
         "marvin": "./src/index.ts",
       },
@@ -124,7 +124,7 @@
       "dependencies": {
         "@yeshwanthyk/agent-core": "^0.1.0",
         "@yeshwanthyk/ai": "^0.1.0",
-        "@yeshwanthyk/runtime-effect": "^0.1.0",
+        "@yeshwanthyk/runtime-effect": "^0.1.1",
         "effect": "^3.19.14",
       },
     },

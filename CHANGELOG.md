@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.1] - 2026-01-19
+
+### Fixed
+- **Global install resolution**: Publish-time tsconfig and path fallbacks now let Bun resolve internal aliases and workspace deps when installed from npm.
+
 ## [0.3.0] - 2026-01-19
 
 ### Added

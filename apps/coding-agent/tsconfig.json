@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "../..",
-    "baseUrl": "src",
+    "baseUrl": ".",
     "outDir": "dist",
     "declaration": true,
     "composite": true,
@@ -15,21 +15,51 @@
     "jsxImportSource": "@opentui/solid",
     "types": ["node", "bun"],
     "paths": {
-      "@adapters/*": ["adapters/*"],
-      "@runtime/*": ["runtime/*"],
-      "@domain/*": ["domain/*"],
-      "@ext/*": ["extensibility/*"],
-      "@ui/*": ["ui/*"],
-      "@yeshwanthyk/agent-core": ["../../../packages/agent/src/index.ts"],
-      "@yeshwanthyk/agent-core/*": ["../../../packages/agent/src/*"],
-      "@yeshwanthyk/base-tools": ["../../../packages/base-tools/src/index.ts"],
-      "@yeshwanthyk/base-tools/*": ["../../../packages/base-tools/src/*"],
-      "@yeshwanthyk/lsp": ["../../../packages/lsp/src/index.ts"],
-      "@yeshwanthyk/lsp/*": ["../../../packages/lsp/src/*"],
-      "@yeshwanthyk/ai": ["../../../packages/ai/src/index.ts"],
-      "@yeshwanthyk/ai/src/*": ["../../../packages/ai/src/*"],
-      "@yeshwanthyk/runtime-effect": ["../../../packages/runtime-effect/src/index.ts"],
-      "@yeshwanthyk/runtime-effect/*": ["../../../packages/runtime-effect/src/*"]
+      "@adapters/*": ["src/adapters/*"],
+      "@runtime/*": ["src/runtime/*"],
+      "@domain/*": ["src/domain/*"],
+      "@ext/*": ["src/extensibility/*"],
+      "@ui/*": ["src/ui/*"],
+      "@yeshwanthyk/agent-core": [
+        "../../packages/agent/src/index.ts",
+        "../agent-core/dist/index.js"
+      ],
+      "@yeshwanthyk/agent-core/*": [
+        "../../packages/agent/src/*",
+        "../agent-core/dist/*"
+      ],
+      "@yeshwanthyk/base-tools": [
+        "../../packages/base-tools/src/index.ts",
+        "../base-tools/dist/index.js"
+      ],
+      "@yeshwanthyk/base-tools/*": [
+        "../../packages/base-tools/src/*",
+        "../base-tools/dist/*"
+      ],
+      "@yeshwanthyk/lsp": [
+        "../../packages/lsp/src/index.ts",
+        "../lsp/dist/index.js"
+      ],
+      "@yeshwanthyk/lsp/*": [
+        "../../packages/lsp/src/*",
+        "../lsp/dist/*"
+      ],
+      "@yeshwanthyk/ai": [
+        "../../packages/ai/src/index.ts",
+        "../ai/dist/index.js"
+      ],
+      "@yeshwanthyk/ai/src/*": [
+        "../../packages/ai/src/*",
+        "../ai/dist/*"
+      ],
+      "@yeshwanthyk/runtime-effect": [
+        "../../packages/runtime-effect/src/index.ts",
+        "../runtime-effect/dist/index.js"
+      ],
+      "@yeshwanthyk/runtime-effect/*": [
+        "../../packages/runtime-effect/src/*",
+        "../runtime-effect/dist/*"
+      ]
     }
   },
   "include": [
