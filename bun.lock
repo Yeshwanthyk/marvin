@@ -21,7 +21,7 @@
     },
     "apps/coding-agent": {
       "name": "@yeshwanthyk/coding-agent",
-      "version": "0.3.3",
+      "version": "0.3.6",
       "bin": {
         "marvin": "./dist/index.js",
       },
@@ -91,7 +91,7 @@
     },
     "packages/open-tui": {
       "name": "@yeshwanthyk/open-tui",
-      "version": "0.1.0",
+      "version": "0.1.4",
       "dependencies": {
         "@opentui/core": "0.1.63",
         "@opentui/solid": "0.1.63",

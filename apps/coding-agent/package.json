@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/coding-agent",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "type": "module",
   "bin": {
     "marvin": "./dist/index.js"
@@ -23,7 +23,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "test": "bun test tests",
-    "build": "tsc -b tsconfig.build.json --force && tsc-alias -p tsconfig.alias.json",
+    "build": "tsc -b tsconfig.build.json --force && tsc-alias -p tsconfig.alias.json && node scripts/replace-jsx-runtime.js",
     "build:binary": "bun scripts/build.ts",
     "prepublishOnly": "npm run build -w @yeshwanthyk/open-tui && npm run clean && npm run build"
   },

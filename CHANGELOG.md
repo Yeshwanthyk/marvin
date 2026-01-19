@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.6] - 2026-01-19
+
+### Fixed
+- **TUI runtime output**: Emit JS (not JSX) for the CLI build and rewrite JSX runtime imports for Bun.
+
 ## [0.3.5] - 2026-01-19
 
 ### Fixed
