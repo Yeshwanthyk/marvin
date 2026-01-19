@@ -1,6 +1,6 @@
 {
 	"name": "@yeshwanthyk/open-tui",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"description": "OpenTUI-based Terminal User Interface with SolidJS reactive rendering",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -17,7 +17,7 @@
 		"lint": "biome check --write . && oxlint .",
 		"lint:check": "biome check . && oxlint .",
 		"typecheck": "tsc --noEmit",
-		"build": "tsc -b tsconfig.build.json --force",
+		"build": "tsc -b tsconfig.build.json --force && node scripts/replace-jsx-runtime.js",
 		"check": "bun run lint:check && bun run typecheck",
 		"test": "bun test",
 		"demo": "bun run examples/run.ts",

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.4] - 2026-01-19
+
+### Fixed
+- **Global install runtime**: Pull OpenTUI `^0.1.3`, which rewrites JSX runtime imports for Bun/Node compatibility.
+
 ## [0.3.3] - 2026-01-19
 
 ### Fixed
