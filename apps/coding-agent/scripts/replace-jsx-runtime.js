@@ -1,8 +1,8 @@
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { extname, join } from "node:path";
 
-const FROM = "@opentui/solid/jsx-runtime";
-const TO = "solid-js/h/jsx-runtime";
+const FROM = "solid-js/h/jsx-runtime";
+const TO = "@opentui/solid/jsx-runtime";
 
 const walk = async (dir) => {
   const entries = await readdir(dir, { withFileTypes: true });

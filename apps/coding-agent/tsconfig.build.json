@@ -4,8 +4,7 @@
     "rootDir": "src",
     "outDir": "dist",
     "baseUrl": "src",
-    "jsx": "react-jsx",
-    "jsxImportSource": "@opentui/solid",
+    "jsx": "preserve",
     "paths": {
       "@adapters/*": ["adapters/*"],
       "@runtime/*": ["runtime/*"],
