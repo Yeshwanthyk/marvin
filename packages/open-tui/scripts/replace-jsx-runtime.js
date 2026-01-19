@@ -3,7 +3,7 @@ import { extname, join } from "node:path";
 import { readdir } from "node:fs/promises";
 
 const FROM = "@opentui/solid/jsx-runtime";
-const TO = "solid-js/jsx-runtime";
+const TO = "solid-js/h/jsx-runtime";
 
 const walk = async (dir) => {
   const entries = await readdir(dir, { withFileTypes: true });

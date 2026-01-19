@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.5] - 2026-01-19
+
+### Fixed
+- **JSX runtime resolution**: Use Solid's `h/jsx-runtime` so Bun resolves `jsx` exports correctly in global installs.
+
 ## [0.3.4] - 2026-01-19
 
 ### Fixed
