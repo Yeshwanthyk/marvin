@@ -2,7 +2,7 @@ import type { AppMessage } from "@yeshwanthyk/agent-core"
 import type { AssistantMessage, TextContent, ToolCall } from "@yeshwanthyk/ai"
 import type { RuntimeServices } from "@yeshwanthyk/runtime-effect/runtime.js"
 import { isRecord } from "./internal.js"
-import type { SdkResult } from "./types.js"
+import type { SdkResult, StopReason } from "./types.js"
 
 const isAssistantMessage = (value: unknown): value is AssistantMessage => {
   if (!isRecord(value)) return false
@@ -50,9 +50,21 @@ const extractToolCalls = (message: AssistantMessage): ToolCall[] => {
   return calls
 }
 
-export const buildSdkResult = (runtime: RuntimeServices): SdkResult => {
+const deriveStopReason = (message: AssistantMessage | undefined): StopReason => {
+  if (!message) return "error"
+  const reason = (message as { stopReason?: string }).stopReason
+  if (reason === "aborted") return "aborted"
+  if (reason === "maxTokens") return "maxTokens"
+  if (reason === "error") return "error"
+  return "complete"
+}
+
+export const buildSdkResult = (runtime: RuntimeServices, startTime: number): SdkResult => {
   const messages = runtime.agent.state.messages.slice()
   const assistant = lastAssistantMessage(messages)
+  const durationMs = Date.now() - startTime
+  const stopReason = deriveStopReason(assistant)
+
   const result: SdkResult = {
     text: assistant ? extractAssistantText(assistant) : "",
     messages,
@@ -60,6 +72,8 @@ export const buildSdkResult = (runtime: RuntimeServices): SdkResult => {
     provider: runtime.config.provider,
     model: runtime.config.modelId,
     sessionId: runtime.sessionManager.sessionId,
+    stopReason,
+    durationMs,
   }
   if (assistant?.usage) {
     result.usage = assistant.usage

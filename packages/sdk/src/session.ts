@@ -31,10 +31,11 @@ export const createAgentSessionEffect: (
     const runtime = yield* createSdkRuntime(options)
 
     const chat = (text: string, promptOptions?: { mode?: PromptDeliveryMode; attachments?: Attachment[] }) => {
+      const startTime = Date.now()
       const chatOptions: { mode?: PromptDeliveryMode; attachments?: Attachment[] } = {}
       if (promptOptions?.mode !== undefined) chatOptions.mode = promptOptions.mode
       if (promptOptions?.attachments !== undefined) chatOptions.attachments = promptOptions.attachments
-      return runtime.submitPromptAndWait(text, chatOptions).pipe(Effect.map(() => buildSdkResult(runtime.services)))
+      return runtime.submitPromptAndWait(text, chatOptions).pipe(Effect.map(() => buildSdkResult(runtime.services, startTime)))
     }
 
     const snapshot = () =>
@@ -44,9 +45,11 @@ export const createAgentSessionEffect: (
 
     const drainQueue = () => runtime.services.sessionOrchestrator.drainToScript
 
+    const abort = () => Effect.sync(() => runtime.services.agent.abort())
+
     const close = () => runtime.close
 
-    return { chat, snapshot, drainQueue, close } satisfies SdkSessionEffect
+    return { chat, snapshot, drainQueue, abort, close } satisfies SdkSessionEffect
   })
 
 export const createAgentSession = async (options: SdkSessionOptions): Promise<SdkSessionPromise> => {
@@ -56,6 +59,7 @@ export const createAgentSession = async (options: SdkSessionOptions): Promise<Sd
       chat: (text, promptOptions) => Effect.runPromise(session.chat(text, promptOptions)),
       snapshot: () => Effect.runPromise(session.snapshot()),
       drainQueue: () => Effect.runPromise(session.drainQueue()),
+      abort: () => { Effect.runSync(session.abort()) },
       close: () => Effect.runPromise(session.close()),
     }
   } catch (error) {

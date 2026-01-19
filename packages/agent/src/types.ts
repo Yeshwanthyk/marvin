@@ -76,6 +76,8 @@ export interface AgentState {
 	streamMessage: Message | null;
 	pendingToolCalls: Set<string>;
 	error?: string;
+	maxTokens?: number;
+	temperature?: number;
 }
 
 /**

@@ -8,6 +8,8 @@ import type { PromptDeliveryMode, PromptQueueSnapshot } from "@yeshwanthyk/runti
 import type { ApiKeyResolver, TransportBundle } from "@yeshwanthyk/runtime-effect/transports.js"
 import type { SdkError } from "./errors.js"
 
+export type StopReason = "complete" | "maxTokens" | "aborted" | "error"
+
 export interface SdkResult {
   text: string
   messages: AppMessage[]
@@ -16,6 +18,8 @@ export interface SdkResult {
   provider: string
   model: string
   sessionId: string | null
+  stopReason: StopReason
+  durationMs: number
 }
 
 export interface SdkSessionSnapshot {
@@ -37,12 +41,15 @@ export type TransportFactory = (config: LoadedAppConfig, resolver: ApiKeyResolve
 export interface SdkBaseOptions extends LoadConfigOptions {
   instrumentation?: (event: InstrumentationEvent) => void
   transportFactory?: TransportFactory
+  maxTokens?: number
+  temperature?: number
 }
 
 export interface RunAgentOptions extends SdkBaseOptions {
   prompt: string
   mode?: PromptDeliveryMode
   attachments?: Attachment[]
+  signal?: AbortSignal
 }
 
 export interface RunAgentStreamOptions extends RunAgentOptions {}
@@ -55,11 +62,13 @@ export interface SdkSession<
   Chat = SdkEffect<SdkResult>,
   Snapshot = SdkEffect<SdkSessionSnapshot>,
   Drain = SdkEffect<string | null>,
-  Close = Effect.Effect<void>
+  Close = Effect.Effect<void>,
+  Abort = Effect.Effect<void>
 > {
-  chat: (text: string, options?: { mode?: PromptDeliveryMode; attachments?: Attachment[] }) => Chat
+  chat: (text: string, options?: { mode?: PromptDeliveryMode; attachments?: Attachment[]; signal?: AbortSignal }) => Chat
   snapshot: () => Snapshot
   drainQueue: () => Drain
+  abort: () => Abort
   close: () => Close
 }
 
@@ -68,5 +77,6 @@ export type SdkSessionPromise = SdkSession<
   Promise<SdkResult>,
   Promise<SdkSessionSnapshot>,
   Promise<string | null>,
-  Promise<void>
+  Promise<void>,
+  void
 >

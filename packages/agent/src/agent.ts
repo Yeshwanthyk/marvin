@@ -117,6 +117,15 @@ export class Agent {
 		this.queueMode = mode;
 	}
 
+	setModelParameters(params: { maxTokens?: number; temperature?: number }) {
+		if (params.maxTokens !== undefined) {
+			this._state.maxTokens = params.maxTokens;
+		}
+		if (params.temperature !== undefined) {
+			this._state.temperature = params.temperature;
+		}
+	}
+
 	getQueueMode(): "all" | "one-at-a-time" {
 		return this.queueMode;
 	}

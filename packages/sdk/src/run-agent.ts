@@ -8,19 +8,23 @@ import { buildSdkResult } from "./sdk-result.js"
 import { createSdkRuntime } from "./runtime.js"
 import type { RunAgentOptions, SdkResult } from "./types.js"
 
-export const runAgentEffect = (options: RunAgentOptions): Effect.Effect<SdkResult, SdkError> =>
-  createSdkRuntime(options).pipe(
+export const runAgentEffect = (options: RunAgentOptions): Effect.Effect<SdkResult, SdkError> => {
+  const { prompt, mode, attachments, signal, ...rest } = options
+  const runtimeOptions = signal !== undefined ? { ...rest, signal } : rest
+  return createSdkRuntime(runtimeOptions).pipe(
     Effect.flatMap((runtime) => {
+      const startTime = Date.now()
       const promptOptions: { mode?: PromptDeliveryMode; attachments?: Attachment[] } = {}
       if (options.mode !== undefined) promptOptions.mode = options.mode
       if (options.attachments !== undefined) promptOptions.attachments = options.attachments
 
       return runtime.submitPromptAndWait(options.prompt, promptOptions).pipe(
-        Effect.map(() => buildSdkResult(runtime.services)),
+        Effect.map(() => buildSdkResult(runtime.services, startTime)),
         Effect.ensuring(runtime.close),
       )
     }),
   )
+}
 
 export const runAgent = async (options: RunAgentOptions): Promise<Result<SdkResult, SdkError>> => {
   try {

@@ -13,7 +13,7 @@ import {
   type RuntimeServices,
 } from "@yeshwanthyk/runtime-effect/runtime.js"
 import type { SdkError } from "./errors.js"
-import { toSdkError } from "./errors.js"
+import { toSdkError, ConfigError } from "./errors.js"
 import type { TransportFactory } from "./types.js"
 
 export interface SdkRuntimeOptions extends LoadConfigOptions {
@@ -21,6 +21,9 @@ export interface SdkRuntimeOptions extends LoadConfigOptions {
   instrumentationSink?: (event: InstrumentationEvent) => void
   hookMessageSink?: (message: HookMessage) => void
   transportFactory?: TransportFactory
+  signal?: AbortSignal
+  maxTokens?: number
+  temperature?: number
 }
 
 export interface PromptOptions {
@@ -151,6 +154,27 @@ const createSdkRuntimeImpl = Effect.fn(function* (options: SdkRuntimeOptions) {
       services.agent.setSystemPrompt(services.config.systemPrompt)
     }
 
+    // Wire external AbortSignal to agent.abort()
+    const signal = options.signal
+    if (signal) {
+      if (signal.aborted) {
+        return yield* Effect.fail(toSdkError(new DOMException("Aborted", "AbortError"), "RequestError"))
+      }
+      const onAbort = () => services.agent.abort()
+      signal.addEventListener("abort", onAbort, { once: true })
+      yield* Scope.addFinalizer(scope, Effect.sync(() => {
+        signal.removeEventListener("abort", onAbort)
+      }))
+    }
+
+    // Apply model parameters if provided
+    if (options.maxTokens !== undefined || options.temperature !== undefined) {
+      const modelParams: { maxTokens?: number; temperature?: number } = {}
+      if (options.maxTokens !== undefined) modelParams.maxTokens = options.maxTokens
+      if (options.temperature !== undefined) modelParams.temperature = options.temperature
+      services.agent.setModelParameters(modelParams)
+    }
+
     const close = Effect.suspend(() => Scope.close(scope, Exit.void))
 
     const submitPromptEffect = Effect.fn(function* (
@@ -160,7 +184,7 @@ const createSdkRuntimeImpl = Effect.fn(function* (options: SdkRuntimeOptions) {
     ) {
         const prompt = normalizePrompt(text)
         if (!prompt) {
-          return yield* Effect.fail(toSdkError("Empty prompt", "RuntimeError"))
+          return yield* Effect.fail(ConfigError("CONFIG_INVALID", "Empty prompt"))
         }
 
         const beforeStartResult = yield* Effect.tryPromise(() =>
@@ -184,7 +208,7 @@ const createSdkRuntimeImpl = Effect.fn(function* (options: SdkRuntimeOptions) {
         if (wait) {
           return yield* services.sessionOrchestrator
             .submitPromptAndWait(prompt, submitOptions)
-            .pipe(Effect.mapError((err) => toSdkError(err, "RuntimeError")))
+            .pipe(Effect.mapError((err) => toSdkError(err, "RequestError")))
         }
 
         yield* services.sessionOrchestrator.submitPrompt(prompt, submitOptions)
