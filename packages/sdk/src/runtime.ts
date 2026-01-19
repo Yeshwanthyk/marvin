@@ -14,7 +14,7 @@ import {
 } from "@yeshwanthyk/runtime-effect/runtime.js"
 import type { SdkError } from "./errors.js"
 import { toSdkError, ConfigError } from "./errors.js"
-import type { TransportFactory } from "./types.js"
+import type { SessionState, TransportFactory } from "./types.js"
 
 export interface SdkRuntimeOptions extends LoadConfigOptions {
   instrumentation?: (event: InstrumentationEvent) => void
@@ -24,6 +24,7 @@ export interface SdkRuntimeOptions extends LoadConfigOptions {
   signal?: AbortSignal
   maxTokens?: number
   temperature?: number
+  restore?: SessionState
 }
 
 export interface PromptOptions {
@@ -173,6 +174,15 @@ const createSdkRuntimeImpl = Effect.fn(function* (options: SdkRuntimeOptions) {
       if (options.maxTokens !== undefined) modelParams.maxTokens = options.maxTokens
       if (options.temperature !== undefined) modelParams.temperature = options.temperature
       services.agent.setModelParameters(modelParams)
+    }
+
+    // Restore session state if provided
+    if (options.restore) {
+      const state = options.restore
+      if (state.version !== 1) {
+        return yield* Effect.fail(ConfigError("CONFIG_INVALID", `Unsupported session state version: ${state.version}`))
+      }
+      services.agent.replaceMessages(state.messages)
     }
 
     const close = Effect.suspend(() => Scope.close(scope, Exit.void))

@@ -12,6 +12,7 @@ export type {
   SdkSessionOptions,
   SdkSessionPromise,
   SdkSessionSnapshot,
+  SessionState,
   StopReason,
 } from "./types.js"
 export { runAgent, runAgentEffect } from "./run-agent.js"

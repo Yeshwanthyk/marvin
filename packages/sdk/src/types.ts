@@ -31,6 +31,16 @@ export interface SdkSessionSnapshot {
   queue: PromptQueueSnapshot
 }
 
+export interface SessionState {
+  readonly version: 1
+  readonly messages: AppMessage[]
+  readonly provider: string
+  readonly model: string
+  readonly thinking: ThinkingLevel
+  readonly systemPrompt?: string
+  readonly exportedAt: number
+}
+
 export type SdkEvent =
   | { type: "agent"; event: AgentEvent }
   | { type: "hookMessage"; message: HookMessage }
@@ -54,7 +64,9 @@ export interface RunAgentOptions extends SdkBaseOptions {
 
 export interface RunAgentStreamOptions extends RunAgentOptions {}
 
-export interface SdkSessionOptions extends SdkBaseOptions {}
+export interface SdkSessionOptions extends SdkBaseOptions {
+  restore?: SessionState
+}
 
 type SdkEffect<T> = Effect.Effect<T, SdkError>
 
@@ -63,12 +75,14 @@ export interface SdkSession<
   Snapshot = SdkEffect<SdkSessionSnapshot>,
   Drain = SdkEffect<string | null>,
   Close = Effect.Effect<void>,
-  Abort = Effect.Effect<void>
+  Abort = Effect.Effect<void>,
+  Export = SdkEffect<SessionState>
 > {
   chat: (text: string, options?: { mode?: PromptDeliveryMode; attachments?: Attachment[]; signal?: AbortSignal }) => Chat
   snapshot: () => Snapshot
   drainQueue: () => Drain
   abort: () => Abort
+  export: () => Export
   close: () => Close
 }
 
@@ -78,5 +92,6 @@ export type SdkSessionPromise = SdkSession<
   Promise<SdkSessionSnapshot>,
   Promise<string | null>,
   Promise<void>,
-  void
+  void,
+  Promise<SessionState>
 >

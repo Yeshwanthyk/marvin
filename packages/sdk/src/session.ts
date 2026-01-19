@@ -5,7 +5,7 @@ import type { Attachment } from "@yeshwanthyk/agent-core"
 import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import { buildSdkResult } from "./sdk-result.js"
 import { createSdkRuntime } from "./runtime.js"
-import type { SdkSessionEffect, SdkSessionOptions, SdkSessionPromise, SdkSessionSnapshot } from "./types.js"
+import type { SessionState, SdkSessionEffect, SdkSessionOptions, SdkSessionPromise, SdkSessionSnapshot } from "./types.js"
 
 const buildSnapshot = (
   services: {
@@ -47,9 +47,20 @@ export const createAgentSessionEffect: (
 
     const abort = () => Effect.sync(() => runtime.services.agent.abort())
 
+    const exportSession = (): Effect.Effect<SessionState, SdkError> =>
+      Effect.sync((): SessionState => ({
+        version: 1,
+        messages: runtime.services.agent.state.messages.slice(),
+        provider: runtime.services.config.provider,
+        model: runtime.services.config.modelId,
+        thinking: runtime.services.config.thinking,
+        systemPrompt: runtime.services.config.systemPrompt,
+        exportedAt: Date.now(),
+      }))
+
     const close = () => runtime.close
 
-    return { chat, snapshot, drainQueue, abort, close } satisfies SdkSessionEffect
+    return { chat, snapshot, drainQueue, abort, export: exportSession, close } satisfies SdkSessionEffect
   })
 
 export const createAgentSession = async (options: SdkSessionOptions): Promise<SdkSessionPromise> => {
@@ -60,6 +71,7 @@ export const createAgentSession = async (options: SdkSessionOptions): Promise<Sd
       snapshot: () => Effect.runPromise(session.snapshot()),
       drainQueue: () => Effect.runPromise(session.drainQueue()),
       abort: () => { Effect.runSync(session.abort()) },
+      export: () => Effect.runPromise(session.export()),
       close: () => Effect.runPromise(session.close()),
     }
   } catch (error) {
