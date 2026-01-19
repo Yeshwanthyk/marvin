@@ -6,14 +6,14 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@marvin-agents/agent-core": ["../agent/src/index.ts"],
-      "@marvin-agents/agent-core/*": ["../agent/src/*"],
-      "@marvin-agents/ai": ["../ai/src/index.ts"],
-      "@marvin-agents/ai/*": ["../ai/src/*"],
-      "@marvin-agents/base-tools": ["../base-tools/src/index.ts"],
-      "@marvin-agents/base-tools/*": ["../base-tools/src/*"],
-      "@marvin-agents/lsp": ["../lsp/src/index.ts"],
-      "@marvin-agents/lsp/*": ["../lsp/src/*"]
+      "@yeshwanthyk/agent-core": ["../agent/src/index.ts"],
+      "@yeshwanthyk/agent-core/*": ["../agent/src/*"],
+      "@yeshwanthyk/ai": ["../ai/src/index.ts"],
+      "@yeshwanthyk/ai/*": ["../ai/src/*"],
+      "@yeshwanthyk/base-tools": ["../base-tools/src/index.ts"],
+      "@yeshwanthyk/base-tools/*": ["../base-tools/src/*"],
+      "@yeshwanthyk/lsp": ["../lsp/src/index.ts"],
+      "@yeshwanthyk/lsp/*": ["../lsp/src/*"]
     }
   },
   "include": [

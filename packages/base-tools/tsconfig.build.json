@@ -8,8 +8,8 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
-      "@marvin-agents/ai": ["../ai/dist/index.d.ts"],
-      "@marvin-agents/ai/*": ["../ai/dist/*"]
+      "@yeshwanthyk/ai": ["../ai/dist/index.d.ts"],
+      "@yeshwanthyk/ai/*": ["../ai/dist/*"]
     }
   },
   "include": ["src/**/*.ts"],

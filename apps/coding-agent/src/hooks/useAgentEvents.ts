@@ -1,5 +1,5 @@
 import { createEffect, onCleanup } from "solid-js"
-import type { Agent, AgentEvent } from "@marvin-agents/agent-core"
+import type { Agent, AgentEvent } from "@yeshwanthyk/agent-core"
 import { createAgentEventHandler, type EventHandlerContext } from "../agent-events.js"
 
 export interface AgentEventsOptions {

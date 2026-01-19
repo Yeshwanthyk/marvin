@@ -8,12 +8,12 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
-      "@marvin-agents/agent-core": ["../agent/dist/index.d.ts"],
-      "@marvin-agents/agent-core/*": ["../agent/dist/*"],
-      "@marvin-agents/ai": ["../ai/dist/index.d.ts"],
-      "@marvin-agents/ai/*": ["../ai/dist/*"],
-      "@marvin-agents/runtime-effect": ["../runtime-effect/dist/index.d.ts"],
-      "@marvin-agents/runtime-effect/*": ["../runtime-effect/dist/*"]
+      "@yeshwanthyk/agent-core": ["../agent/dist/index.d.ts"],
+      "@yeshwanthyk/agent-core/*": ["../agent/dist/*"],
+      "@yeshwanthyk/ai": ["../ai/dist/index.d.ts"],
+      "@yeshwanthyk/ai/*": ["../ai/dist/*"],
+      "@yeshwanthyk/runtime-effect": ["../runtime-effect/dist/index.d.ts"],
+      "@yeshwanthyk/runtime-effect/*": ["../runtime-effect/dist/*"]
     }
   },
   "include": ["src/**/*.ts"],

@@ -5,7 +5,7 @@
  *   cp examples/hooks/git-context.ts ~/.config/marvin/hooks/
  */
 
-import type { HookEventContext, HookFactory } from "@marvin-agents/coding-agent/hooks"
+import type { HookEventContext, HookFactory } from "@yeshwanthyk/coding-agent/hooks"
 
 const hook: HookFactory = (marvin) => {
 	const sendGitContext = async (_ev: unknown, ctx: HookEventContext) => {

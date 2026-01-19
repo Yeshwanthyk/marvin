@@ -39,8 +39,8 @@ import type {
 	ToolExecuteAfterEvent,
 	ToolExecuteAfterResult,
 } from "./types.js"
-import type { AgentRunConfig } from "@marvin-agents/agent-core"
-import type { Api, ImageContent, Message, Model } from "@marvin-agents/ai"
+import type { AgentRunConfig } from "@yeshwanthyk/agent-core"
+import type { Api, ImageContent, Message, Model } from "@yeshwanthyk/ai"
 import type { ReadonlySessionManager } from "../session-manager.js"
 import type { PromptDeliveryMode } from "../session/prompt-queue.js"
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import { Effect, Layer } from "effect"
 import * as Runtime from "effect/Runtime"
-import type { Api, Model } from "@marvin-agents/ai"
+import type { Api, Model } from "@yeshwanthyk/ai"
 import {
 	HookContextControllerLayer,
 	HookContextControllerTag,

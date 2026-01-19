@@ -2,11 +2,11 @@
  * ACP Session - wraps Agent and emits ACP updates
  */
 
-import type { Agent, AgentEvent, Attachment } from "@marvin-agents/agent-core"
+import type { Agent, AgentEvent, Attachment } from "@yeshwanthyk/agent-core"
 import type { UpdateEmitter } from "./updates.js"
 import type { ContentBlock, SlashCommand, ModelOption, StopReason } from "./protocol.js"
 import { textChunk, thoughtChunk, toolCall, toolCallUpdate, toolNameToKind } from "./updates.js"
-import type { SessionOrchestratorService } from "@marvin-agents/runtime-effect/session/orchestrator.js"
+import type { SessionOrchestratorService } from "@yeshwanthyk/runtime-effect/session/orchestrator.js"
 import { Effect } from "effect"
 
 export interface AcpSessionConfig {

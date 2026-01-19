@@ -1,5 +1,5 @@
 {
-  "name": "@marvin-agents/runtime-effect",
+  "name": "@yeshwanthyk/runtime-effect",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -23,10 +23,10 @@
   },
   "dependencies": {
     "@effect/platform-node": "^0.104.0",
-    "@marvin-agents/agent-core": "^0.1.0",
-    "@marvin-agents/ai": "^0.1.0",
-    "@marvin-agents/base-tools": "^0.1.0",
-    "@marvin-agents/lsp": "^0.1.0",
+    "@yeshwanthyk/agent-core": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
+    "@yeshwanthyk/base-tools": "^0.1.0",
+    "@yeshwanthyk/lsp": "^0.1.0",
     "effect": "^3.19.14"
   },
   "keywords": ["ai", "agent", "effect", "runtime"],

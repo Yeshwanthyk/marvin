@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { createPromptQueue, type PromptQueueItem } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
+import { createPromptQueue, type PromptQueueItem } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 
 describe("prompt queue", () => {
 	it("tracks size when pushing and shifting", () => {

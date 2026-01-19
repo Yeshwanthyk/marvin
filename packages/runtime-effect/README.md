@@ -1,17 +1,17 @@
-# @marvin-agents/runtime-effect
+# @yeshwanthyk/runtime-effect
 
 Effect-powered runtime layer for Marvin agents (config, hooks, tools, LSP, sessions).
 
 ## Installation
 
 ```bash
-npm install @marvin-agents/runtime-effect
+npm install @yeshwanthyk/runtime-effect
 ```
 
 ## Usage
 
 ```typescript
-import { RuntimeLayer } from "@marvin-agents/runtime-effect/runtime";
+import { RuntimeLayer } from "@yeshwanthyk/runtime-effect/runtime";
 ```
 
 ## License

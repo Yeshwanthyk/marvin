@@ -1,5 +1,5 @@
 {
-	"name": "@marvin-agents/agent-core",
+	"name": "@yeshwanthyk/agent-core",
 	"version": "0.1.0",
 	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
 	"type": "module",
@@ -26,7 +26,7 @@
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {
-		"@marvin-agents/ai": "^0.1.0"
+		"@yeshwanthyk/ai": "^0.1.0"
 	},
 	"keywords": [
 		"ai",

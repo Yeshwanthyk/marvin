@@ -1,12 +1,12 @@
-import type { Agent, ThinkingLevel } from "@marvin-agents/agent-core"
-import type { CodexTransport } from "@marvin-agents/agent-core"
-import type { Api, Model, KnownProvider } from "@marvin-agents/ai"
+import type { Agent, ThinkingLevel } from "@yeshwanthyk/agent-core"
+import type { CodexTransport } from "@yeshwanthyk/agent-core"
+import type { Api, Model, KnownProvider } from "@yeshwanthyk/ai"
 import type { SessionManager } from "../../session-manager.js"
 import type { ActivityState, ToolBlock, UIMessage } from "../../types.js"
 import type { EditorConfig } from "../../config.js"
 import type { HookRunner } from "../../hooks/index.js"
-import type { PromptDeliveryMode } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
-import type { PromptSubmitOptions } from "@marvin-agents/runtime-effect/session/orchestrator.js"
+import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
+import type { PromptSubmitOptions } from "@yeshwanthyk/runtime-effect/session/orchestrator.js"
 
 export const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"]
 

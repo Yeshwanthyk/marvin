@@ -1,18 +1,18 @@
-# @marvin-agents/agent-core
+# @yeshwanthyk/agent-core
 
 Stateful agent abstraction with transport layer for LLM interactions. Provides a reactive `Agent` class that manages conversation state, emits granular events, and supports pluggable transports for different deployment scenarios.
 
 ## Installation
 
 ```bash
-npm install @marvin-agents/agent-core
+npm install @yeshwanthyk/agent-core
 ```
 
 ## Quick Start
 
 ```typescript
-import { Agent, ProviderTransport } from '@marvin-agents/agent-core';
-import { getModel } from '@marvin-agents/ai';
+import { Agent, ProviderTransport } from '@yeshwanthyk/agent-core';
+import { getModel } from '@yeshwanthyk/ai';
 
 // Create agent with direct provider transport
 const agent = new Agent({
@@ -96,7 +96,7 @@ Events provide fine-grained lifecycle information:
 
 Transports abstract LLM communication:
 
-- **`ProviderTransport`**: Direct API calls using `@marvin-agents/ai`
+- **`ProviderTransport`**: Direct API calls using `@yeshwanthyk/ai`
 - **`AppTransport`**: Proxy through a backend server (for browser apps)
 - **`CodexTransport`**: OAuth-based access via ChatGPT subscription (gpt-5.2)
 - **`RouterTransport`**: Auto-routes to correct transport based on model provider
@@ -118,7 +118,7 @@ const agent = new Agent({
 });
 
 // Multi-provider with Codex + API keys
-import { RouterTransport, CodexTransport, ProviderTransport, loadTokens, saveTokens, clearTokens } from '@marvin-agents/agent-core';
+import { RouterTransport, CodexTransport, ProviderTransport, loadTokens, saveTokens, clearTokens } from '@yeshwanthyk/agent-core';
 
 const router = new RouterTransport({
   codex: new CodexTransport({
@@ -170,7 +170,7 @@ await agent.prompt('What is in this image?', [{
 Extend `AppMessage` for app-specific messages via declaration merging:
 
 ```typescript
-declare module '@marvin-agents/agent-core' {
+declare module '@yeshwanthyk/agent-core' {
   interface CustomMessages {
     artifact: { role: 'artifact'; code: string; language: string };
   }

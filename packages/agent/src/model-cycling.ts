@@ -1,4 +1,4 @@
-import type { Model, ReasoningEffort } from "@marvin-agents/ai";
+import type { Model, ReasoningEffort } from "@yeshwanthyk/ai";
 
 export type ThinkingLevel = ReasoningEffort | "off";
 

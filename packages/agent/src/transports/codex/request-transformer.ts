@@ -1,4 +1,4 @@
-import type { ReasoningEffort } from "@marvin-agents/ai";
+import type { ReasoningEffort } from "@yeshwanthyk/ai";
 import type { CodexRequestBody, InputItem } from "./types.js";
 import { normalizeModel } from "./model-map.js";
 

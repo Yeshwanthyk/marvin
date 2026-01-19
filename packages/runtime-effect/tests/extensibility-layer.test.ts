@@ -8,7 +8,7 @@ import { SessionManager, SessionManagerTag } from "../src/session-manager.js"
 import { CustomCommandTag } from "../src/extensibility/custom-commands.js"
 import type { LoadedCustomTool } from "../src/extensibility/custom-tools/index.js"
 import type { HookRunner } from "../src/hooks/index.js"
-import { getModels } from "@marvin-agents/ai"
+import { getModels } from "@yeshwanthyk/ai"
 import { Type } from "@sinclair/typebox"
 import type { CustomAgentTool } from "../src/extensibility/custom-tools/types.js"
 

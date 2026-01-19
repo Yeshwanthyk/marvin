@@ -2,7 +2,7 @@
  * Custom tool types for user-defined tools.
  */
 
-import type { AgentTool, AgentToolResult } from "@marvin-agents/ai"
+import type { AgentTool, AgentToolResult } from "@yeshwanthyk/ai"
 import type { JSX } from "solid-js"
 import type { ValidationIssue } from "../schema.js"
 import type { HookTheme } from "../../hooks/types.js"

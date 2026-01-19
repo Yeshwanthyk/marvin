@@ -4,8 +4,8 @@ import {
 	loadAnthropicTokens,
 	clearAnthropicTokens,
 	getAnthropicTokensPath,
-} from "@marvin-agents/agent-core"
-import { loginAnthropic } from "@marvin-agents/ai"
+} from "@yeshwanthyk/agent-core"
+import { loginAnthropic } from "@yeshwanthyk/ai"
 import type { CommandDefinition } from "../types.js"
 import { addSystemMessage } from "../helpers.js"
 

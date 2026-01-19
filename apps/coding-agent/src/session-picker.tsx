@@ -3,7 +3,7 @@
  */
 
 import { render, useTerminalDimensions, useKeyboard } from "@opentui/solid"
-import { SelectList, ThemeProvider, useTheme, type SelectItem, type SelectListRef, type ThemeMode } from "@marvin-agents/open-tui"
+import { SelectList, ThemeProvider, useTheme, type SelectItem, type SelectListRef, type ThemeMode } from "@yeshwanthyk/open-tui"
 import type { SessionManager } from "./session-manager.js"
 
 /** Detect system dark/light mode (macOS only, defaults to dark) */

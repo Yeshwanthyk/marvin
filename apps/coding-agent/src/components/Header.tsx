@@ -5,9 +5,9 @@
  */
 
 import { Show, createMemo, createSignal } from "solid-js"
-import { useTheme } from "@marvin-agents/open-tui"
-import type { ThinkingLevel } from "@marvin-agents/agent-core"
-import type { LspManager, LspServerId } from "@marvin-agents/lsp"
+import { useTheme } from "@yeshwanthyk/open-tui"
+import type { ThinkingLevel } from "@yeshwanthyk/agent-core"
+import type { LspManager, LspServerId } from "@yeshwanthyk/lsp"
 import type { ActivityState } from "../types.js"
 
 const LSP_SYMBOLS: Record<LspServerId, [string, string]> = {
@@ -45,7 +45,7 @@ const PROGRESS_FILLED = "━"
 const PROGRESS_EMPTY = "┄"
 const PROGRESS_BAR_LENGTH = 8
 
-import type { QueueCounts } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
+import type { QueueCounts } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 
 export interface HeaderProps {
   modelId: string

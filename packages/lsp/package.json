@@ -1,5 +1,5 @@
 {
-  "name": "@marvin-agents/lsp",
+  "name": "@yeshwanthyk/lsp",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,7 +22,7 @@
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@marvin-agents/ai": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageserver-types": "^3.17.5"
   },

@@ -1,4 +1,4 @@
-import type { Agent, AppMessage, Attachment } from "@marvin-agents/agent-core";
+import type { Agent, AppMessage, Attachment } from "@yeshwanthyk/agent-core";
 import { Context, Deferred, Effect, Layer, Ref } from "effect";
 import { randomUUID } from "node:crypto";
 import type { PromptDeliveryMode, PromptQueueSnapshot, PromptQueueItem } from "./prompt-queue.js";

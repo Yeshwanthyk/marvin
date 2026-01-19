@@ -1,6 +1,6 @@
 import { TextareaRenderable, type KeyEvent } from "@opentui/core"
 import { Show } from "solid-js"
-import { SelectList, type AutocompleteItem, type SelectItem, type Theme } from "@marvin-agents/open-tui"
+import { SelectList, type AutocompleteItem, type SelectItem, type Theme } from "@yeshwanthyk/open-tui"
 
 export interface ComposerProps {
 	theme: Theme

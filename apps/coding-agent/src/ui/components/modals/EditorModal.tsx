@@ -1,5 +1,5 @@
 import { useKeyboard } from "@opentui/solid"
-import { Dialog, Editor, useTheme, type EditorRef } from "@marvin-agents/open-tui"
+import { Dialog, Editor, useTheme, type EditorRef } from "@yeshwanthyk/open-tui"
 import type { JSX } from "solid-js"
 
 export interface EditorModalProps {

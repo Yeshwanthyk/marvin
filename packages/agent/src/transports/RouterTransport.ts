@@ -1,5 +1,5 @@
 import type { AgentRunConfig, AgentTransport } from "./types.js";
-import type { Message } from "@marvin-agents/ai";
+import type { Message } from "@yeshwanthyk/ai";
 
 export interface RouterTransportOptions {
 	/** Transport for codex provider (OAuth) */

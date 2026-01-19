@@ -1,7 +1,7 @@
 import { describe, expect, it, mock, beforeEach } from "bun:test"
 import { createAgentEventHandler, type EventHandlerContext } from "../src/agent-events.js"
-import type { AgentEvent } from "@marvin-agents/agent-core"
-import type { PromptQueueItem } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
+import type { AgentEvent } from "@yeshwanthyk/agent-core"
+import type { PromptQueueItem } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 
 // Mock context factory
 function createMockContext(overrides: Partial<EventHandlerContext> = {}): EventHandlerContext {

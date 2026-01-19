@@ -1,5 +1,5 @@
-import { getModels, getProviders } from '@marvin-agents/ai';
-import type { ThinkingLevel } from '@marvin-agents/agent-core';
+import { getModels, getProviders } from '@yeshwanthyk/ai';
+import type { ThinkingLevel } from '@yeshwanthyk/agent-core';
 import { THEME_NAMES } from "./theme-names.js";
 
 type KnownProvider = ReturnType<typeof getProviders>[number];

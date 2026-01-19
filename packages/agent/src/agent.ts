@@ -1,5 +1,5 @@
-import type { ImageContent, Message, QueuedMessage, ReasoningEffort, TextContent } from "@marvin-agents/ai";
-import { getModel } from "@marvin-agents/ai";
+import type { ImageContent, Message, QueuedMessage, ReasoningEffort, TextContent } from "@yeshwanthyk/ai";
+import { getModel } from "@yeshwanthyk/ai";
 import type { AgentRunConfig, AgentTransport } from "./transports/types.js";
 import type { AgentEvent, AgentState, AppMessage, Attachment, ThinkingLevel } from "./types.js";
 

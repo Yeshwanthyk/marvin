@@ -181,11 +181,11 @@ Find the imports at the top and update them:
 
 ```typescript
 // BEFORE (around line 7-8):
-import type { AppMessage, ThinkingLevel } from "@marvin-agents/agent-core"
-import type { AgentTool, ImageContent, TextContent, ToolResultMessage } from "@marvin-agents/ai"
+import type { AppMessage, ThinkingLevel } from "@yeshwanthyk/agent-core"
+import type { AgentTool, ImageContent, TextContent, ToolResultMessage } from "@yeshwanthyk/ai"
 
 // AFTER:
-import type { AppMessage, ThinkingLevel } from "@marvin-agents/agent-core"
+import type { AppMessage, ThinkingLevel } from "@yeshwanthyk/agent-core"
 import type { 
   AgentTool, 
   Api, 
@@ -195,8 +195,8 @@ import type {
   SimpleStreamOptions, 
   TextContent, 
   ToolResultMessage 
-} from "@marvin-agents/ai"
-import type { Theme } from "@marvin-agents/open-tui"
+} from "@yeshwanthyk/ai"
+import type { Theme } from "@yeshwanthyk/open-tui"
 import type { JSX } from "solid-js"
 ```
 
@@ -1303,7 +1303,7 @@ import type {
   ToolExecuteAfterResult,
 } from "./types.js"
 import type { ReadonlySessionManager } from "../session-manager.js"
-import type { ImageContent, Message } from "@marvin-agents/ai"
+import type { ImageContent, Message } from "@yeshwanthyk/ai"
 ```
 
 #### 3.2 Add No-Op Context Defaults
@@ -1727,7 +1727,7 @@ Replace the entire file:
  * Tool wrapper - wraps tools with hook callbacks for interception.
  */
 
-import type { AgentTool, AgentToolUpdateCallback, TextContent } from "@marvin-agents/ai"
+import type { AgentTool, AgentToolUpdateCallback, TextContent } from "@yeshwanthyk/ai"
 import type { HookRunner } from "./runner.js"
 
 /**
@@ -1847,7 +1847,7 @@ export function wrapToolsWithHooks(
  * Adapter to convert hook-registered tools to AgentTool interface.
  */
 
-import type { AgentTool, TextContent } from "@marvin-agents/ai"
+import type { AgentTool, TextContent } from "@yeshwanthyk/ai"
 import type { HookRunner } from "./runner.js"
 import type { RegisteredTool, HookEventContext } from "./types.js"
 

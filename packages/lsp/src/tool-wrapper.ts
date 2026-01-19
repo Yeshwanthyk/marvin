@@ -1,4 +1,4 @@
-import type { AgentTool, AgentToolResult } from "@marvin-agents/ai"
+import type { AgentTool, AgentToolResult } from "@yeshwanthyk/ai"
 import type { Diagnostic } from "vscode-languageserver-types"
 import path from "node:path"
 import type { LspManager, LspDiagnosticCaps } from "./types.js"

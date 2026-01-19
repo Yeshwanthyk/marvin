@@ -1,11 +1,11 @@
 import type { Effect } from "effect"
-import type { AgentEvent, AppMessage, Attachment, ThinkingLevel } from "@marvin-agents/agent-core"
-import type { ToolCall, Usage } from "@marvin-agents/ai"
-import type { LoadConfigOptions, LoadedAppConfig } from "@marvin-agents/runtime-effect/config.js"
-import type { InstrumentationEvent } from "@marvin-agents/runtime-effect/instrumentation.js"
-import type { HookMessage } from "@marvin-agents/runtime-effect/hooks/types.js"
-import type { PromptDeliveryMode, PromptQueueSnapshot } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
-import type { ApiKeyResolver, TransportBundle } from "@marvin-agents/runtime-effect/transports.js"
+import type { AgentEvent, AppMessage, Attachment, ThinkingLevel } from "@yeshwanthyk/agent-core"
+import type { ToolCall, Usage } from "@yeshwanthyk/ai"
+import type { LoadConfigOptions, LoadedAppConfig } from "@yeshwanthyk/runtime-effect/config.js"
+import type { InstrumentationEvent } from "@yeshwanthyk/runtime-effect/instrumentation.js"
+import type { HookMessage } from "@yeshwanthyk/runtime-effect/hooks/types.js"
+import type { PromptDeliveryMode, PromptQueueSnapshot } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
+import type { ApiKeyResolver, TransportBundle } from "@yeshwanthyk/runtime-effect/transports.js"
 import type { SdkError } from "./errors.js"
 
 export interface SdkResult {

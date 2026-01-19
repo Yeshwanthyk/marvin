@@ -41,14 +41,14 @@ Marvin supports multiple UI surfaces that share the same core agent infrastructu
 │  │   custom)    │  │   events)    │  │   files)     │  │                  │ │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                   Agent Core (@marvin-agents/agent-core)                    │
+│                   Agent Core (@yeshwanthyk/agent-core)                    │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │  Agent State Machine → messages, model, tools, streaming state         │ │
 │  │  Event Emitter → granular events for UI binding                        │ │
 │  │  Transport Layer → ProviderTransport, RouterTransport, CodexTransport  │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                       AI Package (@marvin-agents/ai)                        │
+│                       AI Package (@yeshwanthyk/ai)                        │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │  Provider Adapters → Anthropic, OpenAI, Google, Mistral                │ │
 │  │  Agent Loop → streaming, tool execution, multi-turn                    │ │
@@ -83,37 +83,37 @@ All variants have **full local filesystem access** via the base tools. The deskt
 
 ```
 packages/
-├── agent/         @marvin-agents/agent-core - Agent state machine, transports
-├── ai/            @marvin-agents/ai - LLM provider abstraction, streaming
-├── base-tools/    @marvin-agents/base-tools - read, write, edit, bash tools
-├── lsp/           @marvin-agents/lsp - Language server protocol integration
-├── open-tui/      @marvin-agents/open-tui - TUI components (terminal)
-├── runtime-effect @marvin-agents/runtime-effect - Effect runtime composition
-└── sdk/           @marvin-agents/sdk - Headless SDK on runtime-effect
+├── agent/         @yeshwanthyk/agent-core - Agent state machine, transports
+├── ai/            @yeshwanthyk/ai - LLM provider abstraction, streaming
+├── base-tools/    @yeshwanthyk/base-tools - read, write, edit, bash tools
+├── lsp/           @yeshwanthyk/lsp - Language server protocol integration
+├── open-tui/      @yeshwanthyk/open-tui - TUI components (terminal)
+├── runtime-effect @yeshwanthyk/runtime-effect - Effect runtime composition
+└── sdk/           @yeshwanthyk/sdk - Headless SDK on runtime-effect
 
 apps/
-├── coding-agent/  @marvin-agents/coding-agent - Terminal CLI/TUI
-└── desktop/       @marvin-agents/desktop - Tauri desktop application
+├── coding-agent/  @yeshwanthyk/coding-agent - Terminal CLI/TUI
+└── desktop/       @yeshwanthyk/desktop - Tauri desktop application
 ```
 
 ### Package Dependency Graph
 
 ```
-                    @marvin-agents/ai
+                    @yeshwanthyk/ai
                            │
               ┌────────────┼────────────┐
               ▼            ▼            ▼
-    @marvin-agents/    @marvin-agents/  @marvin-agents/
+    @yeshwanthyk/    @yeshwanthyk/  @yeshwanthyk/
        agent-core       base-tools         lsp
               │            │                │
               └────────────┼────────────────┘
                            │
-                  @marvin-agents/
+                  @yeshwanthyk/
                    runtime-effect
                            │
               ┌────────────┼────────────┐
               ▼            ▼            ▼
-   apps/coding-agent  apps/desktop   @marvin-agents/sdk
+   apps/coding-agent  apps/desktop   @yeshwanthyk/sdk
          │                 │               │
          ▼                 ▼               ▼
    open-tui (terminal)  desktop-ui (web)  headless SDK
@@ -153,7 +153,7 @@ The shared runtime lives in `packages/runtime-effect` and is composed entirely w
    - `drainToScript()` to serialize outstanding queue items when aborting or persisting state.
 6. **RuntimeLayer** wires everything together and hands adapters a scoped `RuntimeServices` bundle (agent, orchestrator, LSP, extensibility metadata, instrumentation handles, etc.).
 
-All adapters—TUI, headless CLI, ACP, or future surfaces—call `createRuntime()` which builds `RuntimeLayer` under a managed Effect scope and returns both the services and a `close()` helper that shuts down the scope (LSP, hooks, prompt loop) deterministically. The SDK (`@marvin-agents/sdk`) wraps the same runtime and exposes `runAgent`, session, and streaming APIs without bypassing Effect.
+All adapters—TUI, headless CLI, ACP, or future surfaces—call `createRuntime()` which builds `RuntimeLayer` under a managed Effect scope and returns both the services and a `close()` helper that shuts down the scope (LSP, hooks, prompt loop) deterministically. The SDK (`@yeshwanthyk/sdk`) wraps the same runtime and exposes `runAgent`, session, and streaming APIs without bypassing Effect.
 
 ## Slash Command Registry
 

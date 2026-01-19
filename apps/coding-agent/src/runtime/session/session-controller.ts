@@ -1,5 +1,5 @@
-import type { Agent, ThinkingLevel, AppMessage } from "@marvin-agents/agent-core"
-import type { Api, Model, KnownProvider } from "@marvin-agents/ai"
+import type { Agent, ThinkingLevel, AppMessage } from "@yeshwanthyk/agent-core"
+import type { Api, Model, KnownProvider } from "@yeshwanthyk/ai"
 import type { HookRunner } from "../../hooks/index.js"
 import type { SessionManager, LoadedSession } from "../../session-manager.js"
 import type { UIMessage, ToolBlock, UIContentBlock, UIShellMessage } from "../../types.js"
@@ -12,7 +12,7 @@ import {
 	getToolText,
 } from "@domain/messaging/content.js"
 import { resolveProvider, resolveModel } from "@domain/commands/helpers.js"
-import type { PromptDeliveryMode, PromptQueue } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
+import type { PromptDeliveryMode, PromptQueue } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 
 export interface SessionControllerOptions {
 	initialProvider: KnownProvider

@@ -1,17 +1,17 @@
-# @marvin-agents/sdk
+# @yeshwanthyk/sdk
 
 Headless SDK for running Marvin agents using the Effect runtime.
 
 ## Installation
 
 ```bash
-npm install @marvin-agents/sdk
+npm install @yeshwanthyk/sdk
 ```
 
 ## Usage
 
 ```typescript
-import { runAgent } from "@marvin-agents/sdk";
+import { runAgent } from "@yeshwanthyk/sdk";
 
 const result = await runAgent({ prompt: "Hello", cwd: process.cwd() });
 ```

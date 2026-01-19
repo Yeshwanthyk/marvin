@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Syncs ALL @marvin-agents/* package dependency versions to match their current versions.
+ * Syncs ALL @yeshwanthyk/* package dependency versions to match their current versions.
  * Ensures lockstep versioning across the monorepo.
  *
  * Usage: node scripts/sync-versions.js

@@ -6,8 +6,8 @@ import {
   loadTokens,
   saveTokens,
   loadAnthropicTokens,
-} from "@marvin-agents/agent-core";
-import { getApiKey } from "@marvin-agents/ai";
+} from "@yeshwanthyk/agent-core";
+import { getApiKey } from "@yeshwanthyk/ai";
 import { Context, Effect, Layer } from "effect";
 import type { LoadedAppConfig } from "./config.js";
 

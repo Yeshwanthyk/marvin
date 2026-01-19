@@ -1,6 +1,6 @@
 import { createSignal, type JSX } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
-import { Dialog, SelectList, type SelectListRef, type SelectItem } from "@marvin-agents/open-tui"
+import { Dialog, SelectList, type SelectListRef, type SelectItem } from "@yeshwanthyk/open-tui"
 
 export interface SelectModalProps {
 	title: string

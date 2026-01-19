@@ -1,5 +1,5 @@
 import { Context, Effect, Layer } from "effect"
-import { createLspManager, type LspManager } from "@marvin-agents/lsp"
+import { createLspManager, type LspManager } from "@yeshwanthyk/lsp"
 import { ConfigTag } from "./config.js"
 import { InstrumentationTag } from "./instrumentation.js"
 

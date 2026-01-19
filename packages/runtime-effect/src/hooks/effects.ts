@@ -1,7 +1,7 @@
 import { Channel, Context, Deferred, Effect, Either, Exit, Queue } from "effect"
 import { pipe } from "effect/Function"
-import type { AgentRunConfig } from "@marvin-agents/agent-core"
-import type { Message, ImageContent } from "@marvin-agents/ai"
+import type { AgentRunConfig } from "@yeshwanthyk/agent-core"
+import type { Message, ImageContent } from "@yeshwanthyk/ai"
 import type { HookRunner } from "./runner.js"
 import type {
 	BeforeAgentStartResult,

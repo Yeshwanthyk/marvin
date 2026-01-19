@@ -1,4 +1,4 @@
-# @marvin-agents/base-tools
+# @yeshwanthyk/base-tools
 
 Core file system and shell tools for AI coding agents.
 
@@ -12,13 +12,13 @@ Core file system and shell tools for AI coding agents.
 ## Installation
 
 ```bash
-npm install @marvin-agents/base-tools
+npm install @yeshwanthyk/base-tools
 ```
 
 ## Usage
 
 ```typescript
-import { createToolRegistry, createReadTool } from "@marvin-agents/base-tools";
+import { createToolRegistry, createReadTool } from "@yeshwanthyk/base-tools";
 
 const cwd = process.cwd();
 

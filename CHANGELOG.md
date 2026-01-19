@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.0] - 2026-01-19
+
+### Added
+- **Effect runtime foundation**: Core orchestration, session handling, and SDK entrypoints now use the Effect-based runtime.
+- **SDK publish readiness**: Packages are published under the `@yeshwanthyk/*` scope for npm consumption.
+
+### Changed
+- **TUI hook visibility**: `agent.before_start` hook messages are surfaced in the UI again after the prompt path refactor.
+
 ## [0.2.3] - 2026-01-18
 
 ### Added

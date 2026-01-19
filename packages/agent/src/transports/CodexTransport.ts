@@ -6,7 +6,7 @@ import {
 	type Message,
 	type Model,
 	type UserMessage,
-} from "@marvin-agents/ai";
+} from "@yeshwanthyk/ai";
 import type { AgentRunConfig, AgentTransport } from "./types.js";
 import type { CodexTokens } from "./codex/types.js";
 import { createCodexFetch } from "./codex/fetch.js";

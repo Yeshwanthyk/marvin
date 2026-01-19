@@ -1,1 +1,1 @@
-export * from "@marvin-agents/runtime-effect/session-manager";
+export * from "@yeshwanthyk/runtime-effect/session-manager";

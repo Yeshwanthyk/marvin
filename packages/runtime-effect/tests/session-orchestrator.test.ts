@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import * as Runtime from "effect/Runtime";
-import { getModels, type Api, type Model, type KnownProvider } from "@marvin-agents/ai";
-import type { AppMessage, Attachment } from "@marvin-agents/agent-core";
+import { getModels, type Api, type Model, type KnownProvider } from "@yeshwanthyk/ai";
+import type { AppMessage, Attachment } from "@yeshwanthyk/agent-core";
 import { SessionOrchestratorLayer, SessionOrchestratorTag } from "../src/session/orchestrator.js";
 import { PromptQueueLayer } from "../src/session/prompt-queue.js";
 import { ExecutionPlanBuilderLayer, type ExecutionPlanBuilderOptions } from "../src/session/execution-plan.js";

@@ -1,5 +1,5 @@
 {
-  "name": "@marvin-agents/base-tools",
+  "name": "@yeshwanthyk/base-tools",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,7 +22,7 @@
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@marvin-agents/ai": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
     "@sinclair/typebox": "0.34.45",
     "diff": "^8.0.2",
     "file-type": "^21.1.1"

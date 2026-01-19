@@ -1,4 +1,4 @@
-import type { AgentTool, ImageContent, TextContent } from "@marvin-agents/ai";
+import type { AgentTool, ImageContent, TextContent } from "@yeshwanthyk/ai";
 import { Type } from "@sinclair/typebox";
 import { constants } from "fs";
 import { access, readFile } from "fs/promises";

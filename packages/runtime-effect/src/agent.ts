@@ -1,5 +1,5 @@
-import { Agent, type AgentTransport, type ThinkingLevel } from "@marvin-agents/agent-core";
-import type { Api, AgentTool, Model } from "@marvin-agents/ai";
+import { Agent, type AgentTransport, type ThinkingLevel } from "@yeshwanthyk/agent-core";
+import type { Api, AgentTool, Model } from "@yeshwanthyk/ai";
 import { Context, Effect, Layer } from "effect";
 import { ConfigTag } from "./config.js";
 import { ToolServiceTag } from "./tools.js";

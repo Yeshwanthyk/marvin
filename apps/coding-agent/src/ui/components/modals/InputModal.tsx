@@ -1,5 +1,5 @@
 import { useKeyboard } from "@opentui/solid"
-import { Dialog, Input } from "@marvin-agents/open-tui"
+import { Dialog, Input } from "@yeshwanthyk/open-tui"
 import type { JSX } from "solid-js"
 
 export interface InputModalProps {

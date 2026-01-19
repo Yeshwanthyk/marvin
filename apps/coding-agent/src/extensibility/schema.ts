@@ -1,1 +1,1 @@
-export * from "@marvin-agents/runtime-effect/extensibility/schema.js"
+export * from "@yeshwanthyk/runtime-effect/extensibility/schema.js"

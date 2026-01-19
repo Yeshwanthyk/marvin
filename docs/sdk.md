@@ -5,7 +5,7 @@ This SDK exposes the Effect runtime as a small, stable surface for headless use.
 ## Quick Start
 
 ```typescript
-import { runAgent } from "@marvin-agents/sdk";
+import { runAgent } from "@yeshwanthyk/sdk";
 
 const result = await runAgent({
   prompt: "Summarize the project structure",
@@ -22,7 +22,7 @@ if (result.ok) {
 ## Sessions
 
 ```typescript
-import { createAgentSession } from "@marvin-agents/sdk";
+import { createAgentSession } from "@yeshwanthyk/sdk";
 
 const session = await createAgentSession({
   cwd: process.cwd(),
@@ -38,7 +38,7 @@ await session.close();
 ## Streaming
 
 ```typescript
-import { runAgentStream } from "@marvin-agents/sdk";
+import { runAgentStream } from "@yeshwanthyk/sdk";
 
 for await (const event of runAgentStream({
   prompt: "Walk through the error log",

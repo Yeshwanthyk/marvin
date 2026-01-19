@@ -1,17 +1,17 @@
 import { Context, Effect, Exit, Layer, Scope } from "effect"
-import type { Attachment } from "@marvin-agents/agent-core"
-import type { LoadConfigOptions, LspConfig } from "@marvin-agents/runtime-effect/config.js"
-import type { BeforeAgentStartResult, HookMessage } from "@marvin-agents/runtime-effect/hooks/types.js"
-import { createHookMessage, hookMessageToText } from "@marvin-agents/runtime-effect/hooks/hook-messages.js"
-import type { InstrumentationEvent, InstrumentationService } from "@marvin-agents/runtime-effect/instrumentation.js"
-import type { PromptDeliveryMode } from "@marvin-agents/runtime-effect/session/prompt-queue.js"
-import type { SendRef } from "@marvin-agents/runtime-effect/extensibility/custom-tools/types.js"
+import type { Attachment } from "@yeshwanthyk/agent-core"
+import type { LoadConfigOptions, LspConfig } from "@yeshwanthyk/runtime-effect/config.js"
+import type { BeforeAgentStartResult, HookMessage } from "@yeshwanthyk/runtime-effect/hooks/types.js"
+import { createHookMessage, hookMessageToText } from "@yeshwanthyk/runtime-effect/hooks/hook-messages.js"
+import type { InstrumentationEvent, InstrumentationService } from "@yeshwanthyk/runtime-effect/instrumentation.js"
+import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
+import type { SendRef } from "@yeshwanthyk/runtime-effect/extensibility/custom-tools/types.js"
 import {
   RuntimeLayer,
   RuntimeServicesTag,
   type RuntimeLayerOptions,
   type RuntimeServices,
-} from "@marvin-agents/runtime-effect/runtime.js"
+} from "@yeshwanthyk/runtime-effect/runtime.js"
 import type { SdkError } from "./errors.js"
 import { toSdkError } from "./errors.js"
 import type { TransportFactory } from "./types.js"

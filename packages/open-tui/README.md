@@ -1,18 +1,18 @@
-# @marvin-agents/open-tui
+# @yeshwanthyk/open-tui
 
 A Terminal User Interface library built on [OpenTUI](https://github.com/anthropics/opentui) with SolidJS reactive rendering.
 
 ## Installation
 
 ```bash
-bun add @marvin-agents/open-tui
+bun add @yeshwanthyk/open-tui
 ```
 
 ## Quick Start
 
 ```tsx
 import { render } from "@opentui/solid"
-import { ThemeProvider, useTheme, Markdown, Panel } from "@marvin-agents/open-tui"
+import { ThemeProvider, useTheme, Markdown, Panel } from "@yeshwanthyk/open-tui"
 
 function App() {
   const { theme } = useTheme()
@@ -92,7 +92,7 @@ function MyComponent() {
 For syntax highlighting, configure parsers before rendering:
 
 ```tsx
-import { configureParsers } from "@marvin-agents/open-tui"
+import { configureParsers } from "@yeshwanthyk/open-tui"
 
 await configureParsers({
   languages: ["typescript", "python", "markdown"],
@@ -103,7 +103,7 @@ await configureParsers({
 ## Autocomplete
 
 ```tsx
-import { CombinedAutocompleteProvider } from "@marvin-agents/open-tui"
+import { CombinedAutocompleteProvider } from "@yeshwanthyk/open-tui"
 
 const provider = new CombinedAutocompleteProvider(
   [{ name: "help", description: "Show help" }],

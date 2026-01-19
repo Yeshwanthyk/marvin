@@ -2,8 +2,8 @@ import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Effect, Layer, Context } from "effect";
-import { getModels, getProviders, type Api, type KnownProvider, type Model } from "@marvin-agents/ai";
-import type { ThinkingLevel } from "@marvin-agents/agent-core";
+import { getModels, getProviders, type Api, type KnownProvider, type Model } from "@yeshwanthyk/ai";
+import type { ThinkingLevel } from "@yeshwanthyk/agent-core";
 
 const GLOBAL_AGENTS_PATHS = [
   () => path.join(os.homedir(), ".config", "marvin", "agents.md"),

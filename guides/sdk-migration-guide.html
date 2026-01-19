@@ -264,7 +264,7 @@ Difficulty: Advanced</blockquote>
 
 <p>This guide assumes the new repo is merlin from day one. Use this mapping everywhere as you migrate:</p>
 
-<div class="table-wrap"><table><thead><tr><th>Old</th><th>New</th></tr></thead><tbody><tr><td>Package scope: <code>@marvin-agents/<em></code></td><td><code>@merlin-agents/</em></code></td></tr><tr><td>CLI binary: <code>marvin</code></td><td><code>merlin</code></td></tr><tr><td>Config dir: <code>~/.config/marvin</code></td><td><code>~/.config/merlin</code></td></tr><tr><td>Codex cache: <code>~/.marvin/cache</code></td><td><code>~/.merlin/cache</code></td></tr><tr><td>Env vars: <code>MARVIN_<em></code></td><td><code>MERLIN_</em></code></td></tr><tr><td>Default theme: <code>marvin</code></td><td><code>merlin</code></td></tr><tr><td>Hook API parameter name in examples: <code>marvin</code></td><td><code>merlin</code></td></tr><tr><td>Repo name and URLs: <code>marvin</code></td><td><code>merlin</code></td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Old</th><th>New</th></tr></thead><tbody><tr><td>Package scope: <code>@yeshwanthyk/<em></code></td><td><code>@merlin-agents/</em></code></td></tr><tr><td>CLI binary: <code>marvin</code></td><td><code>merlin</code></td></tr><tr><td>Config dir: <code>~/.config/marvin</code></td><td><code>~/.config/merlin</code></td></tr><tr><td>Codex cache: <code>~/.marvin/cache</code></td><td><code>~/.merlin/cache</code></td></tr><tr><td>Env vars: <code>MARVIN_<em></code></td><td><code>MERLIN_</em></code></td></tr><tr><td>Default theme: <code>marvin</code></td><td><code>merlin</code></td></tr><tr><td>Hook API parameter name in examples: <code>marvin</code></td><td><code>merlin</code></td></tr><tr><td>Repo name and URLs: <code>marvin</code></td><td><code>merlin</code></td></tr></tbody></table></div>
 
 <h3 id="h-what-quotsdk-readyquot-means-here-6" data-section="6"><span class="section-num">6</span>What &quot;SDK-ready&quot; means here</h3>
 
@@ -2637,7 +2637,7 @@ function resolveModel(provider: KnownProvider, modelIdRaw: string | undefined): 
   return models.find(m =&gt; m.id === modelIdRaw);
 }</code></pre></figure></p>
 
-<h4 id="h-63-implement-the-sdk-agent-factory-97" data-section="97"><span class="section-num">97</span>6.3 Use the Effect SDK surface</h4><p>This repo uses <code>@marvin-agents/sdk</code> built on <code>packages/runtime-effect</code>. Do not implement a custom agent factory inside the SDK; use the provided surface instead.</p><ul><li><code>runAgent</code> / <code>runAgentEffect</code></li><li><code>createAgentSession</code> / <code>createAgentSessionEffect</code></li><li><code>runAgentStream</code></li></ul><p>See <code>docs/sdk.md</code> for examples.</p><h4 id="h-64-re-export-sdk-surface-98" data-section="98"><span class="section-num">98</span>6.4 Re-export SDK surface</h4>
+<h4 id="h-63-implement-the-sdk-agent-factory-97" data-section="97"><span class="section-num">97</span>6.3 Use the Effect SDK surface</h4><p>This repo uses <code>@yeshwanthyk/sdk</code> built on <code>packages/runtime-effect</code>. Do not implement a custom agent factory inside the SDK; use the provided surface instead.</p><ul><li><code>runAgent</code> / <code>runAgentEffect</code></li><li><code>createAgentSession</code> / <code>createAgentSessionEffect</code></li><li><code>runAgentStream</code></li></ul><p>See <code>docs/sdk.md</code> for examples.</p><h4 id="h-64-re-export-sdk-surface-98" data-section="98"><span class="section-num">98</span>6.4 Re-export SDK surface</h4>
 
 <p>Create <code>packages/sdk/src/index.ts</code>:</p>
 
@@ -3177,7 +3177,7 @@ bun run generate-models</code></pre></figure>
 
 <strong>Import path errors after rename:</strong>
 <ul>
-<li>Check all <code>@marvin-agents/<em></code> imports are changed to <code>@merlin-agents/</em></code></li>
+<li>Check all <code>@yeshwanthyk/<em></code> imports are changed to <code>@merlin-agents/</em></code></li>
 <li>Check <code>file:../</code> paths in package.json dependencies</li>
 </ul>
 

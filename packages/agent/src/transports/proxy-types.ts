@@ -1,4 +1,4 @@
-import type { StopReason, Usage } from "@marvin-agents/ai";
+import type { StopReason, Usage } from "@yeshwanthyk/ai";
 
 /**
  * Event types emitted by the proxy server.

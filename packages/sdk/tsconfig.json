@@ -6,12 +6,12 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@marvin-agents/agent-core": ["../agent/src/index.ts"],
-      "@marvin-agents/agent-core/*": ["../agent/src/*"],
-      "@marvin-agents/ai": ["../ai/src/index.ts"],
-      "@marvin-agents/ai/*": ["../ai/src/*"],
-      "@marvin-agents/runtime-effect": ["../runtime-effect/src/index.ts"],
-      "@marvin-agents/runtime-effect/*": ["../runtime-effect/src/*"]
+      "@yeshwanthyk/agent-core": ["../agent/src/index.ts"],
+      "@yeshwanthyk/agent-core/*": ["../agent/src/*"],
+      "@yeshwanthyk/ai": ["../ai/src/index.ts"],
+      "@yeshwanthyk/ai/*": ["../ai/src/*"],
+      "@yeshwanthyk/runtime-effect": ["../runtime-effect/src/index.ts"],
+      "@yeshwanthyk/runtime-effect/*": ["../runtime-effect/src/*"]
     }
   },
   "include": [

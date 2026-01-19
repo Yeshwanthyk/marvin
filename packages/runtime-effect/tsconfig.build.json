@@ -8,14 +8,14 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
-      "@marvin-agents/agent-core": ["../agent/dist/index.d.ts"],
-      "@marvin-agents/agent-core/*": ["../agent/dist/*"],
-      "@marvin-agents/ai": ["../ai/dist/index.d.ts"],
-      "@marvin-agents/ai/*": ["../ai/dist/*"],
-      "@marvin-agents/base-tools": ["../base-tools/dist/index.d.ts"],
-      "@marvin-agents/base-tools/*": ["../base-tools/dist/*"],
-      "@marvin-agents/lsp": ["../lsp/dist/index.d.ts"],
-      "@marvin-agents/lsp/*": ["../lsp/dist/*"]
+      "@yeshwanthyk/agent-core": ["../agent/dist/index.d.ts"],
+      "@yeshwanthyk/agent-core/*": ["../agent/dist/*"],
+      "@yeshwanthyk/ai": ["../ai/dist/index.d.ts"],
+      "@yeshwanthyk/ai/*": ["../ai/dist/*"],
+      "@yeshwanthyk/base-tools": ["../base-tools/dist/index.d.ts"],
+      "@yeshwanthyk/base-tools/*": ["../base-tools/dist/*"],
+      "@yeshwanthyk/lsp": ["../lsp/dist/index.d.ts"],
+      "@yeshwanthyk/lsp/*": ["../lsp/dist/*"]
     }
   },
   "include": ["src/**/*.ts"],

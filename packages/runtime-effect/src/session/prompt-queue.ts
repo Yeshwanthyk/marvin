@@ -3,7 +3,7 @@ import * as Chunk from "effect/Chunk";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import type { Attachment } from "@marvin-agents/agent-core";
+import type { Attachment } from "@yeshwanthyk/agent-core";
 import type { BeforeAgentStartResult } from "../hooks/types.js";
 
 export type PromptDeliveryMode = "steer" | "followUp";

@@ -1,4 +1,4 @@
-import type { AgentTool } from "@marvin-agents/ai";
+import type { AgentTool } from "@yeshwanthyk/ai";
 
 export interface ToolDef {
 	name: string;

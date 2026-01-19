@@ -1,8 +1,8 @@
-# Publish @marvin-agents/* Packages to npm
+# Publish @yeshwanthyk/* Packages to npm
 
 ## Overview
 
-Make all `@marvin-agents/*` packages publishable to npm using the pi-mono pattern: semver deps + tsconfig paths for dev, dist entrypoints always, lockstep versioning. Keep CLI/Homebrew versioning separate.
+Make all `@yeshwanthyk/*` packages publishable to npm using the pi-mono pattern: semver deps + tsconfig paths for dev, dist entrypoints always, lockstep versioning. Keep CLI/Homebrew versioning separate.
 
 ## Current State
 
@@ -10,12 +10,12 @@ Make all `@marvin-agents/*` packages publishable to npm using the pi-mono patter
 
 | Package | Version | private | Entrypoints | Build | Internal Deps |
 |---------|---------|---------|-------------|-------|---------------|
-| `@marvin-agents/ai` | 0.23.3 | no | `src/index.ts` | ✓ | none |
-| `@marvin-agents/agent-core` | 0.23.3 | no | `src/index.ts` | ✓ | `file:../ai` |
-| `@marvin-agents/base-tools` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai` |
-| `@marvin-agents/lsp` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai` |
-| `@marvin-agents/runtime-effect` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai`, `file:../agent`, `file:../base-tools`, `file:../lsp` |
-| `@marvin-agents/sdk` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai`, `file:../agent`, `file:../runtime-effect` |
+| `@yeshwanthyk/ai` | 0.23.3 | no | `src/index.ts` | ✓ | none |
+| `@yeshwanthyk/agent-core` | 0.23.3 | no | `src/index.ts` | ✓ | `file:../ai` |
+| `@yeshwanthyk/base-tools` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai` |
+| `@yeshwanthyk/lsp` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai` |
+| `@yeshwanthyk/runtime-effect` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai`, `file:../agent`, `file:../base-tools`, `file:../lsp` |
+| `@yeshwanthyk/sdk` | 0.1.0 | **yes** | `src/index.ts` | ✗ | `file:../ai`, `file:../agent`, `file:../runtime-effect` |
 
 ### Key Discoveries
 
@@ -32,8 +32,8 @@ Paths mapping example for local dev:
 {
   "compilerOptions": {
     "paths": {
-      "@marvin-agents/ai": ["./packages/ai/src/index.ts"],
-      "@marvin-agents/agent-core": ["./packages/agent/src/index.ts"]
+      "@yeshwanthyk/ai": ["./packages/ai/src/index.ts"],
+      "@yeshwanthyk/agent-core": ["./packages/agent/src/index.ts"]
     }
   }
 }
@@ -42,8 +42,8 @@ Paths mapping example for local dev:
 Semver dependency example for published packages:
 ```json
 "dependencies": {
-  "@marvin-agents/ai": "^0.1.0",
-  "@marvin-agents/agent-core": "^0.1.0"
+  "@yeshwanthyk/ai": "^0.1.0",
+  "@yeshwanthyk/agent-core": "^0.1.0"
 }
 ```
 
@@ -54,7 +54,7 @@ Semver dependency example for published packages:
 3. TypeScript paths resolve to `src/` for local dev
 4. Entrypoints always point to `dist/`
 5. Lockstep versioning via `sync-versions.js`
-6. Hooks and SDK consumers can `npm install @marvin-agents/sdk` (and `@marvin-agents/ai`, `@marvin-agents/base-tools`)
+6. Hooks and SDK consumers can `npm install @yeshwanthyk/sdk` (and `@yeshwanthyk/ai`, `@yeshwanthyk/base-tools`)
 
 ### Versioning Targets
 
@@ -71,23 +71,23 @@ npm publish -ws --access public --dry-run
 # Test in isolated environment
 mkdir /tmp/test-marvin && cd /tmp/test-marvin
 npm init -y
-npm install @marvin-agents/ai @marvin-agents/base-tools @marvin-agents/sdk
-node -e "import('@marvin-agents/ai').then(m => console.log(Object.keys(m)))"
-node -e "import('@marvin-agents/sdk').then(m => console.log(Object.keys(m)))"
+npm install @yeshwanthyk/ai @yeshwanthyk/base-tools @yeshwanthyk/sdk
+node -e "import('@yeshwanthyk/ai').then(m => console.log(Object.keys(m)))"
+node -e "import('@yeshwanthyk/sdk').then(m => console.log(Object.keys(m)))"
 ```
 
 ## Out of Scope
 
-- `@marvin-agents/open-tui` — TUI framework, not needed for hooks/SDK
+- `@yeshwanthyk/open-tui` — TUI framework, not needed for hooks/SDK
 - CI/CD automation (manual first)
 
 ## Distribution Strategy
 
 Because marvin uses `@opentui/core` (native dylib + tree-sitter WASM), we use a **dual distribution model**:
 
-1. **Library packages** → npm (`@marvin-agents/ai`, `@marvin-agents/agent-core`, `@marvin-agents/base-tools`, `@marvin-agents/lsp`, `@marvin-agents/runtime-effect`, `@marvin-agents/sdk`)
+1. **Library packages** → npm (`@yeshwanthyk/ai`, `@yeshwanthyk/agent-core`, `@yeshwanthyk/base-tools`, `@yeshwanthyk/lsp`, `@yeshwanthyk/runtime-effect`, `@yeshwanthyk/sdk`)
    - For hooks, custom tools, embedding in other projects
-   - Standard `npm install @marvin-agents/sdk` (pulls runtime-effect + core deps)
+   - Standard `npm install @yeshwanthyk/sdk` (pulls runtime-effect + core deps)
 
 2. **CLI binary** → GitHub Releases (compiled standalone executables, version `0.3.0`)
    - Self-contained Bun binary with all deps embedded
@@ -202,7 +202,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
 **Before**:
 ```json
 {
-  "name": "@marvin-agents/base-tools",
+  "name": "@yeshwanthyk/base-tools",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -212,7 +212,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
     "test": "node -e \"process.exit(0)\""
   },
   "dependencies": {
-    "@marvin-agents/ai": "file:../ai",
+    "@yeshwanthyk/ai": "file:../ai",
     "@sinclair/typebox": "^0.34.41",
     "diff": "^8.0.2",
     "file-type": "^21.1.1"
@@ -223,7 +223,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
 **After**:
 ```json
 {
-  "name": "@marvin-agents/base-tools",
+  "name": "@yeshwanthyk/base-tools",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -246,7 +246,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@marvin-agents/ai": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
     "@sinclair/typebox": "^0.34.41",
     "diff": "^8.0.2",
     "file-type": "^21.1.1"
@@ -278,7 +278,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
 **Before**:
 ```json
 {
-  "name": "@marvin-agents/lsp",
+  "name": "@yeshwanthyk/lsp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -288,7 +288,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
     "test": "bun test tests"
   },
   "dependencies": {
-    "@marvin-agents/ai": "file:../ai",
+    "@yeshwanthyk/ai": "file:../ai",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageserver-types": "^3.17.5"
   }
@@ -298,7 +298,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
 **After**:
 ```json
 {
-  "name": "@marvin-agents/lsp",
+  "name": "@yeshwanthyk/lsp",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -321,7 +321,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@marvin-agents/ai": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageserver-types": "^3.17.5"
   },
@@ -346,7 +346,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
 **Before**:
 ```json
 {
-  "name": "@marvin-agents/runtime-effect",
+  "name": "@yeshwanthyk/runtime-effect",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -363,10 +363,10 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
   "dependencies": {
     "effect": "^3.19.14",
     "@effect/platform-node": "^0.104.0",
-    "@marvin-agents/agent-core": "file:../agent",
-    "@marvin-agents/ai": "file:../ai",
-    "@marvin-agents/base-tools": "file:../base-tools",
-    "@marvin-agents/lsp": "file:../lsp"
+    "@yeshwanthyk/agent-core": "file:../agent",
+    "@yeshwanthyk/ai": "file:../ai",
+    "@yeshwanthyk/base-tools": "file:../base-tools",
+    "@yeshwanthyk/lsp": "file:../lsp"
   }
 }
 ```
@@ -374,7 +374,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
 **After**:
 ```json
 {
-  "name": "@marvin-agents/runtime-effect",
+  "name": "@yeshwanthyk/runtime-effect",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -399,10 +399,10 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
   "dependencies": {
     "effect": "^3.19.14",
     "@effect/platform-node": "^0.104.0",
-    "@marvin-agents/agent-core": "^0.1.0",
-    "@marvin-agents/ai": "^0.1.0",
-    "@marvin-agents/base-tools": "^0.1.0",
-    "@marvin-agents/lsp": "^0.1.0"
+    "@yeshwanthyk/agent-core": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
+    "@yeshwanthyk/base-tools": "^0.1.0",
+    "@yeshwanthyk/lsp": "^0.1.0"
   },
   "keywords": ["ai", "agent", "effect", "runtime"],
   "author": "Yesh Yendamuri",
@@ -425,7 +425,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
 **Before**:
 ```json
 {
-  "name": "@marvin-agents/sdk",
+  "name": "@yeshwanthyk/sdk",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -440,9 +440,9 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
     "test": "bun test tests"
   },
   "dependencies": {
-    "@marvin-agents/agent-core": "file:../agent",
-    "@marvin-agents/ai": "file:../ai",
-    "@marvin-agents/runtime-effect": "file:../runtime-effect",
+    "@yeshwanthyk/agent-core": "file:../agent",
+    "@yeshwanthyk/ai": "file:../ai",
+    "@yeshwanthyk/runtime-effect": "file:../runtime-effect",
     "effect": "^3.19.14"
   }
 }
@@ -451,7 +451,7 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
 **After**:
 ```json
 {
-  "name": "@marvin-agents/sdk",
+  "name": "@yeshwanthyk/sdk",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -474,9 +474,9 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@marvin-agents/agent-core": "^0.1.0",
-    "@marvin-agents/ai": "^0.1.0",
-    "@marvin-agents/runtime-effect": "^0.1.0",
+    "@yeshwanthyk/agent-core": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
+    "@yeshwanthyk/runtime-effect": "^0.1.0",
     "effect": "^3.19.14"
   },
   "keywords": ["ai", "agent", "sdk", "effect"],
@@ -558,14 +558,14 @@ Add `tsconfig.build.json` and build scripts to `base-tools`, `lsp`, `runtime-eff
 **Before** (in dependencies):
 ```json
   "dependencies": {
-    "@marvin-agents/ai": "file:../ai"
+    "@yeshwanthyk/ai": "file:../ai"
   }
 ```
 
 **After**:
 ```json
   "dependencies": {
-    "@marvin-agents/ai": "^0.1.0"
+    "@yeshwanthyk/ai": "^0.1.0"
   }
 ```
 
@@ -593,7 +593,7 @@ git checkout HEAD -- packages/
 
 ### Overview
 
-Add tsconfig paths so TypeScript resolves `@marvin-agents/*` to local `src/` during development.
+Add tsconfig paths so TypeScript resolves `@yeshwanthyk/*` to local `src/` during development.
 
 ### Prerequisites
 
@@ -612,18 +612,18 @@ Add tsconfig paths so TypeScript resolves `@marvin-agents/*` to local `src/` dur
   "compilerOptions": {
     "noEmit": true,
     "paths": {
-      "@marvin-agents/ai": ["./packages/ai/src/index.ts"],
-      "@marvin-agents/ai/*": ["./packages/ai/src/*"],
-      "@marvin-agents/agent-core": ["./packages/agent/src/index.ts"],
-      "@marvin-agents/agent-core/*": ["./packages/agent/src/*"],
-      "@marvin-agents/base-tools": ["./packages/base-tools/src/index.ts"],
-      "@marvin-agents/base-tools/*": ["./packages/base-tools/src/*"],
-      "@marvin-agents/lsp": ["./packages/lsp/src/index.ts"],
-      "@marvin-agents/lsp/*": ["./packages/lsp/src/*"],
-      "@marvin-agents/runtime-effect": ["./packages/runtime-effect/src/index.ts"],
-      "@marvin-agents/runtime-effect/*": ["./packages/runtime-effect/src/*"],
-      "@marvin-agents/sdk": ["./packages/sdk/src/index.ts"],
-      "@marvin-agents/sdk/*": ["./packages/sdk/src/*"]
+      "@yeshwanthyk/ai": ["./packages/ai/src/index.ts"],
+      "@yeshwanthyk/ai/*": ["./packages/ai/src/*"],
+      "@yeshwanthyk/agent-core": ["./packages/agent/src/index.ts"],
+      "@yeshwanthyk/agent-core/*": ["./packages/agent/src/*"],
+      "@yeshwanthyk/base-tools": ["./packages/base-tools/src/index.ts"],
+      "@yeshwanthyk/base-tools/*": ["./packages/base-tools/src/*"],
+      "@yeshwanthyk/lsp": ["./packages/lsp/src/index.ts"],
+      "@yeshwanthyk/lsp/*": ["./packages/lsp/src/*"],
+      "@yeshwanthyk/runtime-effect": ["./packages/runtime-effect/src/index.ts"],
+      "@yeshwanthyk/runtime-effect/*": ["./packages/runtime-effect/src/*"],
+      "@yeshwanthyk/sdk": ["./packages/sdk/src/index.ts"],
+      "@yeshwanthyk/sdk/*": ["./packages/sdk/src/*"]
     }
   },
   "include": [
@@ -643,22 +643,22 @@ Add tsconfig paths so TypeScript resolves `@marvin-agents/*` to local `src/` dur
 **Before** (in dependencies):
 ```json
   "dependencies": {
-    "@marvin-agents/agent-core": "file:../../packages/agent",
-    "@marvin-agents/ai": "file:../../packages/ai",
-    "@marvin-agents/base-tools": "file:../../packages/base-tools",
-    "@marvin-agents/lsp": "file:../../packages/lsp",
-    "@marvin-agents/open-tui": "file:../../packages/open-tui",
+    "@yeshwanthyk/agent-core": "file:../../packages/agent",
+    "@yeshwanthyk/ai": "file:../../packages/ai",
+    "@yeshwanthyk/base-tools": "file:../../packages/base-tools",
+    "@yeshwanthyk/lsp": "file:../../packages/lsp",
+    "@yeshwanthyk/open-tui": "file:../../packages/open-tui",
 ```
 
 **After**:
 ```json
   "dependencies": {
-    "@marvin-agents/agent-core": "^0.1.0",
-    "@marvin-agents/ai": "^0.1.0",
-    "@marvin-agents/base-tools": "^0.1.0",
-    "@marvin-agents/lsp": "^0.1.0",
-    "@marvin-agents/runtime-effect": "^0.1.0",
-    "@marvin-agents/open-tui": "file:../../packages/open-tui",
+    "@yeshwanthyk/agent-core": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
+    "@yeshwanthyk/base-tools": "^0.1.0",
+    "@yeshwanthyk/lsp": "^0.1.0",
+    "@yeshwanthyk/runtime-effect": "^0.1.0",
+    "@yeshwanthyk/open-tui": "file:../../packages/open-tui",
 ```
 
 **Note**: Keep `open-tui` as `file:` since we're not publishing it.
@@ -705,7 +705,7 @@ Create `sync-versions.js` to enforce all packages stay at same version.
 #!/usr/bin/env node
 
 /**
- * Syncs ALL @marvin-agents/* package dependency versions to match their current versions.
+ * Syncs ALL @yeshwanthyk/* package dependency versions to match their current versions.
  * Ensures lockstep versioning across the monorepo.
  * 
  * Usage: node scripts/sync-versions.js
@@ -821,7 +821,7 @@ if (totalUpdates === 0) {
     "test": "bun scripts/test-all.ts",
     "check": "bun run typecheck && bun run test",
     "build": "cd apps/coding-agent && bun scripts/build.ts",
-    "build:packages": "npm run build -w @marvin-agents/ai && npm run build -w @marvin-agents/agent-core && npm run build -w @marvin-agents/base-tools && npm run build -w @marvin-agents/lsp && npm run build -w @marvin-agents/runtime-effect && npm run build -w @marvin-agents/sdk",
+    "build:packages": "npm run build -w @yeshwanthyk/ai && npm run build -w @yeshwanthyk/agent-core && npm run build -w @yeshwanthyk/base-tools && npm run build -w @yeshwanthyk/lsp && npm run build -w @yeshwanthyk/runtime-effect && npm run build -w @yeshwanthyk/sdk",
     "marvin": "bun apps/coding-agent/src/index.ts",
     "sync-versions": "node scripts/sync-versions.js",
     "version:patch": "npm version patch -ws --no-git-tag-version && npm run sync-versions",
@@ -877,7 +877,7 @@ Add minimal READMEs for npm package pages.
 
 **Add**:
 ```markdown
-# @marvin-agents/base-tools
+# @yeshwanthyk/base-tools
 
 Core file system and shell tools for AI coding agents.
 
@@ -891,13 +891,13 @@ Core file system and shell tools for AI coding agents.
 ## Installation
 
 ```bash
-npm install @marvin-agents/base-tools
+npm install @yeshwanthyk/base-tools
 ```
 
 ## Usage
 
 ```typescript
-import { createToolRegistry, createReadTool } from '@marvin-agents/base-tools';
+import { createToolRegistry, createReadTool } from '@yeshwanthyk/base-tools';
 
 const cwd = process.cwd();
 
@@ -922,20 +922,20 @@ MIT
 
 **Add**:
 ```markdown
-# @marvin-agents/lsp
+# @yeshwanthyk/lsp
 
 LSP integration for AI coding agents. Provides real-time diagnostics from language servers.
 
 ## Installation
 
 ```bash
-npm install @marvin-agents/lsp
+npm install @yeshwanthyk/lsp
 ```
 
 ## Usage
 
 ```typescript
-import { createLspManager, wrapToolsWithLspDiagnostics } from '@marvin-agents/lsp';
+import { createLspManager, wrapToolsWithLspDiagnostics } from '@yeshwanthyk/lsp';
 
 const lsp = createLspManager({ cwd: process.cwd(), enabled: true });
 const tools = wrapToolsWithLspDiagnostics(baseTools, lsp, { cwd });
@@ -952,20 +952,20 @@ MIT
 
 **Add**:
 ```markdown
-# @marvin-agents/runtime-effect
+# @yeshwanthyk/runtime-effect
 
 Effect-powered runtime layer for Marvin agents (config, hooks, tools, LSP, sessions).
 
 ## Installation
 
 ```bash
-npm install @marvin-agents/runtime-effect
+npm install @yeshwanthyk/runtime-effect
 ```
 
 ## Usage
 
 ```typescript
-import { RuntimeLayer } from "@marvin-agents/runtime-effect/runtime";
+import { RuntimeLayer } from "@yeshwanthyk/runtime-effect/runtime";
 ```
 
 ## License
@@ -979,20 +979,20 @@ MIT
 
 **Add**:
 ```markdown
-# @marvin-agents/sdk
+# @yeshwanthyk/sdk
 
 Headless SDK for running Marvin agents using the Effect runtime.
 
 ## Installation
 
 ```bash
-npm install @marvin-agents/sdk
+npm install @yeshwanthyk/sdk
 ```
 
 ## Usage
 
 ```typescript
-import { runAgent } from "@marvin-agents/sdk";
+import { runAgent } from "@yeshwanthyk/sdk";
 
 const result = await runAgent({ prompt: "Hello", cwd: process.cwd() });
 ```
@@ -1057,20 +1057,20 @@ git push origin main --tags
 
 ```bash
 # Packages visible on npm
-npm view @marvin-agents/ai
-npm view @marvin-agents/agent-core
-npm view @marvin-agents/base-tools
-npm view @marvin-agents/lsp
-npm view @marvin-agents/runtime-effect
-npm view @marvin-agents/sdk
+npm view @yeshwanthyk/ai
+npm view @yeshwanthyk/agent-core
+npm view @yeshwanthyk/base-tools
+npm view @yeshwanthyk/lsp
+npm view @yeshwanthyk/runtime-effect
+npm view @yeshwanthyk/sdk
 
 # Installable
 mkdir /tmp/test && cd /tmp/test
 npm init -y
-npm install @marvin-agents/ai @marvin-agents/base-tools
-npm install @marvin-agents/sdk
-node -e "import('@marvin-agents/ai').then(m => console.log('OK:', Object.keys(m).length, 'exports'))"
-node -e "import('@marvin-agents/sdk').then(m => console.log('OK:', Object.keys(m).length, 'exports'))"
+npm install @yeshwanthyk/ai @yeshwanthyk/base-tools
+npm install @yeshwanthyk/sdk
+node -e "import('@yeshwanthyk/ai').then(m => console.log('OK:', Object.keys(m).length, 'exports'))"
+node -e "import('@yeshwanthyk/sdk').then(m => console.log('OK:', Object.keys(m).length, 'exports'))"
 ```
 
 ---
@@ -1092,16 +1092,16 @@ Install published packages in hooks directory and update `auto-compact-90.ts` to
 ```bash
 cd ~/.config/marvin/hooks
 npm init -y
-npm install @marvin-agents/ai
+npm install @yeshwanthyk/ai
 ```
 
 #### 2. Update auto-compact-90.ts
 
-Remove hardcoded `CONTEXT_WINDOWS` map and restore `@marvin-agents/ai` import:
+Remove hardcoded `CONTEXT_WINDOWS` map and restore `@yeshwanthyk/ai` import:
 
 **Before** (current workaround):
 ```typescript
-// Hardcoded context windows to avoid @marvin-agents/ai dependency
+// Hardcoded context windows to avoid @yeshwanthyk/ai dependency
 const CONTEXT_WINDOWS: Record<string, number> = { ... }
 
 const resolveContextWindow = (_provider: string, modelId: string): number | null => {
@@ -1111,7 +1111,7 @@ const resolveContextWindow = (_provider: string, modelId: string): number | null
 
 **After**:
 ```typescript
-import { getModels } from "@marvin-agents/ai"
+import { getModels } from "@yeshwanthyk/ai"
 
 const resolveContextWindow = (provider: string, modelId: string): number | null => {
 	const models = getModels(provider as Parameters<typeof getModels>[0])
@@ -1856,7 +1856,7 @@ curl -fsSL https://raw.githubusercontent.com/Yeshwanthyk/marvin/main/install.sh 
 marvin update
 
 # Install library packages (for hooks/custom tools)
-npm install @marvin-agents/ai @marvin-agents/base-tools
+npm install @yeshwanthyk/ai @yeshwanthyk/base-tools
 ```
 
 ---

@@ -1,5 +1,5 @@
 {
-  "name": "@marvin-agents/sdk",
+  "name": "@yeshwanthyk/sdk",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,9 +22,9 @@
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@marvin-agents/agent-core": "^0.1.0",
-    "@marvin-agents/ai": "^0.1.0",
-    "@marvin-agents/runtime-effect": "^0.1.0",
+    "@yeshwanthyk/agent-core": "^0.1.0",
+    "@yeshwanthyk/ai": "^0.1.0",
+    "@yeshwanthyk/runtime-effect": "^0.1.0",
     "effect": "^3.19.14"
   },
   "keywords": ["ai", "agent", "sdk", "effect"],

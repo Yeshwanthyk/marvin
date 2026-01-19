@@ -1,4 +1,4 @@
-import type { Message, TextContent } from "@marvin-agents/ai"
+import type { Message, TextContent } from "@yeshwanthyk/ai"
 import { Effect } from "effect"
 import { createRuntime, type RuntimeInitArgs } from "@runtime/factory.js"
 

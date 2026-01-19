@@ -14,7 +14,7 @@ import {
 	DEFAULT_MAX_LINES,
 	DEFAULT_MAX_BYTES,
 	type TruncationResult,
-} from "@marvin-agents/base-tools"
+} from "@yeshwanthyk/base-tools"
 
 export interface ShellResult {
 	output: string

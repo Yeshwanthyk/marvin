@@ -5,6 +5,13 @@ Terminal-native coding agent. Multi-provider, extensible, LSP-aware.
 ## Install
 
 ```bash
+# npm (recommended)
+npm install -g @yeshwanthyk/coding-agent
+
+# bun
+bun add -g @yeshwanthyk/coding-agent
+
+# From source
 bun install
 cd apps/coding-agent && bun run build
 
@@ -29,7 +36,7 @@ marvin validate --config-dir ~/.config/marvin   # Lint hooks/tools/commands
 
 - **Providers**: Anthropic, OpenAI, Google, Codex, OpenRouter, Groq, xAI, Mistral, Cerebras
 - **TUI**: SolidJS terminal UI, 30+ themes, precision diff viewing
-- **Tools**: read, write, edit, bash, subagent, ask_user_question
+- **Tools**: read, write, edit, bash, subagent, interview
 - **LSP**: Auto-spawns language servers, injects diagnostics
 - **Sessions**: Per-cwd persistence, resume with `-c`/`-r`
 - **Thinking**: Configurable depth (off → xhigh)

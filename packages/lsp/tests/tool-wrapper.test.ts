@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { wrapToolsWithLspDiagnostics } from "../src/tool-wrapper.js"
-import type { AgentTool, AgentToolResult } from "@marvin-agents/ai"
+import type { AgentTool, AgentToolResult } from "@yeshwanthyk/ai"
 import type { LspManager } from "../src/types.js"
 import type { Diagnostic } from "vscode-languageserver-types"
 

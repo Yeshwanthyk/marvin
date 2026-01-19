@@ -1,5 +1,5 @@
-import type { AgentTool } from "@marvin-agents/ai";
-import type { ToolDef } from "@marvin-agents/base-tools";
+import type { AgentTool } from "@yeshwanthyk/ai";
+import type { ToolDef } from "@yeshwanthyk/base-tools";
 
 /**
  * Lazily loads tools from registry + manages custom/hook tools.
