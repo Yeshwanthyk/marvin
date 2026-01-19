@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/runtime-effect",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -141,7 +141,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-		"build": "tsc -b tsconfig.build.json --force",
+    "build": "tsc -b tsconfig.build.json --force",
     "test": "bun test",
     "prepublishOnly": "npm run clean && npm run build"
   },
@@ -153,7 +153,12 @@
     "@yeshwanthyk/lsp": "^0.1.0",
     "effect": "^3.19.14"
   },
-  "keywords": ["ai", "agent", "effect", "runtime"],
+  "keywords": [
+    "ai",
+    "agent",
+    "effect",
+    "runtime"
+  ],
   "author": "Yesh Yendamuri",
   "license": "MIT",
   "repository": {

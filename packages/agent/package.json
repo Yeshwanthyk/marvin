@@ -1,48 +1,48 @@
 {
-	"name": "@yeshwanthyk/agent-core",
-	"version": "0.1.0",
-	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
-	"type": "module",
-	"main": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js"
-		},
-		"./package.json": "./package.json"
-	},
-	"files": [
-		"dist",
-		"README.md"
-	],
-	"scripts": {
-		"clean": "rm -rf dist",
-		"build": "tsgo -b tsconfig.build.json --force",
-		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
-		"check": "tsgo --noEmit",
-		"test": "node -e \"process.exit(0)\"",
-		"codex-auth": "npx tsx src/codex-auth-cli.ts",
-		"prepublishOnly": "npm run clean && npm run build"
-	},
-	"dependencies": {
-		"@yeshwanthyk/ai": "^0.1.0"
-	},
-	"keywords": [
-		"ai",
-		"agent",
-		"llm",
-		"transport",
-		"state-management"
-	],
-	"author": "Yesh Yendamuri",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/Yeshwanthyk/marvin.git",
-		"directory": "packages/agent"
-	},
-	"engines": {
-		"node": ">=20.0.0"
-	}
+  "name": "@yeshwanthyk/agent-core",
+  "version": "0.1.1",
+  "description": "General-purpose agent with transport abstraction, state management, and attachment support",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsgo -b tsconfig.build.json --force",
+    "dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
+    "check": "tsgo --noEmit",
+    "test": "node -e \"process.exit(0)\"",
+    "codex-auth": "npx tsx src/codex-auth-cli.ts",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@yeshwanthyk/ai": "^0.1.0"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "llm",
+    "transport",
+    "state-management"
+  ],
+  "author": "Yesh Yendamuri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yeshwanthyk/marvin.git",
+    "directory": "packages/agent"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-		"build": "tsc -b tsconfig.build.json --force",
+    "build": "tsc -b tsconfig.build.json --force",
     "test": "bun test tests",
     "prepublishOnly": "npm run clean && npm run build"
   },
@@ -27,7 +27,12 @@
     "@yeshwanthyk/runtime-effect": "^0.1.0",
     "effect": "^3.19.14"
   },
-  "keywords": ["ai", "agent", "sdk", "effect"],
+  "keywords": [
+    "ai",
+    "agent",
+    "sdk",
+    "effect"
+  ],
   "author": "Yesh Yendamuri",
   "license": "MIT",
   "repository": {
