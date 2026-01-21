@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/base-tools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-		"build": "tsc -b tsconfig.build.json --force",
+    "build": "tsc -b tsconfig.build.json --force",
     "test": "bun test tests",
     "prepublishOnly": "npm run clean && npm run build"
   },
@@ -27,7 +27,12 @@
     "diff": "^8.0.2",
     "file-type": "^21.1.1"
   },
-  "keywords": ["ai", "agent", "tools", "coding"],
+  "keywords": [
+    "ai",
+    "agent",
+    "tools",
+    "coding"
+  ],
   "author": "Yesh Yendamuri",
   "license": "MIT",
   "repository": {

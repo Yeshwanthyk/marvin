@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/lsp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-		"build": "tsc -b tsconfig.build.json --force",
+    "build": "tsc -b tsconfig.build.json --force",
     "test": "bun test tests",
     "prepublishOnly": "npm run clean && npm run build"
   },
@@ -26,7 +26,12 @@
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageserver-types": "^3.17.5"
   },
-  "keywords": ["ai", "agent", "lsp", "language-server"],
+  "keywords": [
+    "ai",
+    "agent",
+    "lsp",
+    "language-server"
+  ],
   "author": "Yesh Yendamuri",
   "license": "MIT",
   "repository": {
