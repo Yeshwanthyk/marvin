@@ -221,6 +221,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		const trimmed = text.trim()
 		if (!trimmed) return
 		if (store.isResponding.value()) {
+			// Inject via agent's internal queue - can interrupt during tool execution
 			await sessionController.steer(trimmed)
 			return
 		}
@@ -231,7 +232,9 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		const trimmed = text.trim()
 		if (!trimmed) return
 		if (store.isResponding.value()) {
-			await sessionController.followUp(trimmed)
+			// Enqueue to orchestrator - will be processed after current prompt completes
+			promptQueue.push({ text: trimmed, mode: "followUp" })
+			await Effect.runPromise(runtime.sessionOrchestrator.submitPrompt(trimmed, { mode: "followUp" }))
 			return
 		}
 		await submitPrompt(trimmed, "followUp")
