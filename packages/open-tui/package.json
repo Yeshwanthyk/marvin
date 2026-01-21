@@ -1,6 +1,6 @@
 {
 	"name": "@yeshwanthyk/open-tui",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"description": "OpenTUI-based Terminal User Interface with SolidJS reactive rendering",
 	"type": "module",
 	"main": "./dist/index.js",
