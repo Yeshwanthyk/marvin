@@ -305,6 +305,44 @@ export class SessionManager implements ReadonlySessionManager {
     return this.currentSessionPath;
   }
 
+  forkSession(): { id: string; path: string } | null {
+    if (!this.currentSessionPath || !existsSync(this.currentSessionPath)) {
+      return null;
+    }
+
+    try {
+      const content = readFileSync(this.currentSessionPath, "utf8");
+      const lines = content.trim().split("\n").filter((l) => l.length > 0);
+      if (lines.length === 0) return null;
+
+      const originalMetadata = JSON.parse(lines[0]!) as SessionMetadata;
+      if (originalMetadata.type !== "session") return null;
+
+      const newId = randomUUID();
+      const now = Date.now();
+      const timestamp = now <= lastSessionTimestamp ? lastSessionTimestamp + 1 : now;
+      lastSessionTimestamp = timestamp;
+
+      const newMetadata: SessionMetadata & { forkedFrom?: string } = {
+        ...originalMetadata,
+        id: newId,
+        timestamp,
+        forkedFrom: originalMetadata.id,
+      };
+
+      const newLines = [JSON.stringify(newMetadata), ...lines.slice(1)];
+      const filename = `${timestamp}_${newId}.jsonl`;
+      const newPath = join(this.sessionDir, filename);
+
+      this.ensureDir();
+      writeFileSync(newPath, `${newLines.join("\n")}\n`, "utf8");
+
+      return { id: newId, path: newPath };
+    } catch {
+      return null;
+    }
+  }
+
   getEntries(): SessionEntry[] {
     if (!this.currentSessionPath || !existsSync(this.currentSessionPath)) return [];
 
