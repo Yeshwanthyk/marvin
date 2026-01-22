@@ -64,6 +64,7 @@ export interface ReadonlySessionManager {
   listSessions(): SessionInfo[];
   loadSession(sessionPath: string): LoadedSession | null;
   loadLatest(): LoadedSession | null;
+  findSession(identifier: string): SessionInfo | null;
 }
 
 const safeCwd = (cwd: string): string => `--${cwd.replace(/\//g, "--")}--`;
@@ -295,6 +296,38 @@ export class SessionManager implements ReadonlySessionManager {
     } catch {
       return null;
     }
+  }
+
+  findSession(identifier: string): SessionInfo | null {
+    // If it looks like an absolute path or contains .jsonl, try direct path load
+    if (identifier.startsWith("/") || identifier.includes(".jsonl")) {
+      const resolvedPath = identifier.startsWith("/") ? identifier : join(this.sessionDir, identifier);
+      if (!existsSync(resolvedPath)) return null;
+      try {
+        const firstLine = readFileSync(resolvedPath, "utf8").split("\n")[0];
+        if (!firstLine) return null;
+        const metadata = JSON.parse(firstLine) as SessionMetadata;
+        if (metadata.type !== "session") return null;
+        return {
+          id: metadata.id,
+          timestamp: metadata.timestamp,
+          path: resolvedPath,
+          provider: metadata.provider,
+          modelId: metadata.modelId,
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    // Otherwise search by UUID or UUID prefix in current directory's sessions
+    const sessions = this.listSessions();
+    // Try exact match first
+    const exact = sessions.find((s) => s.id === identifier);
+    if (exact) return exact;
+    // Try prefix match (most recent if multiple match)
+    const prefixMatch = sessions.find((s) => s.id.startsWith(identifier));
+    return prefixMatch ?? null;
   }
 
   get sessionId(): string | null {

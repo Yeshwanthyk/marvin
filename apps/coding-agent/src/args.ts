@@ -11,6 +11,8 @@ export interface ParsedArgs {
   thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   continue: boolean;
   resume: boolean;
+  /** Session ID (full UUID, prefix, or path) to load directly */
+  session?: string;
   help: boolean;
   version: boolean;
 }
@@ -27,6 +29,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     thinking: undefined,
     continue: false,
     resume: false,
+    session: undefined,
     help: false,
     version: false,
   };
@@ -52,6 +55,11 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (a === '--resume' || a === '-r') {
       args.resume = true;
+      continue;
+    }
+    if (a === '--session' || a === '-s') {
+      args.session = argv[i + 1];
+      i += 1;
       continue;
     }
     if (a === "--headless") {

@@ -61,6 +61,7 @@ const runTui = async (args: {
   thinking?: ThinkingLevel;
   continueSession?: boolean;
   resumeSession?: boolean;
+  session?: string;
 }) => {
   const solidPlugin = (await import("@opentui/solid/bun-plugin")).default;
   Bun.plugin(solidPlugin);
@@ -89,6 +90,7 @@ const printHelp = () => {
       '  --config <path>              Config file path (default: <config-dir>/config.json)',
       '  -c, --continue               Resume most recent session for current directory',
       '  -r, --resume                 Pick from recent sessions to resume',
+      '  -s, --session <id>           Load session by ID (UUID, prefix, or path)',
       '  --headless                   Run without TUI; reads prompt from args or stdin',
       '  --acp                        Run as ACP server for Zed integration',
       '  -h, --help                   Show help',
@@ -182,6 +184,7 @@ const main = async () => {
     thinking: args.thinking,
     continueSession: args.continue,
     resumeSession: args.resume,
+    session: args.session,
   });
 };
 

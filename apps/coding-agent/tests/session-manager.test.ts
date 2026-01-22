@@ -107,4 +107,51 @@ describe("SessionManager", () => {
     expect(manager.loadLatest()).toBe(null);
     expect(manager.listSessions().length).toBe(0);
   });
+
+  it("findSession returns session by exact UUID", () => {
+    const id = manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
+    
+    const found = manager.findSession(id);
+    expect(found).toBeTruthy();
+    expect(found!.id).toBe(id);
+  });
+
+  it("findSession returns session by UUID prefix", () => {
+    const id = manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
+    const prefix = id.slice(0, 8);
+    
+    const found = manager.findSession(prefix);
+    expect(found).toBeTruthy();
+    expect(found!.id).toBe(id);
+  });
+
+  it("findSession returns session by full path", () => {
+    manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
+    const path = manager.sessionPath!;
+    
+    const found = manager.findSession(path);
+    expect(found).toBeTruthy();
+    expect(found!.path).toBe(path);
+  });
+
+  it("findSession returns null for non-existent session", () => {
+    manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
+    
+    expect(manager.findSession("nonexistent-uuid")).toBe(null);
+    expect(manager.findSession("/path/to/nonexistent.jsonl")).toBe(null);
+  });
+
+  it("findSession prefers exact match over prefix", () => {
+    // Create first session
+    const id1 = manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
+    
+    // Create second session with different manager instance
+    const manager2 = new SessionManager(tempDir);
+    manager2.startSession("openai", "gpt-4o", "off");
+    
+    // Exact match should find id1, not any prefix collision
+    const found = manager.findSession(id1);
+    expect(found).toBeTruthy();
+    expect(found!.id).toBe(id1);
+  });
 });
