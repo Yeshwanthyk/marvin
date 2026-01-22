@@ -94,7 +94,11 @@ function formatRelativeTime(ts: number): string {
 }
 
 export async function selectSession(sessionManager: SessionManager): Promise<string | null> {
-	const sessions = sessionManager.loadAllSessions()
+	const allSessions = sessionManager.loadAllSessions()
+	// Filter out empty sessions and subagent sessions (start with "System context:")
+	const sessions = allSessions.filter(
+		(s) => s.messageCount > 0 && !s.firstMessage.startsWith("System context:")
+	)
 	if (sessions.length === 0) return null
 	if (sessions.length === 1) return sessions[0]!.path
 
