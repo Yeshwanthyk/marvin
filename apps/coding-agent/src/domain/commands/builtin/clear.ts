@@ -8,6 +8,7 @@ export const clearCommand: CommandDefinition = {
 		ctx.setContextTokens(0)
 		ctx.setCacheStats(null)
 		ctx.agent.reset()
+		ctx.clearEditor?.()
 		void ctx.hookRunner?.emit({ type: "session.clear", sessionId: null })
 		return true
 	},

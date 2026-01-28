@@ -56,6 +56,7 @@ export interface MainViewProps {
 	setEditorTextRef: { current: (text: string) => void }
 	getEditorTextRef: { current: () => string }
 	showToastRef: { current: (title: string, message: string, variant?: "info" | "warning" | "success" | "error") => void }
+	clearEditorRef: { current: () => void }
 	onBeforeExit?: () => Promise<void>
 	editor?: import("../../../config.js").EditorConfig
 	lsp: LspManager
@@ -177,6 +178,10 @@ export function MainView(props: MainViewProps) {
 	props.exitHandlerRef.current = exitApp
 	props.setEditorTextRef.current = (text: string) => textareaRef?.setText(text)
 	props.getEditorTextRef.current = () => textareaRef?.plainText ?? ""
+	props.clearEditorRef.current = () => {
+		textareaRef?.clear()
+		setIsBashMode(false)
+	}
 	props.showToastRef.current = (title, message, variant = "info") => {
 		pushToast({ title, message, variant }, 3000)
 	}

@@ -46,6 +46,7 @@ export interface CommandContext {
 	setTheme?: (name: string) => void
 	launchEditor?: (command: string, args: string[], cwd: string, onError: (error: Error) => void) => void
 	openEditor?: () => Promise<void> | void
+	clearEditor?: () => void
 
 	onExit?: () => void
 	hookRunner?: HookRunner

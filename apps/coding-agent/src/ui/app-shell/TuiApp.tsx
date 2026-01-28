@@ -150,9 +150,8 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 	const editorOpenRef = { current: async () => {} }
 	const setEditorTextRef = { current: (_text: string) => {} }
 	const getEditorTextRef = { current: () => "" }
+	const clearEditorRef = { current: () => {} }
 	const showToastRef = { current: (_title: string, _message: string, _variant?: "info" | "warning" | "success" | "error") => {} }
-	// Flag to skip editor clear when hooks populate the editor via setEditorText
-	const skipNextEditorClearRef = { current: false }
 
 	const handleBeforeExit = async () => {
 		// Emit shutdown hook before exiting
@@ -284,6 +283,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		setConcealMarkdown: store.concealMarkdown.set,
 		setTheme: handleThemeChange,
 		openEditor: () => editorOpenRef.current(),
+		clearEditor: () => clearEditorRef.current(),
 		onExit: () => exitHandlerRef.current(),
 		hookRunner,
 		submitPrompt: (text, options) => submitPrompt(text, options?.mode ?? "followUp"),
@@ -376,11 +376,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 				onExpand: async (expanded) => handleSubmit(expanded),
 			})
 			if (handled) {
-				// Skip clear if hook populated editor via setEditorText
-				if (!skipNextEditorClearRef.current) {
-					editorClearFn?.()
-				}
-				skipNextEditorClearRef.current = false
+				// Commands that need to clear input do so explicitly via ctx.clearEditor()
 				return
 			}
 		}
@@ -398,7 +394,6 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 	// Initialize hook runner with full context
 	const hookUIContext = createHookUIContext({
 		setEditorText: (text) => {
-			skipNextEditorClearRef.current = true
 			setEditorTextRef.current(text)
 		},
 		getEditorText: () => getEditorTextRef.current(),
@@ -579,6 +574,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 				setEditorTextRef={setEditorTextRef}
 				getEditorTextRef={getEditorTextRef}
 				showToastRef={showToastRef}
+				clearEditorRef={clearEditorRef}
 				onBeforeExit={handleBeforeExit}
 				editor={config.editor}
 				lsp={lsp}

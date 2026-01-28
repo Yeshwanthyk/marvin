@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/coding-agent",
-  "version": "0.3.20",
+  "version": "0.3.21",
   "type": "module",
   "bin": {
     "marvin": "./dist/cli.js"

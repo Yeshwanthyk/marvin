@@ -62,6 +62,7 @@ export const loginCommand: CommandDefinition = {
 				)
 				saveAnthropicTokens(credentials, { configDir })
 				pendingAuthUrl = null
+				ctx.clearEditor?.()
 				addSystemMessage(
 					ctx,
 					`Logged in successfully! Token saved to ${getAnthropicTokensPath({ configDir })}`,
@@ -95,6 +96,7 @@ export const loginCommand: CommandDefinition = {
 		} catch (err) {
 			if (err instanceof Error && err.message === "PENDING") {
 				// Expected - show instructions
+				ctx.clearEditor?.()
 				addSystemMessage(
 					ctx,
 					[

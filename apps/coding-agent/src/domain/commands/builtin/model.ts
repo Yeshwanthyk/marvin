@@ -30,6 +30,7 @@ export const modelCommand: CommandDefinition = {
 			ctx.setCurrentModelId(model.id)
 			ctx.setDisplayModelId(model.id)
 			ctx.setDisplayContextWindow(model.contextWindow)
+			ctx.clearEditor?.()
 			void updateAppConfig(
 				{ configDir: ctx.configDir, configPath: ctx.configPath },
 				{ model: model.id },
@@ -57,6 +58,7 @@ export const modelCommand: CommandDefinition = {
 		ctx.setCurrentModelId(model.id)
 		ctx.setDisplayModelId(model.id)
 		ctx.setDisplayContextWindow(model.contextWindow)
+		ctx.clearEditor?.()
 		void updateAppConfig(
 			{ configDir: ctx.configDir, configPath: ctx.configPath },
 			{ provider, model: model.id },

@@ -9,6 +9,7 @@ export const forkCommand: CommandDefinition = {
 			process.stderr.write("No active session to fork\n")
 			return true
 		}
+		ctx.clearEditor?.()
 		process.stdout.write(`Forked → ${result.id}\nResume with: marvin -r\n`)
 		return true
 	},

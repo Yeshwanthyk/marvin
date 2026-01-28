@@ -38,6 +38,7 @@ export const compactCommand: CommandDefinition = {
 
 		ctx.setActivityState("compacting")
 		ctx.setIsResponding(true)
+		ctx.clearEditor?.()
 
 		try {
 			const prevState = ctx.sessionManager.getCompactionState()

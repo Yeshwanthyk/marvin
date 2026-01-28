@@ -10,6 +10,7 @@ export const thinkingCommand: CommandDefinition = {
 		ctx.agent.setThinkingLevel(next)
 		ctx.setCurrentThinking(next)
 		ctx.setDisplayThinking(next)
+		ctx.clearEditor?.()
 		void updateAppConfig({ configDir: ctx.configDir, configPath: ctx.configPath }, { thinking: next })
 		return true
 	},

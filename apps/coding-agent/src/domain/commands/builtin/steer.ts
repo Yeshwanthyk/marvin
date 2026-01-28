@@ -13,6 +13,8 @@ export const steerCommand: CommandDefinition = {
 			return true
 		}
 
+		ctx.clearEditor?.()
+
 		if (ctx.isResponding()) {
 			await ctx.steer(text)
 			return true

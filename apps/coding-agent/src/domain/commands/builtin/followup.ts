@@ -13,6 +13,8 @@ export const followupCommand: CommandDefinition = {
 			return true
 		}
 
+		ctx.clearEditor?.()
+
 		if (ctx.isResponding()) {
 			await ctx.followUp(text)
 			return true
