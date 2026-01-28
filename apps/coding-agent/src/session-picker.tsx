@@ -12,7 +12,7 @@ import {
 	ThemeProvider,
 	useTheme,
 } from "@yeshwanthyk/open-tui";
-import { createMemo, createSignal, For, onMount, Show } from "solid-js";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
 import { searchSessions, triggerBackgroundIndex } from "./mmem.js";
 import type { SessionManager } from "./session-manager.js";
 
@@ -33,57 +33,12 @@ function detectThemeMode(): ThemeMode {
 	}
 }
 
-type DateCategory = "Today" | "Yesterday" | "This Week" | "Older";
-
-function getDateCategory(timestamp: number): DateCategory {
-	const now = new Date();
-	const date = new Date(timestamp);
-
-	const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-	const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-	const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-	if (date >= today) return "Today";
-	if (date >= yesterday) return "Yesterday";
-	if (date >= weekAgo) return "This Week";
-	return "Older";
-}
-
-interface GroupedSessions {
-	category: DateCategory;
-	sessions: SessionForDisplay[];
-}
-
 interface SessionForDisplay {
 	path: string;
 	title: string;
 	lastActivity: number;
 	messageCount?: number;
 	modelId?: string;
-}
-
-function groupByDate(sessions: SessionForDisplay[]): GroupedSessions[] {
-	const categories: DateCategory[] = [
-		"Today",
-		"Yesterday",
-		"This Week",
-		"Older",
-	];
-	const grouped: Record<DateCategory, SessionForDisplay[]> = {
-		Today: [],
-		Yesterday: [],
-		"This Week": [],
-		Older: [],
-	};
-
-	for (const session of sessions) {
-		const cat = getDateCategory(session.lastActivity);
-		grouped[cat].push(session);
-	}
-
-	return categories
-		.map((cat) => ({ category: cat, sessions: grouped[cat] }))
-		.filter((g) => g.sessions.length > 0);
 }
 
 interface SessionPickerProps {
@@ -148,12 +103,6 @@ function SessionPickerApp(props: SessionPickerProps) {
 	// Final display list
 	const displaySessions = createMemo(() => searchResults() ?? loadedSessions());
 
-	// Group by date only when not searching
-	const grouped = createMemo(() => {
-		if (query().trim()) return null;
-		return groupByDate(displaySessions());
-	});
-
 	// Flat items for SelectList
 	const items = createMemo((): SelectItem[] =>
 		displaySessions().map((s) => ({
@@ -164,7 +113,10 @@ function SessionPickerApp(props: SessionPickerProps) {
 	);
 
 	useKeyboard((e: { name: string; ctrl?: boolean; shift?: boolean }) => {
-		if (e.name === "up" || (e.ctrl && e.name === "p")) {
+		if (e.name === "tab" || ((e.name === "down" || (e.ctrl && e.name === "n")) && searchFocused())) {
+			// Tab or down arrow exits search and focuses list
+			setSearchFocused(false);
+		} else if (e.name === "up" || (e.ctrl && e.name === "p")) {
 			listRef?.moveUp();
 		} else if (e.name === "down" || (e.ctrl && e.name === "n")) {
 			listRef?.moveDown();
@@ -208,46 +160,16 @@ function SessionPickerApp(props: SessionPickerProps) {
 				/>
 			</box>
 			<box height={1} />
-			<Show
-				when={grouped()}
-				fallback={
-					<SelectList
-						ref={(r) => {
-							listRef = r;
-						}}
-						items={items()}
-						maxVisible={maxVisible()}
-						width={dimensions().width - 2}
-						onSelect={(item) => props.onSelect(item.value)}
-						onCancel={props.onCancel}
-					/>
-				}
-			>
-				{(groups) => (
-					<box flexDirection="column">
-						<For each={groups()}>
-							{(group) => (
-								<box flexDirection="column">
-									<text fg={theme.accent}>{group.category}</text>
-									<For each={group.sessions}>
-										{(session, idx) => (
-											<text fg={idx() === 0 ? theme.text : theme.textMuted}>
-												{idx() === 0 ? "→ " : "  "}
-												{formatFirstMessage(session.title)}
-												{"  "}
-												<span style={{ fg: theme.textMuted }}>
-													{formatRelativeTime(session.lastActivity)}
-												</span>
-											</text>
-										)}
-									</For>
-									<box height={1} />
-								</box>
-							)}
-						</For>
-					</box>
-				)}
-			</Show>
+			<SelectList
+				ref={(r) => {
+					listRef = r;
+				}}
+				items={items()}
+				maxVisible={maxVisible()}
+				width={dimensions().width - 2}
+				onSelect={(item) => props.onSelect(item.value)}
+				onCancel={props.onCancel}
+			/>
 			<box flexGrow={1} />
 			<box
 				flexDirection="row"
