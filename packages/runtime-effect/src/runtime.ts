@@ -418,6 +418,15 @@ const buildCycleModels = (
       continue;
     }
 
+    // First, try the loaded provider (from config or --provider flag)
+    // This ensures --provider codex --model gpt-5.2 uses codex's gpt-5.2, not openai's
+    const loadedProviderModel = findModel(loaded.provider, id);
+    if (loadedProviderModel) {
+      entries.push({ provider: loaded.provider, model: loadedProviderModel });
+      continue;
+    }
+
+    // Fall back to searching all providers
     let resolved = false;
     for (const provider of getProviders()) {
       const known = getKnownProvider(provider);
@@ -430,10 +439,7 @@ const buildCycleModels = (
       }
     }
     if (!resolved) {
-      const fallbackModel = findModel(loaded.provider, id);
-      if (fallbackModel) {
-        entries.push({ provider: loaded.provider, model: fallbackModel });
-      }
+      // No model found anywhere - will use default at end if entries empty
     }
   }
 
