@@ -1,4 +1,4 @@
-import { appendFile, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { appendFile, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AppMessage, ThinkingLevel } from "@yeshwanthyk/agent-core";
@@ -49,6 +49,7 @@ export interface SessionInfo {
 export interface SessionDetails extends SessionInfo {
   messageCount: number;
   firstMessage: string;
+  lastActivity: number;
 }
 
 export interface LoadedSession {
@@ -250,6 +251,9 @@ export class SessionManager implements ReadonlySessionManager {
           }
         }
 
+        // Use file mtime for last activity (more accurate than creation timestamp)
+        const lastActivity = statSync(path).mtimeMs;
+
         sessions.push({
           id: metadata.id,
           timestamp: metadata.timestamp,
@@ -258,13 +262,15 @@ export class SessionManager implements ReadonlySessionManager {
           modelId: metadata.modelId,
           messageCount,
           firstMessage: firstMessage || "(empty session)",
+          lastActivity,
         });
       } catch {
         // skip invalid files
       }
     }
 
-    return sessions;
+    // Sort by last activity (most recent first)
+    return sessions.sort((a, b) => b.lastActivity - a.lastActivity);
   }
 
   loadLatest(): LoadedSession | null {
