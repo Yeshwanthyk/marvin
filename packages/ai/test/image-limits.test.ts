@@ -74,7 +74,14 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getModel } from "../src/models.js";
 import { complete } from "../src/stream.js";
-import type { Api, Context, ImageContent, Model, OptionsForApi, UserMessage } from "../src/types.js";
+import type {
+	Api,
+	Context,
+	ImageContent,
+	Model,
+	OptionsForApi,
+	UserMessage,
+} from "../src/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -85,9 +92,15 @@ const TEMP_DIR = join(__dirname, ".temp-images");
 /**
  * Generate a valid PNG image of specified dimensions using ImageMagick
  */
-function generateImage(width: number, height: number, filename: string): string {
+function generateImage(
+	width: number,
+	height: number,
+	filename: string,
+): string {
 	const filepath = join(TEMP_DIR, filename);
-	execSync(`magick -size ${width}x${height} xc:red "${filepath}"`, { stdio: "ignore" });
+	execSync(`magick -size ${width}x${height} xc:red "${filepath}"`, {
+		stdio: "ignore",
+	});
 	const buffer = require("fs").readFileSync(filepath);
 	return buffer.toString("base64");
 }
@@ -102,16 +115,22 @@ function generateImageWithSize(targetBytes: number, filename: string): string {
 	// For a square image: side = sqrt(targetBytes / 3)
 	const side = Math.ceil(Math.sqrt(targetBytes / 3));
 	// Use noise pattern to prevent compression from shrinking the file
-	execSync(`magick -size ${side}x${side} xc: +noise Random -depth 8 PNG24:"${filepath}"`, { stdio: "ignore" });
+	execSync(
+		`magick -size ${side}x${side} xc: +noise Random -depth 8 PNG24:"${filepath}"`,
+		{ stdio: "ignore" },
+	);
 
 	// Check actual size and adjust if needed
 	const stats = require("fs").statSync(filepath);
 	if (stats.size < targetBytes * 0.8) {
 		// If too small, increase dimensions
 		const newSide = Math.ceil(side * Math.sqrt(targetBytes / stats.size));
-		execSync(`magick -size ${newSide}x${newSide} xc: +noise Random -depth 8 PNG24:"${filepath}"`, {
-			stdio: "ignore",
-		});
+		execSync(
+			`magick -size ${newSide}x${newSide} xc: +noise Random -depth 8 PNG24:"${filepath}"`,
+			{
+				stdio: "ignore",
+			},
+		);
 	}
 
 	const buffer = require("fs").readFileSync(filepath);
@@ -121,9 +140,15 @@ function generateImageWithSize(targetBytes: number, filename: string): string {
 /**
  * Create a user message with multiple images
  */
-function createMultiImageMessage(imageCount: number, imageBase64: string): UserMessage {
+function createMultiImageMessage(
+	imageCount: number,
+	imageBase64: string,
+): UserMessage {
 	const content: (ImageContent | { type: "text"; text: string })[] = [
-		{ type: "text", text: `I am sending you ${imageCount} images. Just reply with "received ${imageCount}".` },
+		{
+			type: "text",
+			text: `I am sending you ${imageCount} images. Just reply with "received ${imageCount}".`,
+		},
 	];
 
 	for (let i = 0; i < imageCount; i++) {
@@ -161,7 +186,10 @@ async function testImageCount<TApi extends Api>(
 		}
 		return { success: true };
 	} catch (e) {
-		return { success: false, error: e instanceof Error ? e.message : String(e) };
+		return {
+			success: false,
+			error: e instanceof Error ? e.message : String(e),
+		};
 	}
 }
 
@@ -178,7 +206,10 @@ async function testImageSize<TApi extends Api>(
 			{
 				role: "user",
 				content: [
-					{ type: "text", text: "I am sending you an image. Just reply with 'received'." },
+					{
+						type: "text",
+						text: "I am sending you an image. Just reply with 'received'.",
+					},
 					{ type: "image", data: imageBase64, mimeType: "image/png" },
 				],
 				timestamp: Date.now(),
@@ -193,7 +224,10 @@ async function testImageSize<TApi extends Api>(
 		}
 		return { success: true };
 	} catch (e) {
-		return { success: false, error: e instanceof Error ? e.message : String(e) };
+		return {
+			success: false,
+			error: e instanceof Error ? e.message : String(e),
+		};
 	}
 }
 
@@ -210,7 +244,10 @@ async function testImageDimensions<TApi extends Api>(
 			{
 				role: "user",
 				content: [
-					{ type: "text", text: "I am sending you an image. Just reply with 'received'." },
+					{
+						type: "text",
+						text: "I am sending you an image. Just reply with 'received'.",
+					},
 					{ type: "image", data: imageBase64, mimeType: "image/png" },
 				],
 				timestamp: Date.now(),
@@ -225,7 +262,10 @@ async function testImageDimensions<TApi extends Api>(
 		}
 		return { success: true };
 	} catch (e) {
-		return { success: false, error: e instanceof Error ? e.message : String(e) };
+		return {
+			success: false,
+			error: e instanceof Error ? e.message : String(e),
+		};
 	}
 }
 
@@ -281,225 +321,302 @@ describe("Image Limits E2E Tests", () => {
 	// Anthropic (claude-3-5-haiku-20241022)
 	// Limits: 100 images, 5MB per image, 8000px max dimension
 	// -------------------------------------------------------------------------
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic (claude-3-5-haiku-20241022)", () => {
-		const model = getModel("anthropic", "claude-3-5-haiku-20241022");
+	describe.skipIf(!process.env.ANTHROPIC_API_KEY)(
+		"Anthropic (claude-3-5-haiku-20241022)",
+		() => {
+			const model = getModel("anthropic", "claude-3-5-haiku-20241022");
 
-		it("should accept a small number of images (5)", async () => {
-			const result = await testImageCount(model, 5, smallImage);
-			expect(result.success, result.error).toBe(true);
-		});
+			it("should accept a small number of images (5)", async () => {
+				const result = await testImageCount(model, 5, smallImage);
+				expect(result.success, result.error).toBe(true);
+			});
 
-		it("should find maximum image count limit", { timeout: 600000 }, async () => {
-			// Known limit: 100 images
-			const { limit, lastError } = await findLimit((count) => testImageCount(model, count, smallImage), 20, 120, 20);
-			console.log(`\n  Anthropic max images: ~${limit} (last error: ${lastError})`);
-			expect(limit).toBeGreaterThanOrEqual(80);
-			expect(limit).toBeLessThanOrEqual(100);
-		});
+			it(
+				"should find maximum image count limit",
+				{ timeout: 600000 },
+				async () => {
+					// Known limit: 100 images
+					const { limit, lastError } = await findLimit(
+						(count) => testImageCount(model, count, smallImage),
+						20,
+						120,
+						20,
+					);
+					console.log(
+						`\n  Anthropic max images: ~${limit} (last error: ${lastError})`,
+					);
+					expect(limit).toBeGreaterThanOrEqual(80);
+					expect(limit).toBeLessThanOrEqual(100);
+				},
+			);
 
-		it("should find maximum image size limit", { timeout: 600000 }, async () => {
-			const MB = 1024 * 1024;
-			// Known limit: 5MB per image
-			const sizes = [1, 2, 3, 4, 5, 6];
+			it(
+				"should find maximum image size limit",
+				{ timeout: 600000 },
+				async () => {
+					const MB = 1024 * 1024;
+					// Known limit: 5MB per image
+					const sizes = [1, 2, 3, 4, 5, 6];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+					let lastSuccess = 0;
+					let lastError: string | undefined;
 
-			for (const sizeMB of sizes) {
-				console.log(`  Testing size: ${sizeMB}MB...`);
-				const imageBase64 = generateImageWithSize(sizeMB * MB, `size-${sizeMB}mb.png`);
-				const result = await testImageSize(model, imageBase64);
-				if (result.success) {
-					lastSuccess = sizeMB;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
-				}
-			}
+					for (const sizeMB of sizes) {
+						console.log(`  Testing size: ${sizeMB}MB...`);
+						const imageBase64 = generateImageWithSize(
+							sizeMB * MB,
+							`size-${sizeMB}mb.png`,
+						);
+						const result = await testImageSize(model, imageBase64);
+						if (result.success) {
+							lastSuccess = sizeMB;
+							console.log(`    SUCCESS`);
+						} else {
+							lastError = result.error;
+							console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+							break;
+						}
+					}
 
-			console.log(`\n  Anthropic max image size: ~${lastSuccess}MB (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(1);
-		});
+					console.log(
+						`\n  Anthropic max image size: ~${lastSuccess}MB (last error: ${lastError})`,
+					);
+					expect(lastSuccess).toBeGreaterThanOrEqual(1);
+				},
+			);
 
-		it("should find maximum image dimension limit", { timeout: 600000 }, async () => {
-			// Known limit: 8000px
-			const dimensions = [1000, 2000, 4000, 6000, 8000, 10000];
+			it(
+				"should find maximum image dimension limit",
+				{ timeout: 600000 },
+				async () => {
+					// Known limit: 8000px
+					const dimensions = [1000, 2000, 4000, 6000, 8000, 10000];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+					let lastSuccess = 0;
+					let lastError: string | undefined;
 
-			for (const dim of dimensions) {
-				console.log(`  Testing dimension: ${dim}x${dim}...`);
-				const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
-				const result = await testImageDimensions(model, imageBase64);
-				if (result.success) {
-					lastSuccess = dim;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
-				}
-			}
+					for (const dim of dimensions) {
+						console.log(`  Testing dimension: ${dim}x${dim}...`);
+						const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
+						const result = await testImageDimensions(model, imageBase64);
+						if (result.success) {
+							lastSuccess = dim;
+							console.log(`    SUCCESS`);
+						} else {
+							lastError = result.error;
+							console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+							break;
+						}
+					}
 
-			console.log(`\n  Anthropic max dimension: ~${lastSuccess}px (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(6000);
-			expect(lastSuccess).toBeLessThanOrEqual(8000);
-		});
-	});
+					console.log(
+						`\n  Anthropic max dimension: ~${lastSuccess}px (last error: ${lastError})`,
+					);
+					expect(lastSuccess).toBeGreaterThanOrEqual(6000);
+					expect(lastSuccess).toBeLessThanOrEqual(8000);
+				},
+			);
+		},
+	);
 
 	// -------------------------------------------------------------------------
 	// OpenAI (gpt-4o-mini via openai-completions)
 	// Limits: 500 images, ~20MB per image (documented)
 	// -------------------------------------------------------------------------
 	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI (gpt-4o-mini)", () => {
-		const model: Model<"openai-completions"> = { ...getModel("openai", "gpt-4o-mini"), api: "openai-completions" };
+		const model: Model<"openai-completions"> = {
+			...getModel("openai", "gpt-4o-mini"),
+			api: "openai-completions",
+		};
 
 		it("should accept a small number of images (5)", async () => {
 			const result = await testImageCount(model, 5, smallImage);
 			expect(result.success, result.error).toBe(true);
 		});
 
-		it("should find maximum image count limit", { timeout: 600000 }, async () => {
-			// Known limit: 500 images
-			const { limit, lastError } = await findLimit(
-				(count) => testImageCount(model, count, smallImage),
-				100,
-				600,
-				100,
-			);
-			console.log(`\n  OpenAI max images: ~${limit} (last error: ${lastError})`);
-			expect(limit).toBeGreaterThanOrEqual(400);
-			expect(limit).toBeLessThanOrEqual(500);
-		});
+		it(
+			"should find maximum image count limit",
+			{ timeout: 600000 },
+			async () => {
+				// Known limit: 500 images
+				const { limit, lastError } = await findLimit(
+					(count) => testImageCount(model, count, smallImage),
+					100,
+					600,
+					100,
+				);
+				console.log(
+					`\n  OpenAI max images: ~${limit} (last error: ${lastError})`,
+				);
+				expect(limit).toBeGreaterThanOrEqual(400);
+				expect(limit).toBeLessThanOrEqual(500);
+			},
+		);
 
-		it("should find maximum image size limit", { timeout: 600000 }, async () => {
-			const MB = 1024 * 1024;
-			// Documented limit: 20MB
-			const sizes = [5, 10, 15, 20, 25];
+		it(
+			"should find maximum image size limit",
+			{ timeout: 600000 },
+			async () => {
+				const MB = 1024 * 1024;
+				// Documented limit: 20MB
+				const sizes = [5, 10, 15, 20, 25];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const sizeMB of sizes) {
-				console.log(`  Testing size: ${sizeMB}MB...`);
-				const imageBase64 = generateImageWithSize(sizeMB * MB, `size-${sizeMB}mb.png`);
-				const result = await testImageSize(model, imageBase64);
-				if (result.success) {
-					lastSuccess = sizeMB;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const sizeMB of sizes) {
+					console.log(`  Testing size: ${sizeMB}MB...`);
+					const imageBase64 = generateImageWithSize(
+						sizeMB * MB,
+						`size-${sizeMB}mb.png`,
+					);
+					const result = await testImageSize(model, imageBase64);
+					if (result.success) {
+						lastSuccess = sizeMB;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  OpenAI max image size: ~${lastSuccess}MB (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(15);
-		});
+				console.log(
+					`\n  OpenAI max image size: ~${lastSuccess}MB (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(15);
+			},
+		);
 
-		it("should find maximum image dimension limit", { timeout: 600000 }, async () => {
-			const dimensions = [2000, 4000, 8000, 16000, 20000];
+		it(
+			"should find maximum image dimension limit",
+			{ timeout: 600000 },
+			async () => {
+				const dimensions = [2000, 4000, 8000, 16000, 20000];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const dim of dimensions) {
-				console.log(`  Testing dimension: ${dim}x${dim}...`);
-				const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
-				const result = await testImageDimensions(model, imageBase64);
-				if (result.success) {
-					lastSuccess = dim;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const dim of dimensions) {
+					console.log(`  Testing dimension: ${dim}x${dim}...`);
+					const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
+					const result = await testImageDimensions(model, imageBase64);
+					if (result.success) {
+						lastSuccess = dim;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  OpenAI max dimension: ~${lastSuccess}px (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(2000);
-		});
+				console.log(
+					`\n  OpenAI max dimension: ~${lastSuccess}px (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(2000);
+			},
+		);
 	});
 
 	// -------------------------------------------------------------------------
 	// Google Gemini (gemini-2.5-flash)
 	// Limits: Very high (~2500 images), large size support
 	// -------------------------------------------------------------------------
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Gemini (gemini-2.5-flash)", () => {
-		const model = getModel("google", "gemini-2.5-flash");
+	describe.skipIf(!process.env.GEMINI_API_KEY)(
+		"Gemini (gemini-2.5-flash)",
+		() => {
+			const model = getModel("google", "gemini-2.5-flash");
 
-		it("should accept a small number of images (5)", async () => {
-			const result = await testImageCount(model, 5, smallImage);
-			expect(result.success, result.error).toBe(true);
-		});
+			it("should accept a small number of images (5)", async () => {
+				const result = await testImageCount(model, 5, smallImage);
+				expect(result.success, result.error).toBe(true);
+			});
 
-		it("should find maximum image count limit", { timeout: 900000 }, async () => {
-			// Known to work up to ~2500, hits errors around 3000
-			const { limit, lastError } = await findLimit(
-				(count) => testImageCount(model, count, smallImage),
-				500,
-				3000,
-				500,
+			it(
+				"should find maximum image count limit",
+				{ timeout: 900000 },
+				async () => {
+					// Known to work up to ~2500, hits errors around 3000
+					const { limit, lastError } = await findLimit(
+						(count) => testImageCount(model, count, smallImage),
+						500,
+						3000,
+						500,
+					);
+					console.log(
+						`\n  Gemini max images: ~${limit} (last error: ${lastError})`,
+					);
+					expect(limit).toBeGreaterThanOrEqual(500);
+				},
 			);
-			console.log(`\n  Gemini max images: ~${limit} (last error: ${lastError})`);
-			expect(limit).toBeGreaterThanOrEqual(500);
-		});
 
-		it("should find maximum image size limit", { timeout: 600000 }, async () => {
-			const MB = 1024 * 1024;
-			// Very permissive, tested up to 60MB successfully
-			const sizes = [10, 20, 30, 40];
+			it(
+				"should find maximum image size limit",
+				{ timeout: 600000 },
+				async () => {
+					const MB = 1024 * 1024;
+					// Very permissive, tested up to 60MB successfully
+					const sizes = [10, 20, 30, 40];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+					let lastSuccess = 0;
+					let lastError: string | undefined;
 
-			for (const sizeMB of sizes) {
-				console.log(`  Testing size: ${sizeMB}MB...`);
-				const imageBase64 = generateImageWithSize(sizeMB * MB, `size-${sizeMB}mb.png`);
-				const result = await testImageSize(model, imageBase64);
-				if (result.success) {
-					lastSuccess = sizeMB;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
-				}
-			}
+					for (const sizeMB of sizes) {
+						console.log(`  Testing size: ${sizeMB}MB...`);
+						const imageBase64 = generateImageWithSize(
+							sizeMB * MB,
+							`size-${sizeMB}mb.png`,
+						);
+						const result = await testImageSize(model, imageBase64);
+						if (result.success) {
+							lastSuccess = sizeMB;
+							console.log(`    SUCCESS`);
+						} else {
+							lastError = result.error;
+							console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+							break;
+						}
+					}
 
-			console.log(`\n  Gemini max image size: ~${lastSuccess}MB (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(20);
-		});
+					console.log(
+						`\n  Gemini max image size: ~${lastSuccess}MB (last error: ${lastError})`,
+					);
+					expect(lastSuccess).toBeGreaterThanOrEqual(20);
+				},
+			);
 
-		it("should find maximum image dimension limit", { timeout: 600000 }, async () => {
-			const dimensions = [2000, 4000, 8000, 16000, 20000];
+			it(
+				"should find maximum image dimension limit",
+				{ timeout: 600000 },
+				async () => {
+					const dimensions = [2000, 4000, 8000, 16000, 20000];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+					let lastSuccess = 0;
+					let lastError: string | undefined;
 
-			for (const dim of dimensions) {
-				console.log(`  Testing dimension: ${dim}x${dim}...`);
-				const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
-				const result = await testImageDimensions(model, imageBase64);
-				if (result.success) {
-					lastSuccess = dim;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
-				}
-			}
+					for (const dim of dimensions) {
+						console.log(`  Testing dimension: ${dim}x${dim}...`);
+						const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
+						const result = await testImageDimensions(model, imageBase64);
+						if (result.success) {
+							lastSuccess = dim;
+							console.log(`    SUCCESS`);
+						} else {
+							lastError = result.error;
+							console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+							break;
+						}
+					}
 
-			console.log(`\n  Gemini max dimension: ~${lastSuccess}px (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(2000);
-		});
-	});
+					console.log(
+						`\n  Gemini max dimension: ~${lastSuccess}px (last error: ${lastError})`,
+					);
+					expect(lastSuccess).toBeGreaterThanOrEqual(2000);
+				},
+			);
+		},
+	);
 
 	// -------------------------------------------------------------------------
 	// Mistral (pixtral-12b)
@@ -513,131 +630,186 @@ describe("Image Limits E2E Tests", () => {
 			expect(result.success, result.error).toBe(true);
 		});
 
-		it("should find maximum image count limit", { timeout: 600000 }, async () => {
-			// Known to fail around 9 images
-			const { limit, lastError } = await findLimit((count) => testImageCount(model, count, smallImage), 5, 15, 1);
-			console.log(`\n  Mistral max images: ~${limit} (last error: ${lastError})`);
-			expect(limit).toBeGreaterThanOrEqual(5);
-		});
+		it(
+			"should find maximum image count limit",
+			{ timeout: 600000 },
+			async () => {
+				// Known to fail around 9 images
+				const { limit, lastError } = await findLimit(
+					(count) => testImageCount(model, count, smallImage),
+					5,
+					15,
+					1,
+				);
+				console.log(
+					`\n  Mistral max images: ~${limit} (last error: ${lastError})`,
+				);
+				expect(limit).toBeGreaterThanOrEqual(5);
+			},
+		);
 
-		it("should find maximum image size limit", { timeout: 600000 }, async () => {
-			const MB = 1024 * 1024;
-			const sizes = [5, 10, 15, 20];
+		it(
+			"should find maximum image size limit",
+			{ timeout: 600000 },
+			async () => {
+				const MB = 1024 * 1024;
+				const sizes = [5, 10, 15, 20];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const sizeMB of sizes) {
-				console.log(`  Testing size: ${sizeMB}MB...`);
-				const imageBase64 = generateImageWithSize(sizeMB * MB, `size-${sizeMB}mb.png`);
-				const result = await testImageSize(model, imageBase64);
-				if (result.success) {
-					lastSuccess = sizeMB;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const sizeMB of sizes) {
+					console.log(`  Testing size: ${sizeMB}MB...`);
+					const imageBase64 = generateImageWithSize(
+						sizeMB * MB,
+						`size-${sizeMB}mb.png`,
+					);
+					const result = await testImageSize(model, imageBase64);
+					if (result.success) {
+						lastSuccess = sizeMB;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  Mistral max image size: ~${lastSuccess}MB (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(5);
-		});
+				console.log(
+					`\n  Mistral max image size: ~${lastSuccess}MB (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(5);
+			},
+		);
 
-		it("should find maximum image dimension limit", { timeout: 600000 }, async () => {
-			const dimensions = [2000, 4000, 8000, 16000, 20000];
+		it(
+			"should find maximum image dimension limit",
+			{ timeout: 600000 },
+			async () => {
+				const dimensions = [2000, 4000, 8000, 16000, 20000];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const dim of dimensions) {
-				console.log(`  Testing dimension: ${dim}x${dim}...`);
-				const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
-				const result = await testImageDimensions(model, imageBase64);
-				if (result.success) {
-					lastSuccess = dim;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const dim of dimensions) {
+					console.log(`  Testing dimension: ${dim}x${dim}...`);
+					const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
+					const result = await testImageDimensions(model, imageBase64);
+					if (result.success) {
+						lastSuccess = dim;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  Mistral max dimension: ~${lastSuccess}px (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(2000);
-		});
+				console.log(
+					`\n  Mistral max dimension: ~${lastSuccess}px (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(2000);
+			},
+		);
 	});
 
 	// -------------------------------------------------------------------------
 	// OpenRouter (z-ai/glm-4.5v)
 	// Limits: Context-window limited (~45 images at 100x100), ~15MB per image
 	// -------------------------------------------------------------------------
-	describe.skipIf(!process.env.OPENROUTER_API_KEY)("OpenRouter (z-ai/glm-4.5v)", () => {
-		const model = getModel("openrouter", "z-ai/glm-4.5v");
+	describe.skipIf(!process.env.OPENROUTER_API_KEY)(
+		"OpenRouter (z-ai/glm-4.5v)",
+		() => {
+			const model = getModel("openrouter", "z-ai/glm-4.5v");
 
-		it("should accept a small number of images (5)", async () => {
-			const result = await testImageCount(model, 5, smallImage);
-			expect(result.success, result.error).toBe(true);
-		});
+			it("should accept a small number of images (5)", async () => {
+				const result = await testImageCount(model, 5, smallImage);
+				expect(result.success, result.error).toBe(true);
+			});
 
-		it("should find maximum image count limit", { timeout: 600000 }, async () => {
-			// Limited by context window, not explicit image limit
-			const { limit, lastError } = await findLimit((count) => testImageCount(model, count, smallImage), 10, 60, 10);
-			console.log(`\n  OpenRouter max images: ~${limit} (last error: ${lastError})`);
-			expect(limit).toBeGreaterThanOrEqual(10);
-		});
+			it(
+				"should find maximum image count limit",
+				{ timeout: 600000 },
+				async () => {
+					// Limited by context window, not explicit image limit
+					const { limit, lastError } = await findLimit(
+						(count) => testImageCount(model, count, smallImage),
+						10,
+						60,
+						10,
+					);
+					console.log(
+						`\n  OpenRouter max images: ~${limit} (last error: ${lastError})`,
+					);
+					expect(limit).toBeGreaterThanOrEqual(10);
+				},
+			);
 
-		it("should find maximum image size limit", { timeout: 600000 }, async () => {
-			const MB = 1024 * 1024;
-			const sizes = [5, 10, 15, 20];
+			it(
+				"should find maximum image size limit",
+				{ timeout: 600000 },
+				async () => {
+					const MB = 1024 * 1024;
+					const sizes = [5, 10, 15, 20];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+					let lastSuccess = 0;
+					let lastError: string | undefined;
 
-			for (const sizeMB of sizes) {
-				console.log(`  Testing size: ${sizeMB}MB...`);
-				const imageBase64 = generateImageWithSize(sizeMB * MB, `size-${sizeMB}mb.png`);
-				const result = await testImageSize(model, imageBase64);
-				if (result.success) {
-					lastSuccess = sizeMB;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
-				}
-			}
+					for (const sizeMB of sizes) {
+						console.log(`  Testing size: ${sizeMB}MB...`);
+						const imageBase64 = generateImageWithSize(
+							sizeMB * MB,
+							`size-${sizeMB}mb.png`,
+						);
+						const result = await testImageSize(model, imageBase64);
+						if (result.success) {
+							lastSuccess = sizeMB;
+							console.log(`    SUCCESS`);
+						} else {
+							lastError = result.error;
+							console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+							break;
+						}
+					}
 
-			console.log(`\n  OpenRouter max image size: ~${lastSuccess}MB (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(5);
-		});
+					console.log(
+						`\n  OpenRouter max image size: ~${lastSuccess}MB (last error: ${lastError})`,
+					);
+					expect(lastSuccess).toBeGreaterThanOrEqual(5);
+				},
+			);
 
-		it("should find maximum image dimension limit", { timeout: 600000 }, async () => {
-			const dimensions = [2000, 4000, 8000, 16000, 20000];
+			it(
+				"should find maximum image dimension limit",
+				{ timeout: 600000 },
+				async () => {
+					const dimensions = [2000, 4000, 8000, 16000, 20000];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+					let lastSuccess = 0;
+					let lastError: string | undefined;
 
-			for (const dim of dimensions) {
-				console.log(`  Testing dimension: ${dim}x${dim}...`);
-				const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
-				const result = await testImageDimensions(model, imageBase64);
-				if (result.success) {
-					lastSuccess = dim;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
-				}
-			}
+					for (const dim of dimensions) {
+						console.log(`  Testing dimension: ${dim}x${dim}...`);
+						const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
+						const result = await testImageDimensions(model, imageBase64);
+						if (result.success) {
+							lastSuccess = dim;
+							console.log(`    SUCCESS`);
+						} else {
+							lastError = result.error;
+							console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+							break;
+						}
+					}
 
-			console.log(`\n  OpenRouter max dimension: ~${lastSuccess}px (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(2000);
-		});
-	});
+					console.log(
+						`\n  OpenRouter max dimension: ~${lastSuccess}px (last error: ${lastError})`,
+					);
+					expect(lastSuccess).toBeGreaterThanOrEqual(2000);
+				},
+			);
+		},
+	);
 
 	// -------------------------------------------------------------------------
 	// xAI (grok-2-vision)
@@ -650,60 +822,84 @@ describe("Image Limits E2E Tests", () => {
 			expect(result.success, result.error).toBe(true);
 		});
 
-		it("should find maximum image count limit", { timeout: 600000 }, async () => {
-			const { limit, lastError } = await findLimit((count) => testImageCount(model, count, smallImage), 10, 100, 10);
-			console.log(`\n  xAI max images: ~${limit} (last error: ${lastError})`);
-			expect(limit).toBeGreaterThanOrEqual(5);
-		});
+		it(
+			"should find maximum image count limit",
+			{ timeout: 600000 },
+			async () => {
+				const { limit, lastError } = await findLimit(
+					(count) => testImageCount(model, count, smallImage),
+					10,
+					100,
+					10,
+				);
+				console.log(`\n  xAI max images: ~${limit} (last error: ${lastError})`);
+				expect(limit).toBeGreaterThanOrEqual(5);
+			},
+		);
 
-		it("should find maximum image size limit", { timeout: 600000 }, async () => {
-			const MB = 1024 * 1024;
-			const sizes = [5, 10, 15, 20, 25];
+		it(
+			"should find maximum image size limit",
+			{ timeout: 600000 },
+			async () => {
+				const MB = 1024 * 1024;
+				const sizes = [5, 10, 15, 20, 25];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const sizeMB of sizes) {
-				console.log(`  Testing size: ${sizeMB}MB...`);
-				const imageBase64 = generateImageWithSize(sizeMB * MB, `size-${sizeMB}mb.png`);
-				const result = await testImageSize(model, imageBase64);
-				if (result.success) {
-					lastSuccess = sizeMB;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const sizeMB of sizes) {
+					console.log(`  Testing size: ${sizeMB}MB...`);
+					const imageBase64 = generateImageWithSize(
+						sizeMB * MB,
+						`size-${sizeMB}mb.png`,
+					);
+					const result = await testImageSize(model, imageBase64);
+					if (result.success) {
+						lastSuccess = sizeMB;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  xAI max image size: ~${lastSuccess}MB (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(5);
-		});
+				console.log(
+					`\n  xAI max image size: ~${lastSuccess}MB (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(5);
+			},
+		);
 
-		it("should find maximum image dimension limit", { timeout: 600000 }, async () => {
-			const dimensions = [2000, 4000, 8000, 16000, 20000];
+		it(
+			"should find maximum image dimension limit",
+			{ timeout: 600000 },
+			async () => {
+				const dimensions = [2000, 4000, 8000, 16000, 20000];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const dim of dimensions) {
-				console.log(`  Testing dimension: ${dim}x${dim}...`);
-				const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
-				const result = await testImageDimensions(model, imageBase64);
-				if (result.success) {
-					lastSuccess = dim;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const dim of dimensions) {
+					console.log(`  Testing dimension: ${dim}x${dim}...`);
+					const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
+					const result = await testImageDimensions(model, imageBase64);
+					if (result.success) {
+						lastSuccess = dim;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  xAI max dimension: ~${lastSuccess}px (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(2000);
-		});
+				console.log(
+					`\n  xAI max dimension: ~${lastSuccess}px (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(2000);
+			},
+		);
 	});
 
 	// -------------------------------------------------------------------------
@@ -717,60 +913,86 @@ describe("Image Limits E2E Tests", () => {
 			expect(result.success, result.error).toBe(true);
 		});
 
-		it("should find maximum image count limit", { timeout: 600000 }, async () => {
-			const { limit, lastError } = await findLimit((count) => testImageCount(model, count, smallImage), 5, 50, 5);
-			console.log(`\n  Groq max images: ~${limit} (last error: ${lastError})`);
-			expect(limit).toBeGreaterThanOrEqual(5);
-		});
+		it(
+			"should find maximum image count limit",
+			{ timeout: 600000 },
+			async () => {
+				const { limit, lastError } = await findLimit(
+					(count) => testImageCount(model, count, smallImage),
+					5,
+					50,
+					5,
+				);
+				console.log(
+					`\n  Groq max images: ~${limit} (last error: ${lastError})`,
+				);
+				expect(limit).toBeGreaterThanOrEqual(5);
+			},
+		);
 
-		it("should find maximum image size limit", { timeout: 600000 }, async () => {
-			const MB = 1024 * 1024;
-			const sizes = [1, 5, 10, 15, 20];
+		it(
+			"should find maximum image size limit",
+			{ timeout: 600000 },
+			async () => {
+				const MB = 1024 * 1024;
+				const sizes = [1, 5, 10, 15, 20];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const sizeMB of sizes) {
-				console.log(`  Testing size: ${sizeMB}MB...`);
-				const imageBase64 = generateImageWithSize(sizeMB * MB, `size-${sizeMB}mb.png`);
-				const result = await testImageSize(model, imageBase64);
-				if (result.success) {
-					lastSuccess = sizeMB;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const sizeMB of sizes) {
+					console.log(`  Testing size: ${sizeMB}MB...`);
+					const imageBase64 = generateImageWithSize(
+						sizeMB * MB,
+						`size-${sizeMB}mb.png`,
+					);
+					const result = await testImageSize(model, imageBase64);
+					if (result.success) {
+						lastSuccess = sizeMB;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  Groq max image size: ~${lastSuccess}MB (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(1);
-		});
+				console.log(
+					`\n  Groq max image size: ~${lastSuccess}MB (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(1);
+			},
+		);
 
-		it("should find maximum image dimension limit", { timeout: 600000 }, async () => {
-			const dimensions = [2000, 4000, 8000, 16000, 20000];
+		it(
+			"should find maximum image dimension limit",
+			{ timeout: 600000 },
+			async () => {
+				const dimensions = [2000, 4000, 8000, 16000, 20000];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const dim of dimensions) {
-				console.log(`  Testing dimension: ${dim}x${dim}...`);
-				const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
-				const result = await testImageDimensions(model, imageBase64);
-				if (result.success) {
-					lastSuccess = dim;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const dim of dimensions) {
+					console.log(`  Testing dimension: ${dim}x${dim}...`);
+					const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
+					const result = await testImageDimensions(model, imageBase64);
+					if (result.success) {
+						lastSuccess = dim;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  Groq max dimension: ~${lastSuccess}px (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(2000);
-		});
+				console.log(
+					`\n  Groq max dimension: ~${lastSuccess}px (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(2000);
+			},
+		);
 	});
 
 	// -------------------------------------------------------------------------
@@ -784,60 +1006,84 @@ describe("Image Limits E2E Tests", () => {
 			expect(result.success, result.error).toBe(true);
 		});
 
-		it("should find maximum image count limit", { timeout: 600000 }, async () => {
-			const { limit, lastError } = await findLimit((count) => testImageCount(model, count, smallImage), 10, 100, 10);
-			console.log(`\n  zAI max images: ~${limit} (last error: ${lastError})`);
-			expect(limit).toBeGreaterThanOrEqual(5);
-		});
+		it(
+			"should find maximum image count limit",
+			{ timeout: 600000 },
+			async () => {
+				const { limit, lastError } = await findLimit(
+					(count) => testImageCount(model, count, smallImage),
+					10,
+					100,
+					10,
+				);
+				console.log(`\n  zAI max images: ~${limit} (last error: ${lastError})`);
+				expect(limit).toBeGreaterThanOrEqual(5);
+			},
+		);
 
-		it("should find maximum image size limit", { timeout: 600000 }, async () => {
-			const MB = 1024 * 1024;
-			const sizes = [5, 10, 15, 20];
+		it(
+			"should find maximum image size limit",
+			{ timeout: 600000 },
+			async () => {
+				const MB = 1024 * 1024;
+				const sizes = [5, 10, 15, 20];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const sizeMB of sizes) {
-				console.log(`  Testing size: ${sizeMB}MB...`);
-				const imageBase64 = generateImageWithSize(sizeMB * MB, `size-${sizeMB}mb.png`);
-				const result = await testImageSize(model, imageBase64);
-				if (result.success) {
-					lastSuccess = sizeMB;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const sizeMB of sizes) {
+					console.log(`  Testing size: ${sizeMB}MB...`);
+					const imageBase64 = generateImageWithSize(
+						sizeMB * MB,
+						`size-${sizeMB}mb.png`,
+					);
+					const result = await testImageSize(model, imageBase64);
+					if (result.success) {
+						lastSuccess = sizeMB;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  zAI max image size: ~${lastSuccess}MB (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(5);
-		});
+				console.log(
+					`\n  zAI max image size: ~${lastSuccess}MB (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(5);
+			},
+		);
 
-		it("should find maximum image dimension limit", { timeout: 600000 }, async () => {
-			const dimensions = [2000, 4000, 8000, 16000, 20000];
+		it(
+			"should find maximum image dimension limit",
+			{ timeout: 600000 },
+			async () => {
+				const dimensions = [2000, 4000, 8000, 16000, 20000];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const dim of dimensions) {
-				console.log(`  Testing dimension: ${dim}x${dim}...`);
-				const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
-				const result = await testImageDimensions(model, imageBase64);
-				if (result.success) {
-					lastSuccess = dim;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
-					break;
+				for (const dim of dimensions) {
+					console.log(`  Testing dimension: ${dim}x${dim}...`);
+					const imageBase64 = generateImage(dim, dim, `dim-${dim}.png`);
+					const result = await testImageDimensions(model, imageBase64);
+					if (result.success) {
+						lastSuccess = dim;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 100)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  zAI max dimension: ~${lastSuccess}px (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(2000);
-		});
+				console.log(
+					`\n  zAI max dimension: ~${lastSuccess}px (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(2000);
+			},
+		);
 	});
 
 	// =========================================================================
@@ -859,9 +1105,14 @@ describe("Image Limits E2E Tests", () => {
 				return imageCache.get(targetMB)!;
 			}
 			console.log(`  Generating ~${targetMB}MB noise image...`);
-			const imageBase64 = generateImageWithSize(targetMB * 1024 * 1024, `stress-${targetMB}mb.png`);
+			const imageBase64 = generateImageWithSize(
+				targetMB * 1024 * 1024,
+				`stress-${targetMB}mb.png`,
+			);
 			const actualSize = Buffer.from(imageBase64, "base64").length;
-			console.log(`    Actual size: ${(actualSize / 1024 / 1024).toFixed(2)}MB`);
+			console.log(
+				`    Actual size: ${(actualSize / 1024 / 1024).toFixed(2)}MB`,
+			);
 			imageCache.set(targetMB, imageBase64);
 			return imageBase64;
 		}
@@ -893,7 +1144,9 @@ describe("Image Limits E2E Tests", () => {
 					}
 				}
 
-				console.log(`\n  Anthropic max ~3MB images: ${lastSuccess} (last error: ${lastError})`);
+				console.log(
+					`\n  Anthropic max ~3MB images: ${lastSuccess} (last error: ${lastError})`,
+				);
 				expect(lastSuccess).toBeGreaterThanOrEqual(1);
 			},
 		);
@@ -925,7 +1178,9 @@ describe("Image Limits E2E Tests", () => {
 					}
 				}
 
-				console.log(`\n  OpenAI max ~15MB images: ${lastSuccess} (last error: ${lastError})`);
+				console.log(
+					`\n  OpenAI max ~15MB images: ${lastSuccess} (last error: ${lastError})`,
+				);
 				expect(lastSuccess).toBeGreaterThanOrEqual(1);
 			},
 		);
@@ -957,7 +1212,9 @@ describe("Image Limits E2E Tests", () => {
 					}
 				}
 
-				console.log(`\n  Gemini max ~20MB images: ${lastSuccess} (last error: ${lastError})`);
+				console.log(
+					`\n  Gemini max ~20MB images: ${lastSuccess} (last error: ${lastError})`,
+				);
 				expect(lastSuccess).toBeGreaterThanOrEqual(1);
 			},
 		);
@@ -989,38 +1246,46 @@ describe("Image Limits E2E Tests", () => {
 					}
 				}
 
-				console.log(`\n  Mistral max ~10MB images: ${lastSuccess} (last error: ${lastError})`);
+				console.log(
+					`\n  Mistral max ~10MB images: ${lastSuccess} (last error: ${lastError})`,
+				);
 				expect(lastSuccess).toBeGreaterThanOrEqual(1);
 			},
 		);
 
 		// xAI - 25MB per image limit (26214400 bytes exact)
 		// Test with 20MB images (safely under limit)
-		it.skipIf(!process.env.XAI_API_KEY)("xAI: max ~20MB images before rejection", { timeout: 1200000 }, async () => {
-			const model = getModel("xai", "grok-2-vision");
-			const image20mb = getImageAtSize(20);
-			// Test progressively
-			const counts = [1, 2, 5, 10, 20];
+		it.skipIf(!process.env.XAI_API_KEY)(
+			"xAI: max ~20MB images before rejection",
+			{ timeout: 1200000 },
+			async () => {
+				const model = getModel("xai", "grok-2-vision");
+				const image20mb = getImageAtSize(20);
+				// Test progressively
+				const counts = [1, 2, 5, 10, 20];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const count of counts) {
-				console.log(`  Testing ${count} x ~20MB images...`);
-				const result = await testImageCount(model, count, image20mb);
-				if (result.success) {
-					lastSuccess = count;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 150)}`);
-					break;
+				for (const count of counts) {
+					console.log(`  Testing ${count} x ~20MB images...`);
+					const result = await testImageCount(model, count, image20mb);
+					if (result.success) {
+						lastSuccess = count;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 150)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  xAI max ~20MB images: ${lastSuccess} (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(1);
-		});
+				console.log(
+					`\n  xAI max ~20MB images: ${lastSuccess} (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(1);
+			},
+		);
 
 		// Groq - very limited (5 images, ~5760px max due to 33M pixel limit)
 		// 8k images (64M pixels) exceed limit, so test with 5760px images instead
@@ -1028,7 +1293,10 @@ describe("Image Limits E2E Tests", () => {
 			"Groq: max 5760px images before rejection",
 			{ timeout: 600000 },
 			async () => {
-				const model = getModel("groq", "meta-llama/llama-4-scout-17b-16e-instruct");
+				const model = getModel(
+					"groq",
+					"meta-llama/llama-4-scout-17b-16e-instruct",
+				);
 				// Generate 5760x5760 image (33177600 pixels = Groq's limit)
 				console.log("  Generating 5760x5760 test image for Groq...");
 				const image5760 = generateImage(5760, 5760, "stress-5760.png");
@@ -1052,38 +1320,46 @@ describe("Image Limits E2E Tests", () => {
 					}
 				}
 
-				console.log(`\n  Groq max 5760px images: ${lastSuccess} (last error: ${lastError})`);
+				console.log(
+					`\n  Groq max 5760px images: ${lastSuccess} (last error: ${lastError})`,
+				);
 				expect(lastSuccess).toBeGreaterThanOrEqual(1);
 			},
 		);
 
 		// zAI - ≥20MB per image, context-window limited (65k tokens)
 		// Test with 15MB images
-		it.skipIf(!process.env.ZAI_API_KEY)("zAI: max ~15MB images before rejection", { timeout: 1200000 }, async () => {
-			const model = getModel("zai", "glm-4.5v");
-			const image15mb = getImageAtSize(15);
-			// Context-limited, test progressively
-			const counts = [1, 2, 5, 10, 20];
+		it.skipIf(!process.env.ZAI_API_KEY)(
+			"zAI: max ~15MB images before rejection",
+			{ timeout: 1200000 },
+			async () => {
+				const model = getModel("zai", "glm-4.5v");
+				const image15mb = getImageAtSize(15);
+				// Context-limited, test progressively
+				const counts = [1, 2, 5, 10, 20];
 
-			let lastSuccess = 0;
-			let lastError: string | undefined;
+				let lastSuccess = 0;
+				let lastError: string | undefined;
 
-			for (const count of counts) {
-				console.log(`  Testing ${count} x ~15MB images...`);
-				const result = await testImageCount(model, count, image15mb);
-				if (result.success) {
-					lastSuccess = count;
-					console.log(`    SUCCESS`);
-				} else {
-					lastError = result.error;
-					console.log(`    FAILED: ${result.error?.substring(0, 150)}`);
-					break;
+				for (const count of counts) {
+					console.log(`  Testing ${count} x ~15MB images...`);
+					const result = await testImageCount(model, count, image15mb);
+					if (result.success) {
+						lastSuccess = count;
+						console.log(`    SUCCESS`);
+					} else {
+						lastError = result.error;
+						console.log(`    FAILED: ${result.error?.substring(0, 150)}`);
+						break;
+					}
 				}
-			}
 
-			console.log(`\n  zAI max ~15MB images: ${lastSuccess} (last error: ${lastError})`);
-			expect(lastSuccess).toBeGreaterThanOrEqual(1);
-		});
+				console.log(
+					`\n  zAI max ~15MB images: ${lastSuccess} (last error: ${lastError})`,
+				);
+				expect(lastSuccess).toBeGreaterThanOrEqual(1);
+			},
+		);
 
 		// OpenRouter - ~10MB per image, context-window limited (65k tokens)
 		// Test with 5MB images (safer size)
@@ -1112,7 +1388,9 @@ describe("Image Limits E2E Tests", () => {
 					}
 				}
 
-				console.log(`\n  OpenRouter max ~5MB images: ${lastSuccess} (last error: ${lastError})`);
+				console.log(
+					`\n  OpenRouter max ~5MB images: ${lastSuccess} (last error: ${lastError})`,
+				);
 				expect(lastSuccess).toBeGreaterThanOrEqual(1);
 			},
 		);

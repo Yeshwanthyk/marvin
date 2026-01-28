@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, ".."); // apps/coding-agent
 const workspaceRoot = join(__dirname, "../../.."); // monorepo root where bun.lock lives
 
-const outfile = process.argv[2] || join(process.env.HOME!, "commands", "marvin");
+const outfile = process.argv[2] || join(process.env.HOME ?? "/tmp", "commands", "marvin");
 const require = createRequire(import.meta.url);
 
 // Resolve the dylib path for the current platform

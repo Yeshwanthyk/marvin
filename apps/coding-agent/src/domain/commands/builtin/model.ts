@@ -17,8 +17,9 @@ export const modelCommand: CommandDefinition = {
 		}
 
 		const parts = args.split(/\s+/)
-		if (parts.length === 1) {
-			const modelId = parts[0]!
+		const firstPart = parts[0]
+		if (parts.length === 1 && firstPart) {
+			const modelId = firstPart
 			const model = resolveModel(ctx.currentProvider, modelId)
 			if (!model) {
 				const examples = getModels(ctx.currentProvider).slice(0, 5).map((m) => m.id).join(", ")
@@ -39,7 +40,11 @@ export const modelCommand: CommandDefinition = {
 		}
 
 		const [providerRaw, ...modelParts] = parts
-		const provider = resolveProvider(providerRaw!)
+		if (!providerRaw) {
+			addSystemMessage(ctx, "Usage: /model <provider> <modelId> (or /model <modelId>)")
+			return true
+		}
+		const provider = resolveProvider(providerRaw)
 		if (!provider) {
 			addSystemMessage(ctx, `Unknown provider "${providerRaw}". Known: ${getProviders().join(", ")}`)
 			return true

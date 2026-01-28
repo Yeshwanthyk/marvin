@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Type } from "@sinclair/typebox";
 import { describe, expect, it } from "vitest";
-import type { Api, Context, Model, Tool, ToolResultMessage } from "../src/index.js";
+import type {
+	Api,
+	Context,
+	Model,
+	Tool,
+	ToolResultMessage,
+} from "../src/index.js";
 import { complete, getModel } from "../src/index.js";
 import type { OptionsForApi } from "../src/types.js";
 
@@ -13,10 +19,15 @@ import type { OptionsForApi } from "../src/types.js";
  * 2. Providers correctly pass images from tool results to the LLM
  * 3. The LLM can see and describe images returned by tools
  */
-async function handleToolWithImageResult<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
+async function handleToolWithImageResult<TApi extends Api>(
+	model: Model<TApi>,
+	options?: OptionsForApi<TApi>,
+) {
 	// Check if the model supports images
 	if (!model.input.includes("image")) {
-		console.log(`Skipping tool image result test - model ${model.id} doesn't support images`);
+		console.log(
+			`Skipping tool image result test - model ${model.id} doesn't support images`,
+		);
 		return;
 	}
 
@@ -38,7 +49,8 @@ async function handleToolWithImageResult<TApi extends Api>(model: Model<TApi>, o
 		messages: [
 			{
 				role: "user",
-				content: "Use the get_circle tool to get an image, and describe what you see, shapes, colors, etc.",
+				content:
+					"Use the get_circle tool to get an image, and describe what you see, shapes, colors, etc.",
 				timestamp: Date.now(),
 			},
 		],
@@ -101,10 +113,15 @@ async function handleToolWithImageResult<TApi extends Api>(model: Model<TApi>, o
  * 2. Providers correctly pass both text and images from tool results to the LLM
  * 3. The LLM can see both the text and images in tool results
  */
-async function handleToolWithTextAndImageResult<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
+async function handleToolWithTextAndImageResult<TApi extends Api>(
+	model: Model<TApi>,
+	options?: OptionsForApi<TApi>,
+) {
 	// Check if the model supports images
 	if (!model.input.includes("image")) {
-		console.log(`Skipping tool text+image result test - model ${model.id} doesn't support images`);
+		console.log(
+			`Skipping tool text+image result test - model ${model.id} doesn't support images`,
+		);
 		return;
 	}
 
@@ -190,87 +207,111 @@ async function handleToolWithTextAndImageResult<TApi extends Api>(model: Model<T
 }
 
 describe("Tool Results with Images", () => {
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google Provider (gemini-2.5-flash)", () => {
-		const llm = getModel("google", "gemini-2.5-flash");
+	describe.skipIf(!process.env.GEMINI_API_KEY)(
+		"Google Provider (gemini-2.5-flash)",
+		() => {
+			const llm = getModel("google", "gemini-2.5-flash");
 
-		it("should handle tool result with only image", async () => {
-			await handleToolWithImageResult(llm);
-		});
+			it("should handle tool result with only image", async () => {
+				await handleToolWithImageResult(llm);
+			});
 
-		it("should handle tool result with text and image", async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
-	});
+			it("should handle tool result with text and image", async () => {
+				await handleToolWithTextAndImageResult(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider (gpt-4o-mini)", () => {
-		const llm: Model<"openai-completions"> = { ...getModel("openai", "gpt-4o-mini"), api: "openai-completions" };
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Completions Provider (gpt-4o-mini)",
+		() => {
+			const llm: Model<"openai-completions"> = {
+				...getModel("openai", "gpt-4o-mini"),
+				api: "openai-completions",
+			};
 
-		it("should handle tool result with only image", async () => {
-			await handleToolWithImageResult(llm);
-		});
+			it("should handle tool result with only image", async () => {
+				await handleToolWithImageResult(llm);
+			});
 
-		it("should handle tool result with text and image", async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
-	});
+			it("should handle tool result with text and image", async () => {
+				await handleToolWithTextAndImageResult(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider (gpt-5-mini)", () => {
-		const llm = getModel("openai", "gpt-5-mini");
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Responses Provider (gpt-5-mini)",
+		() => {
+			const llm = getModel("openai", "gpt-5-mini");
 
-		it("should handle tool result with only image", async () => {
-			await handleToolWithImageResult(llm);
-		});
+			it("should handle tool result with only image", async () => {
+				await handleToolWithImageResult(llm);
+			});
 
-		it("should handle tool result with text and image", async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
-	});
+			it("should handle tool result with text and image", async () => {
+				await handleToolWithTextAndImageResult(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider (claude-haiku-4-5)", () => {
-		const model = getModel("anthropic", "claude-haiku-4-5");
+	describe.skipIf(!process.env.ANTHROPIC_API_KEY)(
+		"Anthropic Provider (claude-haiku-4-5)",
+		() => {
+			const model = getModel("anthropic", "claude-haiku-4-5");
 
-		it("should handle tool result with only image", async () => {
-			await handleToolWithImageResult(model);
-		});
+			it("should handle tool result with only image", async () => {
+				await handleToolWithImageResult(model);
+			});
 
-		it("should handle tool result with text and image", async () => {
-			await handleToolWithTextAndImageResult(model);
-		});
-	});
+			it("should handle tool result with text and image", async () => {
+				await handleToolWithTextAndImageResult(model);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("Anthropic Provider (claude-sonnet-4-5)", () => {
-		const model = getModel("anthropic", "claude-sonnet-4-5");
+	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)(
+		"Anthropic Provider (claude-sonnet-4-5)",
+		() => {
+			const model = getModel("anthropic", "claude-sonnet-4-5");
 
-		it("should handle tool result with only image", async () => {
-			await handleToolWithImageResult(model);
-		});
+			it("should handle tool result with only image", async () => {
+				await handleToolWithImageResult(model);
+			});
 
-		it("should handle tool result with text and image", async () => {
-			await handleToolWithTextAndImageResult(model);
-		});
-	});
+			it("should handle tool result with text and image", async () => {
+				await handleToolWithTextAndImageResult(model);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENROUTER_API_KEY)("OpenRouter Provider (glm-4.5v)", () => {
-		const llm = getModel("openrouter", "z-ai/glm-4.5v");
+	describe.skipIf(!process.env.OPENROUTER_API_KEY)(
+		"OpenRouter Provider (glm-4.5v)",
+		() => {
+			const llm = getModel("openrouter", "z-ai/glm-4.5v");
 
-		it("should handle tool result with only image", async () => {
-			await handleToolWithImageResult(llm);
-		});
+			it("should handle tool result with only image", async () => {
+				await handleToolWithImageResult(llm);
+			});
 
-		it("should handle tool result with text and image", async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
-	});
+			it("should handle tool result with text and image", async () => {
+				await handleToolWithTextAndImageResult(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider (pixtral-12b)", () => {
-		const llm = getModel("mistral", "pixtral-12b");
+	describe.skipIf(!process.env.MISTRAL_API_KEY)(
+		"Mistral Provider (pixtral-12b)",
+		() => {
+			const llm = getModel("mistral", "pixtral-12b");
 
-		it("should handle tool result with only image", async () => {
-			await handleToolWithImageResult(llm);
-		});
+			it("should handle tool result with only image", async () => {
+				await handleToolWithImageResult(llm);
+			});
 
-		it("should handle tool result with text and image", async () => {
-			await handleToolWithTextAndImageResult(llm);
-		});
-	});
+			it("should handle tool result with text and image", async () => {
+				await handleToolWithTextAndImageResult(llm);
+			});
+		},
+	);
 });

@@ -6,7 +6,9 @@ import type { Context, Tool } from "../src/types.js";
 
 // Simple calculate tool
 const calculateSchema = Type.Object({
-	expression: Type.String({ description: "The mathematical expression to evaluate" }),
+	expression: Type.String({
+		description: "The mathematical expression to evaluate",
+	}),
 });
 
 type CalculateParams = Static<typeof calculateSchema>;
@@ -20,7 +22,8 @@ const calculateTool: Tool = {
 async function testToolCallWithoutResult(model: any, options: any = {}) {
 	// Step 1: Create context with the calculate tool
 	const context: Context = {
-		systemPrompt: "You are a helpful assistant. Use the calculate tool when asked to perform calculations.",
+		systemPrompt:
+			"You are a helpful assistant. Use the calculate tool when asked to perform calculations.",
 		messages: [],
 		tools: [calculateTool],
 	};
@@ -39,11 +42,15 @@ async function testToolCallWithoutResult(model: any, options: any = {}) {
 	console.log("First response:", JSON.stringify(firstResponse, null, 2));
 
 	// Verify the response contains a tool call
-	const hasToolCall = firstResponse.content.some((block) => block.type === "toolCall");
+	const hasToolCall = firstResponse.content.some(
+		(block) => block.type === "toolCall",
+	);
 	expect(hasToolCall).toBe(true);
 
 	if (!hasToolCall) {
-		throw new Error("Expected assistant to make a tool call, but none was found");
+		throw new Error(
+			"Expected assistant to make a tool call, but none was found",
+		);
 	}
 
 	// Step 4: Send a user message WITHOUT providing tool result
@@ -78,19 +85,25 @@ async function testToolCallWithoutResult(model: any, options: any = {}) {
 }
 
 describe("Tool Call Without Result Tests", () => {
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider - Missing Tool Result", () => {
-		const model = getModel("anthropic", "claude-3-5-haiku-20241022");
+	describe.skipIf(!process.env.ANTHROPIC_API_KEY)(
+		"Anthropic Provider - Missing Tool Result",
+		() => {
+			const model = getModel("anthropic", "claude-3-5-haiku-20241022");
 
-		it("should filter out tool calls without corresponding tool results", async () => {
-			await testToolCallWithoutResult(model);
-		}, 30000);
-	});
+			it("should filter out tool calls without corresponding tool results", async () => {
+				await testToolCallWithoutResult(model);
+			}, 30000);
+		},
+	);
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider - Missing Tool Result", () => {
-		const model = getModel("mistral", "devstral-medium-latest");
+	describe.skipIf(!process.env.MISTRAL_API_KEY)(
+		"Mistral Provider - Missing Tool Result",
+		() => {
+			const model = getModel("mistral", "devstral-medium-latest");
 
-		it("should filter out tool calls without corresponding tool results", async () => {
-			await testToolCallWithoutResult(model);
-		}, 30000);
-	});
+			it("should filter out tool calls without corresponding tool results", async () => {
+				await testToolCallWithoutResult(model);
+			}, 30000);
+		},
+	);
 });

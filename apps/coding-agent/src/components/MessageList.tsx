@@ -5,6 +5,7 @@
 import { For, Show, Switch, Match, createMemo } from "solid-js"
 import { Markdown, useTheme } from "@yeshwanthyk/open-tui"
 import type { UIMessage, ToolBlock, ContentItem } from "../types.js"
+import type { ToolArgs } from "../types/tool-rendering.js"
 import { profile } from "../profiler.js"
 import { ToolBlock as ToolBlockComponent } from "../tui-open-rendering.js"
 
@@ -22,7 +23,7 @@ function ToolBlockWrapper(props: {
 	return (
 		<ToolBlockComponent
 			name={props.tool.name}
-			args={props.tool.args}
+			args={props.tool.args as ToolArgs}
 			output={props.tool.output || null}
 			editDiff={props.tool.editDiff || null}
 			isError={props.tool.isError}

@@ -79,7 +79,10 @@ const OVERFLOW_PATTERNS = [
  * @param contextWindow - Optional context window size for detecting silent overflow (z.ai)
  * @returns true if the message indicates a context overflow
  */
-export function isContextOverflow(message: AssistantMessage, contextWindow?: number): boolean {
+export function isContextOverflow(
+	message: AssistantMessage,
+	contextWindow?: number,
+): boolean {
 	// Case 1: Check error message patterns
 	if (message.stopReason === "error" && message.errorMessage) {
 		// Check known patterns
@@ -88,7 +91,9 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
 		}
 
 		// Cerebras and Mistral return 400/413 with no body - check for status code pattern
-		if (/^4(00|13)\s*(status code)?\s*\(no body\)/i.test(message.errorMessage)) {
+		if (
+			/^4(00|13)\s*(status code)?\s*\(no body\)/i.test(message.errorMessage)
+		) {
 			return true;
 		}
 	}

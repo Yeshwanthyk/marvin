@@ -91,8 +91,8 @@ export const createBashTool = (cwd: string): AgentTool<typeof bashSchema> => ({
 
 				// Trim old chunks if buffer is too large
 				while (chunksBytes > maxChunksBytes && chunks.length > 1) {
-					const removed = chunks.shift()!;
-					chunksBytes -= removed.length;
+					const removed = chunks.shift();
+					if (removed) chunksBytes -= removed.length;
 				}
 
 				// Stream partial output to callback (truncated rolling buffer)

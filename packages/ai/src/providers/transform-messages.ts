@@ -1,4 +1,10 @@
-import type { Api, AssistantMessage, Message, Model, ToolCall } from "../types.js";
+import type {
+	Api,
+	AssistantMessage,
+	Message,
+	Model,
+	ToolCall,
+} from "../types.js";
 
 /**
  * Normalize tool call ID for GitHub Copilot cross-API compatibility.
@@ -9,7 +15,10 @@ function normalizeCopilotToolCallId(id: string): string {
 	return id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40);
 }
 
-export function transformMessages<TApi extends Api>(messages: Message[], model: Model<TApi>): Message[] {
+export function transformMessages<TApi extends Api>(
+	messages: Message[],
+	model: Model<TApi>,
+): Message[] {
 	// Build a map of original tool call IDs to normalized IDs for github-copilot cross-API switches
 	const toolCallIdMap = new Map<string, string>();
 
@@ -34,7 +43,10 @@ export function transformMessages<TApi extends Api>(messages: Message[], model: 
 				const assistantMsg = msg as AssistantMessage;
 
 				// If message is from the same provider and API, keep as is
-				if (assistantMsg.provider === model.provider && assistantMsg.api === model.api) {
+				if (
+					assistantMsg.provider === model.provider &&
+					assistantMsg.api === model.api
+				) {
 					return msg;
 				}
 

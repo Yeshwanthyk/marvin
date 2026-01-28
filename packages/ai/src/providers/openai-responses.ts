@@ -380,13 +380,21 @@ function formatErrorMessage(error: unknown): string {
 	if (error instanceof Error) {
 		const anyErr = error as any;
 		const cause = anyErr?.cause;
-		if (cause instanceof Error && cause.message && cause.message !== error.message) {
+		if (
+			cause instanceof Error &&
+			cause.message &&
+			cause.message !== error.message
+		) {
 			return `${error.message} (cause: ${cause.message})`;
 		}
 		if (typeof cause === "string" && cause && cause !== error.message) {
 			return `${error.message} (cause: ${cause})`;
 		}
-		if (cause && typeof cause === "object" && typeof (cause as any).message === "string") {
+		if (
+			cause &&
+			typeof cause === "object" &&
+			typeof (cause as any).message === "string"
+		) {
 			const causeMessage = (cause as any).message;
 			if (causeMessage && causeMessage !== error.message) {
 				return `${error.message} (cause: ${causeMessage})`;
@@ -445,7 +453,10 @@ function buildParams(
 ) {
 	const messages = convertMessages(model, context);
 
-	const params: ResponseCreateParamsStreaming & { instructions?: string; store?: boolean } = {
+	const params: ResponseCreateParamsStreaming & {
+		instructions?: string;
+		store?: boolean;
+	} = {
 		model: model.id,
 		input: messages,
 		stream: true,

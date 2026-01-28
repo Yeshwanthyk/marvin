@@ -9,7 +9,9 @@ import type { Tool, ToolCall } from "../types.js";
 
 // Detect if we're in a browser extension environment with strict CSP
 // Chrome extensions with Manifest V3 don't allow eval/Function constructor
-const isBrowserExtension = typeof globalThis !== "undefined" && (globalThis as any).chrome?.runtime?.id !== undefined;
+const isBrowserExtension =
+	typeof globalThis !== "undefined" &&
+	(globalThis as any).chrome?.runtime?.id !== undefined;
 
 // Create a singleton AJV instance with formats (only if not in browser extension)
 // AJV requires 'unsafe-eval' CSP which is not allowed in Manifest V3
@@ -69,7 +71,9 @@ export function validateToolArguments(tool: Tool, toolCall: ToolCall): any {
 	const errors =
 		validate.errors
 			?.map((err: any) => {
-				const path = err.instancePath ? err.instancePath.substring(1) : err.params.missingProperty || "root";
+				const path = err.instancePath
+					? err.instancePath.substring(1)
+					: err.params.missingProperty || "root";
 				return `  - ${path}: ${err.message}`;
 			})
 			.join("\n") || "Unknown validation error";

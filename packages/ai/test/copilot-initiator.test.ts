@@ -17,7 +17,12 @@ vi.mock("openai", () => {
 				create: (
 					_body: unknown,
 					_options?: unknown,
-				) => AsyncGenerator<{ choices: Array<{ delta: { content?: string }; finish_reason: string | null }> }>;
+				) => AsyncGenerator<{
+					choices: Array<{
+						delta: { content?: string };
+						finish_reason: string | null;
+					}>;
+				}>;
 			};
 		};
 
@@ -169,7 +174,9 @@ describe("GitHub Copilot Headers", () => {
 				messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
 			};
 
-			const stream = streamOpenAICompletions(copilotCompletionsModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAICompletions(copilotCompletionsModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("user");
@@ -177,10 +184,15 @@ describe("GitHub Copilot Headers", () => {
 
 		it("sets X-Initiator: agent when assistant message exists in history", async () => {
 			const context: Context = {
-				messages: [{ role: "user", content: "Hello", timestamp: Date.now() }, assistantMessage],
+				messages: [
+					{ role: "user", content: "Hello", timestamp: Date.now() },
+					assistantMessage,
+				],
 			};
 
-			const stream = streamOpenAICompletions(copilotCompletionsModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAICompletions(copilotCompletionsModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("agent");
@@ -188,10 +200,15 @@ describe("GitHub Copilot Headers", () => {
 
 		it("sets X-Initiator: agent when toolResult exists in history", async () => {
 			const context: Context = {
-				messages: [{ role: "user", content: "Hello", timestamp: Date.now() }, toolResultMessage],
+				messages: [
+					{ role: "user", content: "Hello", timestamp: Date.now() },
+					toolResultMessage,
+				],
 			};
 
-			const stream = streamOpenAICompletions(copilotCompletionsModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAICompletions(copilotCompletionsModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("agent");
@@ -206,7 +223,9 @@ describe("GitHub Copilot Headers", () => {
 				],
 			};
 
-			const stream = streamOpenAICompletions(copilotCompletionsModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAICompletions(copilotCompletionsModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("agent");
@@ -217,7 +236,9 @@ describe("GitHub Copilot Headers", () => {
 				messages: [],
 			};
 
-			const stream = streamOpenAICompletions(copilotCompletionsModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAICompletions(copilotCompletionsModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("user");
@@ -228,10 +249,14 @@ describe("GitHub Copilot Headers", () => {
 				messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
 			};
 
-			const stream = streamOpenAICompletions(copilotCompletionsModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAICompletions(copilotCompletionsModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
-			expect(lastOpenAIConfig?.defaultHeaders?.["Openai-Intent"]).toBe("conversation-edits");
+			expect(lastOpenAIConfig?.defaultHeaders?.["Openai-Intent"]).toBe(
+				"conversation-edits",
+			);
 		});
 
 		it("does NOT set Copilot headers for non-Copilot providers", async () => {
@@ -239,11 +264,15 @@ describe("GitHub Copilot Headers", () => {
 				messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
 			};
 
-			const stream = streamOpenAICompletions(otherCompletionsModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAICompletions(otherCompletionsModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBeUndefined();
-			expect(lastOpenAIConfig?.defaultHeaders?.["Openai-Intent"]).toBeUndefined();
+			expect(
+				lastOpenAIConfig?.defaultHeaders?.["Openai-Intent"],
+			).toBeUndefined();
 		});
 	});
 
@@ -253,7 +282,9 @@ describe("GitHub Copilot Headers", () => {
 				messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
 			};
 
-			const stream = streamOpenAIResponses(copilotResponsesModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAIResponses(copilotResponsesModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("user");
@@ -263,11 +294,17 @@ describe("GitHub Copilot Headers", () => {
 			const context: Context = {
 				messages: [
 					{ role: "user", content: "Hello", timestamp: Date.now() },
-					{ ...assistantMessage, api: "openai-responses" as const, model: "gpt-5.1-codex" },
+					{
+						...assistantMessage,
+						api: "openai-responses" as const,
+						model: "gpt-5.1-codex",
+					},
 				],
 			};
 
-			const stream = streamOpenAIResponses(copilotResponsesModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAIResponses(copilotResponsesModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("agent");
@@ -275,10 +312,15 @@ describe("GitHub Copilot Headers", () => {
 
 		it("sets X-Initiator: agent when toolResult exists in history", async () => {
 			const context: Context = {
-				messages: [{ role: "user", content: "Hello", timestamp: Date.now() }, toolResultMessage],
+				messages: [
+					{ role: "user", content: "Hello", timestamp: Date.now() },
+					toolResultMessage,
+				],
 			};
 
-			const stream = streamOpenAIResponses(copilotResponsesModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAIResponses(copilotResponsesModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("agent");
@@ -288,12 +330,18 @@ describe("GitHub Copilot Headers", () => {
 			const context: Context = {
 				messages: [
 					{ role: "user", content: "Hello", timestamp: Date.now() },
-					{ ...assistantMessage, api: "openai-responses" as const, model: "gpt-5.1-codex" },
+					{
+						...assistantMessage,
+						api: "openai-responses" as const,
+						model: "gpt-5.1-codex",
+					},
 					{ role: "user", content: "Tell me a joke", timestamp: Date.now() },
 				],
 			};
 
-			const stream = streamOpenAIResponses(copilotResponsesModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAIResponses(copilotResponsesModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("agent");
@@ -304,7 +352,9 @@ describe("GitHub Copilot Headers", () => {
 				messages: [],
 			};
 
-			const stream = streamOpenAIResponses(copilotResponsesModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAIResponses(copilotResponsesModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBe("user");
@@ -315,10 +365,14 @@ describe("GitHub Copilot Headers", () => {
 				messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
 			};
 
-			const stream = streamOpenAIResponses(copilotResponsesModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAIResponses(copilotResponsesModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
-			expect(lastOpenAIConfig?.defaultHeaders?.["Openai-Intent"]).toBe("conversation-edits");
+			expect(lastOpenAIConfig?.defaultHeaders?.["Openai-Intent"]).toBe(
+				"conversation-edits",
+			);
 		});
 
 		it("does NOT set Copilot headers for non-Copilot providers", async () => {
@@ -326,11 +380,15 @@ describe("GitHub Copilot Headers", () => {
 				messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
 			};
 
-			const stream = streamOpenAIResponses(otherResponsesModel, context, { apiKey: "test-key" });
+			const stream = streamOpenAIResponses(otherResponsesModel, context, {
+				apiKey: "test-key",
+			});
 			await consumeStream(stream);
 
 			expect(lastOpenAIConfig?.defaultHeaders?.["X-Initiator"]).toBeUndefined();
-			expect(lastOpenAIConfig?.defaultHeaders?.["Openai-Intent"]).toBeUndefined();
+			expect(
+				lastOpenAIConfig?.defaultHeaders?.["Openai-Intent"],
+			).toBeUndefined();
 		});
 	});
 });

@@ -7,6 +7,7 @@ import { Show, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
 import { getToolText, getEditDiffText } from "@domain/messaging/content.js"
 import { getAgentDelegationArgs, getAgentDelegationUi, type AgentDelegationArgs, type AgentDelegationUi, type DelegationStatus } from "./tool-ui-contracts.js"
+import type { ToolArgs, ToolResultContent, RenderCallFunction, RenderResultFunction } from "./types/tool-rendering.js"
 
 // Re-export for backwards compatibility
 export { getToolText, getEditDiffText }
@@ -230,7 +231,7 @@ function getDiffStartLine(diffText: string): number | undefined {
 	return line
 }
 
-function toolTitle(name: string, args: any): string {
+function toolTitle(name: string, args: ToolArgs): string {
 	switch (name) {
 		case "bash": {
 			// Prefer description if available
@@ -266,7 +267,7 @@ export function Thinking(props: { summary: string }): JSX.Element {
 
 export interface ToolBlockProps {
 	name: string
-	args: any
+	args: ToolArgs
 	output: string | null
 	editDiff: string | null
 	isError: boolean
@@ -280,16 +281,16 @@ export interface ToolBlockProps {
 	label?: string
 	source?: "builtin" | "custom"
 	sourcePath?: string
-	result?: { content: any[]; details: any }
-	renderCall?: (args: any, theme: Theme) => JSX.Element
-	renderResult?: (result: any, opts: { expanded: boolean; isPartial: boolean }, theme: Theme) => JSX.Element
+	result?: ToolResultContent
+	renderCall?: RenderCallFunction
+	renderResult?: RenderResultFunction<ToolResultContent>
 }
 
 type ToolRenderMode = "inline" | "block"
 
 interface ToolRenderContext {
 	name: string
-	args: any
+	args: ToolArgs
 	output: string | null
 	editDiff: string | null
 	result: ToolBlockProps["result"] | null
@@ -385,13 +386,13 @@ const registry: Record<string, ToolRenderer> = {
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
 			const imageBlocks = (ctx.result?.content ?? []).filter(
-				(block) =>
+				(block): block is { type: "image"; data: string; mimeType: string; [key: string]: unknown } =>
 					typeof block === "object" &&
 					block !== null &&
 					(block as { type?: string }).type === "image" &&
 					typeof (block as { data?: string }).data === "string" &&
 					typeof (block as { mimeType?: string }).mimeType === "string",
-			) as Array<{ data: string; mimeType: string }>
+			)
 
 			if (!ctx.output && imageBlocks.length === 0) return <text fg={theme.textMuted}>reading…</text>
 			const rendered = ctx.output ? (ctx.expanded ? replaceTabs(ctx.output) : truncateLines(ctx.output, 20).text) : ""

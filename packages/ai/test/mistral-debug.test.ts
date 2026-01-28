@@ -33,7 +33,12 @@ describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Debug", () => {
 					role: "assistant",
 					api: "openai-completions",
 					content: [
-						{ type: "toolCall", id: "call_abc123", name: "get_weather", arguments: { location: "Tokyo" } },
+						{
+							type: "toolCall",
+							id: "call_abc123",
+							name: "get_weather",
+							arguments: { location: "Tokyo" },
+						},
 					],
 					provider: "openai",
 					model: "gpt-4o-mini",
@@ -43,7 +48,13 @@ describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "toolUse",
 					timestamp: Date.now(),
@@ -56,7 +67,11 @@ describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Debug", () => {
 					isError: false,
 					timestamp: Date.now(),
 				},
-				{ role: "user", content: "What was the temperature?", timestamp: Date.now() },
+				{
+					role: "user",
+					content: "What was the temperature?",
+					timestamp: Date.now(),
+				},
 			],
 			tools: [weatherTool],
 		};
@@ -97,7 +112,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "aborted",
 					timestamp: Date.now(),
@@ -127,7 +148,9 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 	it("reproduce 502 from session fixture", async () => {
 		const fs = await import("fs");
 		const path = await import("path");
-		const fixtureData = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/mistral.json"), "utf-8"));
+		const fixtureData = JSON.parse(
+			fs.readFileSync(path.join(__dirname, "fixtures/mistral.json"), "utf-8"),
+		);
 		// Filter out bashExecution and convert to user message like messageTransformer does
 		const messages = fixtureData.map((m: any) => {
 			if (m.role === "bashExecution") {
@@ -137,7 +160,11 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 				} else {
 					text += "(no output)";
 				}
-				return { role: "user", content: [{ type: "text", text }], timestamp: m.timestamp };
+				return {
+					role: "user",
+					content: [{ type: "text", text }],
+					timestamp: m.timestamp,
+				};
 			}
 			return m;
 		});
@@ -153,13 +180,27 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 	it("5d. two tool calls + results, no follow-up user", async () => {
 		const context: Context = {
 			messages: [
-				{ role: "user", content: "Check weather in Tokyo and Paris", timestamp: Date.now() },
+				{
+					role: "user",
+					content: "Check weather in Tokyo and Paris",
+					timestamp: Date.now(),
+				},
 				{
 					role: "assistant",
 					api: "openai-completions",
 					content: [
-						{ type: "toolCall", id: "T7TcP5RVB", name: "get_weather", arguments: { location: "Tokyo" } },
-						{ type: "toolCall", id: "X8UdQ6SWC", name: "get_weather", arguments: { location: "Paris" } },
+						{
+							type: "toolCall",
+							id: "T7TcP5RVB",
+							name: "get_weather",
+							arguments: { location: "Tokyo" },
+						},
+						{
+							type: "toolCall",
+							id: "X8UdQ6SWC",
+							name: "get_weather",
+							arguments: { location: "Paris" },
+						},
 					],
 					provider: "mistral",
 					model: "devstral-medium-latest",
@@ -169,7 +210,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "toolUse",
 					timestamp: Date.now(),
@@ -201,13 +248,27 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 	it("5e. two tool calls + results + user follow-up", async () => {
 		const context: Context = {
 			messages: [
-				{ role: "user", content: "Check weather in Tokyo and Paris", timestamp: Date.now() },
+				{
+					role: "user",
+					content: "Check weather in Tokyo and Paris",
+					timestamp: Date.now(),
+				},
 				{
 					role: "assistant",
 					api: "openai-completions",
 					content: [
-						{ type: "toolCall", id: "T7TcP5RVB", name: "get_weather", arguments: { location: "Tokyo" } },
-						{ type: "toolCall", id: "X8UdQ6SWC", name: "get_weather", arguments: { location: "Paris" } },
+						{
+							type: "toolCall",
+							id: "T7TcP5RVB",
+							name: "get_weather",
+							arguments: { location: "Tokyo" },
+						},
+						{
+							type: "toolCall",
+							id: "X8UdQ6SWC",
+							name: "get_weather",
+							arguments: { location: "Paris" },
+						},
 					],
 					provider: "mistral",
 					model: "devstral-medium-latest",
@@ -217,7 +278,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "toolUse",
 					timestamp: Date.now(),
@@ -252,13 +319,27 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 		// Workaround: merge tool results into an assistant message
 		const context: Context = {
 			messages: [
-				{ role: "user", content: "Check weather in Tokyo and Paris", timestamp: Date.now() },
+				{
+					role: "user",
+					content: "Check weather in Tokyo and Paris",
+					timestamp: Date.now(),
+				},
 				{
 					role: "assistant",
 					api: "openai-completions",
 					content: [
-						{ type: "toolCall", id: "T7TcP5RVB", name: "get_weather", arguments: { location: "Tokyo" } },
-						{ type: "toolCall", id: "X8UdQ6SWC", name: "get_weather", arguments: { location: "Paris" } },
+						{
+							type: "toolCall",
+							id: "T7TcP5RVB",
+							name: "get_weather",
+							arguments: { location: "Tokyo" },
+						},
+						{
+							type: "toolCall",
+							id: "X8UdQ6SWC",
+							name: "get_weather",
+							arguments: { location: "Paris" },
+						},
 					],
 					provider: "mistral",
 					model: "devstral-medium-latest",
@@ -268,7 +349,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "toolUse",
 					timestamp: Date.now(),
@@ -293,7 +380,9 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 				{
 					role: "assistant",
 					api: "openai-completions",
-					content: [{ type: "text", text: "I found the weather for both cities." }],
+					content: [
+						{ type: "text", text: "I found the weather for both cities." },
+					],
 					provider: "mistral",
 					model: "devstral-medium-latest",
 					usage: {
@@ -302,7 +391,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "stop",
 					timestamp: Date.now(),
@@ -323,7 +418,14 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 				{
 					role: "assistant",
 					api: "openai-completions",
-					content: [{ type: "toolCall", id: "test_1", name: "test_tool", arguments: {} }],
+					content: [
+						{
+							type: "toolCall",
+							id: "test_1",
+							name: "test_tool",
+							arguments: {},
+						},
+					],
 					provider: "mistral",
 					model: "devstral-medium-latest",
 					usage: {
@@ -332,7 +434,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "toolUse",
 					timestamp: Date.now(),
@@ -341,11 +449,17 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 					role: "toolResult",
 					toolCallId: "test_1",
 					toolName: "test_tool",
-					content: [{ type: "text", text: "Result without emoji: hello world" }],
+					content: [
+						{ type: "text", text: "Result without emoji: hello world" },
+					],
 					isError: false,
 					timestamp: Date.now(),
 				},
-				{ role: "user", content: "What did the tool return?", timestamp: Date.now() },
+				{
+					role: "user",
+					content: "What did the tool return?",
+					timestamp: Date.now(),
+				},
 			],
 			tools: [weatherTool],
 		};
@@ -362,7 +476,11 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 					role: "assistant",
 					api: "anthropic-messages",
 					content: [
-						{ type: "thinking", thinking: "Let me calculate 2+2. That equals 4.", thinkingSignature: "sig_abc" },
+						{
+							type: "thinking",
+							thinking: "Let me calculate 2+2. That equals 4.",
+							thinkingSignature: "sig_abc",
+						},
 						{ type: "text", text: "The answer is 4." },
 					],
 					provider: "anthropic",
@@ -373,7 +491,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "stop",
 					timestamp: Date.now(),
@@ -389,11 +513,22 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 	it("5a. tool call + result, no follow-up user message", async () => {
 		const context: Context = {
 			messages: [
-				{ role: "user", content: "Check weather in Tokyo", timestamp: Date.now() },
+				{
+					role: "user",
+					content: "Check weather in Tokyo",
+					timestamp: Date.now(),
+				},
 				{
 					role: "assistant",
 					api: "openai-completions",
-					content: [{ type: "toolCall", id: "T7TcP5RVB", name: "get_weather", arguments: { location: "Tokyo" } }],
+					content: [
+						{
+							type: "toolCall",
+							id: "T7TcP5RVB",
+							name: "get_weather",
+							arguments: { location: "Tokyo" },
+						},
+					],
 					provider: "mistral",
 					model: "devstral-medium-latest",
 					usage: {
@@ -402,7 +537,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "toolUse",
 					timestamp: Date.now(),
@@ -430,7 +571,14 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 				{
 					role: "assistant",
 					api: "openai-completions",
-					content: [{ type: "toolCall", id: "T7TcP5RVB", name: "get_weather", arguments: { location: "Tokyo" } }],
+					content: [
+						{
+							type: "toolCall",
+							id: "T7TcP5RVB",
+							name: "get_weather",
+							arguments: { location: "Tokyo" },
+						},
+					],
 					provider: "mistral",
 					model: "devstral-medium-latest",
 					usage: {
@@ -439,7 +587,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "toolUse",
 					timestamp: Date.now(),
@@ -452,7 +606,11 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 					isError: false,
 					timestamp: Date.now(),
 				},
-				{ role: "user", content: "What was the temperature?", timestamp: Date.now() },
+				{
+					role: "user",
+					content: "What was the temperature?",
+					timestamp: Date.now(),
+				},
 			],
 			tools: [weatherTool],
 		};
@@ -470,7 +628,12 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 					api: "openai-completions",
 					content: [
 						{ type: "text", text: "Let me check the weather." },
-						{ type: "toolCall", id: "T7TcP5RVB", name: "get_weather", arguments: { location: "Tokyo" } },
+						{
+							type: "toolCall",
+							id: "T7TcP5RVB",
+							name: "get_weather",
+							arguments: { location: "Tokyo" },
+						},
 					],
 					provider: "mistral",
 					model: "devstral-medium-latest",
@@ -480,7 +643,13 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 						cacheRead: 0,
 						cacheWrite: 0,
 						totalTokens: 0,
-						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
 					},
 					stopReason: "toolUse",
 					timestamp: Date.now(),
@@ -493,7 +662,11 @@ describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Debug", () => {
 					isError: false,
 					timestamp: Date.now(),
 				},
-				{ role: "user", content: "What was the temperature?", timestamp: Date.now() },
+				{
+					role: "user",
+					content: "What was the temperature?",
+					timestamp: Date.now(),
+				},
 			],
 			tools: [weatherTool],
 		};

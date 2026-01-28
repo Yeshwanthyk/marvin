@@ -27,7 +27,12 @@ describe("Tool Validation with TypeBox and AJV", () => {
 		parameters: testSchema,
 		execute: async (_toolCallId, args) => {
 			return {
-				content: [{ type: "text", text: `Processed: ${args.name}, ${args.age}, ${args.email}` }],
+				content: [
+					{
+						type: "text",
+						text: `Processed: ${args.name}, ${args.age}, ${args.email}`,
+					},
+				],
 				details: undefined,
 			};
 		},
@@ -104,7 +109,9 @@ describe("Tool Validation with TypeBox and AJV", () => {
 		if (validate.errors) {
 			const errors = validate.errors
 				.map((err: any) => {
-					const path = err.instancePath ? err.instancePath.substring(1) : err.params.missingProperty || "root";
+					const path = err.instancePath
+						? err.instancePath.substring(1)
+						: err.params.missingProperty || "root";
 					return `  - ${path}: ${err.message}`;
 				})
 				.join("\n");

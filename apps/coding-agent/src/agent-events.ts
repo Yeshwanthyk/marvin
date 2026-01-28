@@ -28,8 +28,8 @@ export interface ToolMeta {
 	label: string
 	source: "builtin" | "custom"
 	sourcePath?: string
-	renderCall?: (args: any, theme: Theme) => JSX.Element
-	renderResult?: (result: AgentToolResult<any>, opts: RenderResultOptions, theme: Theme) => JSX.Element
+	renderCall?: (args: unknown, theme: Theme) => JSX.Element
+	renderResult?: (result: AgentToolResult<unknown>, opts: RenderResultOptions, theme: Theme) => JSX.Element
 }
 
 export interface EventHandlerContext {
@@ -86,6 +86,54 @@ function computeUpdateThrottleMs(textLength: number): number {
 	if (textLength > 12000) return UPDATE_THROTTLE_SLOWEST_MS
 	if (textLength > 6000) return UPDATE_THROTTLE_SLOW_MS
 	return UPDATE_THROTTLE_MS
+}
+
+/** Type guard to check if a message is an AppMessage */
+function isAppMessage(message: unknown): message is AppMessage {
+	return typeof message === "object" && 
+		message !== null && 
+		"role" in message &&
+		typeof (message as any).role === "string" &&
+		["user", "assistant", "toolResult"].includes((message as any).role)
+}
+
+/** Type guard to check if a message is an AssistantMessage */
+function isAssistantMessage(message: unknown): message is AssistantMessage {
+	return typeof message === "object" && 
+		message !== null && 
+		"role" in message &&
+		(message as any).role === "assistant" &&
+		"content" in message &&
+		Array.isArray((message as any).content)
+}
+
+/** Type guard to check if tool results array is valid */
+function isToolResultMessageArray(toolResults: unknown): toolResults is ToolResultMessage[] {
+	return Array.isArray(toolResults) && 
+		toolResults.every(result => 
+			typeof result === "object" && 
+			result !== null && 
+			"role" in result &&
+			(result as any).role === "toolResult"
+		)
+}
+
+/** Type guard to check if an object has usage statistics */
+function hasUsageStats(obj: unknown): obj is { usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number } } {
+	return typeof obj === "object" && obj !== null
+}
+
+/** Type guard to check if an object has basic usage info */
+function hasBasicUsage(obj: unknown): obj is { usage?: { totalTokens?: number; cacheRead?: number; input?: number } } {
+	return typeof obj === "object" && obj !== null
+}
+
+/** Type guard to check if message has content array */
+function hasContentArray(message: unknown): message is { content: unknown[] } {
+	return typeof message === "object" && 
+		message !== null && 
+		"content" in message &&
+		Array.isArray((message as any).content)
 }
 
 /** Incremental extraction cache - avoids re-parsing entire content array each update */
@@ -189,7 +237,8 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 	// Inline update handler - accesses extractionCache from closure
 	const handleMessageUpdate = (ev: Extract<AgentEvent, { type: "message_update" }>) =>
 		profile("stream_message_update", () => {
-			const content = ev.message.content as unknown[]
+			if (!hasContentArray(ev.message)) return
+			const content = ev.message.content
 
 			// Use incremental extraction - only processes new blocks
 			extractionCache = extractIncremental(content, extractionCache)
@@ -239,7 +288,7 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		}, TOOL_UPDATE_THROTTLE_MS)
 	}
 
-	const handler = ((event: AgentEvent) => {
+	const handleEvent = (event: AgentEvent) => {
 		if (disposed) return
 
 		// Emit hook events for agent lifecycle (fire-and-forget)
@@ -264,33 +313,34 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 
 		if (event.type === "turn_end") {
 			// Extract usage from message for hook consumption
-			const msgUsage = event.message as { usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number } }
 			const contextWindow = ctx.getContextWindow?.() ?? 0
-			const currentTokens = msgUsage.usage?.totalTokens ?? 0
+			const currentTokens = hasUsageStats(event.message) ? (event.message.usage?.totalTokens ?? 0) : 0
 
 			const tokens = {
-				input: msgUsage.usage?.inputTokens ?? 0,
-				output: msgUsage.usage?.outputTokens ?? 0,
-				cacheRead: msgUsage.usage?.cacheReadInputTokens,
-				cacheWrite: msgUsage.usage?.cacheCreationInputTokens,
+				input: hasUsageStats(event.message) ? (event.message.usage?.inputTokens ?? 0) : 0,
+				output: hasUsageStats(event.message) ? (event.message.usage?.outputTokens ?? 0) : 0,
+				cacheRead: hasUsageStats(event.message) ? event.message.usage?.cacheReadInputTokens : undefined,
+				cacheWrite: hasUsageStats(event.message) ? event.message.usage?.cacheCreationInputTokens : undefined,
 				total: currentTokens,
 			}
 
 			// Update hook runner with token usage for session context
 			ctx.hookRunner?.updateTokenUsage(tokens, contextWindow)
 
-			void ctx.hookRunner?.emit({
-				type: "turn.end",
-				sessionId: ctx.sessionManager.sessionId,
-				turnIndex,
-				message: event.message,
-				toolResults: event.toolResults as ToolResultMessage[],
-				tokens,
-				contextLimit: contextWindow,
-				usage: contextWindow > 0 && currentTokens > 0
-					? { current: currentTokens, max: contextWindow, percent: (currentTokens / contextWindow) * 100 }
-					: undefined,
-			})
+			if (isToolResultMessageArray(event.toolResults)) {
+				void ctx.hookRunner?.emit({
+					type: "turn.end",
+					sessionId: ctx.sessionManager.sessionId,
+					turnIndex,
+					message: event.message,
+					toolResults: event.toolResults,
+					tokens,
+					contextLimit: contextWindow,
+					usage: contextWindow > 0 && currentTokens > 0
+						? { current: currentTokens, max: contextWindow, percent: (currentTokens / contextWindow) * 100 }
+						: undefined,
+				})
+			}
 			turnIndex++
 		}
 
@@ -310,7 +360,9 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 
 		if (event.type === "message_end" && event.message.role === "toolResult") {
 			// Persist tool results so sessions can be resumed with tool output context.
-			ctx.sessionManager.appendMessage(event.message as AppMessage)
+			if (isAppMessage(event.message)) {
+				ctx.sessionManager.appendMessage(event.message)
+			}
 		}
 
 		if (event.type === "tool_execution_start") {
@@ -336,9 +388,9 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		if (event.type === "agent_end") {
 			handleAgentEnd(event, ctx)
 		}
-	}) as AgentEventHandler
-
-	handler.dispose = dispose
+	}
+	
+	const handler: AgentEventHandler = Object.assign(handleEvent, { dispose })
 	return handler
 }
 
@@ -362,8 +414,8 @@ function updateStreamingMessage(ctx: EventHandlerContext, updater: (msg: UIAssis
 		const idx = prev.findIndex((m) => m.id === streamingId)
 		if (idx === -1) return prev
 
-		const current = prev[idx]!
-		if (current.role !== "assistant") return prev
+		const current = prev[idx]
+		if (!current || current.role !== "assistant") return prev
 		const updated = updater(current)
 		if (updated === current) return prev
 
@@ -386,9 +438,9 @@ function handleMessageStart(
 
 		// Only consume from queue if this message matches the queued text
 		const peeked = ctx.promptQueue.peek()
-		if (peeked !== undefined && peeked.text === text) {
+		if (peeked !== undefined && peeked.text === text && isAppMessage(event.message)) {
 			ctx.promptQueue.shift() // consume the matched message
-			ctx.sessionManager.appendMessage(event.message as AppMessage)
+			ctx.sessionManager.appendMessage(event.message)
 			ctx.setMessages((prev) => appendWithCap(prev, { id: crypto.randomUUID(), role: "user", content: text, timestamp: Date.now() }))
 			ctx.setActivityState("thinking")
 		}
@@ -396,12 +448,13 @@ function handleMessageStart(
 
 	// Create streaming assistant message
 	if (event.message.role === "assistant") {
-		ctx.streamingMessageId.current = crypto.randomUUID()
+		const messageId = crypto.randomUUID()
+		ctx.streamingMessageId.current = messageId
 		cache.current = createExtractionCache() // Reset cache for new message
 		batch(() => {
 			ctx.setActivityState("streaming")
 			ctx.setMessages((prev) => appendWithCap(prev, {
-				id: ctx.streamingMessageId.current!,
+				id: messageId,
 				role: "assistant",
 				content: "",
 				isStreaming: true,
@@ -416,7 +469,9 @@ function handleMessageEnd(
 	event: Extract<AgentEvent, { type: "message_end" }>,
 	ctx: EventHandlerContext
 ): void {
-	const content = event.message.content as unknown[]
+	if (!hasContentArray(event.message)) return
+	
+	const content = event.message.content
 	const text = extractText(content)
 	const thinking = extractThinking(content)
 	const orderedBlocks = extractOrderedBlocks(content)
@@ -444,18 +499,21 @@ function handleMessageEnd(
 	ctx.streamingMessageId.current = null
 
 	// Save message to session
-	ctx.sessionManager.appendMessage(event.message as AppMessage)
+	if (isAppMessage(event.message)) {
+		ctx.sessionManager.appendMessage(event.message)
+	}
 
 	// Update usage - context window budget includes input + output for the full request
 	// totalTokens is already computed by providers as: (uncached_input + cacheRead + cacheWrite) + output
 	// Only update if totalTokens > 0 to avoid clearing bar on aborted responses
-	const msg = event.message as { usage?: { totalTokens?: number; cacheRead?: number; input?: number } }
-	if (msg.usage?.totalTokens) {
-		ctx.setContextTokens(msg.usage.totalTokens)
+	if (hasBasicUsage(event.message) && event.message.usage?.totalTokens) {
+		ctx.setContextTokens(event.message.usage.totalTokens)
 	}
 	// Update cache stats for efficiency indicator
-	if (msg.usage && typeof msg.usage.cacheRead === "number" && typeof msg.usage.input === "number") {
-		ctx.setCacheStats({ cacheRead: msg.usage.cacheRead, input: msg.usage.input })
+	if (hasBasicUsage(event.message) && event.message.usage && 
+		typeof event.message.usage.cacheRead === "number" && 
+		typeof event.message.usage.input === "number") {
+		ctx.setCacheStats({ cacheRead: event.message.usage.cacheRead, input: event.message.usage.input })
 	}
 }
 
@@ -577,8 +635,8 @@ function handleToolEnd(
 		)
 		if (idx === -1) return prev
 
-		const msg = prev[idx]!
-		if (msg.role !== "assistant") return prev
+		const msg = prev[idx]
+		if (!msg || msg.role !== "assistant") return prev
 		const updated: UIAssistantMessage = {
 			...msg,
 			tools: updateTools(msg.tools || []),
@@ -608,8 +666,8 @@ function handleAgentEnd(
 	})
 
 	// Check for retryable error
-	const lastMsg = ctx.agent.state.messages[ctx.agent.state.messages.length - 1] as AssistantMessage | undefined
-	const errorMsg = lastMsg?.role === "assistant" && (lastMsg as AssistantMessage).errorMessage
+	const lastMsg = ctx.agent.state.messages[ctx.agent.state.messages.length - 1]
+	const errorMsg = isAssistantMessage(lastMsg) ? lastMsg.errorMessage : undefined
 	const isRetryable = errorMsg && ctx.retryablePattern.test(errorMsg)
 
 	if (isRetryable && ctx.retryConfig.enabled && ctx.retryState.attempt < ctx.retryConfig.maxRetries) {

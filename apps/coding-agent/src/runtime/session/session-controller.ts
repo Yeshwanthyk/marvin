@@ -1,5 +1,7 @@
 import type { Agent, ThinkingLevel, AppMessage } from "@yeshwanthyk/agent-core"
-import type { Api, Model, KnownProvider } from "@yeshwanthyk/ai"
+import type { Api, Model, KnownProvider, AgentToolResult } from "@yeshwanthyk/ai"
+import type { Theme } from "@yeshwanthyk/open-tui"
+import type { JSX } from "solid-js"
 import type { HookRunner } from "../../hooks/index.js"
 import type { SessionManager, LoadedSession } from "../../session-manager.js"
 import type { UIMessage, ToolBlock, UIContentBlock, UIShellMessage } from "../../types.js"
@@ -13,6 +15,7 @@ import {
 } from "@domain/messaging/content.js"
 import { resolveProvider, resolveModel } from "@domain/commands/helpers.js"
 import type { PromptDeliveryMode, PromptQueue } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
+import type { RenderResultOptions } from "@yeshwanthyk/runtime-effect/extensibility/custom-tools/types.js"
 
 export interface SessionControllerOptions {
 	initialProvider: KnownProvider
@@ -22,7 +25,7 @@ export interface SessionControllerOptions {
 	agent: Agent
 	sessionManager: SessionManager
 	hookRunner: HookRunner
-	toolByName: Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: any; renderResult?: any }>
+	toolByName: Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: (args: unknown, theme: Theme) => JSX.Element; renderResult?: (result: AgentToolResult<unknown>, opts: RenderResultOptions, theme: Theme) => JSX.Element }>
 	setMessages: (updater: (prev: UIMessage[]) => UIMessage[]) => void
 	setContextTokens: (v: number) => void
 	setDisplayProvider: (provider: KnownProvider) => void

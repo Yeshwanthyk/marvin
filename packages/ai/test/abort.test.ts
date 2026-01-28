@@ -3,12 +3,16 @@ import { getModel } from "../src/models.js";
 import { complete, stream } from "../src/stream.js";
 import type { Api, Context, Model, OptionsForApi } from "../src/types.js";
 
-async function testAbortSignal<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function testAbortSignal<TApi extends Api>(
+	llm: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	const context: Context = {
 		messages: [
 			{
 				role: "user",
-				content: "What is 15 + 27? Think step by step. Then list 50 first names.",
+				content:
+					"What is 15 + 27? Think step by step. Then list 50 first names.",
 				timestamp: Date.now(),
 			},
 		],
@@ -16,7 +20,10 @@ async function testAbortSignal<TApi extends Api>(llm: Model<TApi>, options: Opti
 
 	let abortFired = false;
 	const controller = new AbortController();
-	const response = await stream(llm, context, { ...options, signal: controller.signal });
+	const response = await stream(llm, context, {
+		...options,
+		signal: controller.signal,
+	});
 	for await (const event of response) {
 		if (abortFired) return;
 		setTimeout(() => controller.abort(), 3000);
@@ -41,7 +48,10 @@ async function testAbortSignal<TApi extends Api>(llm: Model<TApi>, options: Opti
 	expect(followUp.content.length).toBeGreaterThan(0);
 }
 
-async function testImmediateAbort<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function testImmediateAbort<TApi extends Api>(
+	llm: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	const controller = new AbortController();
 
 	controller.abort();
@@ -50,7 +60,10 @@ async function testImmediateAbort<TApi extends Api>(llm: Model<TApi>, options: O
 		messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
 	};
 
-	const response = await complete(llm, context, { ...options, signal: controller.signal });
+	const response = await complete(llm, context, {
+		...options,
+		signal: controller.signal,
+	});
 	expect(response.stopReason).toBe("aborted");
 }
 
@@ -67,54 +80,72 @@ describe("AI Providers Abort Tests", () => {
 		});
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider Abort", () => {
-		const llm: Model<"openai-completions"> = {
-			...getModel("openai", "gpt-4o-mini")!,
-			api: "openai-completions",
-		};
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Completions Provider Abort",
+		() => {
+			const llm: Model<"openai-completions"> = {
+				...getModel("openai", "gpt-4o-mini")!,
+				api: "openai-completions",
+			};
 
-		it("should abort mid-stream", async () => {
-			await testAbortSignal(llm);
-		});
+			it("should abort mid-stream", async () => {
+				await testAbortSignal(llm);
+			});
 
-		it("should handle immediate abort", async () => {
-			await testImmediateAbort(llm);
-		});
-	});
+			it("should handle immediate abort", async () => {
+				await testImmediateAbort(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider Abort", () => {
-		const llm = getModel("openai", "gpt-5-mini");
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Responses Provider Abort",
+		() => {
+			const llm = getModel("openai", "gpt-5-mini");
 
-		it("should abort mid-stream", async () => {
-			await testAbortSignal(llm);
-		});
+			it("should abort mid-stream", async () => {
+				await testAbortSignal(llm);
+			});
 
-		it("should handle immediate abort", async () => {
-			await testImmediateAbort(llm);
-		});
-	});
+			it("should handle immediate abort", async () => {
+				await testImmediateAbort(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("Anthropic Provider Abort", () => {
-		const llm = getModel("anthropic", "claude-opus-4-1-20250805");
+	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)(
+		"Anthropic Provider Abort",
+		() => {
+			const llm = getModel("anthropic", "claude-opus-4-1-20250805");
 
-		it("should abort mid-stream", async () => {
-			await testAbortSignal(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
-		});
+			it("should abort mid-stream", async () => {
+				await testAbortSignal(llm, {
+					thinkingEnabled: true,
+					thinkingBudgetTokens: 2048,
+				});
+			});
 
-		it("should handle immediate abort", async () => {
-			await testImmediateAbort(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
-		});
-	});
+			it("should handle immediate abort", async () => {
+				await testImmediateAbort(llm, {
+					thinkingEnabled: true,
+					thinkingBudgetTokens: 2048,
+				});
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider Abort", () => {
-		const llm = getModel("mistral", "devstral-medium-latest");
+	describe.skipIf(!process.env.MISTRAL_API_KEY)(
+		"Mistral Provider Abort",
+		() => {
+			const llm = getModel("mistral", "devstral-medium-latest");
 
-		it("should abort mid-stream", async () => {
-			await testAbortSignal(llm);
-		});
+			it("should abort mid-stream", async () => {
+				await testAbortSignal(llm);
+			});
 
-		it("should handle immediate abort", async () => {
-			await testImmediateAbort(llm);
-		});
-	});
+			it("should handle immediate abort", async () => {
+				await testImmediateAbort(llm);
+			});
+		},
+	);
 });

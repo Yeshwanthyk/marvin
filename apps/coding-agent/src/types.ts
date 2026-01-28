@@ -64,9 +64,9 @@ export interface ToolBlock {
 	label?: string
 	source?: "builtin" | "custom"
 	sourcePath?: string
-	result?: AgentToolResult<any>
-	renderCall?: (args: any, theme: Theme) => JSX.Element
-	renderResult?: (result: AgentToolResult<any>, opts: RenderResultOptions, theme: Theme) => JSX.Element
+	result?: AgentToolResult<unknown>
+	renderCall?: (args: unknown, theme: Theme) => JSX.Element
+	renderResult?: (result: AgentToolResult<unknown>, opts: RenderResultOptions, theme: Theme) => JSX.Element
 }
 
 export type ActivityState = "idle" | "thinking" | "streaming" | "tool" | "compacting"

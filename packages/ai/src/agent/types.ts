@@ -19,10 +19,15 @@ export interface AgentToolResult<T> {
 }
 
 // Callback for streaming tool execution updates
-export type AgentToolUpdateCallback<T = any> = (partialResult: AgentToolResult<T>) => void;
+export type AgentToolUpdateCallback<T = any> = (
+	partialResult: AgentToolResult<T>,
+) => void;
 
 // AgentTool extends Tool but adds the execute function
-export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> extends Tool<TParameters> {
+export interface AgentTool<
+	TParameters extends TSchema = TSchema,
+	TDetails = any,
+> extends Tool<TParameters> {
 	// A human-readable label for the tool to be displayed in UI
 	label: string;
 	execute(
@@ -49,29 +54,42 @@ export type AgentEvent =
 	// Emitted when a user, assistant or tool result message starts
 	| { type: "message_start"; message: Message }
 	// Emitted when an asssitant messages is updated due to streaming
-	| { type: "message_update"; assistantMessageEvent: AssistantMessageEvent; message: AssistantMessage }
+	| {
+			type: "message_update";
+			assistantMessageEvent: AssistantMessageEvent;
+			message: AssistantMessage;
+	  }
 	// Emitted when a user, assistant or tool result message is complete
 	| { type: "message_end"; message: Message }
 	// Emitted when a tool execution starts
-	| { type: "tool_execution_start"; toolCallId: string; toolName: string; args: any }
+	| {
+			type: "tool_execution_start";
+			toolCallId: string;
+			toolName: string;
+			args: unknown;
+	  }
 	// Emitted when a tool execution produces output (streaming)
 	| {
 			type: "tool_execution_update";
 			toolCallId: string;
 			toolName: string;
-			args: any;
-			partialResult: AgentToolResult<any>;
+			args: unknown;
+			partialResult: AgentToolResult<unknown>;
 	  }
 	// Emitted when a tool execution completes
 	| {
 			type: "tool_execution_end";
 			toolCallId: string;
 			toolName: string;
-			result: AgentToolResult<any>;
+			result: AgentToolResult<unknown>;
 			isError: boolean;
 	  }
 	// Emitted when a full turn completes
-	| { type: "turn_end"; message: AssistantMessage; toolResults: ToolResultMessage[] }
+	| {
+			type: "turn_end";
+			message: AssistantMessage;
+			toolResults: ToolResultMessage[];
+	  }
 	// Emitted when the agent has completed all its turns. All messages from every turn are
 	// contained in messages, which can be appended to the context
 	| { type: "agent_end"; messages: AgentContext["messages"] };
@@ -88,7 +106,10 @@ export interface QueuedMessage<TApp = Message> {
 // Configuration for agent loop execution
 export interface AgentLoopConfig extends SimpleStreamOptions {
 	model: Model<any>;
-	preprocessor?: (messages: AgentContext["messages"], abortSignal?: AbortSignal) => Promise<AgentContext["messages"]>;
+	preprocessor?: (
+		messages: AgentContext["messages"],
+		abortSignal?: AbortSignal,
+	) => Promise<AgentContext["messages"]>;
 	getQueuedMessages?: <T>() => Promise<QueuedMessage<T>[]>;
 	getSteeringMessages?: <T>() => Promise<QueuedMessage<T>[]>;
 	getFollowUpMessages?: <T>() => Promise<QueuedMessage<T>[]>;

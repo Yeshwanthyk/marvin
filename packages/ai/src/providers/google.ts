@@ -109,9 +109,17 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 								currentBlock = newBlock;
 								output.content.push(newBlock);
 								if (isThinking) {
-									stream.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
+									stream.push({
+										type: "thinking_start",
+										contentIndex: blockIndex(),
+										partial: output,
+									});
 								} else {
-									stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+									stream.push({
+										type: "text_start",
+										contentIndex: blockIndex(),
+										partial: output,
+									});
 								}
 							}
 							if (!currentBlock) continue;
@@ -160,7 +168,10 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 							// Generate unique ID if not provided or if it's a duplicate
 							const providedId = part.functionCall.id;
 							const needsNewId =
-								!providedId || output.content.some((b) => b.type === "toolCall" && b.id === providedId);
+								!providedId ||
+								output.content.some(
+									(b) => b.type === "toolCall" && b.id === providedId,
+								);
 							const toolCallId = needsNewId
 								? `${part.functionCall.name}_${Date.now()}_${++toolCallCounter}`
 								: providedId;
@@ -170,18 +181,29 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 								id: toolCallId,
 								name: part.functionCall.name || "",
 								arguments: part.functionCall.args as Record<string, any>,
-								...(part.thoughtSignature && { thoughtSignature: part.thoughtSignature }),
+								...(part.thoughtSignature && {
+									thoughtSignature: part.thoughtSignature,
+								}),
 							};
 
 							output.content.push(toolCall);
-							stream.push({ type: "toolcall_start", contentIndex: blockIndex(), partial: output });
+							stream.push({
+								type: "toolcall_start",
+								contentIndex: blockIndex(),
+								partial: output,
+							});
 							stream.push({
 								type: "toolcall_delta",
 								contentIndex: blockIndex(),
 								delta: JSON.stringify(toolCall.arguments),
 								partial: output,
 							});
-							stream.push({ type: "toolcall_end", contentIndex: blockIndex(), toolCall, partial: output });
+							stream.push({
+								type: "toolcall_end",
+								contentIndex: blockIndex(),
+								toolCall,
+								partial: output,
+							});
 						}
 					}
 				}
@@ -197,7 +219,8 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 					output.usage = {
 						input: chunk.usageMetadata.promptTokenCount || 0,
 						output:
-							(chunk.usageMetadata.candidatesTokenCount || 0) + (chunk.usageMetadata.thoughtsTokenCount || 0),
+							(chunk.usageMetadata.candidatesTokenCount || 0) +
+							(chunk.usageMetadata.thoughtsTokenCount || 0),
 						cacheRead: chunk.usageMetadata.cachedContentTokenCount || 0,
 						cacheWrite: 0,
 						totalTokens: chunk.usageMetadata.totalTokenCount || 0,
@@ -244,7 +267,8 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 		} catch (error) {
 			for (const block of output.content) delete (block as any).index;
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+			output.errorMessage =
+				error instanceof Error ? error.message : JSON.stringify(error);
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}
@@ -253,7 +277,10 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 	return stream;
 };
 
-function createClient(model: Model<"google-generative-ai">, apiKey?: string): GoogleGenAI {
+function createClient(
+	model: Model<"google-generative-ai">,
+	apiKey?: string,
+): GoogleGenAI {
 	if (!apiKey) {
 		if (!process.env.GEMINI_API_KEY) {
 			throw new Error(
@@ -286,7 +313,9 @@ function buildParams(
 
 	const config: GenerateContentConfig = {
 		...(Object.keys(generationConfig).length > 0 ? generationConfig : {}),
-		...(context.systemPrompt && { systemInstruction: sanitizeSurrogates(context.systemPrompt) }),
+		...(context.systemPrompt && {
+			systemInstruction: sanitizeSurrogates(context.systemPrompt),
+		}),
 	};
 
 	if (context.tools && context.tools.length > 0) {
@@ -328,7 +357,10 @@ function buildParams(
 
 	return params;
 }
-function convertMessages(model: Model<"google-generative-ai">, context: Context): Content[] {
+function convertMessages(
+	model: Model<"google-generative-ai">,
+	context: Context,
+): Content[] {
 	const contents: Content[] = [];
 	const transformedMessages = transformMessages(context.messages, model);
 
@@ -352,7 +384,9 @@ function convertMessages(model: Model<"google-generative-ai">, context: Context)
 						};
 					}
 				});
-				const filteredParts = !model.input.includes("image") ? parts.filter((p) => p.text !== undefined) : parts;
+				const filteredParts = !model.input.includes("image")
+					? parts.filter((p) => p.text !== undefined)
+					: parts;
 				if (filteredParts.length === 0) continue;
 				contents.push({
 					role: "user",
@@ -369,7 +403,9 @@ function convertMessages(model: Model<"google-generative-ai">, context: Context)
 					const thinkingPart: Part = {
 						thought: true,
 						text: sanitizeSurrogates(block.thinking),
-						...(block.thinkingSignature ? { thoughtSignature: block.thinkingSignature } : {}),
+						...(block.thinkingSignature
+							? { thoughtSignature: block.thinkingSignature }
+							: {}),
 					};
 					parts.push(thinkingPart);
 				} else if (block.type === "toolCall") {
@@ -401,7 +437,9 @@ function convertMessages(model: Model<"google-generative-ai">, context: Context)
 				.filter((c) => c.type === "text")
 				.map((c) => (c as any).text)
 				.join("\n");
-			const imageBlocks = model.input.includes("image") ? msg.content.filter((c) => c.type === "image") : [];
+			const imageBlocks = model.input.includes("image")
+				? msg.content.filter((c) => c.type === "image")
+				: [];
 
 			// Always add functionResponse with text result (or placeholder if only images)
 			const hasText = textResult.length > 0;
@@ -412,7 +450,11 @@ function convertMessages(model: Model<"google-generative-ai">, context: Context)
 					id: msg.toolCallId,
 					name: msg.toolName,
 					response: {
-						result: hasText ? sanitizeSurrogates(textResult) : hasImages ? "(see attached image)" : "",
+						result: hasText
+							? sanitizeSurrogates(textResult)
+							: hasImages
+								? "(see attached image)"
+								: "",
 						isError: msg.isError,
 					},
 				},

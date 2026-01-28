@@ -1,5 +1,6 @@
 import type {
 	AgentTool,
+	AgentToolResult,
 	AssistantMessage,
 	AssistantMessageEvent,
 	Message,
@@ -97,6 +98,6 @@ export type AgentEvent =
 	| { type: "message_update"; message: AppMessage; assistantMessageEvent: AssistantMessageEvent }
 	| { type: "message_end"; message: AppMessage }
 	// Tool execution lifecycle
-	| { type: "tool_execution_start"; toolCallId: string; toolName: string; args: any }
-	| { type: "tool_execution_update"; toolCallId: string; toolName: string; args: any; partialResult: any }
-	| { type: "tool_execution_end"; toolCallId: string; toolName: string; result: any; isError: boolean };
+	| { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
+	| { type: "tool_execution_update"; toolCallId: string; toolName: string; args: unknown; partialResult: AgentToolResult<unknown> }
+	| { type: "tool_execution_end"; toolCallId: string; toolName: string; result: AgentToolResult<unknown>; isError: boolean };

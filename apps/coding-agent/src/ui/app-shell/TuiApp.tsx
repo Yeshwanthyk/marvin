@@ -58,12 +58,19 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 
 	const toolMetaByName = new Map<string, ToolMeta>()
 	for (const [name, entry] of toolByName.entries()) {
+		const renderCall = entry.renderCall && typeof entry.renderCall === 'function' 
+			? (entry.renderCall as ToolMeta["renderCall"])
+			: undefined
+		const renderResult = entry.renderResult && typeof entry.renderResult === 'function'
+			? (entry.renderResult as ToolMeta["renderResult"]) 
+			: undefined
+			
 		toolMetaByName.set(name, {
 			label: entry.label,
 			source: entry.source,
 			sourcePath: entry.sourcePath,
-			renderCall: entry.renderCall as ToolMeta["renderCall"],
-			renderResult: entry.renderResult as ToolMeta["renderResult"],
+			renderCall,
+			renderResult,
 		})
 	}
 
@@ -114,7 +121,10 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 	const retryConfig = { enabled: true, maxRetries: 3, baseDelayMs: 2000 }
 	const retryablePattern =
 		/overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error/i
-	const retryState = { attempt: 0, abortController: null as AbortController | null }
+	const retryState: { attempt: number; abortController: AbortController | null } = { 
+		attempt: 0, 
+		abortController: null 
+	}
 
 	lspActiveRef.setActive = store.lspActive.set
 
@@ -133,7 +143,11 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		retryConfig,
 		retryablePattern,
 		retryState,
-		agent: agent as EventHandlerContext["agent"],
+		agent: {
+			state: { messages: agent.state.messages },
+			replaceMessages: (messages: unknown[]) => agent.replaceMessages(messages as AppMessage[]),
+			continue: agent.continue.bind(agent),
+		},
 		hookRunner,
 		toolByName: toolMetaByName,
 		getContextWindow: () => store.displayContextWindow.value(),
@@ -349,7 +363,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 				truncated: result.truncated,
 				tempFilePath: result.tempFilePath,
 				timestamp: Date.now(),
-			} as unknown as AppMessage)
+			})
 
 			if (shouldInject) {
 				const injectionLines = [`${SHELL_INJECTION_PREFIX}`, `$ ${command}`, result.output]
@@ -479,7 +493,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 			store.messages.set((prev) => appendWithCap(prev, uiMsg))
 		}
 		// Persist hook message to session
-		sessionManager.appendMessage(hookMessage as unknown as AppMessage)
+		sessionManager.appendMessage(hookMessage)
 		// Optionally trigger a new turn
 		if (triggerTurn) {
 			void handleSubmit(typeof hookMessage.content === "string" ? hookMessage.content : "")

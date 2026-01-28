@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { getModel } from "../src/models.js";
 import { complete } from "../src/stream.js";
-import type { Api, Context, Model, OptionsForApi, ToolResultMessage } from "../src/types.js";
+import type {
+	Api,
+	Context,
+	Model,
+	OptionsForApi,
+	ToolResultMessage,
+} from "../src/types.js";
 
 /**
  * Test for Unicode surrogate pair handling in tool results.
@@ -14,7 +20,10 @@ import type { Api, Context, Model, OptionsForApi, ToolResultMessage } from "../s
  * "The request body is not valid JSON: no low surrogate in string: line 1 column 197667"
  */
 
-async function testEmojiInToolResults<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function testEmojiInToolResults<TApi extends Api>(
+	llm: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	// Simulate a tool that returns emoji
 	const context: Context = {
 		systemPrompt: "You are a helpful assistant.",
@@ -100,7 +109,10 @@ async function testEmojiInToolResults<TApi extends Api>(llm: Model<TApi>, option
 	expect(response.content.length).toBeGreaterThan(0);
 }
 
-async function testRealWorldLinkedInData<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function testRealWorldLinkedInData<TApi extends Api>(
+	llm: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	const context: Context = {
 		systemPrompt: "You are a helpful assistant.",
 		messages: [
@@ -188,7 +200,10 @@ Unanswered Comments: 2
 	expect(response.content.some((b) => b.type === "text")).toBe(true);
 }
 
-async function testUnpairedHighSurrogate<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function testUnpairedHighSurrogate<TApi extends Api>(
+	llm: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	const context: Context = {
 		systemPrompt: "You are a helpful assistant.",
 		messages: [
@@ -239,7 +254,12 @@ async function testUnpairedHighSurrogate<TApi extends Api>(llm: Model<TApi>, opt
 		role: "toolResult",
 		toolCallId: "test_2",
 		toolName: "test_tool",
-		content: [{ type: "text", text: `Text with unpaired surrogate: ${unpairedSurrogate} <- should be sanitized` }],
+		content: [
+			{
+				type: "text",
+				text: `Text with unpaired surrogate: ${unpairedSurrogate} <- should be sanitized`,
+			},
+		],
 		isError: false,
 		timestamp: Date.now(),
 	};
@@ -262,147 +282,174 @@ async function testUnpairedHighSurrogate<TApi extends Api>(llm: Model<TApi>, opt
 }
 
 describe("AI Providers Unicode Surrogate Pair Tests", () => {
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google Provider Unicode Handling", () => {
-		const llm = getModel("google", "gemini-2.5-flash");
+	describe.skipIf(!process.env.GEMINI_API_KEY)(
+		"Google Provider Unicode Handling",
+		() => {
+			const llm = getModel("google", "gemini-2.5-flash");
 
-		it("should handle emoji in tool results", async () => {
-			await testEmojiInToolResults(llm);
-		});
+			it("should handle emoji in tool results", async () => {
+				await testEmojiInToolResults(llm);
+			});
 
-		it("should handle real-world LinkedIn comment data with emoji", async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+			it("should handle real-world LinkedIn comment data with emoji", async () => {
+				await testRealWorldLinkedInData(llm);
+			});
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
-	});
+			it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
+				await testUnpairedHighSurrogate(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider Unicode Handling", () => {
-		const llm = getModel("openai", "gpt-4o-mini");
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Completions Provider Unicode Handling",
+		() => {
+			const llm = getModel("openai", "gpt-4o-mini");
 
-		it("should handle emoji in tool results", async () => {
-			await testEmojiInToolResults(llm);
-		});
+			it("should handle emoji in tool results", async () => {
+				await testEmojiInToolResults(llm);
+			});
 
-		it("should handle real-world LinkedIn comment data with emoji", async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+			it("should handle real-world LinkedIn comment data with emoji", async () => {
+				await testRealWorldLinkedInData(llm);
+			});
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
-	});
+			it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
+				await testUnpairedHighSurrogate(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider Unicode Handling", () => {
-		const llm = getModel("openai", "gpt-5-mini");
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Responses Provider Unicode Handling",
+		() => {
+			const llm = getModel("openai", "gpt-5-mini");
 
-		it("should handle emoji in tool results", async () => {
-			await testEmojiInToolResults(llm);
-		});
+			it("should handle emoji in tool results", async () => {
+				await testEmojiInToolResults(llm);
+			});
 
-		it("should handle real-world LinkedIn comment data with emoji", async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+			it("should handle real-world LinkedIn comment data with emoji", async () => {
+				await testRealWorldLinkedInData(llm);
+			});
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
-	});
+			it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
+				await testUnpairedHighSurrogate(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("Anthropic Provider Unicode Handling", () => {
-		const llm = getModel("anthropic", "claude-3-5-haiku-20241022");
+	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)(
+		"Anthropic Provider Unicode Handling",
+		() => {
+			const llm = getModel("anthropic", "claude-3-5-haiku-20241022");
 
-		it("should handle emoji in tool results", async () => {
-			await testEmojiInToolResults(llm);
-		});
+			it("should handle emoji in tool results", async () => {
+				await testEmojiInToolResults(llm);
+			});
 
-		it("should handle real-world LinkedIn comment data with emoji", async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+			it("should handle real-world LinkedIn comment data with emoji", async () => {
+				await testRealWorldLinkedInData(llm);
+			});
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
-	});
+			it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
+				await testUnpairedHighSurrogate(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.XAI_API_KEY)("xAI Provider Unicode Handling", () => {
-		const llm = getModel("xai", "grok-3");
+	describe.skipIf(!process.env.XAI_API_KEY)(
+		"xAI Provider Unicode Handling",
+		() => {
+			const llm = getModel("xai", "grok-3");
 
-		it("should handle emoji in tool results", async () => {
-			await testEmojiInToolResults(llm);
-		});
+			it("should handle emoji in tool results", async () => {
+				await testEmojiInToolResults(llm);
+			});
 
-		it("should handle real-world LinkedIn comment data with emoji", async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+			it("should handle real-world LinkedIn comment data with emoji", async () => {
+				await testRealWorldLinkedInData(llm);
+			});
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
-	});
+			it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
+				await testUnpairedHighSurrogate(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.GROQ_API_KEY)("Groq Provider Unicode Handling", () => {
-		const llm = getModel("groq", "openai/gpt-oss-20b");
+	describe.skipIf(!process.env.GROQ_API_KEY)(
+		"Groq Provider Unicode Handling",
+		() => {
+			const llm = getModel("groq", "openai/gpt-oss-20b");
 
-		it("should handle emoji in tool results", async () => {
-			await testEmojiInToolResults(llm);
-		});
+			it("should handle emoji in tool results", async () => {
+				await testEmojiInToolResults(llm);
+			});
 
-		it("should handle real-world LinkedIn comment data with emoji", async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+			it("should handle real-world LinkedIn comment data with emoji", async () => {
+				await testRealWorldLinkedInData(llm);
+			});
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
-	});
+			it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
+				await testUnpairedHighSurrogate(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.CEREBRAS_API_KEY)("Cerebras Provider Unicode Handling", () => {
-		const llm = getModel("cerebras", "gpt-oss-120b");
+	describe.skipIf(!process.env.CEREBRAS_API_KEY)(
+		"Cerebras Provider Unicode Handling",
+		() => {
+			const llm = getModel("cerebras", "gpt-oss-120b");
 
-		it("should handle emoji in tool results", async () => {
-			await testEmojiInToolResults(llm);
-		});
+			it("should handle emoji in tool results", async () => {
+				await testEmojiInToolResults(llm);
+			});
 
-		it("should handle real-world LinkedIn comment data with emoji", async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+			it("should handle real-world LinkedIn comment data with emoji", async () => {
+				await testRealWorldLinkedInData(llm);
+			});
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
-	});
+			it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
+				await testUnpairedHighSurrogate(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.ZAI_API_KEY)("zAI Provider Unicode Handling", () => {
-		const llm = getModel("zai", "glm-4.5-air");
+	describe.skipIf(!process.env.ZAI_API_KEY)(
+		"zAI Provider Unicode Handling",
+		() => {
+			const llm = getModel("zai", "glm-4.5-air");
 
-		it("should handle emoji in tool results", async () => {
-			await testEmojiInToolResults(llm);
-		});
+			it("should handle emoji in tool results", async () => {
+				await testEmojiInToolResults(llm);
+			});
 
-		it("should handle real-world LinkedIn comment data with emoji", async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+			it("should handle real-world LinkedIn comment data with emoji", async () => {
+				await testRealWorldLinkedInData(llm);
+			});
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
-	});
+			it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
+				await testUnpairedHighSurrogate(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider Unicode Handling", () => {
-		const llm = getModel("mistral", "devstral-medium-latest");
+	describe.skipIf(!process.env.MISTRAL_API_KEY)(
+		"Mistral Provider Unicode Handling",
+		() => {
+			const llm = getModel("mistral", "devstral-medium-latest");
 
-		it("should handle emoji in tool results", async () => {
-			await testEmojiInToolResults(llm);
-		});
+			it("should handle emoji in tool results", async () => {
+				await testEmojiInToolResults(llm);
+			});
 
-		it("should handle real-world LinkedIn comment data with emoji", async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+			it("should handle real-world LinkedIn comment data with emoji", async () => {
+				await testRealWorldLinkedInData(llm);
+			});
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
-	});
+			it("should handle unpaired high surrogate (0xD83D) in tool results", async () => {
+				await testUnpairedHighSurrogate(llm);
+			});
+		},
+	);
 });

@@ -67,7 +67,11 @@ function hasToolHistory(messages: Message[]): boolean {
 }
 
 export interface OpenAICompletionsOptions extends StreamOptions {
-	toolChoice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
+	toolChoice?:
+		| "auto"
+		| "none"
+		| "required"
+		| { type: "function"; function: { name: string } };
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 }
 
@@ -100,10 +104,16 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 		try {
 			const client = createClient(model, context, options?.apiKey);
 			const params = buildParams(model, context, options);
-			const openaiStream = await client.chat.completions.create(params, { signal: options?.signal });
+			const openaiStream = await client.chat.completions.create(params, {
+				signal: options?.signal,
+			});
 			stream.push({ type: "start", partial: output });
 
-			let currentBlock: TextContent | ThinkingContent | (ToolCall & { partialArgs?: string }) | null = null;
+			let currentBlock:
+				| TextContent
+				| ThinkingContent
+				| (ToolCall & { partialArgs?: string })
+				| null = null;
 			const blocks = output.content;
 			const blockIndex = () => blocks.length - 1;
 			const finishCurrentBlock = (block?: typeof currentBlock) => {
@@ -137,10 +147,13 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 
 			for await (const chunk of openaiStream) {
 				if (chunk.usage) {
-					const cachedTokens = chunk.usage.prompt_tokens_details?.cached_tokens || 0;
-					const reasoningTokens = chunk.usage.completion_tokens_details?.reasoning_tokens || 0;
+					const cachedTokens =
+						chunk.usage.prompt_tokens_details?.cached_tokens || 0;
+					const reasoningTokens =
+						chunk.usage.completion_tokens_details?.reasoning_tokens || 0;
 					const input = (chunk.usage.prompt_tokens || 0) - cachedTokens;
-					const outputTokens = (chunk.usage.completion_tokens || 0) + reasoningTokens;
+					const outputTokens =
+						(chunk.usage.completion_tokens || 0) + reasoningTokens;
 					output.usage = {
 						// OpenAI includes cached tokens in prompt_tokens, so subtract to get non-cached input
 						input,
@@ -178,7 +191,11 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 							finishCurrentBlock(currentBlock);
 							currentBlock = { type: "text", text: "" };
 							output.content.push(currentBlock);
-							stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+							stream.push({
+								type: "text_start",
+								contentIndex: blockIndex(),
+								partial: output,
+							});
 						}
 
 						if (currentBlock.type === "text") {
@@ -209,7 +226,11 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 									thinkingSignature: field,
 								};
 								output.content.push(currentBlock);
-								stream.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
+								stream.push({
+									type: "thinking_start",
+									contentIndex: blockIndex(),
+									partial: output,
+								});
 							}
 
 							if (currentBlock.type === "thinking") {
@@ -241,17 +262,24 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 									partialArgs: "",
 								};
 								output.content.push(currentBlock);
-								stream.push({ type: "toolcall_start", contentIndex: blockIndex(), partial: output });
+								stream.push({
+									type: "toolcall_start",
+									contentIndex: blockIndex(),
+									partial: output,
+								});
 							}
 
 							if (currentBlock.type === "toolCall") {
 								if (toolCall.id) currentBlock.id = toolCall.id;
-								if (toolCall.function?.name) currentBlock.name = toolCall.function.name;
+								if (toolCall.function?.name)
+									currentBlock.name = toolCall.function.name;
 								let delta = "";
 								if (toolCall.function?.arguments) {
 									delta = toolCall.function.arguments;
 									currentBlock.partialArgs += toolCall.function.arguments;
-									currentBlock.arguments = parseStreamingJson(currentBlock.partialArgs);
+									currentBlock.arguments = parseStreamingJson(
+										currentBlock.partialArgs,
+									);
 								}
 								stream.push({
 									type: "toolcall_delta",
@@ -280,7 +308,8 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 		} catch (error) {
 			for (const block of output.content) delete (block as any).index;
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+			output.errorMessage =
+				error instanceof Error ? error.message : JSON.stringify(error);
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}
@@ -289,7 +318,11 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions"> = (
 	return stream;
 };
 
-function createClient(model: Model<"openai-completions">, context: Context, apiKey?: string) {
+function createClient(
+	model: Model<"openai-completions">,
+	context: Context,
+	apiKey?: string,
+) {
 	if (!apiKey) {
 		if (!process.env.OPENAI_API_KEY) {
 			throw new Error(
@@ -304,7 +337,9 @@ function createClient(model: Model<"openai-completions">, context: Context, apiK
 		// Copilot expects X-Initiator to indicate whether the request is user-initiated
 		// or agent-initiated. It's an agent call if ANY message in history has assistant/tool role.
 		const messages = context.messages || [];
-		const isAgentCall = messages.some((msg) => msg.role === "assistant" || msg.role === "toolResult");
+		const isAgentCall = messages.some(
+			(msg) => msg.role === "assistant" || msg.role === "toolResult",
+		);
 		headers["X-Initiator"] = isAgentCall ? "agent" : "user";
 		headers["Openai-Intent"] = "conversation-edits";
 	}
@@ -317,11 +352,17 @@ function createClient(model: Model<"openai-completions">, context: Context, apiK
 	});
 }
 
-function buildParams(model: Model<"openai-completions">, context: Context, options?: OpenAICompletionsOptions) {
+function buildParams(
+	model: Model<"openai-completions">,
+	context: Context,
+	options?: OpenAICompletionsOptions,
+) {
 	const compat = getCompat(model);
 	const messages = convertMessages(model, context, compat);
 
-	const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+	const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming & {
+		max_tokens?: number;
+	} = {
 		model: model.id,
 		messages,
 		stream: true,
@@ -334,7 +375,7 @@ function buildParams(model: Model<"openai-completions">, context: Context, optio
 
 	if (options?.maxTokens) {
 		if (compat.maxTokensField === "max_tokens") {
-			(params as any).max_tokens = options.maxTokens;
+			params.max_tokens = options.maxTokens;
 		} else {
 			params.max_completion_tokens = options.maxTokens;
 		}
@@ -355,7 +396,11 @@ function buildParams(model: Model<"openai-completions">, context: Context, optio
 		params.tool_choice = options.toolChoice;
 	}
 
-	if (options?.reasoningEffort && model.reasoning && compat.supportsReasoningEffort) {
+	if (
+		options?.reasoningEffort &&
+		model.reasoning &&
+		compat.supportsReasoningEffort
+	) {
 		params.reasoning_effort = options.reasoningEffort;
 	}
 
@@ -374,7 +419,10 @@ function convertMessages(
 	if (context.systemPrompt) {
 		const useDeveloperRole = model.reasoning && compat.supportsDeveloperRole;
 		const role = useDeveloperRole ? "developer" : "system";
-		params.push({ role: role, content: sanitizeSurrogates(context.systemPrompt) });
+		params.push({
+			role: role,
+			content: sanitizeSurrogates(context.systemPrompt),
+		});
 	}
 
 	let lastRole: string | null = null;
@@ -382,7 +430,11 @@ function convertMessages(
 	for (const msg of transformedMessages) {
 		// Some providers (e.g. Mistral/Devstral) don't allow user messages directly after tool results
 		// Insert a synthetic assistant message to bridge the gap
-		if (compat.requiresAssistantAfterToolResult && lastRole === "toolResult" && msg.role === "user") {
+		if (
+			compat.requiresAssistantAfterToolResult &&
+			lastRole === "toolResult" &&
+			msg.role === "user"
+		) {
 			params.push({
 				role: "assistant",
 				content: "I have processed the tool results.",
@@ -396,21 +448,23 @@ function convertMessages(
 					content: sanitizeSurrogates(msg.content),
 				});
 			} else {
-				const content: ChatCompletionContentPart[] = msg.content.map((item): ChatCompletionContentPart => {
-					if (item.type === "text") {
-						return {
-							type: "text",
-							text: sanitizeSurrogates(item.text),
-						} satisfies ChatCompletionContentPartText;
-					} else {
-						return {
-							type: "image_url",
-							image_url: {
-								url: `data:${item.mimeType};base64,${item.data}`,
-							},
-						} satisfies ChatCompletionContentPartImage;
-					}
-				});
+				const content: ChatCompletionContentPart[] = msg.content.map(
+					(item): ChatCompletionContentPart => {
+						if (item.type === "text") {
+							return {
+								type: "text",
+								text: sanitizeSurrogates(item.text),
+							} satisfies ChatCompletionContentPartText;
+						} else {
+							return {
+								type: "image_url",
+								image_url: {
+									url: `data:${item.mimeType};base64,${item.data}`,
+								},
+							} satisfies ChatCompletionContentPartImage;
+						}
+					},
+				);
 				const filteredContent = !model.input.includes("image")
 					? content.filter((c) => c.type !== "image_url")
 					: content;
@@ -427,12 +481,16 @@ function convertMessages(
 				content: compat.requiresAssistantAfterToolResult ? "" : null,
 			};
 
-			const textBlocks = msg.content.filter((b) => b.type === "text") as TextContent[];
+			const textBlocks = msg.content.filter(
+				(b) => b.type === "text",
+			) as TextContent[];
 			if (textBlocks.length > 0) {
 				// GitHub Copilot requires assistant content as a string, not an array.
 				// Sending as array causes Claude models to re-answer all previous prompts.
 				if (model.provider === "github-copilot") {
-					assistantMsg.content = textBlocks.map((b) => sanitizeSurrogates(b.text)).join("");
+					assistantMsg.content = textBlocks
+						.map((b) => sanitizeSurrogates(b.text))
+						.join("");
 				} else {
 					assistantMsg.content = textBlocks.map((b) => {
 						return { type: "text", text: sanitizeSurrogates(b.text) };
@@ -441,12 +499,19 @@ function convertMessages(
 			}
 
 			// Handle thinking blocks
-			const thinkingBlocks = msg.content.filter((b) => b.type === "thinking") as ThinkingContent[];
+			const thinkingBlocks = msg.content.filter(
+				(b) => b.type === "thinking",
+			) as ThinkingContent[];
 			if (thinkingBlocks.length > 0) {
 				if (compat.requiresThinkingAsText) {
 					// Convert thinking blocks to text with <thinking> delimiters
-					const thinkingText = thinkingBlocks.map((b) => `<thinking>\n${b.thinking}\n</thinking>`).join("\n");
-					const textContent = assistantMsg.content as Array<{ type: "text"; text: string }> | null;
+					const thinkingText = thinkingBlocks
+						.map((b) => `<thinking>\n${b.thinking}\n</thinking>`)
+						.join("\n");
+					const textContent = assistantMsg.content as Array<{
+						type: "text";
+						text: string;
+					}> | null;
 					if (textContent) {
 						textContent.unshift({ type: "text", text: thinkingText });
 					} else {
@@ -456,12 +521,16 @@ function convertMessages(
 					// Use the signature from the first thinking block if available (for llama.cpp server + gpt-oss)
 					const signature = thinkingBlocks[0].thinkingSignature;
 					if (signature && signature.length > 0) {
-						(assistantMsg as any)[signature] = thinkingBlocks.map((b) => b.thinking).join("\n");
+						(assistantMsg as any)[signature] = thinkingBlocks
+							.map((b) => b.thinking)
+							.join("\n");
 					}
 				}
 			}
 
-			const toolCalls = msg.content.filter((b) => b.type === "toolCall") as ToolCall[];
+			const toolCalls = msg.content.filter(
+				(b) => b.type === "toolCall",
+			) as ToolCall[];
 			if (toolCalls.length > 0) {
 				assistantMsg.tool_calls = toolCalls.map((tc) => ({
 					id: normalizeMistralToolId(tc.id, compat.requiresMistralToolIds),
@@ -498,8 +567,13 @@ function convertMessages(
 			// Some providers (e.g. Mistral) require the 'name' field in tool results
 			const toolResultMsg: ChatCompletionToolMessageParam = {
 				role: "tool",
-				content: sanitizeSurrogates(hasText ? textResult : "(see attached image)"),
-				tool_call_id: normalizeMistralToolId(msg.toolCallId, compat.requiresMistralToolIds),
+				content: sanitizeSurrogates(
+					hasText ? textResult : "(see attached image)",
+				),
+				tool_call_id: normalizeMistralToolId(
+					msg.toolCallId,
+					compat.requiresMistralToolIds,
+				),
 			};
 			if (compat.requiresToolResultName && msg.toolName) {
 				(toolResultMsg as any).name = msg.toolName;
@@ -509,7 +583,8 @@ function convertMessages(
 			// If there are images and model supports them, send a follow-up user message with images
 			if (hasImages && model.input.includes("image")) {
 				const contentBlocks: Array<
-					{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
+					| { type: "text"; text: string }
+					| { type: "image_url"; image_url: { url: string } }
 				> = [];
 
 				// Add text prefix
@@ -543,7 +618,9 @@ function convertMessages(
 	return params;
 }
 
-function convertTools(tools: Tool[]): OpenAI.Chat.Completions.ChatCompletionTool[] {
+function convertTools(
+	tools: Tool[],
+): OpenAI.Chat.Completions.ChatCompletionTool[] {
 	return tools.map((tool) => ({
 		type: "function",
 		function: {
@@ -554,7 +631,9 @@ function convertTools(tools: Tool[]): OpenAI.Chat.Completions.ChatCompletionTool
 	}));
 }
 
-function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"]): StopReason {
+function mapStopReason(
+	reason: ChatCompletionChunk.Choice["finish_reason"],
+): StopReason {
 	if (reason === null) return "stop";
 	switch (reason) {
 		case "stop":
@@ -584,7 +663,8 @@ function detectCompatFromUrl(baseUrl: string): Required<OpenAICompat> {
 		baseUrl.includes("mistral.ai") ||
 		baseUrl.includes("chutes.ai");
 
-	const useMaxTokens = baseUrl.includes("mistral.ai") || baseUrl.includes("chutes.ai");
+	const useMaxTokens =
+		baseUrl.includes("mistral.ai") || baseUrl.includes("chutes.ai");
 
 	const isGrok = baseUrl.includes("api.x.ai");
 
@@ -612,13 +692,19 @@ function getCompat(model: Model<"openai-completions">): Required<OpenAICompat> {
 
 	return {
 		supportsStore: model.compat.supportsStore ?? detected.supportsStore,
-		supportsDeveloperRole: model.compat.supportsDeveloperRole ?? detected.supportsDeveloperRole,
-		supportsReasoningEffort: model.compat.supportsReasoningEffort ?? detected.supportsReasoningEffort,
+		supportsDeveloperRole:
+			model.compat.supportsDeveloperRole ?? detected.supportsDeveloperRole,
+		supportsReasoningEffort:
+			model.compat.supportsReasoningEffort ?? detected.supportsReasoningEffort,
 		maxTokensField: model.compat.maxTokensField ?? detected.maxTokensField,
-		requiresToolResultName: model.compat.requiresToolResultName ?? detected.requiresToolResultName,
+		requiresToolResultName:
+			model.compat.requiresToolResultName ?? detected.requiresToolResultName,
 		requiresAssistantAfterToolResult:
-			model.compat.requiresAssistantAfterToolResult ?? detected.requiresAssistantAfterToolResult,
-		requiresThinkingAsText: model.compat.requiresThinkingAsText ?? detected.requiresThinkingAsText,
-		requiresMistralToolIds: model.compat.requiresMistralToolIds ?? detected.requiresMistralToolIds,
+			model.compat.requiresAssistantAfterToolResult ??
+			detected.requiresAssistantAfterToolResult,
+		requiresThinkingAsText:
+			model.compat.requiresThinkingAsText ?? detected.requiresThinkingAsText,
+		requiresMistralToolIds:
+			model.compat.requiresMistralToolIds ?? detected.requiresMistralToolIds,
 	};
 }

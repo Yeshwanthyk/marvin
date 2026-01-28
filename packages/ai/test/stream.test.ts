@@ -6,7 +6,15 @@ import { fileURLToPath } from "url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getModel } from "../src/models.js";
 import { complete, stream } from "../src/stream.js";
-import type { Api, Context, ImageContent, Model, OptionsForApi, Tool, ToolResultMessage } from "../src/types.js";
+import type {
+	Api,
+	Context,
+	ImageContent,
+	Model,
+	OptionsForApi,
+	Tool,
+	ToolResultMessage,
+} from "../src/types.js";
 import { StringEnum } from "../src/utils/typebox-helpers.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,7 +27,8 @@ const calculatorSchema = Type.Object({
 	a: Type.Number({ description: "First number" }),
 	b: Type.Number({ description: "Second number" }),
 	operation: StringEnum(["add", "subtract", "multiply", "divide"], {
-		description: "The operation to perform. One of 'add', 'subtract', 'multiply', 'divide'.",
+		description:
+			"The operation to perform. One of 'add', 'subtract', 'multiply', 'divide'.",
 	}),
 });
 
@@ -29,10 +38,19 @@ const calculatorTool: Tool<typeof calculatorSchema> = {
 	parameters: calculatorSchema,
 };
 
-async function basicTextGeneration<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
+async function basicTextGeneration<TApi extends Api>(
+	model: Model<TApi>,
+	options?: OptionsForApi<TApi>,
+) {
 	const context: Context = {
 		systemPrompt: "You are a helpful assistant. Be concise.",
-		messages: [{ role: "user", content: "Reply with exactly: 'Hello test successful'", timestamp: Date.now() }],
+		messages: [
+			{
+				role: "user",
+				content: "Reply with exactly: 'Hello test successful'",
+				timestamp: Date.now(),
+			},
+		],
 	};
 	const response = await complete(model, context, options);
 
@@ -41,24 +59,37 @@ async function basicTextGeneration<TApi extends Api>(model: Model<TApi>, options
 	expect(response.usage.input + response.usage.cacheRead).toBeGreaterThan(0);
 	expect(response.usage.output).toBeGreaterThan(0);
 	expect(response.errorMessage).toBeFalsy();
-	expect(response.content.map((b) => (b.type === "text" ? b.text : "")).join("")).toContain("Hello test successful");
+	expect(
+		response.content.map((b) => (b.type === "text" ? b.text : "")).join(""),
+	).toContain("Hello test successful");
 
 	context.messages.push(response);
-	context.messages.push({ role: "user", content: "Now say 'Goodbye test successful'", timestamp: Date.now() });
+	context.messages.push({
+		role: "user",
+		content: "Now say 'Goodbye test successful'",
+		timestamp: Date.now(),
+	});
 
 	const secondResponse = await complete(model, context, options);
 
 	expect(secondResponse.role).toBe("assistant");
 	expect(secondResponse.content).toBeTruthy();
-	expect(secondResponse.usage.input + secondResponse.usage.cacheRead).toBeGreaterThan(0);
+	expect(
+		secondResponse.usage.input + secondResponse.usage.cacheRead,
+	).toBeGreaterThan(0);
 	expect(secondResponse.usage.output).toBeGreaterThan(0);
 	expect(secondResponse.errorMessage).toBeFalsy();
-	expect(secondResponse.content.map((b) => (b.type === "text" ? b.text : "")).join("")).toContain(
-		"Goodbye test successful",
-	);
+	expect(
+		secondResponse.content
+			.map((b) => (b.type === "text" ? b.text : ""))
+			.join(""),
+	).toContain("Goodbye test successful");
 }
 
-async function handleToolCall<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
+async function handleToolCall<TApi extends Api>(
+	model: Model<TApi>,
+	options?: OptionsForApi<TApi>,
+) {
 	const context: Context = {
 		systemPrompt: "You are a helpful assistant that uses tools when asked.",
 		messages: [
@@ -115,7 +146,12 @@ async function handleToolCall<TApi extends Api>(model: Model<TApi>, options?: Op
 				expect(toolCall.arguments).not.toBeUndefined();
 				expect((toolCall.arguments as any).a).toBe(15);
 				expect((toolCall.arguments as any).b).toBe(27);
-				expect((toolCall.arguments as any).operation).oneOf(["add", "subtract", "multiply", "divide"]);
+				expect((toolCall.arguments as any).operation).oneOf([
+					"add",
+					"subtract",
+					"multiply",
+					"divide",
+				]);
 			}
 		}
 	}
@@ -136,13 +172,18 @@ async function handleToolCall<TApi extends Api>(model: Model<TApi>, options?: Op
 	}
 }
 
-async function handleStreaming<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
+async function handleStreaming<TApi extends Api>(
+	model: Model<TApi>,
+	options?: OptionsForApi<TApi>,
+) {
 	let textStarted = false;
 	let textChunks = "";
 	let textCompleted = false;
 
 	const context: Context = {
-		messages: [{ role: "user", content: "Count from 1 to 3", timestamp: Date.now() }],
+		messages: [
+			{ role: "user", content: "Count from 1 to 3", timestamp: Date.now() },
+		],
 	};
 
 	const s = stream(model, context, options);
@@ -165,7 +206,10 @@ async function handleStreaming<TApi extends Api>(model: Model<TApi>, options?: O
 	expect(response.content.some((b) => b.type === "text")).toBeTruthy();
 }
 
-async function handleThinking<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
+async function handleThinking<TApi extends Api>(
+	model: Model<TApi>,
+	options?: OptionsForApi<TApi>,
+) {
 	let thinkingStarted = false;
 	let thinkingChunks = "";
 	let thinkingCompleted = false;
@@ -201,10 +245,15 @@ async function handleThinking<TApi extends Api>(model: Model<TApi>, options?: Op
 	expect(response.content.some((b) => b.type === "thinking")).toBeTruthy();
 }
 
-async function handleImage<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
+async function handleImage<TApi extends Api>(
+	model: Model<TApi>,
+	options?: OptionsForApi<TApi>,
+) {
 	// Check if the model supports images
 	if (!model.input.includes("image")) {
-		console.log(`Skipping image test - model ${model.id} doesn't support images`);
+		console.log(
+			`Skipping image test - model ${model.id} doesn't support images`,
+		);
 		return;
 	}
 
@@ -247,13 +296,18 @@ async function handleImage<TApi extends Api>(model: Model<TApi>, options?: Optio
 	}
 }
 
-async function multiTurn<TApi extends Api>(model: Model<TApi>, options?: OptionsForApi<TApi>) {
+async function multiTurn<TApi extends Api>(
+	model: Model<TApi>,
+	options?: OptionsForApi<TApi>,
+) {
 	const context: Context = {
-		systemPrompt: "You are a helpful assistant that can use tools to answer questions.",
+		systemPrompt:
+			"You are a helpful assistant that can use tools to answer questions.",
 		messages: [
 			{
 				role: "user",
-				content: "Think about this briefly, then calculate 42 * 17 and 453 + 434 using the calculator tool.",
+				content:
+					"Think about this briefly, then calculate 42 * 17 and 453 + 434 using the calculator tool.",
 				timestamp: Date.now(),
 			},
 		],
@@ -330,304 +384,357 @@ async function multiTurn<TApi extends Api>(model: Model<TApi>, options?: Options
 }
 
 describe("Generate E2E Tests", () => {
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Gemini Provider (gemini-2.5-flash)", () => {
-		const llm = getModel("google", "gemini-2.5-flash");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
-
-		it("should handle ", async () => {
-			await handleThinking(llm, { thinking: { enabled: true, budgetTokens: 1024 } });
-		});
-
-		it("should handle multi-turn with thinking and tools", async () => {
-			await multiTurn(llm, { thinking: { enabled: true, budgetTokens: 2048 } });
-		});
-
-		it("should handle image input", async () => {
-			await handleImage(llm);
-		});
-	});
-
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider (gpt-4o-mini)", () => {
-		const llm: Model<"openai-completions"> = { ...getModel("openai", "gpt-4o-mini"), api: "openai-completions" };
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
-
-		it("should handle image input", async () => {
-			await handleImage(llm);
-		});
-	});
-
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider (gpt-5-mini)", () => {
-		const llm = getModel("openai", "gpt-5-mini");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
-
-		it("should handle thinking", { retry: 2 }, async () => {
-			await handleThinking(llm, { reasoningEffort: "high" });
-		});
-
-		it("should handle multi-turn with thinking and tools", async () => {
-			await multiTurn(llm, { reasoningEffort: "high" });
-		});
-
-		it("should handle image input", async () => {
-			await handleImage(llm);
-		});
-	});
-
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider (claude-3-5-haiku-20241022)", () => {
-		const model = getModel("anthropic", "claude-3-5-haiku-20241022");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(model, { thinkingEnabled: true });
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(model);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(model);
-		});
-
-		it("should handle image input", async () => {
-			await handleImage(model);
-		});
-	});
-
-	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("Anthropic Provider (claude-sonnet-4-20250514)", () => {
-		const model = getModel("anthropic", "claude-sonnet-4-20250514");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(model, { thinkingEnabled: true });
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(model);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(model);
-		});
-
-		it("should handle thinking", async () => {
-			await handleThinking(model, { thinkingEnabled: true });
-		});
-
-		it("should handle multi-turn with thinking and tools", async () => {
-			await multiTurn(model, { thinkingEnabled: true });
-		});
-
-		it("should handle image input", async () => {
-			await handleImage(model);
-		});
-	});
-
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider (gpt-5-mini)", () => {
-		const model = getModel("openai", "gpt-5-mini");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(model);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(model);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(model);
-		});
-
-		it("should handle image input", async () => {
-			await handleImage(model);
-		});
-	});
-
-	describe.skipIf(!process.env.XAI_API_KEY)("xAI Provider (grok-code-fast-1 via OpenAI Completions)", () => {
-		const llm = getModel("xai", "grok-code-fast-1");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
-
-		it("should handle thinking mode", async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
-
-		it("should handle multi-turn with thinking and tools", async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
-	});
-
-	describe.skipIf(!process.env.GROQ_API_KEY)("Groq Provider (gpt-oss-20b via OpenAI Completions)", () => {
-		const llm = getModel("groq", "openai/gpt-oss-20b");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
-
-		it("should handle thinking mode", async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
-
-		it("should handle multi-turn with thinking and tools", async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
-	});
-
-	describe.skipIf(!process.env.CEREBRAS_API_KEY)("Cerebras Provider (gpt-oss-120b via OpenAI Completions)", () => {
-		const llm = getModel("cerebras", "gpt-oss-120b");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
-
-		it("should handle thinking mode", async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
-
-		it("should handle multi-turn with thinking and tools", async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
-	});
-
-	describe.skipIf(!process.env.OPENROUTER_API_KEY)("OpenRouter Provider (glm-4.5v via OpenAI Completions)", () => {
-		const llm = getModel("openrouter", "z-ai/glm-4.5v");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
-
-		it("should handle thinking mode", async () => {
-			await handleThinking(llm, { reasoningEffort: "medium" });
-		});
-
-		it("should handle multi-turn with thinking and tools", { retry: 2 }, async () => {
-			await multiTurn(llm, { reasoningEffort: "medium" });
-		});
-
-		it("should handle image input", async () => {
-			await handleImage(llm);
-		});
-	});
-
-	describe.skipIf(!process.env.ZAI_API_KEY)("zAI Provider (glm-4.5-air via Anthropic Messages)", () => {
-		const llm = getModel("zai", "glm-4.5-air");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
-
-		it("should handle thinking", async () => {
-			// Prompt doesn't trigger thinking
-			// await handleThinking(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
-		});
-
-		it("should handle multi-turn with thinking and tools", async () => {
-			await multiTurn(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
-		});
-	});
-
-	describe.skipIf(!process.env.ZAI_API_KEY)("zAI Provider (glm-4.5v via Anthropic Messages)", () => {
-		const llm = getModel("zai", "glm-4.5v");
-
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
-
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
-
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
-
-		it("should handle thinking", async () => {
-			// Prompt doesn't trigger thinking
-			// await handleThinking(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
-		});
-
-		it("should handle multi-turn with thinking and tools", async () => {
-			await multiTurn(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
-		});
-
-		it("should handle image input", async () => {
-			// Can't see image for some reason?
-			// await handleImage(llm);
-		});
-	});
+	describe.skipIf(!process.env.GEMINI_API_KEY)(
+		"Gemini Provider (gemini-2.5-flash)",
+		() => {
+			const llm = getModel("google", "gemini-2.5-flash");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
+
+			it("should handle ", async () => {
+				await handleThinking(llm, {
+					thinking: { enabled: true, budgetTokens: 1024 },
+				});
+			});
+
+			it("should handle multi-turn with thinking and tools", async () => {
+				await multiTurn(llm, {
+					thinking: { enabled: true, budgetTokens: 2048 },
+				});
+			});
+
+			it("should handle image input", async () => {
+				await handleImage(llm);
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Completions Provider (gpt-4o-mini)",
+		() => {
+			const llm: Model<"openai-completions"> = {
+				...getModel("openai", "gpt-4o-mini"),
+				api: "openai-completions",
+			};
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
+
+			it("should handle image input", async () => {
+				await handleImage(llm);
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Responses Provider (gpt-5-mini)",
+		() => {
+			const llm = getModel("openai", "gpt-5-mini");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
+
+			it("should handle thinking", { retry: 2 }, async () => {
+				await handleThinking(llm, { reasoningEffort: "high" });
+			});
+
+			it("should handle multi-turn with thinking and tools", async () => {
+				await multiTurn(llm, { reasoningEffort: "high" });
+			});
+
+			it("should handle image input", async () => {
+				await handleImage(llm);
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.ANTHROPIC_API_KEY)(
+		"Anthropic Provider (claude-3-5-haiku-20241022)",
+		() => {
+			const model = getModel("anthropic", "claude-3-5-haiku-20241022");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(model, { thinkingEnabled: true });
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(model);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(model);
+			});
+
+			it("should handle image input", async () => {
+				await handleImage(model);
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)(
+		"Anthropic Provider (claude-sonnet-4-20250514)",
+		() => {
+			const model = getModel("anthropic", "claude-sonnet-4-20250514");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(model, { thinkingEnabled: true });
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(model);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(model);
+			});
+
+			it("should handle thinking", async () => {
+				await handleThinking(model, { thinkingEnabled: true });
+			});
+
+			it("should handle multi-turn with thinking and tools", async () => {
+				await multiTurn(model, { thinkingEnabled: true });
+			});
+
+			it("should handle image input", async () => {
+				await handleImage(model);
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Responses Provider (gpt-5-mini)",
+		() => {
+			const model = getModel("openai", "gpt-5-mini");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(model);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(model);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(model);
+			});
+
+			it("should handle image input", async () => {
+				await handleImage(model);
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.XAI_API_KEY)(
+		"xAI Provider (grok-code-fast-1 via OpenAI Completions)",
+		() => {
+			const llm = getModel("xai", "grok-code-fast-1");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
+
+			it("should handle thinking mode", async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			});
+
+			it("should handle multi-turn with thinking and tools", async () => {
+				await multiTurn(llm, { reasoningEffort: "medium" });
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.GROQ_API_KEY)(
+		"Groq Provider (gpt-oss-20b via OpenAI Completions)",
+		() => {
+			const llm = getModel("groq", "openai/gpt-oss-20b");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
+
+			it("should handle thinking mode", async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			});
+
+			it("should handle multi-turn with thinking and tools", async () => {
+				await multiTurn(llm, { reasoningEffort: "medium" });
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.CEREBRAS_API_KEY)(
+		"Cerebras Provider (gpt-oss-120b via OpenAI Completions)",
+		() => {
+			const llm = getModel("cerebras", "gpt-oss-120b");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
+
+			it("should handle thinking mode", async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			});
+
+			it("should handle multi-turn with thinking and tools", async () => {
+				await multiTurn(llm, { reasoningEffort: "medium" });
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.OPENROUTER_API_KEY)(
+		"OpenRouter Provider (glm-4.5v via OpenAI Completions)",
+		() => {
+			const llm = getModel("openrouter", "z-ai/glm-4.5v");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
+
+			it("should handle thinking mode", async () => {
+				await handleThinking(llm, { reasoningEffort: "medium" });
+			});
+
+			it(
+				"should handle multi-turn with thinking and tools",
+				{ retry: 2 },
+				async () => {
+					await multiTurn(llm, { reasoningEffort: "medium" });
+				},
+			);
+
+			it("should handle image input", async () => {
+				await handleImage(llm);
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.ZAI_API_KEY)(
+		"zAI Provider (glm-4.5-air via Anthropic Messages)",
+		() => {
+			const llm = getModel("zai", "glm-4.5-air");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
+
+			it("should handle thinking", async () => {
+				// Prompt doesn't trigger thinking
+				// await handleThinking(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
+			});
+
+			it("should handle multi-turn with thinking and tools", async () => {
+				await multiTurn(llm, {
+					thinkingEnabled: true,
+					thinkingBudgetTokens: 2048,
+				});
+			});
+		},
+	);
+
+	describe.skipIf(!process.env.ZAI_API_KEY)(
+		"zAI Provider (glm-4.5v via Anthropic Messages)",
+		() => {
+			const llm = getModel("zai", "glm-4.5v");
+
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
+
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
+
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
+
+			it("should handle thinking", async () => {
+				// Prompt doesn't trigger thinking
+				// await handleThinking(llm, { thinkingEnabled: true, thinkingBudgetTokens: 2048 });
+			});
+
+			it("should handle multi-turn with thinking and tools", async () => {
+				await multiTurn(llm, {
+					thinkingEnabled: true,
+					thinkingBudgetTokens: 2048,
+				});
+			});
+
+			it("should handle image input", async () => {
+				// Can't see image for some reason?
+				// await handleImage(llm);
+			});
+		},
+	);
 
 	describe.skipIf(!process.env.MISTRAL_API_KEY)(
 		"Mistral Provider (devstral-medium-latest via OpenAI Completions)",
@@ -658,25 +765,28 @@ describe("Generate E2E Tests", () => {
 		},
 	);
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider (pixtral-12b with image support)", () => {
-		const llm = getModel("mistral", "pixtral-12b");
+	describe.skipIf(!process.env.MISTRAL_API_KEY)(
+		"Mistral Provider (pixtral-12b with image support)",
+		() => {
+			const llm = getModel("mistral", "pixtral-12b");
 
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm);
-		});
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm);
+			});
 
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm);
-		});
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm);
+			});
 
-		it("should handle streaming", async () => {
-			await handleStreaming(llm);
-		});
+			it("should handle streaming", async () => {
+				await handleStreaming(llm);
+			});
 
-		it("should handle image input", async () => {
-			await handleImage(llm);
-		});
-	});
+			it("should handle image input", async () => {
+				await handleImage(llm);
+			});
+		},
+	);
 
 	// Read GitHub Copilot token from ~/.pi/agent/oauth.json if available
 	let githubCopilotToken: string | undefined;
@@ -688,21 +798,24 @@ describe("Generate E2E Tests", () => {
 		// oauth.json doesn't exist or is invalid
 	}
 
-	describe.skipIf(!githubCopilotToken)("GitHub Copilot Provider (gpt-4o via OpenAI Completions)", () => {
-		const llm = getModel("github-copilot", "gpt-4o");
+	describe.skipIf(!githubCopilotToken)(
+		"GitHub Copilot Provider (gpt-4o via OpenAI Completions)",
+		() => {
+			const llm = getModel("github-copilot", "gpt-4o");
 
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm, { apiKey: githubCopilotToken });
-		});
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm, { apiKey: githubCopilotToken });
+			});
 
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm, { apiKey: githubCopilotToken });
-		});
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm, { apiKey: githubCopilotToken });
+			});
 
-		it("should handle streaming", async () => {
-			await handleStreaming(llm, { apiKey: githubCopilotToken });
-		});
-	});
+			it("should handle streaming", async () => {
+				await handleStreaming(llm, { apiKey: githubCopilotToken });
+			});
+		},
+	);
 
 	// Check if ollama is installed
 	let ollamaInstalled = false;
@@ -713,92 +826,100 @@ describe("Generate E2E Tests", () => {
 		ollamaInstalled = false;
 	}
 
-	describe.skipIf(!ollamaInstalled)("Ollama Provider (gpt-oss-20b via OpenAI Completions)", () => {
-		let llm: Model<"openai-completions">;
-		let ollamaProcess: ChildProcess | null = null;
+	describe.skipIf(!ollamaInstalled)(
+		"Ollama Provider (gpt-oss-20b via OpenAI Completions)",
+		() => {
+			let llm: Model<"openai-completions">;
+			let ollamaProcess: ChildProcess | null = null;
 
-		beforeAll(async () => {
-			// Check if model is available, if not pull it
-			try {
-				execSync("ollama list | grep -q 'gpt-oss:20b'", { stdio: "ignore" });
-			} catch {
-				console.log("Pulling gpt-oss:20b model for Ollama tests...");
+			beforeAll(async () => {
+				// Check if model is available, if not pull it
 				try {
-					execSync("ollama pull gpt-oss:20b", { stdio: "inherit" });
-				} catch (e) {
-					console.warn("Failed to pull gpt-oss:20b model, tests will be skipped");
-					return;
-				}
-			}
-
-			// Start ollama server
-			ollamaProcess = spawn("ollama", ["serve"], {
-				detached: false,
-				stdio: "ignore",
-			});
-
-			// Wait for server to be ready
-			await new Promise<void>((resolve) => {
-				const checkServer = async () => {
+					execSync("ollama list | grep -q 'gpt-oss:20b'", { stdio: "ignore" });
+				} catch {
+					console.log("Pulling gpt-oss:20b model for Ollama tests...");
 					try {
-						const response = await fetch("http://localhost:11434/api/tags");
-						if (response.ok) {
-							resolve();
-						} else {
+						execSync("ollama pull gpt-oss:20b", { stdio: "inherit" });
+					} catch (e) {
+						console.warn(
+							"Failed to pull gpt-oss:20b model, tests will be skipped",
+						);
+						return;
+					}
+				}
+
+				// Start ollama server
+				ollamaProcess = spawn("ollama", ["serve"], {
+					detached: false,
+					stdio: "ignore",
+				});
+
+				// Wait for server to be ready
+				await new Promise<void>((resolve) => {
+					const checkServer = async () => {
+						try {
+							const response = await fetch("http://localhost:11434/api/tags");
+							if (response.ok) {
+								resolve();
+							} else {
+								setTimeout(checkServer, 500);
+							}
+						} catch {
 							setTimeout(checkServer, 500);
 						}
-					} catch {
-						setTimeout(checkServer, 500);
-					}
+					};
+					setTimeout(checkServer, 1000); // Initial delay
+				});
+
+				llm = {
+					id: "gpt-oss:20b",
+					api: "openai-completions",
+					provider: "ollama",
+					baseUrl: "http://localhost:11434/v1",
+					reasoning: true,
+					input: ["text"],
+					contextWindow: 128000,
+					maxTokens: 16000,
+					cost: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+					},
+					name: "Ollama GPT-OSS 20B",
 				};
-				setTimeout(checkServer, 1000); // Initial delay
+			}, 30000); // 30 second timeout for setup
+
+			afterAll(() => {
+				// Kill ollama server
+				if (ollamaProcess) {
+					ollamaProcess.kill("SIGTERM");
+					ollamaProcess = null;
+				}
 			});
 
-			llm = {
-				id: "gpt-oss:20b",
-				api: "openai-completions",
-				provider: "ollama",
-				baseUrl: "http://localhost:11434/v1",
-				reasoning: true,
-				input: ["text"],
-				contextWindow: 128000,
-				maxTokens: 16000,
-				cost: {
-					input: 0,
-					output: 0,
-					cacheRead: 0,
-					cacheWrite: 0,
-				},
-				name: "Ollama GPT-OSS 20B",
-			};
-		}, 30000); // 30 second timeout for setup
+			it("should complete basic text generation", async () => {
+				await basicTextGeneration(llm, { apiKey: "test" });
+			});
 
-		afterAll(() => {
-			// Kill ollama server
-			if (ollamaProcess) {
-				ollamaProcess.kill("SIGTERM");
-				ollamaProcess = null;
-			}
-		});
+			it("should handle tool calling", async () => {
+				await handleToolCall(llm, { apiKey: "test" });
+			});
 
-		it("should complete basic text generation", async () => {
-			await basicTextGeneration(llm, { apiKey: "test" });
-		});
+			it("should handle streaming", async () => {
+				await handleStreaming(llm, { apiKey: "test" });
+			});
 
-		it("should handle tool calling", async () => {
-			await handleToolCall(llm, { apiKey: "test" });
-		});
+			it("should handle thinking mode", async () => {
+				await handleThinking(llm, {
+					apiKey: "test",
+					reasoningEffort: "medium",
+				});
+			});
 
-		it("should handle streaming", async () => {
-			await handleStreaming(llm, { apiKey: "test" });
-		});
-
-		it("should handle thinking mode", async () => {
-			await handleThinking(llm, { apiKey: "test", reasoningEffort: "medium" });
-		});
-
-		it("should handle multi-turn with thinking and tools", async () => {
-			await multiTurn(llm, { apiKey: "test", reasoningEffort: "medium" });
-		});
-	});
+			it("should handle multi-turn with thinking and tools", async () => {
+				await multiTurn(llm, { apiKey: "test", reasoningEffort: "medium" });
+			});
+		},
+	);
 });

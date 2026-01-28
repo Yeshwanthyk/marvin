@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { getModel } from "../src/models.js";
 import { complete } from "../src/stream.js";
-import type { Api, AssistantMessage, Context, Model, OptionsForApi, UserMessage } from "../src/types.js";
+import type {
+	Api,
+	AssistantMessage,
+	Context,
+	Model,
+	OptionsForApi,
+	UserMessage,
+} from "../src/types.js";
 
-async function testEmptyMessage<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function testEmptyMessage<TApi extends Api>(
+	llm: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	// Test with completely empty content array
 	const emptyMessage: UserMessage = {
 		role: "user",
@@ -28,7 +38,10 @@ async function testEmptyMessage<TApi extends Api>(llm: Model<TApi>, options: Opt
 	}
 }
 
-async function testEmptyStringMessage<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function testEmptyStringMessage<TApi extends Api>(
+	llm: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	// Test with empty string content
 	const context: Context = {
 		messages: [
@@ -53,7 +66,10 @@ async function testEmptyStringMessage<TApi extends Api>(llm: Model<TApi>, option
 	}
 }
 
-async function testWhitespaceOnlyMessage<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function testWhitespaceOnlyMessage<TApi extends Api>(
+	llm: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	// Test with whitespace-only content
 	const context: Context = {
 		messages: [
@@ -78,7 +94,10 @@ async function testWhitespaceOnlyMessage<TApi extends Api>(llm: Model<TApi>, opt
 	}
 }
 
-async function testEmptyAssistantMessage<TApi extends Api>(llm: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function testEmptyAssistantMessage<TApi extends Api>(
+	llm: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	// Test with empty assistant message in conversation flow
 	// User -> Empty Assistant -> User
 	const emptyAssistant: AssistantMessage = {
@@ -130,183 +149,210 @@ async function testEmptyAssistantMessage<TApi extends Api>(llm: Model<TApi>, opt
 }
 
 describe("AI Providers Empty Message Tests", () => {
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google Provider Empty Messages", () => {
-		const llm = getModel("google", "gemini-2.5-flash");
+	describe.skipIf(!process.env.GEMINI_API_KEY)(
+		"Google Provider Empty Messages",
+		() => {
+			const llm = getModel("google", "gemini-2.5-flash");
 
-		it("should handle empty content array", async () => {
-			await testEmptyMessage(llm);
-		});
+			it("should handle empty content array", async () => {
+				await testEmptyMessage(llm);
+			});
 
-		it("should handle empty string content", async () => {
-			await testEmptyStringMessage(llm);
-		});
+			it("should handle empty string content", async () => {
+				await testEmptyStringMessage(llm);
+			});
 
-		it("should handle whitespace-only content", async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+			it("should handle whitespace-only content", async () => {
+				await testWhitespaceOnlyMessage(llm);
+			});
 
-		it("should handle empty assistant message in conversation", async () => {
-			await testEmptyAssistantMessage(llm);
-		});
-	});
+			it("should handle empty assistant message in conversation", async () => {
+				await testEmptyAssistantMessage(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider Empty Messages", () => {
-		const llm = getModel("openai", "gpt-4o-mini");
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Completions Provider Empty Messages",
+		() => {
+			const llm = getModel("openai", "gpt-4o-mini");
 
-		it("should handle empty content array", async () => {
-			await testEmptyMessage(llm);
-		});
+			it("should handle empty content array", async () => {
+				await testEmptyMessage(llm);
+			});
 
-		it("should handle empty string content", async () => {
-			await testEmptyStringMessage(llm);
-		});
+			it("should handle empty string content", async () => {
+				await testEmptyStringMessage(llm);
+			});
 
-		it("should handle whitespace-only content", async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+			it("should handle whitespace-only content", async () => {
+				await testWhitespaceOnlyMessage(llm);
+			});
 
-		it("should handle empty assistant message in conversation", async () => {
-			await testEmptyAssistantMessage(llm);
-		});
-	});
+			it("should handle empty assistant message in conversation", async () => {
+				await testEmptyAssistantMessage(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider Empty Messages", () => {
-		const llm = getModel("openai", "gpt-5-mini");
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Responses Provider Empty Messages",
+		() => {
+			const llm = getModel("openai", "gpt-5-mini");
 
-		it("should handle empty content array", async () => {
-			await testEmptyMessage(llm);
-		});
+			it("should handle empty content array", async () => {
+				await testEmptyMessage(llm);
+			});
 
-		it("should handle empty string content", async () => {
-			await testEmptyStringMessage(llm);
-		});
+			it("should handle empty string content", async () => {
+				await testEmptyStringMessage(llm);
+			});
 
-		it("should handle whitespace-only content", async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+			it("should handle whitespace-only content", async () => {
+				await testWhitespaceOnlyMessage(llm);
+			});
 
-		it("should handle empty assistant message in conversation", async () => {
-			await testEmptyAssistantMessage(llm);
-		});
-	});
+			it("should handle empty assistant message in conversation", async () => {
+				await testEmptyAssistantMessage(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("Anthropic Provider Empty Messages", () => {
-		const llm = getModel("anthropic", "claude-3-5-haiku-20241022");
+	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)(
+		"Anthropic Provider Empty Messages",
+		() => {
+			const llm = getModel("anthropic", "claude-3-5-haiku-20241022");
 
-		it("should handle empty content array", async () => {
-			await testEmptyMessage(llm);
-		});
+			it("should handle empty content array", async () => {
+				await testEmptyMessage(llm);
+			});
 
-		it("should handle empty string content", async () => {
-			await testEmptyStringMessage(llm);
-		});
+			it("should handle empty string content", async () => {
+				await testEmptyStringMessage(llm);
+			});
 
-		it("should handle whitespace-only content", async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+			it("should handle whitespace-only content", async () => {
+				await testWhitespaceOnlyMessage(llm);
+			});
 
-		it("should handle empty assistant message in conversation", async () => {
-			await testEmptyAssistantMessage(llm);
-		});
-	});
+			it("should handle empty assistant message in conversation", async () => {
+				await testEmptyAssistantMessage(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.XAI_API_KEY)("xAI Provider Empty Messages", () => {
-		const llm = getModel("xai", "grok-3");
+	describe.skipIf(!process.env.XAI_API_KEY)(
+		"xAI Provider Empty Messages",
+		() => {
+			const llm = getModel("xai", "grok-3");
 
-		it("should handle empty content array", async () => {
-			await testEmptyMessage(llm);
-		});
+			it("should handle empty content array", async () => {
+				await testEmptyMessage(llm);
+			});
 
-		it("should handle empty string content", async () => {
-			await testEmptyStringMessage(llm);
-		});
+			it("should handle empty string content", async () => {
+				await testEmptyStringMessage(llm);
+			});
 
-		it("should handle whitespace-only content", async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+			it("should handle whitespace-only content", async () => {
+				await testWhitespaceOnlyMessage(llm);
+			});
 
-		it("should handle empty assistant message in conversation", async () => {
-			await testEmptyAssistantMessage(llm);
-		});
-	});
+			it("should handle empty assistant message in conversation", async () => {
+				await testEmptyAssistantMessage(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.GROQ_API_KEY)("Groq Provider Empty Messages", () => {
-		const llm = getModel("groq", "openai/gpt-oss-20b");
+	describe.skipIf(!process.env.GROQ_API_KEY)(
+		"Groq Provider Empty Messages",
+		() => {
+			const llm = getModel("groq", "openai/gpt-oss-20b");
 
-		it("should handle empty content array", async () => {
-			await testEmptyMessage(llm);
-		});
+			it("should handle empty content array", async () => {
+				await testEmptyMessage(llm);
+			});
 
-		it("should handle empty string content", async () => {
-			await testEmptyStringMessage(llm);
-		});
+			it("should handle empty string content", async () => {
+				await testEmptyStringMessage(llm);
+			});
 
-		it("should handle whitespace-only content", async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+			it("should handle whitespace-only content", async () => {
+				await testWhitespaceOnlyMessage(llm);
+			});
 
-		it("should handle empty assistant message in conversation", async () => {
-			await testEmptyAssistantMessage(llm);
-		});
-	});
+			it("should handle empty assistant message in conversation", async () => {
+				await testEmptyAssistantMessage(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.CEREBRAS_API_KEY)("Cerebras Provider Empty Messages", () => {
-		const llm = getModel("cerebras", "gpt-oss-120b");
+	describe.skipIf(!process.env.CEREBRAS_API_KEY)(
+		"Cerebras Provider Empty Messages",
+		() => {
+			const llm = getModel("cerebras", "gpt-oss-120b");
 
-		it("should handle empty content array", async () => {
-			await testEmptyMessage(llm);
-		});
+			it("should handle empty content array", async () => {
+				await testEmptyMessage(llm);
+			});
 
-		it("should handle empty string content", async () => {
-			await testEmptyStringMessage(llm);
-		});
+			it("should handle empty string content", async () => {
+				await testEmptyStringMessage(llm);
+			});
 
-		it("should handle whitespace-only content", async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+			it("should handle whitespace-only content", async () => {
+				await testWhitespaceOnlyMessage(llm);
+			});
 
-		it("should handle empty assistant message in conversation", async () => {
-			await testEmptyAssistantMessage(llm);
-		});
-	});
+			it("should handle empty assistant message in conversation", async () => {
+				await testEmptyAssistantMessage(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.ZAI_API_KEY)("zAI Provider Empty Messages", () => {
-		const llm = getModel("zai", "glm-4.5-air");
+	describe.skipIf(!process.env.ZAI_API_KEY)(
+		"zAI Provider Empty Messages",
+		() => {
+			const llm = getModel("zai", "glm-4.5-air");
 
-		it("should handle empty content array", async () => {
-			await testEmptyMessage(llm);
-		});
+			it("should handle empty content array", async () => {
+				await testEmptyMessage(llm);
+			});
 
-		it("should handle empty string content", async () => {
-			await testEmptyStringMessage(llm);
-		});
+			it("should handle empty string content", async () => {
+				await testEmptyStringMessage(llm);
+			});
 
-		it("should handle whitespace-only content", async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+			it("should handle whitespace-only content", async () => {
+				await testWhitespaceOnlyMessage(llm);
+			});
 
-		it("should handle empty assistant message in conversation", async () => {
-			await testEmptyAssistantMessage(llm);
-		});
-	});
+			it("should handle empty assistant message in conversation", async () => {
+				await testEmptyAssistantMessage(llm);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider Empty Messages", () => {
-		const llm = getModel("mistral", "devstral-medium-latest");
+	describe.skipIf(!process.env.MISTRAL_API_KEY)(
+		"Mistral Provider Empty Messages",
+		() => {
+			const llm = getModel("mistral", "devstral-medium-latest");
 
-		it("should handle empty content array", async () => {
-			await testEmptyMessage(llm);
-		});
+			it("should handle empty content array", async () => {
+				await testEmptyMessage(llm);
+			});
 
-		it("should handle empty string content", async () => {
-			await testEmptyStringMessage(llm);
-		});
+			it("should handle empty string content", async () => {
+				await testEmptyStringMessage(llm);
+			});
 
-		it("should handle whitespace-only content", async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+			it("should handle whitespace-only content", async () => {
+				await testWhitespaceOnlyMessage(llm);
+			});
 
-		it("should handle empty assistant message in conversation", async () => {
-			await testEmptyAssistantMessage(llm);
-		});
-	});
+			it("should handle empty assistant message in conversation", async () => {
+				await testEmptyAssistantMessage(llm);
+			});
+		},
+	);
 });

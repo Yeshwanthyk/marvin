@@ -20,6 +20,11 @@ import {
 import type { ProxyAssistantMessageEvent } from "./proxy-types.js";
 import type { AgentRunConfig, AgentTransport } from "./types.js";
 
+/** ToolCall with streaming accumulator for partial JSON reconstruction */
+interface StreamingToolCall extends ToolCall {
+	partialJson: string;
+}
+
 /**
  * Stream function that proxies through a server instead of calling providers directly.
  * The server strips the partial field from delta events to reduce bandwidth.
@@ -53,7 +58,7 @@ function streamSimpleProxy(
 			timestamp: Date.now(),
 		};
 
-		let reader: import("node:stream/web").ReadableStreamDefaultReader<any> | undefined;
+		let reader: import("node:stream/web").ReadableStreamDefaultReader<Uint8Array> | undefined;
 
 		// Set up abort handler to cancel the reader
 		const abortHandler = () => {
@@ -226,22 +231,24 @@ function streamSimpleProxy(
 									break;
 								}
 
-								case "toolcall_start":
-									partial.content[proxyEvent.contentIndex] = {
+								case "toolcall_start": {
+									const streamingToolCall: StreamingToolCall = {
 										type: "toolCall",
 										id: proxyEvent.id,
 										name: proxyEvent.toolName,
 										arguments: {},
 										partialJson: "",
-									} satisfies ToolCall & { partialJson: string } as ToolCall;
+									};
+									partial.content[proxyEvent.contentIndex] = streamingToolCall;
 									event = { type: "toolcall_start", contentIndex: proxyEvent.contentIndex, partial };
 									break;
+								}
 
 								case "toolcall_delta": {
-									const content = partial.content[proxyEvent.contentIndex];
+									const content = partial.content[proxyEvent.contentIndex] as StreamingToolCall | undefined;
 									if (content?.type === "toolCall") {
-										(content as any).partialJson += proxyEvent.delta;
-										content.arguments = parseStreamingJson((content as any).partialJson) || {};
+										content.partialJson += proxyEvent.delta;
+										content.arguments = parseStreamingJson(content.partialJson) || {};
 										event = {
 											type: "toolcall_delta",
 											contentIndex: proxyEvent.contentIndex,
@@ -256,13 +263,14 @@ function streamSimpleProxy(
 								}
 
 								case "toolcall_end": {
-									const content = partial.content[proxyEvent.contentIndex];
+									const content = partial.content[proxyEvent.contentIndex] as StreamingToolCall | undefined;
 									if (content?.type === "toolCall") {
-										delete (content as any).partialJson;
+										const { partialJson: _, ...toolCall } = content;
+										partial.content[proxyEvent.contentIndex] = toolCall;
 										event = {
 											type: "toolcall_end",
 											contentIndex: proxyEvent.contentIndex,
-											toolCall: content,
+											toolCall,
 											partial,
 										};
 									}
@@ -283,10 +291,11 @@ function streamSimpleProxy(
 									break;
 
 								default: {
-									// Exhaustive check
+									// Exhaustive check - should never reach here if all event types are handled
 									const _exhaustiveCheck: never = proxyEvent;
 									void _exhaustiveCheck;
-									console.warn(`Unhandled event type: ${(proxyEvent as any).type}`);
+									// Runtime defensive logging for unexpected server events
+									console.warn(`Unhandled event type: ${(proxyEvent as { type: unknown }).type}`);
 									break;
 								}
 							}

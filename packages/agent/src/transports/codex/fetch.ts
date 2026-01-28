@@ -8,12 +8,17 @@ export interface CodexFetchOptions {
 	clearTokens: () => Promise<void>;
 }
 
+/** JWT payload structure for ChatGPT tokens */
+interface JwtPayloadWithAccount {
+	[JWT_CLAIM_PATH]?: { chatgpt_account_id?: string };
+}
+
 /**
  * Extract ChatGPT account ID from access token
  */
 function extractAccountId(accessToken: string): string | null {
-	const payload = decodeJWT(accessToken);
-	return (payload?.[JWT_CLAIM_PATH] as any)?.chatgpt_account_id ?? null;
+	const payload = decodeJWT(accessToken) as JwtPayloadWithAccount | null;
+	return payload?.[JWT_CLAIM_PATH]?.chatgpt_account_id ?? null;
 }
 
 /**
@@ -83,8 +88,8 @@ export function createCodexFetch(options: CodexFetchOptions): (input: string | U
 				// Filter input items (remove item_reference, strip IDs)
 				if (Array.isArray(body.input)) {
 					body.input = body.input
-						.filter((item: any) => item.type !== "item_reference")
-						.map(({ id, ...rest }: any) => rest);
+						.filter((item: { type?: string }) => item.type !== "item_reference")
+						.map(({ id, ...rest }: { id?: unknown; [key: string]: unknown }) => rest);
 				}
 
 				init = { ...init, body: JSON.stringify(body) };

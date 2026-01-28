@@ -36,7 +36,8 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
 
   const rest: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i]!;
+    const a = argv[i];
+    if (a === undefined) continue;
     if (!a.startsWith('-') && !args.command && rest.length === 0 && a === 'validate') {
       args.command = 'validate';
       continue;

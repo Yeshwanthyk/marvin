@@ -436,7 +436,10 @@ async function generateModels() {
 	// glm-4.7-free returns "Incorrect role information", grok-code also fails
 	const opencodeNoDeveloperRole = ["glm-4.7-free", "grok-code"];
 	for (const model of allModels) {
-		if (model.provider === "opencode" && opencodeNoDeveloperRole.includes(model.id)) {
+		if (
+			model.provider === "opencode" &&
+			opencodeNoDeveloperRole.includes(model.id)
+		) {
 			model.compat = { supportsDeveloperRole: false };
 		}
 	}

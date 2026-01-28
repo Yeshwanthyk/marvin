@@ -2,7 +2,15 @@ import { Type } from "@sinclair/typebox";
 import { describe, expect, it } from "vitest";
 import { getModel } from "../src/models.js";
 import { complete } from "../src/stream.js";
-import type { Api, AssistantMessage, Context, Message, Model, Tool, ToolResultMessage } from "../src/types.js";
+import type {
+	Api,
+	AssistantMessage,
+	Context,
+	Message,
+	Model,
+	Tool,
+	ToolResultMessage,
+} from "../src/types.js";
 
 // Tool for testing
 const weatherSchema = Type.Object({
@@ -25,7 +33,8 @@ const providerContexts = {
 			content: [
 				{
 					type: "thinking",
-					thinking: "Let me calculate 17 * 23. That's 17 * 20 + 17 * 3 = 340 + 51 = 391",
+					thinking:
+						"Let me calculate 17 * 23. That's 17 * 20 + 17 * 3 = 340 + 51 = 391",
 					thinkingSignature: "signature_abc123",
 				},
 				{
@@ -56,7 +65,9 @@ const providerContexts = {
 			role: "toolResult" as const,
 			toolCallId: "toolu_01abc123",
 			toolName: "get_weather",
-			content: [{ type: "text", text: "Weather in Tokyo: 18°C, partly cloudy" }],
+			content: [
+				{ type: "text", text: "Weather in Tokyo: 18°C, partly cloudy" },
+			],
 			isError: false,
 			timestamp: Date.now(),
 		} satisfies ToolResultMessage,
@@ -274,10 +285,14 @@ async function testProviderHandoff<TApi extends Api>(
 ): Promise<boolean> {
 	// Build conversation context
 	let assistantMessage: AssistantMessage = sourceContext.message;
-	let toolResult: ToolResultMessage | undefined | null = sourceContext.toolResult;
+	let toolResult: ToolResultMessage | undefined | null =
+		sourceContext.toolResult;
 
 	// If target is Mistral, convert tool call IDs to Mistral format
-	if (targetModel.provider === "mistral" && assistantMessage.content.some((c) => c.type === "toolCall")) {
+	if (
+		targetModel.provider === "mistral" &&
+		assistantMessage.content.some((c) => c.type === "toolCall")
+	) {
 		// Clone the message to avoid mutating the original
 		assistantMessage = {
 			...assistantMessage,
@@ -306,7 +321,8 @@ async function testProviderHandoff<TApi extends Api>(
 	const messages: Message[] = [
 		{
 			role: "user",
-			content: "Please do some calculations, tell me about capitals, and check the weather.",
+			content:
+				"Please do some calculations, tell me about capitals, and check the weather.",
 			timestamp: Date.now(),
 		},
 		assistantMessage,
@@ -339,7 +355,9 @@ async function testProviderHandoff<TApi extends Api>(
 
 		// Check for error
 		if (response.stopReason === "error") {
-			console.log(`[${sourceLabel} → ${targetModel.provider}] Failed with error: ${response.errorMessage}`);
+			console.log(
+				`[${sourceLabel} → ${targetModel.provider}] Failed with error: ${response.errorMessage}`,
+			);
 			return false;
 		}
 
@@ -356,7 +374,9 @@ async function testProviderHandoff<TApi extends Api>(
 			const hasThinking = response.content.some((b) => b.type === "thinking");
 			const hasText = response.content.some((b) => b.type === "text");
 
-			expect(response.stopReason === "stop" || response.stopReason === "toolUse").toBe(true);
+			expect(
+				response.stopReason === "stop" || response.stopReason === "toolUse",
+			).toBe(true);
 			expect(hasThinking || hasText || hasToolCalls).toBe(true);
 			console.log(
 				`[${sourceLabel} → ${targetModel.provider}] Handled aborted message successfully, tool calls: ${hasToolCalls}, thinking: ${hasThinking}, text: ${hasText}`,
@@ -365,204 +385,354 @@ async function testProviderHandoff<TApi extends Api>(
 		}
 
 		// Check if response contains our facts
-		const hasCalculation = responseText.includes(sourceContext.facts.calculation.toString());
+		const hasCalculation = responseText.includes(
+			sourceContext.facts.calculation.toString(),
+		);
 		const hasCity =
-			sourceContext.facts.city !== "none" && responseText.includes(sourceContext.facts.city.toLowerCase());
+			sourceContext.facts.city !== "none" &&
+			responseText.includes(sourceContext.facts.city.toLowerCase());
 		const hasTemperature =
-			sourceContext.facts.temperature > 0 && responseText.includes(sourceContext.facts.temperature.toString());
+			sourceContext.facts.temperature > 0 &&
+			responseText.includes(sourceContext.facts.temperature.toString());
 		const hasCapital =
-			sourceContext.facts.capital !== "none" && responseText.includes(sourceContext.facts.capital.toLowerCase());
+			sourceContext.facts.capital !== "none" &&
+			responseText.includes(sourceContext.facts.capital.toLowerCase());
 
 		const success = hasCalculation && hasCity && hasTemperature && hasCapital;
 
 		console.log(`[${sourceLabel} → ${targetModel.provider}] Handoff test:`);
 		if (!success) {
-			console.log(`  Calculation (${sourceContext.facts.calculation}): ${hasCalculation ? "✓" : "✗"}`);
-			console.log(`  City (${sourceContext.facts.city}): ${hasCity ? "✓" : "✗"}`);
-			console.log(`  Temperature (${sourceContext.facts.temperature}): ${hasTemperature ? "✓" : "✗"}`);
-			console.log(`  Capital (${sourceContext.facts.capital}): ${hasCapital ? "✓" : "✗"}`);
+			console.log(
+				`  Calculation (${sourceContext.facts.calculation}): ${hasCalculation ? "✓" : "✗"}`,
+			);
+			console.log(
+				`  City (${sourceContext.facts.city}): ${hasCity ? "✓" : "✗"}`,
+			);
+			console.log(
+				`  Temperature (${sourceContext.facts.temperature}): ${hasTemperature ? "✓" : "✗"}`,
+			);
+			console.log(
+				`  Capital (${sourceContext.facts.capital}): ${hasCapital ? "✓" : "✗"}`,
+			);
 		} else {
 			console.log(`  ✓ All facts found`);
 		}
 
 		return success;
 	} catch (error) {
-		console.error(`[${sourceLabel} → ${targetModel.provider}] Exception:`, error);
+		console.error(
+			`[${sourceLabel} → ${targetModel.provider}] Exception:`,
+			error,
+		);
 		return false;
 	}
 }
 
 describe("Cross-Provider Handoff Tests", () => {
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider Handoff", () => {
-		const model = getModel("anthropic", "claude-3-5-haiku-20241022");
+	describe.skipIf(!process.env.ANTHROPIC_API_KEY)(
+		"Anthropic Provider Handoff",
+		() => {
+			const model = getModel("anthropic", "claude-3-5-haiku-20241022");
 
-		it("should handle contexts from all providers", async () => {
-			console.log("\nTesting Anthropic with pre-built contexts:\n");
+			it("should handle contexts from all providers", async () => {
+				console.log("\nTesting Anthropic with pre-built contexts:\n");
 
-			const contextTests = [
-				{ label: "Anthropic-style", context: providerContexts.anthropic, sourceModel: "claude-3-5-haiku-20241022" },
-				{ label: "Google-style", context: providerContexts.google, sourceModel: "gemini-2.5-flash" },
-				{ label: "OpenAI-Completions", context: providerContexts.openaiCompletions, sourceModel: "gpt-4o-mini" },
-				{ label: "OpenAI-Responses", context: providerContexts.openaiResponses, sourceModel: "gpt-5-mini" },
-				{ label: "Aborted", context: providerContexts.aborted, sourceModel: null },
-			];
+				const contextTests = [
+					{
+						label: "Anthropic-style",
+						context: providerContexts.anthropic,
+						sourceModel: "claude-3-5-haiku-20241022",
+					},
+					{
+						label: "Google-style",
+						context: providerContexts.google,
+						sourceModel: "gemini-2.5-flash",
+					},
+					{
+						label: "OpenAI-Completions",
+						context: providerContexts.openaiCompletions,
+						sourceModel: "gpt-4o-mini",
+					},
+					{
+						label: "OpenAI-Responses",
+						context: providerContexts.openaiResponses,
+						sourceModel: "gpt-5-mini",
+					},
+					{
+						label: "Aborted",
+						context: providerContexts.aborted,
+						sourceModel: null,
+					},
+				];
 
-			let successCount = 0;
-			let skippedCount = 0;
+				let successCount = 0;
+				let skippedCount = 0;
 
-			for (const { label, context, sourceModel } of contextTests) {
-				// Skip testing same model against itself
-				if (sourceModel && sourceModel === model.id) {
-					console.log(`[${label} → ${model.provider}] Skipping same-model test`);
-					skippedCount++;
-					continue;
+				for (const { label, context, sourceModel } of contextTests) {
+					// Skip testing same model against itself
+					if (sourceModel && sourceModel === model.id) {
+						console.log(
+							`[${label} → ${model.provider}] Skipping same-model test`,
+						);
+						skippedCount++;
+						continue;
+					}
+					const success = await testProviderHandoff(model, label, context);
+					if (success) successCount++;
 				}
-				const success = await testProviderHandoff(model, label, context);
-				if (success) successCount++;
-			}
 
-			const totalTests = contextTests.length - skippedCount;
-			console.log(`\nAnthropic success rate: ${successCount}/${totalTests} (${skippedCount} skipped)\n`);
+				const totalTests = contextTests.length - skippedCount;
+				console.log(
+					`\nAnthropic success rate: ${successCount}/${totalTests} (${skippedCount} skipped)\n`,
+				);
 
-			// All non-skipped handoffs should succeed
-			expect(successCount).toBe(totalTests);
-		});
-	});
+				// All non-skipped handoffs should succeed
+				expect(successCount).toBe(totalTests);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.GEMINI_API_KEY)("Google Provider Handoff", () => {
-		const model = getModel("google", "gemini-2.5-flash");
+	describe.skipIf(!process.env.GEMINI_API_KEY)(
+		"Google Provider Handoff",
+		() => {
+			const model = getModel("google", "gemini-2.5-flash");
 
-		it("should handle contexts from all providers", async () => {
-			console.log("\nTesting Google with pre-built contexts:\n");
+			it("should handle contexts from all providers", async () => {
+				console.log("\nTesting Google with pre-built contexts:\n");
 
-			const contextTests = [
-				{ label: "Anthropic-style", context: providerContexts.anthropic, sourceModel: "claude-3-5-haiku-20241022" },
-				{ label: "Google-style", context: providerContexts.google, sourceModel: "gemini-2.5-flash" },
-				{ label: "OpenAI-Completions", context: providerContexts.openaiCompletions, sourceModel: "gpt-4o-mini" },
-				{ label: "OpenAI-Responses", context: providerContexts.openaiResponses, sourceModel: "gpt-5-mini" },
-				{ label: "Aborted", context: providerContexts.aborted, sourceModel: null },
-			];
+				const contextTests = [
+					{
+						label: "Anthropic-style",
+						context: providerContexts.anthropic,
+						sourceModel: "claude-3-5-haiku-20241022",
+					},
+					{
+						label: "Google-style",
+						context: providerContexts.google,
+						sourceModel: "gemini-2.5-flash",
+					},
+					{
+						label: "OpenAI-Completions",
+						context: providerContexts.openaiCompletions,
+						sourceModel: "gpt-4o-mini",
+					},
+					{
+						label: "OpenAI-Responses",
+						context: providerContexts.openaiResponses,
+						sourceModel: "gpt-5-mini",
+					},
+					{
+						label: "Aborted",
+						context: providerContexts.aborted,
+						sourceModel: null,
+					},
+				];
 
-			let successCount = 0;
-			let skippedCount = 0;
+				let successCount = 0;
+				let skippedCount = 0;
 
-			for (const { label, context, sourceModel } of contextTests) {
-				// Skip testing same model against itself
-				if (sourceModel && sourceModel === model.id) {
-					console.log(`[${label} → ${model.provider}] Skipping same-model test`);
-					skippedCount++;
-					continue;
+				for (const { label, context, sourceModel } of contextTests) {
+					// Skip testing same model against itself
+					if (sourceModel && sourceModel === model.id) {
+						console.log(
+							`[${label} → ${model.provider}] Skipping same-model test`,
+						);
+						skippedCount++;
+						continue;
+					}
+					const success = await testProviderHandoff(model, label, context);
+					if (success) successCount++;
 				}
-				const success = await testProviderHandoff(model, label, context);
-				if (success) successCount++;
-			}
 
-			const totalTests = contextTests.length - skippedCount;
-			console.log(`\nGoogle success rate: ${successCount}/${totalTests} (${skippedCount} skipped)\n`);
+				const totalTests = contextTests.length - skippedCount;
+				console.log(
+					`\nGoogle success rate: ${successCount}/${totalTests} (${skippedCount} skipped)\n`,
+				);
 
-			// All non-skipped handoffs should succeed
-			expect(successCount).toBe(totalTests);
-		});
-	});
+				// All non-skipped handoffs should succeed
+				expect(successCount).toBe(totalTests);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider Handoff", () => {
-		const model: Model<"openai-completions"> = { ...getModel("openai", "gpt-4o-mini"), api: "openai-completions" };
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Completions Provider Handoff",
+		() => {
+			const model: Model<"openai-completions"> = {
+				...getModel("openai", "gpt-4o-mini"),
+				api: "openai-completions",
+			};
 
-		it("should handle contexts from all providers", async () => {
-			console.log("\nTesting OpenAI Completions with pre-built contexts:\n");
+			it("should handle contexts from all providers", async () => {
+				console.log("\nTesting OpenAI Completions with pre-built contexts:\n");
 
-			const contextTests = [
-				{ label: "Anthropic-style", context: providerContexts.anthropic, sourceModel: "claude-3-5-haiku-20241022" },
-				{ label: "Google-style", context: providerContexts.google, sourceModel: "gemini-2.5-flash" },
-				{ label: "OpenAI-Completions", context: providerContexts.openaiCompletions, sourceModel: "gpt-4o-mini" },
-				{ label: "OpenAI-Responses", context: providerContexts.openaiResponses, sourceModel: "gpt-5-mini" },
-				{ label: "Aborted", context: providerContexts.aborted, sourceModel: null },
-			];
+				const contextTests = [
+					{
+						label: "Anthropic-style",
+						context: providerContexts.anthropic,
+						sourceModel: "claude-3-5-haiku-20241022",
+					},
+					{
+						label: "Google-style",
+						context: providerContexts.google,
+						sourceModel: "gemini-2.5-flash",
+					},
+					{
+						label: "OpenAI-Completions",
+						context: providerContexts.openaiCompletions,
+						sourceModel: "gpt-4o-mini",
+					},
+					{
+						label: "OpenAI-Responses",
+						context: providerContexts.openaiResponses,
+						sourceModel: "gpt-5-mini",
+					},
+					{
+						label: "Aborted",
+						context: providerContexts.aborted,
+						sourceModel: null,
+					},
+				];
 
-			let successCount = 0;
-			let skippedCount = 0;
+				let successCount = 0;
+				let skippedCount = 0;
 
-			for (const { label, context, sourceModel } of contextTests) {
-				// Skip testing same model against itself
-				if (sourceModel && sourceModel === model.id) {
-					console.log(`[${label} → ${model.provider}] Skipping same-model test`);
-					skippedCount++;
-					continue;
+				for (const { label, context, sourceModel } of contextTests) {
+					// Skip testing same model against itself
+					if (sourceModel && sourceModel === model.id) {
+						console.log(
+							`[${label} → ${model.provider}] Skipping same-model test`,
+						);
+						skippedCount++;
+						continue;
+					}
+					const success = await testProviderHandoff(model, label, context);
+					if (success) successCount++;
 				}
-				const success = await testProviderHandoff(model, label, context);
-				if (success) successCount++;
-			}
 
-			const totalTests = contextTests.length - skippedCount;
-			console.log(`\nOpenAI Completions success rate: ${successCount}/${totalTests} (${skippedCount} skipped)\n`);
+				const totalTests = contextTests.length - skippedCount;
+				console.log(
+					`\nOpenAI Completions success rate: ${successCount}/${totalTests} (${skippedCount} skipped)\n`,
+				);
 
-			// All non-skipped handoffs should succeed
-			expect(successCount).toBe(totalTests);
-		});
-	});
+				// All non-skipped handoffs should succeed
+				expect(successCount).toBe(totalTests);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider Handoff", () => {
-		const model = getModel("openai", "gpt-5-mini");
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Responses Provider Handoff",
+		() => {
+			const model = getModel("openai", "gpt-5-mini");
 
-		it("should handle contexts from all providers", async () => {
-			console.log("\nTesting OpenAI Responses with pre-built contexts:\n");
+			it("should handle contexts from all providers", async () => {
+				console.log("\nTesting OpenAI Responses with pre-built contexts:\n");
 
-			const contextTests = [
-				{ label: "Anthropic-style", context: providerContexts.anthropic, sourceModel: "claude-3-5-haiku-20241022" },
-				{ label: "Google-style", context: providerContexts.google, sourceModel: "gemini-2.5-flash" },
-				{ label: "OpenAI-Completions", context: providerContexts.openaiCompletions, sourceModel: "gpt-4o-mini" },
-				{ label: "OpenAI-Responses", context: providerContexts.openaiResponses, sourceModel: "gpt-5-mini" },
-				{ label: "Aborted", context: providerContexts.aborted, sourceModel: null },
-			];
+				const contextTests = [
+					{
+						label: "Anthropic-style",
+						context: providerContexts.anthropic,
+						sourceModel: "claude-3-5-haiku-20241022",
+					},
+					{
+						label: "Google-style",
+						context: providerContexts.google,
+						sourceModel: "gemini-2.5-flash",
+					},
+					{
+						label: "OpenAI-Completions",
+						context: providerContexts.openaiCompletions,
+						sourceModel: "gpt-4o-mini",
+					},
+					{
+						label: "OpenAI-Responses",
+						context: providerContexts.openaiResponses,
+						sourceModel: "gpt-5-mini",
+					},
+					{
+						label: "Aborted",
+						context: providerContexts.aborted,
+						sourceModel: null,
+					},
+				];
 
-			let successCount = 0;
-			let skippedCount = 0;
+				let successCount = 0;
+				let skippedCount = 0;
 
-			for (const { label, context, sourceModel } of contextTests) {
-				// Skip testing same model against itself
-				if (sourceModel && sourceModel === model.id) {
-					console.log(`[${label} → ${model.provider}] Skipping same-model test`);
-					skippedCount++;
-					continue;
+				for (const { label, context, sourceModel } of contextTests) {
+					// Skip testing same model against itself
+					if (sourceModel && sourceModel === model.id) {
+						console.log(
+							`[${label} → ${model.provider}] Skipping same-model test`,
+						);
+						skippedCount++;
+						continue;
+					}
+					const success = await testProviderHandoff(model, label, context);
+					if (success) successCount++;
 				}
-				const success = await testProviderHandoff(model, label, context);
-				if (success) successCount++;
-			}
 
-			const totalTests = contextTests.length - skippedCount;
-			console.log(`\nOpenAI Responses success rate: ${successCount}/${totalTests} (${skippedCount} skipped)\n`);
+				const totalTests = contextTests.length - skippedCount;
+				console.log(
+					`\nOpenAI Responses success rate: ${successCount}/${totalTests} (${skippedCount} skipped)\n`,
+				);
 
-			// All non-skipped handoffs should succeed
-			expect(successCount).toBe(totalTests);
-		});
-	});
+				// All non-skipped handoffs should succeed
+				expect(successCount).toBe(totalTests);
+			});
+		},
+	);
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider Handoff", () => {
-		const model = getModel("mistral", "devstral-medium-latest");
+	describe.skipIf(!process.env.MISTRAL_API_KEY)(
+		"Mistral Provider Handoff",
+		() => {
+			const model = getModel("mistral", "devstral-medium-latest");
 
-		it("should handle contexts from all providers", async () => {
-			console.log("\nTesting Mistral with pre-built contexts:\n");
+			it("should handle contexts from all providers", async () => {
+				console.log("\nTesting Mistral with pre-built contexts:\n");
 
-			const contextTests = [
-				{ label: "Anthropic-style", context: providerContexts.anthropic, sourceModel: "claude-3-5-haiku-20241022" },
-				{ label: "Google-style", context: providerContexts.google, sourceModel: "gemini-2.5-flash" },
-				{ label: "OpenAI-Completions", context: providerContexts.openaiCompletions, sourceModel: "gpt-4o-mini" },
-				{ label: "OpenAI-Responses", context: providerContexts.openaiResponses, sourceModel: "gpt-5-mini" },
-				{ label: "Aborted", context: providerContexts.aborted, sourceModel: null },
-			];
+				const contextTests = [
+					{
+						label: "Anthropic-style",
+						context: providerContexts.anthropic,
+						sourceModel: "claude-3-5-haiku-20241022",
+					},
+					{
+						label: "Google-style",
+						context: providerContexts.google,
+						sourceModel: "gemini-2.5-flash",
+					},
+					{
+						label: "OpenAI-Completions",
+						context: providerContexts.openaiCompletions,
+						sourceModel: "gpt-4o-mini",
+					},
+					{
+						label: "OpenAI-Responses",
+						context: providerContexts.openaiResponses,
+						sourceModel: "gpt-5-mini",
+					},
+					{
+						label: "Aborted",
+						context: providerContexts.aborted,
+						sourceModel: null,
+					},
+				];
 
-			let successCount = 0;
-			const totalTests = contextTests.length;
+				let successCount = 0;
+				const totalTests = contextTests.length;
 
-			for (const { label, context, sourceModel } of contextTests) {
-				const success = await testProviderHandoff(model, label, context);
-				if (success) successCount++;
-			}
+				for (const { label, context, sourceModel } of contextTests) {
+					const success = await testProviderHandoff(model, label, context);
+					if (success) successCount++;
+				}
 
-			console.log(`\nMistral success rate: ${successCount}/${totalTests}\n`);
+				console.log(`\nMistral success rate: ${successCount}/${totalTests}\n`);
 
-			// All handoffs should succeed
-			expect(successCount).toBe(totalTests);
-		}, 60000);
-	});
+				// All handoffs should succeed
+				expect(successCount).toBe(totalTests);
+			}, 60000);
+		},
+	);
 });

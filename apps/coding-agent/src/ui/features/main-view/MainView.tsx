@@ -144,11 +144,12 @@ export function MainView(props: MainViewProps) {
 		if (!showAutocomplete() || !textareaRef) return false
 		const items = autocompleteItems()
 		const idx = autocompleteIndex()
-		if (idx < 0 || idx >= items.length) return false
+		const selectedItem = items[idx]
+		if (idx < 0 || idx >= items.length || !selectedItem) return false
 		const cursor = textareaRef.logicalCursor
 		const text = textareaRef.plainText
 		const lines = text.split("\n")
-		const result = autocompleteProvider.applyCompletion(lines, cursor.row, cursor.col, items[idx]!, autocompletePrefix())
+		const result = autocompleteProvider.applyCompletion(lines, cursor.row, cursor.col, selectedItem, autocompletePrefix())
 		const newText = result.lines.join("\n")
 		if (newText === text) {
 			setShowAutocomplete(false)

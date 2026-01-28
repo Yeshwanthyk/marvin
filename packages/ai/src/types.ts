@@ -59,7 +59,10 @@ export interface StreamOptions {
 
 // Unified options with reasoning passed to streamSimple() and completeSimple()
 /** Custom fetch function type (compatible with standard fetch signature) */
-export type FetchFunction = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+export type FetchFunction = (
+	input: string | URL | Request,
+	init?: RequestInit,
+) => Promise<Response>;
 
 export interface SimpleStreamOptions extends StreamOptions {
 	reasoning?: ReasoningEffort;

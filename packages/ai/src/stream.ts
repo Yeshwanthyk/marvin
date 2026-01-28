@@ -12,7 +12,6 @@ import {
 	type OpenAIResponsesOptions,
 	streamOpenAIResponses,
 } from "./providers/openai-responses.js";
-import type { AssistantMessageEventStream } from "./utils/event-stream.js";
 import type {
 	Api,
 	AssistantMessage,
@@ -20,22 +19,25 @@ import type {
 	KnownProvider,
 	Model,
 	OptionsForApi,
-	StreamOptions,
 	ReasoningEffort,
 	SimpleStreamOptions,
+	StreamOptions,
 } from "./types.js";
+import type { AssistantMessageEventStream } from "./utils/event-stream.js";
 
 const apiKeys: Map<string, string> = new Map();
 
 export function setApiKey(provider: KnownProvider, key: string): void;
 export function setApiKey(provider: string, key: string): void;
-export function setApiKey(provider: any, key: string): void {
+export function setApiKey(provider: KnownProvider | string, key: string): void {
 	apiKeys.set(provider, key);
 }
 
 export function getApiKey(provider: KnownProvider): string | undefined;
 export function getApiKey(provider: string): string | undefined;
-export function getApiKey(provider: any): string | undefined {
+export function getApiKey(
+	provider: KnownProvider | string,
+): string | undefined {
 	// Check explicit keys first
 	const key = apiKeys.get(provider);
 	if (key) return key;
@@ -91,14 +93,14 @@ export function stream<TApi extends Api>(
 			return streamOpenAICompletions(
 				model as Model<"openai-completions">,
 				context,
-				providerOptions as any,
+				providerOptions as OpenAICompletionsOptions,
 			);
 
 		case "openai-responses":
 			return streamOpenAIResponses(
 				model as Model<"openai-responses">,
 				context,
-				providerOptions as any,
+				providerOptions as OpenAIResponsesOptions,
 			);
 
 		case "google-generative-ai":
@@ -172,13 +174,23 @@ function mapOptionsForApi<TApi extends Api>(
 	}
 
 	// Helper to clamp xhigh to high for providers that don't support it
-	const clampReasoning = (effort: ReasoningEffort | undefined) =>
-		effort === "xhigh" ? "high" : effort;
+	function clampReasoning(
+		effort: ReasoningEffort,
+	): Exclude<ReasoningEffort, "xhigh">;
+	function clampReasoning(
+		effort: ReasoningEffort | undefined,
+	): Exclude<ReasoningEffort, "xhigh"> | undefined;
+	function clampReasoning(
+		effort: ReasoningEffort | undefined,
+	): Exclude<ReasoningEffort, "xhigh"> | undefined {
+		return effort === "xhigh" ? "high" : effort;
+	}
 
 	switch (model.api) {
 		case "anthropic-messages": {
 			// Explicitly disable thinking when reasoning is not specified
-			if (!options?.reasoning) {
+			const reasoning = options?.reasoning;
+			if (!reasoning) {
 				return { ...base, thinkingEnabled: false } satisfies AnthropicOptions;
 			}
 
@@ -192,8 +204,7 @@ function mapOptionsForApi<TApi extends Api>(
 			return {
 				...base,
 				thinkingEnabled: true,
-				thinkingBudgetTokens:
-					anthropicBudgets[clampReasoning(options.reasoning)!],
+				thinkingBudgetTokens: anthropicBudgets[clampReasoning(reasoning)],
 			} satisfies AnthropicOptions;
 		}
 
@@ -211,14 +222,17 @@ function mapOptionsForApi<TApi extends Api>(
 				...base,
 				...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
 				...(options?.fetch ? { fetch: options.fetch } : {}),
-				...(options?.instructions !== undefined ? { instructions: options.instructions } : {}),
+				...(options?.instructions !== undefined
+					? { instructions: options.instructions }
+					: {}),
 			} satisfies OpenAIResponsesOptions;
 		}
 
 		case "google-generative-ai": {
 			// Explicitly disable thinking when reasoning is not specified
 			// This is needed because Gemini has "dynamic thinking" enabled by default
-			if (!options?.reasoning) {
+			const reasoning = options?.reasoning;
+			if (!reasoning) {
 				return {
 					...base,
 					thinking: { enabled: false },
@@ -226,7 +240,7 @@ function mapOptionsForApi<TApi extends Api>(
 			}
 
 			const googleModel = model as Model<"google-generative-ai">;
-			const effort = clampReasoning(options.reasoning)!;
+			const effort = clampReasoning(reasoning);
 
 			// Gemini 3 Pro models use thinkingLevel exclusively instead of thinkingBudget.
 			// https://ai.google.dev/gemini-api/docs/thinking#set-budget

@@ -3,6 +3,7 @@ import {
 	type AgentLoopConfig,
 	agentLoop,
 	agentLoopContinue,
+	type Api,
 	type Message,
 	type Model,
 	type UserMessage,
@@ -47,10 +48,10 @@ export class CodexTransport implements AgentTransport {
 	 * Build a correctly-shaped OpenAI Responses config for one-off calls (e.g. /compact).
 	 * Mirrors the model/option overrides used in `run()`.
 	 */
-	async getDirectCallConfig(baseModel: Model<any>) {
-		const { compat: _compat, ...rest } = baseModel as Model<any>;
+	async getDirectCallConfig<T extends Api>(baseModel: Model<T>) {
+		const { compat: _compat, ...rest } = baseModel;
 		const model: Model<"openai-responses"> = {
-			...(rest as Omit<Model<any>, "compat">),
+			...(rest as Omit<Model<T>, "compat">),
 			baseUrl: "https://api.openai.com/v1",
 			provider: "openai" as const,
 			api: "openai-responses" as const,

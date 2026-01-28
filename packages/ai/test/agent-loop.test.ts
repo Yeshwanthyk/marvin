@@ -1,19 +1,30 @@
-import { describe, expect, it } from "vitest";
 import { Type } from "@sinclair/typebox";
+import { describe, expect, it } from "vitest";
 import { agentLoop } from "../src/agent/agent-loop.js";
 import type {
 	AgentContext,
+	AgentEvent,
 	AgentLoopConfig,
 	AgentTool,
-	AgentEvent,
-	QueuedMessage,
 	QueueDeliveryMode,
+	QueuedMessage,
 } from "../src/agent/types.js";
-import type { AssistantMessage, Message, Model, StopReason, ToolCall, UserMessage } from "../src/types.js";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.js";
 import { getModel } from "../src/models.js";
+import type {
+	AssistantMessage,
+	Message,
+	Model,
+	StopReason,
+	ToolCall,
+	UserMessage,
+} from "../src/types.js";
+import { AssistantMessageEventStream } from "../src/utils/event-stream.js";
 
-function createAssistantMessage(model: Model<any>, content: AssistantMessage["content"], stopReason: StopReason): AssistantMessage {
+function createAssistantMessage(
+	model: Model<any>,
+	content: AssistantMessage["content"],
+	stopReason: StopReason,
+): AssistantMessage {
 	return {
 		role: "assistant",
 		content,
@@ -41,7 +52,10 @@ function createUserMessage(text: string): UserMessage {
 	};
 }
 
-function createQueuedMessage(text: string, mode: QueueDeliveryMode): QueuedMessage {
+function createQueuedMessage(
+	text: string,
+	mode: QueueDeliveryMode,
+): QueuedMessage {
 	const userMessage = createUserMessage(text);
 	return {
 		original: userMessage,
@@ -82,7 +96,10 @@ describe("agentLoop steering/follow-up parity", () => {
 				parameters: Type.Object({}, { additionalProperties: false }),
 				async execute() {
 					steeringQueue.push(createQueuedMessage("steer now", "steer"));
-					return { content: [{ type: "text", text: "first-result" }], details: {} };
+					return {
+						content: [{ type: "text", text: "first-result" }],
+						details: {},
+					};
 				},
 			},
 			{
@@ -92,7 +109,10 @@ describe("agentLoop steering/follow-up parity", () => {
 				parameters: Type.Object({}, { additionalProperties: false }),
 				async execute() {
 					secondToolExecuted = true;
-					return { content: [{ type: "text", text: "second-result" }], details: {} };
+					return {
+						content: [{ type: "text", text: "second-result" }],
+						details: {},
+					};
 				},
 			},
 		];
@@ -143,7 +163,9 @@ describe("agentLoop steering/follow-up parity", () => {
 
 	it("should only deliver follow-ups once the agent is idle", async () => {
 		const steeringQueue: QueuedMessage[] = [];
-		const followUpQueue: QueuedMessage[] = [createQueuedMessage("queued follow-up", "followUp")];
+		const followUpQueue: QueuedMessage[] = [
+			createQueuedMessage("queued follow-up", "followUp"),
+		];
 		const tools: AgentTool[] = [
 			{
 				name: "slow-tool",
@@ -151,7 +173,10 @@ describe("agentLoop steering/follow-up parity", () => {
 				description: "runs once",
 				parameters: Type.Object({}, { additionalProperties: false }),
 				async execute() {
-					return { content: [{ type: "text", text: "tool-result" }], details: {} };
+					return {
+						content: [{ type: "text", text: "tool-result" }],
+						details: {},
+					};
 				},
 			},
 		];
@@ -175,10 +200,21 @@ describe("agentLoop steering/follow-up parity", () => {
 		const assistantMessages = [
 			createAssistantMessage(
 				model,
-				[{ type: "toolCall", id: "tool-slow", name: "slow-tool", arguments: {} }],
+				[
+					{
+						type: "toolCall",
+						id: "tool-slow",
+						name: "slow-tool",
+						arguments: {},
+					},
+				],
 				"toolUse",
 			),
-			createAssistantMessage(model, [{ type: "text", text: "final-response" }], "stop"),
+			createAssistantMessage(
+				model,
+				[{ type: "text", text: "final-response" }],
+				"stop",
+			),
 		];
 		const streamFn = sequentialStream(assistantMessages);
 
@@ -193,7 +229,8 @@ describe("agentLoop steering/follow-up parity", () => {
 			(event) =>
 				event.type === "message_start" &&
 				(event.message as Message).role === "user" &&
-				(event.message as UserMessage).content?.[0]?.text === "queued follow-up",
+				(event.message as UserMessage).content?.[0]?.text ===
+					"queued follow-up",
 		);
 		let finalAssistantIndex = -1;
 		for (let i = events.length - 1; i >= 0; i--) {

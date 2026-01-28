@@ -1,5 +1,11 @@
 import { streamSimple } from "../stream.js";
-import type { AssistantMessage, Context, Message, ToolResultMessage, UserMessage } from "../types.js";
+import type {
+	AssistantMessage,
+	Context,
+	Message,
+	ToolResultMessage,
+	UserMessage,
+} from "../types.js";
 import { EventStream } from "../utils/event-stream.js";
 import { validateToolArguments } from "../utils/validation.js";
 import type {
@@ -37,7 +43,14 @@ export function agentLoop(
 		stream.push({ type: "message_start", message: prompt });
 		stream.push({ type: "message_end", message: prompt });
 
-		await runLoop(currentContext, newMessages, config, signal, stream, streamFn);
+		await runLoop(
+			currentContext,
+			newMessages,
+			config,
+			signal,
+			stream,
+			streamFn,
+		);
 	})();
 
 	return stream;
@@ -60,7 +73,9 @@ export function agentLoopContinue(
 		throw new Error("Cannot continue: no messages in context");
 	}
 	if (lastMessage.role !== "user" && lastMessage.role !== "toolResult") {
-		throw new Error(`Cannot continue from message role: ${lastMessage.role}. Expected 'user' or 'toolResult'.`);
+		throw new Error(
+			`Cannot continue from message role: ${lastMessage.role}. Expected 'user' or 'toolResult'.`,
+		);
 	}
 
 	const stream = createAgentStream();
@@ -73,13 +88,23 @@ export function agentLoopContinue(
 		stream.push({ type: "turn_start" });
 		// No user message events - we're continuing from existing context
 
-		await runLoop(currentContext, newMessages, config, signal, stream, streamFn);
+		await runLoop(
+			currentContext,
+			newMessages,
+			config,
+			signal,
+			stream,
+			streamFn,
+		);
 	})();
 
 	return stream;
 }
 
-function createAgentStream(): EventStream<AgentEvent, AgentContext["messages"]> {
+function createAgentStream(): EventStream<
+	AgentEvent,
+	AgentContext["messages"]
+> {
 	return new EventStream<AgentEvent, AgentContext["messages"]>(
 		(event: AgentEvent) => event.type === "agent_end",
 		(event: AgentEvent) => (event.type === "agent_end" ? event.messages : []),
@@ -98,7 +123,8 @@ function classifyQueuedMessages(messages: QueuedMessage[] = []): RunLoopQueues {
 	const all: QueuedMessage[] = [];
 	for (const msg of messages) {
 		all.push(msg);
-		const mode: QueueDeliveryMode = (msg.mode as QueueDeliveryMode) || "followUp";
+		const mode: QueueDeliveryMode =
+			(msg.mode as QueueDeliveryMode) || "followUp";
 		if (mode === "steer") {
 			steering.push(msg);
 		} else {
@@ -126,11 +152,23 @@ async function runLoop(
 		const general = await config.getQueuedMessages?.();
 		const steering = await config.getSteeringMessages?.();
 		const followUps = await config.getFollowUpMessages?.();
-		const classifiedGeneral = classifyQueuedMessages((general || []) as QueuedMessage[]);
-		const classifiedSteering = classifyQueuedMessages((steering || []) as QueuedMessage[]);
-		const classifiedFollowUps = classifyQueuedMessages((followUps || []) as QueuedMessage[]);
-		const steeringUpdates = [...classifiedGeneral.steering, ...classifiedSteering.all];
-		const followUpUpdates = [...classifiedGeneral.followUps, ...classifiedFollowUps.all];
+		const classifiedGeneral = classifyQueuedMessages(
+			(general || []) as QueuedMessage[],
+		);
+		const classifiedSteering = classifyQueuedMessages(
+			(steering || []) as QueuedMessage[],
+		);
+		const classifiedFollowUps = classifyQueuedMessages(
+			(followUps || []) as QueuedMessage[],
+		);
+		const steeringUpdates = [
+			...classifiedGeneral.steering,
+			...classifiedSteering.all,
+		];
+		const followUpUpdates = [
+			...classifiedGeneral.followUps,
+			...classifiedFollowUps.all,
+		];
 		const generalUpdates = classifiedGeneral.all;
 
 		if (steeringUpdates.length > 0) {
@@ -146,7 +184,12 @@ async function runLoop(
 
 	await refreshQueueState();
 
-	while (hasMoreToolCalls || pendingSteering.length > 0 || pendingFollowUps.length > 0 || pendingGeneral.length > 0) {
+	while (
+		hasMoreToolCalls ||
+		pendingSteering.length > 0 ||
+		pendingFollowUps.length > 0 ||
+		pendingGeneral.length > 0
+	) {
 		if (!firstTurn) {
 			stream.push({ type: "turn_start" });
 		} else {
@@ -167,7 +210,13 @@ async function runLoop(
 		}
 
 		// Stream assistant response
-		const message = await streamAssistantResponse(currentContext, config, signal, stream, streamFn);
+		const message = await streamAssistantResponse(
+			currentContext,
+			config,
+			signal,
+			stream,
+			streamFn,
+		);
 		newMessages.push(message);
 
 		if (message.stopReason === "error" || message.stopReason === "aborted") {
@@ -225,7 +274,6 @@ async function runLoop(
 				}
 			}
 			await refreshQueueState();
-			continue;
 		}
 	}
 
@@ -262,20 +310,25 @@ async function streamAssistantResponse(
 	// Use custom stream function if provided, otherwise use default streamSimple
 	const streamFunction = streamFn || streamSimple;
 	const streamOptions = signal ? { ...config, signal } : config;
-	const response = await streamFunction(config.model, processedContext, streamOptions);
+	const response = await streamFunction(
+		config.model,
+		processedContext,
+		streamOptions,
+	);
 
 	let partialMessage: AssistantMessage | null = null;
 	let addedPartial = false;
 
 	for await (const event of response) {
 		switch (event.type) {
-			case "start":
+			case "start": {
 				const startedMessage = event.partial;
 				partialMessage = startedMessage;
 				context.messages.push(startedMessage);
 				addedPartial = true;
 				stream.push({ type: "message_start", message: { ...startedMessage } });
 				break;
+			}
 
 			case "text_start":
 			case "text_delta":
@@ -290,7 +343,11 @@ async function streamAssistantResponse(
 					const updatedMessage = event.partial;
 					partialMessage = updatedMessage;
 					context.messages[context.messages.length - 1] = updatedMessage;
-					stream.push({ type: "message_update", assistantMessageEvent: event, message: { ...updatedMessage } });
+					stream.push({
+						type: "message_update",
+						assistantMessageEvent: event,
+						message: { ...updatedMessage },
+					});
 				}
 				break;
 
@@ -321,12 +378,19 @@ async function executeToolCalls<T>(
 	stream: EventStream<AgentEvent, Message[]>,
 	shouldInterrupt?: () => Promise<boolean>,
 ): Promise<{ results: ToolResultMessage<T>[]; interrupted: boolean }> {
-	const toolCalls = assistantMessage.content.filter((c) => c.type === "toolCall");
+	const toolCalls = assistantMessage.content.filter(
+		(c) => c.type === "toolCall",
+	);
 	const toolResults: ToolResultMessage<T>[] = [];
 	let interrupted = false;
 
 	for (const toolCall of toolCalls) {
-		const result = await executeSingleToolCall<T>(toolCall, tools, signal, stream);
+		const result = await executeSingleToolCall<T>(
+			toolCall,
+			tools,
+			signal,
+			stream,
+		);
 		toolResults.push(result);
 
 		if (shouldInterrupt && (await shouldInterrupt())) {
@@ -367,18 +431,25 @@ async function executeSingleToolCall<T>(
 		const validatedArgs = validateToolArguments(tool, toolCall);
 
 		// Execute with validated, typed arguments, passing update callback
-		result = await tool.execute(toolCall.id, validatedArgs, signal, (partialResult) => {
-			stream.push({
-				type: "tool_execution_update",
-				toolCallId: toolCall.id,
-				toolName: toolCall.name,
-				args: toolCall.arguments,
-				partialResult,
-			});
-		});
+		result = await tool.execute(
+			toolCall.id,
+			validatedArgs,
+			signal,
+			(partialResult) => {
+				stream.push({
+					type: "tool_execution_update",
+					toolCallId: toolCall.id,
+					toolName: toolCall.name,
+					args: toolCall.arguments,
+					partialResult,
+				});
+			},
+		);
 	} catch (e) {
 		result = {
-			content: [{ type: "text", text: e instanceof Error ? e.message : String(e) }],
+			content: [
+				{ type: "text", text: e instanceof Error ? e.message : String(e) },
+			],
 			details: {} as T,
 		};
 		isError = true;

@@ -42,7 +42,10 @@ interface OverflowResult {
 	response: AssistantMessage;
 }
 
-async function testContextOverflow(model: Model<any>, apiKey: string): Promise<OverflowResult> {
+async function testContextOverflow(
+	model: Model<any>,
+	apiKey: string,
+): Promise<OverflowResult> {
 	const overflowContent = generateOverflowContent(model.contextWindow);
 
 	const context: Context = {
@@ -90,26 +93,39 @@ describe("Context overflow error handling", () => {
 	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic (API Key)", () => {
 		it("claude-3-5-haiku - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("anthropic", "claude-3-5-haiku-20241022");
-			const result = await testContextOverflow(model, process.env.ANTHROPIC_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.ANTHROPIC_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
 			expect(result.errorMessage).toMatch(/prompt is too long/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
-	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("Anthropic (OAuth)", () => {
-		it("claude-sonnet-4 - should detect overflow via isContextOverflow", async () => {
-			const model = getModel("anthropic", "claude-sonnet-4-20250514");
-			const result = await testContextOverflow(model, process.env.ANTHROPIC_OAUTH_TOKEN!);
-			logResult(result);
+	describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)(
+		"Anthropic (OAuth)",
+		() => {
+			it("claude-sonnet-4 - should detect overflow via isContextOverflow", async () => {
+				const model = getModel("anthropic", "claude-sonnet-4-20250514");
+				const result = await testContextOverflow(
+					model,
+					process.env.ANTHROPIC_OAUTH_TOKEN!,
+				);
+				logResult(result);
 
-			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/prompt is too long/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-		}, 120000);
-	});
+				expect(result.stopReason).toBe("error");
+				expect(result.errorMessage).toMatch(/prompt is too long/i);
+				expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+					true,
+				);
+			}, 120000);
+		},
+	);
 
 	// =============================================================================
 	// OpenAI
@@ -120,24 +136,34 @@ describe("Context overflow error handling", () => {
 		it("gpt-4o-mini - should detect overflow via isContextOverflow", async () => {
 			const model = { ...getModel("openai", "gpt-4o-mini") };
 			model.api = "openai-completions" as any;
-			const result = await testContextOverflow(model, process.env.OPENAI_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.OPENAI_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
 			expect(result.errorMessage).toMatch(/maximum context length/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
 	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses", () => {
 		it("gpt-4o - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("openai", "gpt-4o");
-			const result = await testContextOverflow(model, process.env.OPENAI_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.OPENAI_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
 			expect(result.errorMessage).toMatch(/exceeds the context window/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
@@ -149,12 +175,19 @@ describe("Context overflow error handling", () => {
 	describe.skipIf(!process.env.GEMINI_API_KEY)("Google", () => {
 		it("gemini-2.0-flash - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("google", "gemini-2.0-flash");
-			const result = await testContextOverflow(model, process.env.GEMINI_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.GEMINI_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/input token count.*exceeds the maximum/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(result.errorMessage).toMatch(
+				/input token count.*exceeds the maximum/i,
+			);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
@@ -171,7 +204,9 @@ describe("Context overflow error handling", () => {
 
 			expect(result.stopReason).toBe("error");
 			expect(result.errorMessage).toMatch(/maximum prompt length is \d+/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
@@ -183,12 +218,17 @@ describe("Context overflow error handling", () => {
 	describe.skipIf(!process.env.GROQ_API_KEY)("Groq", () => {
 		it("llama-3.3-70b-versatile - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("groq", "llama-3.3-70b-versatile");
-			const result = await testContextOverflow(model, process.env.GROQ_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.GROQ_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
 			expect(result.errorMessage).toMatch(/reduce the length of the messages/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
@@ -200,13 +240,18 @@ describe("Context overflow error handling", () => {
 	describe.skipIf(!process.env.CEREBRAS_API_KEY)("Cerebras", () => {
 		it("qwen-3-235b - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("cerebras", "qwen-3-235b-a22b-instruct-2507");
-			const result = await testContextOverflow(model, process.env.CEREBRAS_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.CEREBRAS_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
 			// Cerebras returns status code with no body
 			expect(result.errorMessage).toMatch(/4(00|13).*\(no body\)/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
@@ -229,10 +274,14 @@ describe("Context overflow error handling", () => {
 			if (result.stopReason === "stop") {
 				expect(result.hasUsageData).toBe(true);
 				expect(result.usage.input).toBeGreaterThan(model.contextWindow);
-				expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+				expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+					true,
+				);
 			} else {
 				// Rate limited or other error - just log and pass
-				console.log("  z.ai returned error (possibly rate limited), skipping overflow detection");
+				console.log(
+					"  z.ai returned error (possibly rate limited), skipping overflow detection",
+				);
 			}
 		}, 120000);
 	});
@@ -245,11 +294,16 @@ describe("Context overflow error handling", () => {
 	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral", () => {
 		it("devstral-medium-latest - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("mistral", "devstral-medium-latest");
-			const result = await testContextOverflow(model, process.env.MISTRAL_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.MISTRAL_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
@@ -262,56 +316,91 @@ describe("Context overflow error handling", () => {
 		// Anthropic backend
 		it("anthropic/claude-sonnet-4 via OpenRouter - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("openrouter", "anthropic/claude-sonnet-4");
-			const result = await testContextOverflow(model, process.env.OPENROUTER_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.OPENROUTER_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(result.errorMessage).toMatch(
+				/maximum context length is \d+ tokens/i,
+			);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 
 		// DeepSeek backend
 		it("deepseek/deepseek-v3.2 via OpenRouter - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("openrouter", "deepseek/deepseek-v3.2");
-			const result = await testContextOverflow(model, process.env.OPENROUTER_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.OPENROUTER_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(result.errorMessage).toMatch(
+				/maximum context length is \d+ tokens/i,
+			);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 
 		// Mistral backend
 		it("mistralai/mistral-large-2512 via OpenRouter - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("openrouter", "mistralai/mistral-large-2512");
-			const result = await testContextOverflow(model, process.env.OPENROUTER_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.OPENROUTER_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(result.errorMessage).toMatch(
+				/maximum context length is \d+ tokens/i,
+			);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 
 		// Google backend
 		it("google/gemini-2.5-flash via OpenRouter - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("openrouter", "google/gemini-2.5-flash");
-			const result = await testContextOverflow(model, process.env.OPENROUTER_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.OPENROUTER_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(result.errorMessage).toMatch(
+				/maximum context length is \d+ tokens/i,
+			);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 
 		// Meta/Llama backend
 		it("meta-llama/llama-4-maverick via OpenRouter - should detect overflow via isContextOverflow", async () => {
 			const model = getModel("openrouter", "meta-llama/llama-4-maverick");
-			const result = await testContextOverflow(model, process.env.OPENROUTER_API_KEY!);
+			const result = await testContextOverflow(
+				model,
+				process.env.OPENROUTER_API_KEY!,
+			);
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
-			expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(result.errorMessage).toMatch(
+				/maximum context length is \d+ tokens/i,
+			);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
@@ -341,7 +430,9 @@ describe("Context overflow error handling", () => {
 				try {
 					execSync("ollama pull gpt-oss:20b", { stdio: "inherit" });
 				} catch (e) {
-					console.warn("Failed to pull gpt-oss:20b model, tests will be skipped");
+					console.warn(
+						"Failed to pull gpt-oss:20b model, tests will be skipped",
+					);
 					return;
 				}
 			}
@@ -400,10 +491,16 @@ describe("Context overflow error handling", () => {
 			if (result.stopReason === "stop" && result.hasUsageData) {
 				// Ollama truncated - check if reported usage is less than what we sent
 				// This is a "silent overflow" - we can detect it if we know expected input size
-				console.log("  Ollama silently truncated input to", result.usage.input, "tokens");
+				console.log(
+					"  Ollama silently truncated input to",
+					result.usage.input,
+					"tokens",
+				);
 				// For now, we accept this behavior - Ollama doesn't give us a way to detect overflow
 			} else if (result.stopReason === "error") {
-				expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+				expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+					true,
+				);
 			}
 		}, 300000); // 5 min timeout for local model
 	});
@@ -414,7 +511,10 @@ describe("Context overflow error handling", () => {
 
 	let lmStudioRunning = false;
 	try {
-		execSync("curl -s --max-time 1 http://localhost:1234/v1/models > /dev/null", { stdio: "ignore" });
+		execSync(
+			"curl -s --max-time 1 http://localhost:1234/v1/models > /dev/null",
+			{ stdio: "ignore" },
+		);
 		lmStudioRunning = true;
 	} catch {
 		lmStudioRunning = false;
@@ -439,7 +539,9 @@ describe("Context overflow error handling", () => {
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 
@@ -449,7 +551,9 @@ describe("Context overflow error handling", () => {
 
 	let llamaCppRunning = false;
 	try {
-		execSync("curl -s --max-time 1 http://localhost:8081/health > /dev/null", { stdio: "ignore" });
+		execSync("curl -s --max-time 1 http://localhost:8081/health > /dev/null", {
+			stdio: "ignore",
+		});
 		llamaCppRunning = true;
 	} catch {
 		llamaCppRunning = false;
@@ -475,7 +579,9 @@ describe("Context overflow error handling", () => {
 			logResult(result);
 
 			expect(result.stopReason).toBe("error");
-			expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
+			expect(isContextOverflow(result.response, model.contextWindow)).toBe(
+				true,
+			);
 		}, 120000);
 	});
 });

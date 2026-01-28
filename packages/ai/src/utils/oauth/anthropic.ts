@@ -3,40 +3,43 @@
  */
 
 export type AnthropicOAuthCredentials = {
-	refresh: string
-	access: string
-	expires: number
-}
+	refresh: string;
+	access: string;
+	expires: number;
+};
 
 // PKCE utilities
 function base64urlEncode(bytes: Uint8Array): string {
-	let binary = ""
+	let binary = "";
 	for (const byte of bytes) {
-		binary += String.fromCharCode(byte)
+		binary += String.fromCharCode(byte);
 	}
-	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")
+	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-async function generatePKCE(): Promise<{ verifier: string; challenge: string }> {
-	const verifierBytes = new Uint8Array(32)
-	crypto.getRandomValues(verifierBytes)
-	const verifier = base64urlEncode(verifierBytes)
+async function generatePKCE(): Promise<{
+	verifier: string;
+	challenge: string;
+}> {
+	const verifierBytes = new Uint8Array(32);
+	crypto.getRandomValues(verifierBytes);
+	const verifier = base64urlEncode(verifierBytes);
 
-	const encoder = new TextEncoder()
-	const data = encoder.encode(verifier)
-	const hashBuffer = await crypto.subtle.digest("SHA-256", data)
-	const challenge = base64urlEncode(new Uint8Array(hashBuffer))
+	const encoder = new TextEncoder();
+	const data = encoder.encode(verifier);
+	const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+	const challenge = base64urlEncode(new Uint8Array(hashBuffer));
 
-	return { verifier, challenge }
+	return { verifier, challenge };
 }
 
 // OAuth constants
-const decode = (s: string) => atob(s)
-const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl")
-const AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
-const TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
-const REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback"
-const SCOPES = "org:create_api_key user:profile user:inference"
+const decode = (s: string) => atob(s);
+const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
+const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
+const TOKEN_URL = "https://console.anthropic.com/v1/oauth/token";
+const REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback";
+const SCOPES = "org:create_api_key user:profile user:inference";
 
 /**
  * Login with Anthropic OAuth
@@ -48,7 +51,7 @@ export async function loginAnthropic(
 	onAuthUrl: (url: string) => void,
 	onPromptCode: () => Promise<string>,
 ): Promise<AnthropicOAuthCredentials> {
-	const { verifier, challenge } = await generatePKCE()
+	const { verifier, challenge } = await generatePKCE();
 
 	const authParams = new URLSearchParams({
 		code: "true",
@@ -59,16 +62,16 @@ export async function loginAnthropic(
 		code_challenge: challenge,
 		code_challenge_method: "S256",
 		state: verifier,
-	})
+	});
 
-	const authUrl = `${AUTHORIZE_URL}?${authParams.toString()}`
+	const authUrl = `${AUTHORIZE_URL}?${authParams.toString()}`;
 
-	onAuthUrl(authUrl)
+	onAuthUrl(authUrl);
 
-	const authCode = await onPromptCode()
-	const splits = authCode.split("#")
-	const code = splits[0]
-	const state = splits[1]
+	const authCode = await onPromptCode();
+	const splits = authCode.split("#");
+	const code = splits[0];
+	const state = splits[1];
 
 	const tokenResponse = await fetch(TOKEN_URL, {
 		method: "POST",
@@ -83,32 +86,34 @@ export async function loginAnthropic(
 			redirect_uri: REDIRECT_URI,
 			code_verifier: verifier,
 		}),
-	})
+	});
 
 	if (!tokenResponse.ok) {
-		const error = await tokenResponse.text()
-		throw new Error(`Token exchange failed: ${error}`)
+		const error = await tokenResponse.text();
+		throw new Error(`Token exchange failed: ${error}`);
 	}
 
 	const tokenData = (await tokenResponse.json()) as {
-		access_token: string
-		refresh_token: string
-		expires_in: number
-	}
+		access_token: string;
+		refresh_token: string;
+		expires_in: number;
+	};
 
-	const expiresAt = Date.now() + tokenData.expires_in * 1000 - 5 * 60 * 1000
+	const expiresAt = Date.now() + tokenData.expires_in * 1000 - 5 * 60 * 1000;
 
 	return {
 		refresh: tokenData.refresh_token,
 		access: tokenData.access_token,
 		expires: expiresAt,
-	}
+	};
 }
 
 /**
  * Refresh Anthropic OAuth token
  */
-export async function refreshAnthropicToken(refreshToken: string): Promise<AnthropicOAuthCredentials> {
+export async function refreshAnthropicToken(
+	refreshToken: string,
+): Promise<AnthropicOAuthCredentials> {
 	const response = await fetch(TOKEN_URL, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -117,22 +122,22 @@ export async function refreshAnthropicToken(refreshToken: string): Promise<Anthr
 			client_id: CLIENT_ID,
 			refresh_token: refreshToken,
 		}),
-	})
+	});
 
 	if (!response.ok) {
-		const error = await response.text()
-		throw new Error(`Anthropic token refresh failed: ${error}`)
+		const error = await response.text();
+		throw new Error(`Anthropic token refresh failed: ${error}`);
 	}
 
 	const data = (await response.json()) as {
-		access_token: string
-		refresh_token: string
-		expires_in: number
-	}
+		access_token: string;
+		refresh_token: string;
+		expires_in: number;
+	};
 
 	return {
 		refresh: data.refresh_token,
 		access: data.access_token,
 		expires: Date.now() + data.expires_in * 1000 - 5 * 60 * 1000,
-	}
+	};
 }

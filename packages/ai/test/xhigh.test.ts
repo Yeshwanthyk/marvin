@@ -24,15 +24,22 @@ describe.skipIf(!process.env.OPENAI_API_KEY)("xhigh reasoning", () => {
 			let hasThinking = false;
 
 			for await (const event of s) {
-				if (event.type === "thinking_start" || event.type === "thinking_delta") {
+				if (
+					event.type === "thinking_start" ||
+					event.type === "thinking_delta"
+				) {
 					hasThinking = true;
 				}
 			}
 
 			const response = await s.result();
-			expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
+			expect(response.stopReason, `Error: ${response.errorMessage}`).toBe(
+				"stop",
+			);
 			expect(response.content.some((b) => b.type === "text")).toBe(true);
-			expect(hasThinking || response.content.some((b) => b.type === "thinking")).toBe(true);
+			expect(
+				hasThinking || response.content.some((b) => b.type === "thinking"),
+			).toBe(true);
 		});
 	});
 

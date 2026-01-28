@@ -53,7 +53,9 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 			} else if (this.done) {
 				return;
 			} else {
-				const result = await new Promise<IteratorResult<T>>((resolve) => this.waiting.push(resolve));
+				const result = await new Promise<IteratorResult<T>>((resolve) =>
+					this.waiting.push(resolve),
+				);
 				if (result.done) return;
 				yield result.value;
 			}
@@ -65,7 +67,10 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 	}
 }
 
-export class AssistantMessageEventStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
+export class AssistantMessageEventStream extends EventStream<
+	AssistantMessageEvent,
+	AssistantMessage
+> {
 	constructor() {
 		super(
 			(event) => event.type === "done" || event.type === "error",

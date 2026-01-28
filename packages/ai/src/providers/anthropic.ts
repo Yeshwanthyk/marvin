@@ -67,7 +67,9 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
 	// If only text blocks, return as concatenated string for simplicity
 	const hasImages = content.some((c) => c.type === "image");
 	if (!hasImages) {
-		return sanitizeSurrogates(content.map((c) => (c as TextContent).text).join("\n"));
+		return sanitizeSurrogates(
+			content.map((c) => (c as TextContent).text).join("\n"),
+		);
 	}
 
 	// If we have images, convert to content block array
@@ -82,7 +84,11 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
 			type: "image" as const,
 			source: {
 				type: "base64" as const,
-				media_type: block.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+				media_type: block.mimeType as
+					| "image/jpeg"
+					| "image/png"
+					| "image/gif"
+					| "image/webp",
 				data: block.data,
 			},
 		};
@@ -135,12 +141,23 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 
 		try {
 			const apiKey = options?.apiKey ?? getApiKey(model.provider) ?? "";
-			const { client, isOAuthToken } = createClient(model, apiKey, options?.interleavedThinking ?? true);
+			const { client, isOAuthToken } = createClient(
+				model,
+				apiKey,
+				options?.interleavedThinking ?? true,
+			);
 			const params = buildParams(model, context, isOAuthToken, options);
-			const anthropicStream = client.messages.stream({ ...params, stream: true }, { signal: options?.signal });
+			const anthropicStream = client.messages.stream(
+				{ ...params, stream: true },
+				{ signal: options?.signal },
+			);
 			stream.push({ type: "start", partial: output });
 
-			type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson: string })) & { index: number };
+			type Block = (
+				| ThinkingContent
+				| TextContent
+				| (ToolCall & { partialJson: string })
+			) & { index: number };
 			const blocks = output.content as Block[];
 
 			for await (const event of anthropicStream) {
@@ -149,11 +166,16 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 					// This ensures we have input token counts even if the stream is aborted early
 					output.usage.input = event.message.usage.input_tokens || 0;
 					output.usage.output = event.message.usage.output_tokens || 0;
-					output.usage.cacheRead = event.message.usage.cache_read_input_tokens || 0;
-					output.usage.cacheWrite = event.message.usage.cache_creation_input_tokens || 0;
+					output.usage.cacheRead =
+						event.message.usage.cache_read_input_tokens || 0;
+					output.usage.cacheWrite =
+						event.message.usage.cache_creation_input_tokens || 0;
 					// Anthropic doesn't provide total_tokens, compute from components
 					output.usage.totalTokens =
-						output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
+						output.usage.input +
+						output.usage.output +
+						output.usage.cacheRead +
+						output.usage.cacheWrite;
 					calculateCost(model, output.usage);
 				} else if (event.type === "content_block_start") {
 					if (event.content_block.type === "text") {
@@ -163,7 +185,11 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 							index: event.index,
 						};
 						output.content.push(block);
-						stream.push({ type: "text_start", contentIndex: output.content.length - 1, partial: output });
+						stream.push({
+							type: "text_start",
+							contentIndex: output.content.length - 1,
+							partial: output,
+						});
 					} else if (event.content_block.type === "thinking") {
 						const block: Block = {
 							type: "thinking",
@@ -172,18 +198,28 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 							index: event.index,
 						};
 						output.content.push(block);
-						stream.push({ type: "thinking_start", contentIndex: output.content.length - 1, partial: output });
+						stream.push({
+							type: "thinking_start",
+							contentIndex: output.content.length - 1,
+							partial: output,
+						});
 					} else if (event.content_block.type === "tool_use") {
 						const block: Block = {
 							type: "toolCall",
 							id: event.content_block.id,
-							name: isOAuthToken ? fromClaudeCodeName(event.content_block.name) : event.content_block.name,
+							name: isOAuthToken
+								? fromClaudeCodeName(event.content_block.name)
+								: event.content_block.name,
 							arguments: event.content_block.input as Record<string, any>,
 							partialJson: "",
 							index: event.index,
 						};
 						output.content.push(block);
-						stream.push({ type: "toolcall_start", contentIndex: output.content.length - 1, partial: output });
+						stream.push({
+							type: "toolcall_start",
+							contentIndex: output.content.length - 1,
+							partial: output,
+						});
 					}
 				} else if (event.type === "content_block_delta") {
 					if (event.delta.type === "text_delta") {
@@ -268,10 +304,14 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 					output.usage.input = event.usage.input_tokens || 0;
 					output.usage.output = event.usage.output_tokens || 0;
 					output.usage.cacheRead = event.usage.cache_read_input_tokens || 0;
-					output.usage.cacheWrite = event.usage.cache_creation_input_tokens || 0;
+					output.usage.cacheWrite =
+						event.usage.cache_creation_input_tokens || 0;
 					// Anthropic doesn't provide total_tokens, compute from components
 					output.usage.totalTokens =
-						output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
+						output.usage.input +
+						output.usage.output +
+						output.usage.cacheRead +
+						output.usage.cacheWrite;
 					calculateCost(model, output.usage);
 				}
 			}
@@ -289,7 +329,8 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 		} catch (error) {
 			for (const block of output.content) delete (block as any).index;
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+			output.errorMessage =
+				error instanceof Error ? error.message : JSON.stringify(error);
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}
@@ -424,7 +465,11 @@ function sanitizeToolCallId(id: string): string {
 	return id.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-function convertMessages(messages: Message[], model: Model<"anthropic-messages">, isOAuthToken: boolean): MessageParam[] {
+function convertMessages(
+	messages: Message[],
+	model: Model<"anthropic-messages">,
+	isOAuthToken: boolean,
+): MessageParam[] {
 	const params: MessageParam[] = [];
 
 	// Transform messages for cross-provider compatibility
@@ -453,13 +498,19 @@ function convertMessages(messages: Message[], model: Model<"anthropic-messages">
 							type: "image",
 							source: {
 								type: "base64",
-								media_type: item.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+								media_type: item.mimeType as
+									| "image/jpeg"
+									| "image/png"
+									| "image/gif"
+									| "image/webp",
 								data: item.data,
 							},
 						};
 					}
 				});
-				let filteredBlocks = !model?.input.includes("image") ? blocks.filter((b) => b.type !== "image") : blocks;
+				let filteredBlocks = !model?.input.includes("image")
+					? blocks.filter((b) => b.type !== "image")
+					: blocks;
 				filteredBlocks = filteredBlocks.filter((b) => {
 					if (b.type === "text") {
 						return b.text.trim().length > 0;
@@ -486,10 +537,15 @@ function convertMessages(messages: Message[], model: Model<"anthropic-messages">
 					if (block.thinking.trim().length === 0) continue;
 					// If thinking signature is missing/empty (e.g., from aborted stream),
 					// convert to text block to avoid API rejection
-					if (!block.thinkingSignature || block.thinkingSignature.trim().length === 0) {
+					if (
+						!block.thinkingSignature ||
+						block.thinkingSignature.trim().length === 0
+					) {
 						blocks.push({
 							type: "text",
-							text: sanitizeSurrogates(`<thinking>\n${block.thinking}\n</thinking>`),
+							text: sanitizeSurrogates(
+								`<thinking>\n${block.thinking}\n</thinking>`,
+							),
 						});
 					} else {
 						// Don't sanitize thinking content - signature depends on exact bytes
@@ -527,7 +583,10 @@ function convertMessages(messages: Message[], model: Model<"anthropic-messages">
 
 			// Look ahead for consecutive toolResult messages
 			let j = i + 1;
-			while (j < transformedMessages.length && transformedMessages[j].role === "toolResult") {
+			while (
+				j < transformedMessages.length &&
+				transformedMessages[j].role === "toolResult"
+			) {
 				const nextMsg = transformedMessages[j] as ToolResultMessage; // We know it's a toolResult
 				toolResults.push({
 					type: "tool_result",
@@ -558,7 +617,9 @@ function convertMessages(messages: Message[], model: Model<"anthropic-messages">
 				const lastBlock = lastMessage.content[lastMessage.content.length - 1];
 				if (
 					lastBlock &&
-					(lastBlock.type === "text" || lastBlock.type === "image" || lastBlock.type === "tool_result")
+					(lastBlock.type === "text" ||
+						lastBlock.type === "image" ||
+						lastBlock.type === "tool_result")
 				) {
 					(lastBlock as any).cache_control = { type: "ephemeral" };
 				}
@@ -569,7 +630,10 @@ function convertMessages(messages: Message[], model: Model<"anthropic-messages">
 	return params;
 }
 
-function convertTools(tools: Tool[], isOAuthToken: boolean): Anthropic.Messages.Tool[] {
+function convertTools(
+	tools: Tool[],
+	isOAuthToken: boolean,
+): Anthropic.Messages.Tool[] {
 	if (!tools) return [];
 
 	return tools.map((tool) => {

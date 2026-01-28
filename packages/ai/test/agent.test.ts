@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { agentLoop, agentLoopContinue } from "../src/agent/agent-loop.js";
 import { calculateTool } from "../src/agent/tools/calculate.js";
-import type { AgentContext, AgentEvent, AgentLoopConfig } from "../src/agent/types.js";
+import type {
+	AgentContext,
+	AgentEvent,
+	AgentLoopConfig,
+} from "../src/agent/types.js";
 import { getModel } from "../src/models.js";
 import type {
 	Api,
@@ -13,7 +17,10 @@ import type {
 	UserMessage,
 } from "../src/types.js";
 
-async function calculateTest<TApi extends Api>(model: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function calculateTest<TApi extends Api>(
+	model: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	// Create the agent context with the calculator tool
 	const context: AgentContext = {
 		systemPrompt:
@@ -63,12 +70,18 @@ async function calculateTest<TApi extends Api>(model: Model<TApi>, options: Opti
 				break;
 
 			case "turn_end":
-				console.log(`=== Turn ${turns} ended with ${event.toolResults.length} tool results ===`);
+				console.log(
+					`=== Turn ${turns} ended with ${event.toolResults.length} tool results ===`,
+				);
 				console.log(event.message);
 				break;
 
 			case "tool_execution_end":
-				if (!event.isError && typeof event.result === "object" && event.result.content) {
+				if (
+					!event.isError &&
+					typeof event.result === "object" &&
+					event.result.content
+				) {
 					const textOutput = event.result.content
 						.filter((c: any) => c.type === "text")
 						.map((c: any) => c.text)
@@ -100,7 +113,8 @@ async function calculateTest<TApi extends Api>(model: Model<TApi>, options: Opti
 	const finalMessage = finalMessages[finalMessages.length - 1];
 	expect(finalMessage).toBeDefined();
 	expect(finalMessage.role).toBe("assistant");
-	if (finalMessage.role !== "assistant") throw new Error("Final message is not from assistant");
+	if (finalMessage.role !== "assistant")
+		throw new Error("Final message is not from assistant");
 
 	// Extract the final answer from the last assistant message
 	const content = finalMessage.content
@@ -121,7 +135,9 @@ async function calculateTest<TApi extends Api>(model: Model<TApi>, options: Opti
 		}
 		// If no exact match, take the last large number as likely the answer
 		if (finalAnswer === undefined) {
-			const largeNumbers = numbers.map((n) => parseInt(n, 10)).filter((n) => n > 1000000);
+			const largeNumbers = numbers
+				.map((n) => parseInt(n, 10))
+				.filter((n) => n > 1000000);
 			if (largeNumbers.length > 0) {
 				finalAnswer = largeNumbers[largeNumbers.length - 1];
 			}
@@ -154,7 +170,9 @@ async function calculateTest<TApi extends Api>(model: Model<TApi>, options: Opti
 	}
 
 	// Log summary
-	console.log(`\nTest completed with ${turns} turns and ${toolCallCount} tool calls`);
+	console.log(
+		`\nTest completed with ${turns} turns and ${toolCallCount} tool calls`,
+	);
 	if (turns === 3) {
 		console.log("Model used parallel tool calls for initial calculations");
 	} else {
@@ -170,7 +188,10 @@ async function calculateTest<TApi extends Api>(model: Model<TApi>, options: Opti
 	};
 }
 
-async function abortTest<TApi extends Api>(model: Model<TApi>, options: OptionsForApi<TApi> = {}) {
+async function abortTest<TApi extends Api>(
+	model: Model<TApi>,
+	options: OptionsForApi<TApi> = {},
+) {
 	// Create the agent context with the calculator tool
 	const context: AgentContext = {
 		systemPrompt:
@@ -188,7 +209,8 @@ async function abortTest<TApi extends Api>(model: Model<TApi>, options: OptionsF
 	// Create a prompt that will require multiple calculations
 	const userPrompt: UserMessage = {
 		role: "user",
-		content: "Calculate 100 * 200, then 300 * 400, then 500 * 600, then sum all three results.",
+		content:
+			"Calculate 100 * 200, then 300 * 400, then 500 * 600, then sum all three results.",
 		timestamp: Date.now(),
 	};
 
@@ -232,7 +254,8 @@ async function abortTest<TApi extends Api>(model: Model<TApi>, options: OptionsF
 	if (!assistantMessage) throw new Error("No final message received");
 	expect(assistantMessage).toBeDefined();
 	expect(assistantMessage.role).toBe("assistant");
-	if (assistantMessage.role !== "assistant") throw new Error("Final message is not from assistant");
+	if (assistantMessage.role !== "assistant")
+		throw new Error("Final message is not from assistant");
 
 	// Should have executed 1 tool call before abort
 	expect(toolCallCount).toBeGreaterThanOrEqual(1);
@@ -261,47 +284,56 @@ describe("Agent Calculator Tests", () => {
 		}, 30000);
 	});
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider Agent", () => {
-		const model = getModel("openai", "gpt-4o-mini");
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Completions Provider Agent",
+		() => {
+			const model = getModel("openai", "gpt-4o-mini");
 
-		it("should calculate multiple expressions and sum the results", async () => {
-			const result = await calculateTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
-		}, 30000);
+			it("should calculate multiple expressions and sum the results", async () => {
+				const result = await calculateTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
+			}, 30000);
 
-		it("should handle abort during tool execution", async () => {
-			const result = await abortTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
-		}, 30000);
-	});
+			it("should handle abort during tool execution", async () => {
+				const result = await abortTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
+			}, 30000);
+		},
+	);
 
-	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider Agent", () => {
-		const model = getModel("openai", "gpt-5-mini");
+	describe.skipIf(!process.env.OPENAI_API_KEY)(
+		"OpenAI Responses Provider Agent",
+		() => {
+			const model = getModel("openai", "gpt-5-mini");
 
-		it("should calculate multiple expressions and sum the results", async () => {
-			const result = await calculateTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
-		}, 30000);
+			it("should calculate multiple expressions and sum the results", async () => {
+				const result = await calculateTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
+			}, 30000);
 
-		it("should handle abort during tool execution", async () => {
-			const result = await abortTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
-		}, 30000);
-	});
+			it("should handle abort during tool execution", async () => {
+				const result = await abortTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
+			}, 30000);
+		},
+	);
 
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider Agent", () => {
-		const model = getModel("anthropic", "claude-haiku-4-5");
+	describe.skipIf(!process.env.ANTHROPIC_API_KEY)(
+		"Anthropic Provider Agent",
+		() => {
+			const model = getModel("anthropic", "claude-haiku-4-5");
 
-		it("should calculate multiple expressions and sum the results", async () => {
-			const result = await calculateTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
-		}, 30000);
+			it("should calculate multiple expressions and sum the results", async () => {
+				const result = await calculateTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
+			}, 30000);
 
-		it("should handle abort during tool execution", async () => {
-			const result = await abortTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
-		}, 30000);
-	});
+			it("should handle abort during tool execution", async () => {
+				const result = await abortTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
+			}, 30000);
+		},
+	);
 
 	describe.skipIf(!process.env.XAI_API_KEY)("xAI Provider Agent", () => {
 		const model = getModel("xai", "grok-3");
@@ -331,19 +363,22 @@ describe("Agent Calculator Tests", () => {
 		}, 30000);
 	});
 
-	describe.skipIf(!process.env.CEREBRAS_API_KEY)("Cerebras Provider Agent", () => {
-		const model = getModel("cerebras", "gpt-oss-120b");
+	describe.skipIf(!process.env.CEREBRAS_API_KEY)(
+		"Cerebras Provider Agent",
+		() => {
+			const model = getModel("cerebras", "gpt-oss-120b");
 
-		it("should calculate multiple expressions and sum the results", async () => {
-			const result = await calculateTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
-		}, 30000);
+			it("should calculate multiple expressions and sum the results", async () => {
+				const result = await calculateTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
+			}, 30000);
 
-		it("should handle abort during tool execution", async () => {
-			const result = await abortTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
-		}, 30000);
-	});
+			it("should handle abort during tool execution", async () => {
+				const result = await abortTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
+			}, 30000);
+		},
+	);
 
 	describe.skipIf(!process.env.ZAI_API_KEY)("zAI Provider Agent", () => {
 		const model = getModel("zai", "glm-4.5-air");
@@ -359,19 +394,22 @@ describe("Agent Calculator Tests", () => {
 		}, 30000);
 	});
 
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider Agent", () => {
-		const model = getModel("mistral", "devstral-medium-latest");
+	describe.skipIf(!process.env.MISTRAL_API_KEY)(
+		"Mistral Provider Agent",
+		() => {
+			const model = getModel("mistral", "devstral-medium-latest");
 
-		it("should calculate multiple expressions and sum the results", async () => {
-			const result = await calculateTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
-		}, 30000);
+			it("should calculate multiple expressions and sum the results", async () => {
+				const result = await calculateTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(2);
+			}, 30000);
 
-		it("should handle abort during tool execution", async () => {
-			const result = await abortTest(model);
-			expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
-		}, 30000);
-	});
+			it("should handle abort during tool execution", async () => {
+				const result = await abortTest(model);
+				expect(result.toolCallCount).toBeGreaterThanOrEqual(1);
+			}, 30000);
+		},
+	);
 });
 
 describe("agentLoopContinue", () => {
@@ -385,7 +423,9 @@ describe("agentLoopContinue", () => {
 		const config: AgentLoopConfig = { model };
 
 		it("should throw when context has no messages", () => {
-			expect(() => agentLoopContinue(baseContext, config)).toThrow("Cannot continue: no messages in context");
+			expect(() => agentLoopContinue(baseContext, config)).toThrow(
+				"Cannot continue: no messages in context",
+			);
 		});
 
 		it("should throw when last message is an assistant message", () => {
@@ -419,129 +459,150 @@ describe("agentLoopContinue", () => {
 		// which actually consume the stream and verify the output
 	});
 
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("continue from user message", () => {
-		const model = getModel("anthropic", "claude-haiku-4-5");
+	describe.skipIf(!process.env.ANTHROPIC_API_KEY)(
+		"continue from user message",
+		() => {
+			const model = getModel("anthropic", "claude-haiku-4-5");
 
-		it("should continue and get assistant response when last message is user", async () => {
-			const userMessage: UserMessage = {
-				role: "user",
-				content: [{ type: "text", text: "Say exactly: HELLO WORLD" }],
-				timestamp: Date.now(),
-			};
+			it("should continue and get assistant response when last message is user", async () => {
+				const userMessage: UserMessage = {
+					role: "user",
+					content: [{ type: "text", text: "Say exactly: HELLO WORLD" }],
+					timestamp: Date.now(),
+				};
 
-			const context: AgentContext = {
-				systemPrompt: "You are a helpful assistant. Follow instructions exactly.",
-				messages: [userMessage],
-				tools: [],
-			};
+				const context: AgentContext = {
+					systemPrompt:
+						"You are a helpful assistant. Follow instructions exactly.",
+					messages: [userMessage],
+					tools: [],
+				};
 
-			const config: AgentLoopConfig = { model };
+				const config: AgentLoopConfig = { model };
 
-			const events: AgentEvent[] = [];
-			const stream = agentLoopContinue(context, config);
+				const events: AgentEvent[] = [];
+				const stream = agentLoopContinue(context, config);
 
-			for await (const event of stream) {
-				events.push(event);
-			}
+				for await (const event of stream) {
+					events.push(event);
+				}
 
-			const messages = await stream.result();
+				const messages = await stream.result();
 
-			// Should have gotten an assistant response
-			expect(messages.length).toBe(1);
-			expect(messages[0].role).toBe("assistant");
+				// Should have gotten an assistant response
+				expect(messages.length).toBe(1);
+				expect(messages[0].role).toBe("assistant");
 
-			// Verify event sequence - no user message events since we're continuing
-			const eventTypes = events.map((e) => e.type);
-			expect(eventTypes).toContain("agent_start");
-			expect(eventTypes).toContain("turn_start");
-			expect(eventTypes).toContain("message_start");
-			expect(eventTypes).toContain("message_end");
-			expect(eventTypes).toContain("turn_end");
-			expect(eventTypes).toContain("agent_end");
+				// Verify event sequence - no user message events since we're continuing
+				const eventTypes = events.map((e) => e.type);
+				expect(eventTypes).toContain("agent_start");
+				expect(eventTypes).toContain("turn_start");
+				expect(eventTypes).toContain("message_start");
+				expect(eventTypes).toContain("message_end");
+				expect(eventTypes).toContain("turn_end");
+				expect(eventTypes).toContain("agent_end");
 
-			// Should NOT have user message events (that's the difference from agentLoop)
-			const messageEndEvents = events.filter((e) => e.type === "message_end");
-			expect(messageEndEvents.length).toBe(1); // Only assistant message
-			expect((messageEndEvents[0] as any).message.role).toBe("assistant");
-		}, 30000);
-	});
+				// Should NOT have user message events (that's the difference from agentLoop)
+				const messageEndEvents = events.filter((e) => e.type === "message_end");
+				expect(messageEndEvents.length).toBe(1); // Only assistant message
+				expect((messageEndEvents[0] as any).message.role).toBe("assistant");
+			}, 30000);
+		},
+	);
 
-	describe.skipIf(!process.env.ANTHROPIC_API_KEY)("continue from tool result", () => {
-		const model = getModel("anthropic", "claude-haiku-4-5");
+	describe.skipIf(!process.env.ANTHROPIC_API_KEY)(
+		"continue from tool result",
+		() => {
+			const model = getModel("anthropic", "claude-haiku-4-5");
 
-		it("should continue processing after tool results", async () => {
-			// Simulate a conversation where:
-			// 1. User asked to calculate something
-			// 2. Assistant made a tool call
-			// 3. Tool result is ready
-			// 4. We continue from here
+			it("should continue processing after tool results", async () => {
+				// Simulate a conversation where:
+				// 1. User asked to calculate something
+				// 2. Assistant made a tool call
+				// 3. Tool result is ready
+				// 4. We continue from here
 
-			const userMessage: UserMessage = {
-				role: "user",
-				content: [{ type: "text", text: "What is 5 + 3? Use the calculator." }],
-				timestamp: Date.now(),
-			};
+				const userMessage: UserMessage = {
+					role: "user",
+					content: [
+						{ type: "text", text: "What is 5 + 3? Use the calculator." },
+					],
+					timestamp: Date.now(),
+				};
 
-			const assistantMessage: AssistantMessage = {
-				role: "assistant",
-				content: [
-					{ type: "text", text: "Let me calculate that for you." },
-					{ type: "toolCall", id: "calc-1", name: "calculate", arguments: { expression: "5 + 3" } },
-				],
-				api: "anthropic-messages",
-				provider: "anthropic",
-				model: "claude-haiku-4-5",
-				usage: {
-					input: 0,
-					output: 0,
-					cacheRead: 0,
-					cacheWrite: 0,
-					totalTokens: 0,
-					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-				},
-				stopReason: "toolUse",
-				timestamp: Date.now(),
-			};
+				const assistantMessage: AssistantMessage = {
+					role: "assistant",
+					content: [
+						{ type: "text", text: "Let me calculate that for you." },
+						{
+							type: "toolCall",
+							id: "calc-1",
+							name: "calculate",
+							arguments: { expression: "5 + 3" },
+						},
+					],
+					api: "anthropic-messages",
+					provider: "anthropic",
+					model: "claude-haiku-4-5",
+					usage: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						totalTokens: 0,
+						cost: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							total: 0,
+						},
+					},
+					stopReason: "toolUse",
+					timestamp: Date.now(),
+				};
 
-			const toolResult: ToolResultMessage = {
-				role: "toolResult",
-				toolCallId: "calc-1",
-				toolName: "calculate",
-				content: [{ type: "text", text: "5 + 3 = 8" }],
-				isError: false,
-				timestamp: Date.now(),
-			};
+				const toolResult: ToolResultMessage = {
+					role: "toolResult",
+					toolCallId: "calc-1",
+					toolName: "calculate",
+					content: [{ type: "text", text: "5 + 3 = 8" }],
+					isError: false,
+					timestamp: Date.now(),
+				};
 
-			const context: AgentContext = {
-				systemPrompt: "You are a helpful assistant. After getting a calculation result, state the answer clearly.",
-				messages: [userMessage, assistantMessage, toolResult],
-				tools: [calculateTool],
-			};
+				const context: AgentContext = {
+					systemPrompt:
+						"You are a helpful assistant. After getting a calculation result, state the answer clearly.",
+					messages: [userMessage, assistantMessage, toolResult],
+					tools: [calculateTool],
+				};
 
-			const config: AgentLoopConfig = { model };
+				const config: AgentLoopConfig = { model };
 
-			const events: AgentEvent[] = [];
-			const stream = agentLoopContinue(context, config);
+				const events: AgentEvent[] = [];
+				const stream = agentLoopContinue(context, config);
 
-			for await (const event of stream) {
-				events.push(event);
-			}
+				for await (const event of stream) {
+					events.push(event);
+				}
 
-			const messages = await stream.result();
+				const messages = await stream.result();
 
-			// Should have gotten an assistant response
-			expect(messages.length).toBeGreaterThanOrEqual(1);
-			const lastMessage = messages[messages.length - 1];
-			expect(lastMessage.role).toBe("assistant");
+				// Should have gotten an assistant response
+				expect(messages.length).toBeGreaterThanOrEqual(1);
+				const lastMessage = messages[messages.length - 1];
+				expect(lastMessage.role).toBe("assistant");
 
-			// The assistant should mention the result (8)
-			if (lastMessage.role === "assistant") {
-				const textContent = lastMessage.content
-					.filter((c) => c.type === "text")
-					.map((c) => (c as any).text)
-					.join(" ");
-				expect(textContent).toMatch(/8/);
-			}
-		}, 30000);
-	});
+				// The assistant should mention the result (8)
+				if (lastMessage.role === "assistant") {
+					const textContent = lastMessage.content
+						.filter((c) => c.type === "text")
+						.map((c) => (c as any).text)
+						.join(" ");
+					expect(textContent).toMatch(/8/);
+				}
+			}, 30000);
+		},
+	);
 });
