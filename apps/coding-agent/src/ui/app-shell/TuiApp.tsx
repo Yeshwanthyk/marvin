@@ -398,7 +398,7 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		}
 
 		if (store.isResponding.value()) {
-			enqueueWhileResponding(text, "followUp")
+			enqueueWhileResponding(text, "steer")
 			editorClearFn?.()
 			return
 		}
