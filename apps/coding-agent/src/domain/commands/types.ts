@@ -40,9 +40,6 @@ export interface CommandContext {
 	setDisplayThinking: (thinking: ThinkingLevel) => void
 	setDisplayContextWindow: (tokens: number) => void
 
-	setDiffWrapMode: (updater: (prev: "word" | "none") => "word" | "none") => void
-	setConcealMarkdown: (updater: (prev: boolean) => boolean) => void
-
 	setTheme?: (name: string) => void
 	launchEditor?: (command: string, args: string[], cwd: string, onError: (error: Error) => void) => void
 	openEditor?: () => Promise<void> | void

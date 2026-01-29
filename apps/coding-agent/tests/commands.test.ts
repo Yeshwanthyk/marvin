@@ -75,8 +75,6 @@ function createMockContext(overrides: Partial<CommandContext> = {}): CommandCont
 		setDisplayModelId: mock(() => {}),
 		setDisplayThinking: mock(() => {}),
 		setDisplayContextWindow: mock(() => {}),
-		setDiffWrapMode: mock(() => {}),
-		setConcealMarkdown: mock(() => {}),
 		submitPrompt: mock(async () => {}),
 		steer: mock(async () => {}),
 		followUp: mock(async () => {}),
@@ -108,32 +106,6 @@ describe("handleSlashCommand", () => {
 			expect(ctx.setMessages).toHaveBeenCalled()
 			expect(ctx.setToolBlocks).toHaveBeenCalled()
 			expect(ctx.setContextTokens).toHaveBeenCalledWith(0)
-		})
-	})
-
-	describe("/thinking", () => {
-		it("changes thinking level for valid input", async () => {
-			const ctx = createMockContext()
-			const result = await handleSlashCommand("/thinking high", ctx)
-			expect(result).toBe(true)
-			expect(ctx.agent.setThinkingLevel).toHaveBeenCalledWith("high")
-			expect(ctx.setCurrentThinking).toHaveBeenCalledWith("high")
-			expect(ctx.setDisplayThinking).toHaveBeenCalledWith("high")
-		})
-
-		it("returns false for invalid thinking level", async () => {
-			const ctx = createMockContext()
-			const result = await handleSlashCommand("/thinking invalid", ctx)
-			expect(result).toBe(false)
-		})
-	})
-
-	describe("/diffwrap", () => {
-		it("toggles diff wrap mode", async () => {
-			const ctx = createMockContext()
-			const result = await handleSlashCommand("/diffwrap", ctx)
-			expect(result).toBe(true)
-			expect(ctx.setDiffWrapMode).toHaveBeenCalled()
 		})
 	})
 

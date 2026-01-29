@@ -293,8 +293,6 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		setDisplayModelId: store.displayModelId.set,
 		setDisplayThinking: store.displayThinking.set,
 		setDisplayContextWindow: store.displayContextWindow.set,
-		setDiffWrapMode: store.diffWrapMode.set,
-		setConcealMarkdown: store.concealMarkdown.set,
 		setTheme: handleThemeChange,
 		openEditor: () => editorOpenRef.current(),
 		clearEditor: () => clearEditorRef.current(),

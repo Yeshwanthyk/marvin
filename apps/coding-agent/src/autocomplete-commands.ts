@@ -1,5 +1,5 @@
 import { getModels, getProviders } from '@yeshwanthyk/ai';
-import type { ThinkingLevel } from '@yeshwanthyk/agent-core';
+
 import { THEME_NAMES } from "./theme-names.js";
 
 type KnownProvider = ReturnType<typeof getProviders>[number];
@@ -24,12 +24,11 @@ const resolveProvider = (raw: string): KnownProvider | undefined => {
 export const slashCommands: SlashCommand[] = [
   { name: 'clear', description: 'Clear chat + reset agent' },
   { name: 'compact', description: 'Compact context into summary + start fresh' },
-  { name: 'conceal', description: 'Toggle markdown conceal mode (hide syntax chars)' },
-  { name: 'diffwrap', description: 'Toggle diff word wrap mode' },
-  { name: 'abort', description: 'Abort in-flight request' },
   { name: 'exit', description: 'Exit' },
   { name: 'status', description: 'Show session status (model, context, turns)' },
   { name: 'sessions', description: 'List and switch to a previous session' },
+  { name: 'login', description: 'Login to AI provider' },
+  { name: 'fork', description: 'Fork current session to new session' },
   { name: 'steer', description: 'Interrupt current run: /steer <text>' },
   { name: 'followup', description: 'Queue follow-up text: /followup <text>' },
   {
@@ -77,17 +76,6 @@ export const slashCommands: SlashCommand[] = [
         .filter((m) => m.id.toLowerCase().startsWith(modelPrefix.toLowerCase()))
         .slice(0, 50)
         .map((m) => ({ value: `${provider} ${m.id}`, label: m.id, description: m.name }));
-    },
-  },
-  {
-    name: 'thinking',
-    description: 'Set thinking: /thinking off|minimal|low|medium|high|xhigh',
-    getArgumentCompletions: (argumentPrefix: string) => {
-      const levels: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
-      const prefix = argumentPrefix.trim().toLowerCase();
-      return levels
-        .filter((level) => level.startsWith(prefix))
-        .map((level) => ({ value: level, label: level }));
     },
   },
 ];
