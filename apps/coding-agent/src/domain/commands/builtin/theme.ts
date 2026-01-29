@@ -4,11 +4,19 @@ import type { CommandDefinition } from "../types.js"
 
 export const themeCommand: CommandDefinition = {
 	name: "theme",
-	execute: (args, ctx) => {
+	execute: async (args, ctx) => {
 		const themeName = args.trim()
 
 		if (!themeName) {
-			addSystemMessage(ctx, `Available themes: ${THEME_NAMES.join(", ")}`)
+			if (!ctx.showSelect) {
+				addSystemMessage(ctx, `Available themes: ${THEME_NAMES.join(", ")}`)
+				return true
+			}
+
+			const selected = await ctx.showSelect("Theme", [...THEME_NAMES])
+			if (selected) {
+				ctx.setTheme?.(selected)
+			}
 			return true
 		}
 

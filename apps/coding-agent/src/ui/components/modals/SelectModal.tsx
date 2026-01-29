@@ -1,4 +1,4 @@
-import { createSignal, type JSX } from "solid-js"
+import type { JSX } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import { Dialog, SelectList, type SelectListRef, type SelectItem } from "@yeshwanthyk/open-tui"
 
@@ -9,7 +9,6 @@ export interface SelectModalProps {
 }
 
 export function SelectModal(props: SelectModalProps): JSX.Element {
-	const [selectedIndex, setSelectedIndex] = createSignal(0)
 	let listRef: SelectListRef | undefined
 
 	const items: SelectItem[] = props.options.map((opt) => ({
@@ -34,8 +33,6 @@ export function SelectModal(props: SelectModalProps): JSX.Element {
 		<Dialog open={true} title={props.title} closeOnOverlayClick={false}>
 			<SelectList
 				items={items}
-				selectedIndex={selectedIndex()}
-				onSelectionChange={(_, index) => setSelectedIndex(index)}
 				onSelect={(item) => props.onSelect(item.value)}
 				onCancel={() => props.onSelect(undefined)}
 				maxVisible={10}
