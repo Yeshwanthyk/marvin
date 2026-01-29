@@ -78,7 +78,9 @@ export class CodexTransport implements AgentTransport {
 
 	private buildContext(messages: Message[], cfg: AgentRunConfig): AgentContext {
 		return {
-			systemPrompt: cfg.systemPrompt,
+			// Don't pass systemPrompt - Codex uses instructions field instead
+			// Passing both causes the API to ignore the input messages
+			systemPrompt: "",
 			messages,
 			tools: cfg.tools,
 		};
