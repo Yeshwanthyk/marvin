@@ -16,7 +16,7 @@ export interface MessagePaneProps {
 
 export function MessagePane(props: MessagePaneProps) {
 	return (
-		<scrollbox stickyScroll stickyStart="bottom" viewportCulling={false} flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
+		<scrollbox stickyScroll stickyStart="bottom" flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
 			<MessageList
 				messages={props.messages}
 				toolBlocks={props.toolBlocks}

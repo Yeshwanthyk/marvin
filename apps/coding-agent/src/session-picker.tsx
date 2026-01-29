@@ -11,6 +11,7 @@ import {
 	type ThemeMode,
 	ThemeProvider,
 	useTheme,
+	useRenderer,
 } from "@yeshwanthyk/open-tui";
 import { createMemo, createSignal, onMount, Show } from "solid-js";
 import { searchSessions, triggerBackgroundIndex } from "./mmem.js";
@@ -58,11 +59,22 @@ interface SessionPickerProps {
 function SessionPickerApp(props: SessionPickerProps) {
 	const { theme } = useTheme();
 	const dimensions = useTerminalDimensions();
+	const renderer = useRenderer();
 	let listRef: SelectListRef | undefined;
 
 	const [query, setQuery] = createSignal("");
 	const [searchFocused, setSearchFocused] = createSignal(true);
 	const [usingFallback, setUsingFallback] = createSignal(false);
+
+	// Destroy renderer before transitioning to main app
+	const handleSelect = (path: string) => {
+		renderer.destroy();
+		props.onSelect(path);
+	};
+	const handleCancel = () => {
+		renderer.destroy();
+		props.onCancel();
+	};
 
 	// Trigger background index on mount
 	onMount(() => {
@@ -126,7 +138,7 @@ function SessionPickerApp(props: SessionPickerProps) {
 			if (query()) {
 				setQuery("");
 			} else {
-				props.onCancel();
+				handleCancel();
 			}
 		}
 	});
@@ -154,7 +166,7 @@ function SessionPickerApp(props: SessionPickerProps) {
 						if (query()) {
 							setQuery("");
 						} else {
-							props.onCancel();
+							handleCancel();
 						}
 					}}
 				/>
@@ -167,8 +179,8 @@ function SessionPickerApp(props: SessionPickerProps) {
 				items={items()}
 				maxVisible={maxVisible()}
 				width={dimensions().width - 2}
-				onSelect={(item) => props.onSelect(item.value)}
-				onCancel={props.onCancel}
+				onSelect={(item) => handleSelect(item.value)}
+				onCancel={handleCancel}
 			/>
 			<box flexGrow={1} />
 			<box
