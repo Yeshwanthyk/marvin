@@ -83,10 +83,11 @@ function sequentialStream(messages: AssistantMessage[]) {
 describe("agentLoop steering/follow-up parity", () => {
 	const model = getModel("google", "gemini-2.5-flash-lite-preview-06-17");
 
-	it("should interrupt remaining tool calls when steering arrives mid-turn", async () => {
+	it("should execute all tool calls in parallel and handle steering after batch completes", async () => {
 		const steeringQueue: QueuedMessage[] = [];
 		const followUpQueue: QueuedMessage[] = [];
 
+		let firstToolExecuted = false;
 		let secondToolExecuted = false;
 		const tools: AgentTool[] = [
 			{
@@ -95,6 +96,7 @@ describe("agentLoop steering/follow-up parity", () => {
 				description: "first",
 				parameters: Type.Object({}, { additionalProperties: false }),
 				async execute() {
+					firstToolExecuted = true;
 					steeringQueue.push(createQueuedMessage("steer now", "steer"));
 					return {
 						content: [{ type: "text", text: "first-result" }],
@@ -150,7 +152,11 @@ describe("agentLoop steering/follow-up parity", () => {
 		}
 		await stream.result();
 
-		expect(secondToolExecuted).toBe(false);
+		// With parallel execution, both tools run to completion
+		expect(firstToolExecuted).toBe(true);
+		expect(secondToolExecuted).toBe(true);
+
+		// Steering should still be handled after the batch completes
 		const steeringEvents = events.filter(
 			(event) =>
 				event.type === "message_start" &&
