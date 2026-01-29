@@ -381,23 +381,43 @@ async function executeToolCalls<T>(
 	const toolCalls = assistantMessage.content.filter(
 		(c) => c.type === "toolCall",
 	);
-	const toolResults: ToolResultMessage<T>[] = [];
-	let interrupted = false;
 
-	for (const toolCall of toolCalls) {
-		const result = await executeSingleToolCall<T>(
-			toolCall,
-			tools,
-			signal,
-			stream,
-		);
-		toolResults.push(result);
+	// Execute all tools in parallel
+	const settled = await Promise.allSettled(
+		toolCalls.map((toolCall) =>
+			executeSingleToolCall<T>(toolCall, tools, signal, stream),
+		),
+	);
 
-		if (shouldInterrupt && (await shouldInterrupt())) {
-			interrupted = true;
-			break;
+	// Extract results, maintaining original order
+	const toolResults: ToolResultMessage<T>[] = settled.map((result, i) => {
+		if (result.status === "fulfilled") {
+			return result.value;
 		}
-	}
+		// This shouldn't happen since executeSingleToolCall catches errors internally,
+		// but handle it just in case
+		const toolCall = toolCalls[i];
+		return {
+			role: "toolResult" as const,
+			toolCallId: toolCall.id,
+			toolName: toolCall.name,
+			content: [
+				{
+					type: "text" as const,
+					text:
+						result.reason instanceof Error
+							? result.reason.message
+							: String(result.reason),
+				},
+			],
+			details: {} as T,
+			isError: true,
+			timestamp: Date.now(),
+		};
+	});
+
+	// Check for interrupt after all tools complete
+	const interrupted = shouldInterrupt ? await shouldInterrupt() : false;
 
 	return { results: toolResults, interrupted };
 }
