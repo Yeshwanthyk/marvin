@@ -39,6 +39,7 @@ export interface SessionControllerOptions {
 export interface SessionControllerState {
 	ensureSession: () => void
 	restoreSession: (session: LoadedSession) => void
+	switchSession: (path: string) => boolean
 	currentProvider: () => KnownProvider
 	setCurrentProvider: (p: KnownProvider) => void
 	currentModelId: () => string
@@ -187,9 +188,34 @@ export function createSessionController(options: SessionControllerOptions): Sess
 		}
 	}
 
+	const switchSession = (path: string): boolean => {
+		try {
+			// 1. Call sessionManager.loadSession(path)
+			const loaded = options.sessionManager.loadSession(path)
+			if (!loaded) {
+				return false
+			}
+
+			// 2. Call sessionManager.continueSession(path, metadata.id)
+			options.sessionManager.continueSession(path, loaded.metadata.id)
+
+			// 3. Call restoreSession(loaded)
+			restoreSession(loaded)
+
+			// 4. Set sessionStarted = true
+			sessionStarted = true
+
+			// 5. Return success boolean
+			return true
+		} catch {
+			return false
+		}
+	}
+
 	return {
 		ensureSession,
 		restoreSession,
+		switchSession,
 		currentProvider: () => currentProvider,
 		setCurrentProvider: (p) => {
 			currentProvider = p

@@ -47,6 +47,8 @@ export interface CommandContext {
 	launchEditor?: (command: string, args: string[], cwd: string, onError: (error: Error) => void) => void
 	openEditor?: () => Promise<void> | void
 	clearEditor?: () => void
+	switchSession?: (sessionPath: string) => Promise<boolean>
+	showSelect?: (title: string, options: string[]) => Promise<string | undefined>
 
 	onExit?: () => void
 	hookRunner?: HookRunner

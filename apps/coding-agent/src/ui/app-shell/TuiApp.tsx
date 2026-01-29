@@ -304,6 +304,8 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 		steer: (text) => steerHelper(text),
 		followUp: (text) => followUpHelper(text),
 		sendUserMessage: (text, options) => sendUserMessageHelper(text, options),
+		showSelect: modals.showSelect,
+		switchSession: async (sessionPath: string) => sessionController.switchSession(sessionPath),
 	}
 
 	const builtInCommandNames = new Set(slashCommands.map((c) => c.name))
