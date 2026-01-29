@@ -62,6 +62,7 @@ const runTui = async (args: {
   continueSession?: boolean;
   resumeSession?: boolean;
   session?: string;
+  prompt?: string;
 }) => {
   const solidPlugin = (await import("@opentui/solid/bun-plugin")).default;
   Bun.plugin(solidPlugin);
@@ -185,6 +186,7 @@ const main = async () => {
     continueSession: args.continue,
     resumeSession: args.resume,
     session: args.session,
+    prompt: args.prompt,
   });
 };
 

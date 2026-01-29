@@ -36,9 +36,11 @@ const SHELL_INJECTION_PREFIX = "[Shell output]" as const
 
 export interface TuiAppProps {
 	initialSession: LoadedSession | null
+	/** Initial prompt to submit on startup */
+	initialPrompt?: string
 }
 
-export const TuiApp = ({ initialSession }: TuiAppProps) => {
+export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 	const runtime = useRuntime()
 	const {
 		agent,
@@ -107,6 +109,14 @@ export const TuiApp = ({ initialSession }: TuiAppProps) => {
 	onMount(() => {
 		if (initialSession) {
 			sessionController.restoreSession(initialSession)
+		}
+	})
+
+	// Submit initial prompt after render settles
+	onMount(() => {
+		if (initialPrompt) {
+			// Delay slightly to let UI initialize
+			setTimeout(() => void submitPrompt(initialPrompt, "followUp"), 50)
 		}
 	})
 

@@ -10,6 +10,8 @@ interface RunTuiArgs extends RuntimeInitArgs {
 	resumeSession?: boolean
 	/** Session ID (UUID, prefix, or path) to load directly */
 	session?: string
+	/** Initial prompt to submit on startup */
+	prompt?: string
 }
 
 export const runTuiOpen = async (args?: RunTuiArgs) => {
@@ -43,7 +45,7 @@ export const runTuiOpen = async (args?: RunTuiArgs) => {
 	render(
 		() => (
 			<RuntimeProvider runtime={runtime}>
-				<TuiApp initialSession={initialSession} />
+				<TuiApp initialSession={initialSession} initialPrompt={args?.prompt} />
 			</RuntimeProvider>
 		),
 		{ targetFps: 30, exitOnCtrlC: false, useKittyKeyboard: {} },
