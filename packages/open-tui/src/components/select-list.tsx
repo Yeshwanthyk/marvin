@@ -178,12 +178,12 @@ function SelectListItem(props: {
 	const value = () => props.item.label || props.item.value
 
 	const labelWidth = () => Math.min(32, Math.max(12, props.width() - prefixWidth - 10))
-	const label = () => truncateToWidth(value(), labelWidth(), "")
+	const label = () => truncateToWidth(value(), labelWidth(), "…")
 	const labelPad = () => " ".repeat(Math.max(0, labelWidth() - visibleWidth(label())))
 
 	const showDescription = () => Boolean(props.item.description) && props.width() > 50
 	const descWidth = () => (showDescription() ? Math.max(0, props.width() - prefixWidth - labelWidth() - 2) : 0)
-	const desc = () => (showDescription() ? truncateToWidth(props.item.description!, descWidth(), "") : "")
+	const desc = () => (showDescription() ? truncateToWidth(props.item.description!, descWidth(), "…") : "")
 
 	const line = () => prefix() + label() + labelPad() + (showDescription() ? "  " + desc() : "")
 	const pad = () => " ".repeat(Math.max(0, props.width() - visibleWidth(line())))

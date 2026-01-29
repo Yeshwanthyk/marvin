@@ -118,6 +118,9 @@ export function truncateToWidth(text: string, maxWidth: number, ellipsis: string
 		currentWidth += graphemeWidth
 	}
 
-	// Add reset code before ellipsis to prevent styling leaking
-	return `${result}\x1b[0m${ellipsis}`
+	// Add reset code before ellipsis to prevent styling leaking (only if there's an ellipsis)
+	if (ellipsis) {
+		return `${result}\x1b[0m${ellipsis}`
+	}
+	return result
 }
