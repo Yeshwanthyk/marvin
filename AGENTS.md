@@ -44,6 +44,39 @@ cd apps/coding-agent && bun run build
 - `tui-app.ts` — main app loop, keybindings
 - Diff rendering uses `diff` package for word-level highlighting
 
+## Release Process
+
+When updating models or publishing packages, follow this dependency order:
+
+```bash
+# 1. Regenerate models (if adding new models)
+cd packages/ai && bun run generate-models
+
+# 2. Bump and publish packages in dependency order:
+#    ai → runtime-effect → coding-agent
+
+# Bump versions (ignore npm lockfile errors)
+cd packages/ai && npm version patch --no-git-tag-version
+cd packages/runtime-effect && npm version patch --no-git-tag-version  
+cd apps/coding-agent && npm version patch --no-git-tag-version
+
+# Commit and push
+git add -A && git commit -m "chore: bump versions for <reason>" && git push
+
+# Publish in order (each depends on previous)
+cd packages/ai && npm publish
+cd packages/runtime-effect && npm publish
+cd apps/coding-agent && npm publish
+
+# 3. Install fresh (clear bun cache first)
+bun pm cache rm && bun add -g @yeshwanthyk/coding-agent@<version>
+```
+
+**Why this order matters:**
+- `coding-agent` depends on `runtime-effect`
+- `runtime-effect` depends on `ai` (where models live)
+- npm resolves deps at publish time, so all must be published in order
+
 <!-- effect-solutions:start -->
 ## Effect Best Practices
 
