@@ -8,6 +8,14 @@ export type AnthropicOAuthCredentials = {
 	expires: number;
 };
 
+/**
+ * Result from starting the OAuth flow
+ */
+export type AnthropicOAuthStart = {
+	authUrl: string;
+	verifier: string;
+};
+
 // PKCE utilities
 function base64urlEncode(bytes: Uint8Array): string {
 	let binary = "";
@@ -42,15 +50,10 @@ const REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback";
 const SCOPES = "org:create_api_key user:profile user:inference";
 
 /**
- * Login with Anthropic OAuth
- *
- * @param onAuthUrl - Callback to handle the authorization URL (e.g., open browser)
- * @param onPromptCode - Callback to prompt user for the authorization code
+ * Start the Anthropic OAuth flow
+ * Returns the authorization URL and verifier (which must be stored for completion)
  */
-export async function loginAnthropic(
-	onAuthUrl: (url: string) => void,
-	onPromptCode: () => Promise<string>,
-): Promise<AnthropicOAuthCredentials> {
+export async function startAnthropicOAuth(): Promise<AnthropicOAuthStart> {
 	const { verifier, challenge } = await generatePKCE();
 
 	const authParams = new URLSearchParams({
@@ -66,9 +69,18 @@ export async function loginAnthropic(
 
 	const authUrl = `${AUTHORIZE_URL}?${authParams.toString()}`;
 
-	onAuthUrl(authUrl);
+	return { authUrl, verifier };
+}
 
-	const authCode = await onPromptCode();
+/**
+ * Complete the Anthropic OAuth flow
+ * @param authCode - The authorization code#state from the callback
+ * @param verifier - The verifier from startAnthropicOAuth
+ */
+export async function completeAnthropicOAuth(
+	authCode: string,
+	verifier: string,
+): Promise<AnthropicOAuthCredentials> {
 	const splits = authCode.split("#");
 	const code = splits[0];
 	const state = splits[1];
@@ -106,6 +118,24 @@ export async function loginAnthropic(
 		access: tokenData.access_token,
 		expires: expiresAt,
 	};
+}
+
+/**
+ * Login with Anthropic OAuth (convenience function combining start and complete)
+ *
+ * @param onAuthUrl - Callback to handle the authorization URL (e.g., open browser)
+ * @param onPromptCode - Callback to prompt user for the authorization code
+ */
+export async function loginAnthropic(
+	onAuthUrl: (url: string) => void,
+	onPromptCode: () => Promise<string>,
+): Promise<AnthropicOAuthCredentials> {
+	const { authUrl, verifier } = await startAnthropicOAuth();
+
+	onAuthUrl(authUrl);
+
+	const authCode = await onPromptCode();
+	return completeAnthropicOAuth(authCode, verifier);
 }
 
 /**

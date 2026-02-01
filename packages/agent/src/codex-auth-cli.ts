@@ -229,17 +229,28 @@ export async function authenticate(
 }
 
 // Run if called directly (skip in compiled binaries)
-if (
-	import.meta.url === `file://${process.argv[1]}` &&
-	!process.argv[1]?.includes("marvin")
-) {
+const isDirectRun = (() => {
+	// Skip if running as compiled marvin binary
+	if (process.argv[1]?.includes("marvin")) return false;
+	// Check if this file is being run directly
+	const scriptPath = process.argv[1];
+	if (!scriptPath) return false;
+	// Handle both absolute and relative paths
+	const normalizedScript = scriptPath.startsWith("/")
+		? `file://${scriptPath}`
+		: `file://${process.cwd()}/${scriptPath}`;
+	return import.meta.url === normalizedScript || import.meta.url.endsWith("/codex-auth-cli.ts");
+})();
+
+if (isDirectRun) {
 	const existing = loadTokens();
-	if (existing && existing.expires > Date.now()) {
-		// Already authenticated, silently exit
-	} else if (process.argv.includes("--force") || !existing) {
+	if (existing && existing.expires > Date.now() && !process.argv.includes("--force")) {
+		console.log(`✓ Already authenticated. Token expires ${new Date(existing.expires).toLocaleString()}`);
+		console.log(`  Run with --force to re-authenticate.`);
+	} else if (existing && existing.expires <= Date.now()) {
+		console.log(`⚠️  Token expired at ${new Date(existing.expires).toLocaleString()}`);
 		authenticate().catch(console.error);
 	} else {
-		console.log(`⚠️  Token expired at ${new Date(existing.expires).toLocaleString()}`);
 		authenticate().catch(console.error);
 	}
 }
