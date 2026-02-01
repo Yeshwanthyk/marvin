@@ -25,7 +25,7 @@ import { useEditorBridge } from "../../../hooks/useEditorBridge.js"
 import { MessagePane } from "../message-pane/MessagePane.js"
 import { Composer } from "../composer/Composer.js"
 import { createComposerKeyboardHandler } from "../composer/keyboard.js"
-import type { ValidationIssue } from "@ext/schema.js"
+import type { ValidationIssue } from "@yeshwanthyk/runtime-effect/extensibility/schema.js"
 
 export interface MainViewProps {
 	validationIssues?: ValidationIssue[]
