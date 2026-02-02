@@ -2,7 +2,7 @@
  * Hook runner - executes hooks and manages event emission.
  */
 
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import { Effect } from "effect"
 import type {
 	AppendEntryHandler,
@@ -151,6 +151,21 @@ const execEffect = (command: string, args: string[], cwd: string, options?: Exec
 	})
 
 /**
+ * Execute an interactive command (stdio: inherit, for TUI apps).
+ */
+async function execInteractiveCommand(command: string, args: string[], cwd: string): Promise<ExecResult> {
+	return new Promise((resolve) => {
+		const result = spawnSync(command, args, { cwd, stdio: "inherit" })
+		resolve({
+			stdout: "",
+			stderr: "",
+			code: result.status ?? 0,
+			killed: result.signal !== null,
+		})
+	})
+}
+
+/**
  * HookRunner executes hooks and manages event emission.
  */
 export class HookRunner {
@@ -295,6 +310,8 @@ export class HookRunner {
 		return {
 			exec: (command: string, args: string[], options?: ExecOptions) =>
 				Effect.runPromise(execEffect(command, args, this.cwd, options)),
+			execInteractive: (command: string, args: string[]) =>
+				execInteractiveCommand(command, args, this.cwd),
 			cwd: this.cwd,
 			configDir: this.configDir,
 			sessionId: this.sessionIdProvider(),

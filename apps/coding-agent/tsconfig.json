@@ -59,6 +59,14 @@
       "@yeshwanthyk/runtime-effect/*": [
         "../../packages/runtime-effect/src/*",
         "../runtime-effect/dist/*"
+      ],
+      "@yeshwanthyk/open-tui": [
+        "../../packages/open-tui/src/index.ts",
+        "../open-tui/dist/index.js"
+      ],
+      "@yeshwanthyk/open-tui/*": [
+        "../../packages/open-tui/src/*",
+        "../open-tui/dist/*"
       ]
     }
   },

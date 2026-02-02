@@ -36,8 +36,10 @@ export interface ExecOptions {
 
 /** Context passed to hook event handlers */
 export interface HookEventContext {
-	/** Execute a shell command */
+	/** Execute a shell command (captures output) */
 	exec(command: string, args: string[], options?: ExecOptions): Promise<ExecResult>
+	/** Execute an interactive command (takes over terminal, e.g. TUI apps) */
+	execInteractive(command: string, args: string[]): Promise<ExecResult>
 	/** Current working directory */
 	cwd: string
 	/** Config directory (~/.config/marvin) */
