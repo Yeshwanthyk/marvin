@@ -2673,6 +2673,23 @@ export const MODELS = {
 			contextWindow: 200000,
 			maxTokens: 64000,
 		} satisfies Model<"openai-completions">,
+		"trinity-large-preview-free": {
+			id: "trinity-large-preview-free",
+			name: "Trinity Large Preview",
+			api: "openai-completions",
+			provider: "opencode",
+			baseUrl: "https://opencode.ai/zen/v1",
+			reasoning: false,
+			input: ["text"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+			contextWindow: 131072,
+			maxTokens: 131072,
+		} satisfies Model<"openai-completions">,
 		"claude-opus-4-5": {
 			id: "claude-opus-4-5",
 			name: "Claude Opus 4.5",
@@ -5136,7 +5153,7 @@ export const MODELS = {
 				cacheWrite: 0,
 			},
 			contextWindow: 131072,
-			maxTokens: 4096,
+			maxTokens: 131072,
 		} satisfies Model<"openai-completions">,
 		"openai/gpt-oss-120b": {
 			id: "openai/gpt-oss-120b",
@@ -5187,7 +5204,7 @@ export const MODELS = {
 				cacheWrite: 0,
 			},
 			contextWindow: 131072,
-			maxTokens: 4096,
+			maxTokens: 131072,
 		} satisfies Model<"openai-completions">,
 		"openai/gpt-oss-20b": {
 			id: "openai/gpt-oss-20b",
@@ -6190,7 +6207,7 @@ export const MODELS = {
 				cacheWrite: 0,
 			},
 			contextWindow: 32768,
-			maxTokens: 4096,
+			maxTokens: 32768,
 		} satisfies Model<"openai-completions">,
 		"google/gemini-2.0-flash-lite-001": {
 			id: "google/gemini-2.0-flash-lite-001",
@@ -6395,23 +6412,6 @@ export const MODELS = {
 			},
 			contextWindow: 32768,
 			maxTokens: 32768,
-		} satisfies Model<"openai-completions">,
-		"deepseek/deepseek-r1-distill-llama-70b": {
-			id: "deepseek/deepseek-r1-distill-llama-70b",
-			name: "DeepSeek: R1 Distill Llama 70B",
-			api: "openai-completions",
-			provider: "openrouter",
-			baseUrl: "https://openrouter.ai/api/v1",
-			reasoning: true,
-			input: ["text"],
-			cost: {
-				input: 0.03,
-				output: 0.11,
-				cacheRead: 0,
-				cacheWrite: 0,
-			},
-			contextWindow: 131072,
-			maxTokens: 131072,
 		} satisfies Model<"openai-completions">,
 		"deepseek/deepseek-r1": {
 			id: "deepseek/deepseek-r1",
@@ -6632,7 +6632,7 @@ export const MODELS = {
 				cacheWrite: 0,
 			},
 			contextWindow: 32768,
-			maxTokens: 4096,
+			maxTokens: 32768,
 		} satisfies Model<"openai-completions">,
 		"anthropic/claude-3.5-haiku": {
 			id: "anthropic/claude-3.5-haiku",
@@ -6751,7 +6751,7 @@ export const MODELS = {
 				cacheWrite: 0,
 			},
 			contextWindow: 32768,
-			maxTokens: 4096,
+			maxTokens: 32768,
 		} satisfies Model<"openai-completions">,
 		"qwen/qwen-2.5-72b-instruct": {
 			id: "qwen/qwen-2.5-72b-instruct",
@@ -6836,7 +6836,7 @@ export const MODELS = {
 				cacheWrite: 0,
 			},
 			contextWindow: 32768,
-			maxTokens: 4096,
+			maxTokens: 32768,
 		} satisfies Model<"openai-completions">,
 		"openai/gpt-4o-2024-08-06": {
 			id: "openai/gpt-4o-2024-08-06",

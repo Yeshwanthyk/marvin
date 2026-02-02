@@ -43,8 +43,13 @@ export function copyToClipboard(text: string): boolean {
 	// Fall back to OSC 52 (works in iTerm2, kitty, Ghostty, tmux with set-clipboard on)
 	// Note: We cannot verify if OSC 52 succeeded
 	const base64 = Buffer.from(text).toString("base64")
-	const osc52 = `\x1b]52;c;${base64}\x07`
-	process.stdout.write(osc52)
+
+	// In tmux, we need to wrap OSC 52 in DCS passthrough sequence
+	if (process.env.TMUX) {
+		process.stdout.write(`\x1bPtmux;\x1b\x1b]52;c;${base64}\x07\x1b\\`)
+	} else {
+		process.stdout.write(`\x1b]52;c;${base64}\x07`)
+	}
 
 	// Return false to indicate we couldn't verify success
 	return false
