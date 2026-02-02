@@ -78,6 +78,9 @@
     "../../packages/base-tools/src/**/*.ts",
     "../../packages/lsp/src/**/*.ts",
     "../../packages/runtime-effect/src/**/*.ts",
+    "../../packages/open-tui/src/**/*.ts",
+    "../../packages/open-tui/src/**/*.tsx",
+    "../../packages/open-tui/src/**/*.json",
     "package.json"
   ],
   "exclude": ["dist", "node_modules"]
