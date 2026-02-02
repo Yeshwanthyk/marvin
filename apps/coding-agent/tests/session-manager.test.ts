@@ -52,7 +52,7 @@ describe("SessionManager", () => {
     manager.appendMessage(assistantMsg);
     
     // Wait for async writes to complete
-    await Bun.sleep(50);
+    await Bun.sleep(150);
     
     // Load and verify
     const loaded = manager.loadSession(manager.sessionPath!);
@@ -87,7 +87,7 @@ describe("SessionManager", () => {
     expect(sessions[1]!.id).toBe(firstId);
   });
 
-  it("loadLatest returns most recent session", () => {
+  it("loadLatest returns most recent session", async () => {
     manager.startSession("anthropic", "claude-sonnet-4-20250514", "medium");
     const userMsg: AppMessage = {
       role: "user",
@@ -95,6 +95,9 @@ describe("SessionManager", () => {
       timestamp: Date.now(),
     };
     manager.appendMessage(userMsg);
+    
+    // Wait for async write to complete
+    await Bun.sleep(150);
     
     const loaded = manager.loadLatest();
     expect(loaded).toBeTruthy();
