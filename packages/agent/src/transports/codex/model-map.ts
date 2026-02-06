@@ -1,6 +1,13 @@
 /** Model variants map to API model IDs */
 export const MODEL_MAP: Record<string, string> = {
-	// GPT-5.2 Codex (newest, supports xhigh, does NOT support "none")
+	// GPT-5.3 Codex (newest, supports xhigh, does NOT support "none")
+	"gpt-5.3-codex": "gpt-5.3-codex",
+	"gpt-5.3-codex-xhigh": "gpt-5.3-codex",
+	"gpt-5.3-codex-high": "gpt-5.3-codex",
+	"gpt-5.3-codex-medium": "gpt-5.3-codex",
+	"gpt-5.3-codex-low": "gpt-5.3-codex",
+
+	// GPT-5.2 Codex (supports xhigh, does NOT support "none")
 	"gpt-5.2-codex": "gpt-5.2-codex",
 	"gpt-5.2-codex-xhigh": "gpt-5.2-codex",
 	"gpt-5.2-codex-high": "gpt-5.2-codex",

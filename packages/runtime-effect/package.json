@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/runtime-effect",
-  "version": "0.1.9",
+  "version": "0.2.5",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -147,12 +147,12 @@
   },
   "dependencies": {
     "@effect/platform-node": "^0.104.0",
-    "@yeshwanthyk/agent-core": "^0.1.0",
-    "@yeshwanthyk/ai": "^0.1.0",
-    "@yeshwanthyk/base-tools": "^0.1.0",
-    "@yeshwanthyk/lsp": "^0.1.0",
-    "solid-js": "1.9.9",
-    "effect": "^3.19.14"
+    "@yeshwanthyk/agent-core": "^0.2.5",
+    "@yeshwanthyk/ai": "^0.2.5",
+    "@yeshwanthyk/base-tools": "^0.2.5",
+    "@yeshwanthyk/lsp": "^0.2.5",
+    "effect": "^3.19.14",
+    "solid-js": "1.9.9"
   },
   "keywords": [
     "ai",

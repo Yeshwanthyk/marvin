@@ -432,6 +432,40 @@ async function generateModels() {
 		opus45.cost.cacheWrite = 6.25;
 	}
 
+	// Temporary Opus 4.6 overrides until upstream metadata is corrected.
+	for (const model of allModels) {
+		if (model.provider === "anthropic" && model.id === "claude-opus-4-6") {
+			model.cost.cacheRead = 0.5;
+			model.cost.cacheWrite = 6.25;
+			model.contextWindow = 200000;
+		}
+	}
+
+	// Add missing Claude Opus 4.6
+	if (
+		!allModels.some(
+			(m) => m.provider === "anthropic" && m.id === "claude-opus-4-6",
+		)
+	) {
+		allModels.push({
+			id: "claude-opus-4-6",
+			name: "Claude Opus 4.6",
+			api: "anthropic-messages",
+			baseUrl: "https://api.anthropic.com",
+			provider: "anthropic",
+			reasoning: true,
+			input: ["text", "image"],
+			cost: {
+				input: 5,
+				output: 25,
+				cacheRead: 0.5,
+				cacheWrite: 6.25,
+			},
+			contextWindow: 200000,
+			maxTokens: 128000,
+		});
+	}
+
 	// Fix opencode models that don't support developer role
 	// glm-4.7-free returns "Incorrect role information", grok-code also fails
 	const opencodeNoDeveloperRole = ["glm-4.7-free", "grok-code"];
@@ -589,6 +623,7 @@ async function generateModels() {
 		{ ...codexBase, id: "gpt-5.2", name: "GPT-5.2" },
 		{ ...codexBase, id: "gpt-5.2-codex", name: "GPT-5.2 Codex" },
 		{ ...codexBase, id: "gpt-5.2-mini", name: "GPT-5.2 Mini" },
+		{ ...codexBase, id: "gpt-5.3-codex", name: "GPT-5.3 Codex" },
 	);
 
 	// Group by provider and deduplicate by model ID

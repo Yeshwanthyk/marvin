@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/coding-agent",
-  "version": "0.3.37",
+  "version": "0.3.38",
   "type": "module",
   "bin": {
     "marvin": "./dist/cli.js"
@@ -32,11 +32,11 @@
     "bun": ">=1.3.0"
   },
   "dependencies": {
-    "@yeshwanthyk/agent-core": "^0.1.0",
-    "@yeshwanthyk/ai": "^0.1.0",
-    "@yeshwanthyk/base-tools": "^0.1.0",
-    "@yeshwanthyk/lsp": "^0.1.0",
-    "@yeshwanthyk/runtime-effect": "^0.1.7",
+    "@yeshwanthyk/agent-core": "^0.2.5",
+    "@yeshwanthyk/ai": "^0.2.5",
+    "@yeshwanthyk/base-tools": "^0.2.5",
+    "@yeshwanthyk/lsp": "^0.2.5",
+    "@yeshwanthyk/runtime-effect": "^0.2.5",
     "@yeshwanthyk/open-tui": "^0.1.6",
     "@opentui/core": "0.1.74",
     "@opentui/solid": "0.1.74",

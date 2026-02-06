@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/sdk",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -22,9 +22,9 @@
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@yeshwanthyk/agent-core": "^0.1.0",
-    "@yeshwanthyk/ai": "^0.1.0",
-    "@yeshwanthyk/runtime-effect": "^0.1.0",
+    "@yeshwanthyk/agent-core": "^0.2.5",
+    "@yeshwanthyk/ai": "^0.2.5",
+    "@yeshwanthyk/runtime-effect": "^0.2.5",
     "effect": "^3.19.14"
   },
   "keywords": [
