@@ -623,7 +623,7 @@ async function generateModels() {
 		{ ...codexBase, id: "gpt-5.2", name: "GPT-5.2" },
 		{ ...codexBase, id: "gpt-5.2-codex", name: "GPT-5.2 Codex" },
 		{ ...codexBase, id: "gpt-5.2-mini", name: "GPT-5.2 Mini" },
-		{ ...codexBase, id: "gpt-5.3-codex", name: "GPT-5.3 Codex" },
+		{ ...codexBase, id: "gpt-5.3-codex", name: "GPT-5.3 Codex", maxTokens: 128000 },
 	);
 
 	// Group by provider and deduplicate by model ID

@@ -7452,7 +7452,7 @@ export const MODELS = {
 				cacheWrite: 0,
 			},
 			contextWindow: 400000,
-			maxTokens: 32000,
+			maxTokens: 128000,
 		} satisfies Model<"openai-responses">,
 	},
 } as const;
