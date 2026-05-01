@@ -134,8 +134,9 @@ function validateCancelParams(params: unknown): CancelParams | null {
 
 // Fixed model list for Zed picker
 const MODEL_OPTIONS: ModelOption[] = [
-	{ modelId: "claude-opus-4-5", name: "Claude Opus 4.5" },
-	{ modelId: "codex/gpt-5.2-codex", name: "GPT 5.2 Codex" },
+	{ modelId: "claude-opus-4-7", name: "Claude Opus 4.7" },
+	{ modelId: "codex/gpt-5.3-codex", name: "GPT 5.3 Codex" },
+	{ modelId: "codex/gpt-5.5", name: "GPT 5.5" },
 	{ modelId: "opencode/glm-4.7-free", name: "GLM 4.7 Free" },
 ]
 
@@ -189,7 +190,7 @@ export async function runAcp(args: { configDir?: string; configPath?: string; mo
 	})
 
 	// Determine initial model from args or first in MODEL_OPTIONS
-	const initialModelId = args.model?.split(",")[0] ?? MODEL_OPTIONS[0]?.modelId ?? "claude-opus-4-5"
+	const initialModelId = args.model?.split(",")[0] ?? MODEL_OPTIONS[0]?.modelId ?? "claude-opus-4-7"
 
 	const state: AcpServerState = {
 		initialized: false,

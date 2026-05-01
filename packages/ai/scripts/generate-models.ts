@@ -432,24 +432,24 @@ async function generateModels() {
 		opus45.cost.cacheWrite = 6.25;
 	}
 
-	// Temporary Opus 4.6 overrides until upstream metadata is corrected.
+	// Temporary Opus 4.7 overrides until upstream metadata is corrected.
 	for (const model of allModels) {
-		if (model.provider === "anthropic" && model.id === "claude-opus-4-6") {
+		if (model.provider === "anthropic" && model.id === "claude-opus-4-7") {
 			model.cost.cacheRead = 0.5;
 			model.cost.cacheWrite = 6.25;
 			model.contextWindow = 200000;
 		}
 	}
 
-	// Add missing Claude Opus 4.6
+	// Add missing Claude Opus 4.7
 	if (
 		!allModels.some(
-			(m) => m.provider === "anthropic" && m.id === "claude-opus-4-6",
+			(m) => m.provider === "anthropic" && m.id === "claude-opus-4-7",
 		)
 	) {
 		allModels.push({
-			id: "claude-opus-4-6",
-			name: "Claude Opus 4.6",
+			id: "claude-opus-4-7",
+			name: "Claude Opus 4.7",
 			api: "anthropic-messages",
 			baseUrl: "https://api.anthropic.com",
 			provider: "anthropic",
@@ -607,7 +607,6 @@ async function generateModels() {
 	}
 
 	// Add Codex models (ChatGPT subscription OAuth access)
-	// GPT-5.2 with different reasoning levels
 	const codexBase = {
 		api: "openai-responses" as const,
 		baseUrl: "https://chatgpt.com/backend-api",
@@ -620,10 +619,11 @@ async function generateModels() {
 	};
 
 	allModels.push(
+		{ ...codexBase, id: "gpt-5.5", name: "GPT-5.5", maxTokens: 128000 },
+		{ ...codexBase, id: "gpt-5.3-codex", name: "GPT-5.3 Codex", maxTokens: 128000 },
 		{ ...codexBase, id: "gpt-5.2", name: "GPT-5.2" },
 		{ ...codexBase, id: "gpt-5.2-codex", name: "GPT-5.2 Codex" },
 		{ ...codexBase, id: "gpt-5.2-mini", name: "GPT-5.2 Mini" },
-		{ ...codexBase, id: "gpt-5.3-codex", name: "GPT-5.3 Codex", maxTokens: 128000 },
 	);
 
 	// Group by provider and deduplicate by model ID

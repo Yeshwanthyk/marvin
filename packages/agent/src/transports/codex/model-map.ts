@@ -1,6 +1,13 @@
 /** Model variants map to API model IDs */
 export const MODEL_MAP: Record<string, string> = {
-	// GPT-5.3 Codex (newest, supports xhigh, does NOT support "none")
+	// GPT-5.5 general (newest, supports xhigh, does NOT support "none")
+	"gpt-5.5": "gpt-5.5",
+	"gpt-5.5-xhigh": "gpt-5.5",
+	"gpt-5.5-high": "gpt-5.5",
+	"gpt-5.5-medium": "gpt-5.5",
+	"gpt-5.5-low": "gpt-5.5",
+
+	// GPT-5.3 Codex (supports xhigh, does NOT support "none")
 	"gpt-5.3-codex": "gpt-5.3-codex",
 	"gpt-5.3-codex-xhigh": "gpt-5.3-codex",
 	"gpt-5.3-codex-high": "gpt-5.3-codex",
@@ -26,6 +33,6 @@ export const MODEL_MAP: Record<string, string> = {
 };
 
 export function normalizeModel(model: string): string {
-	const id = model.includes("/") ? model.split("/").pop()! : model;
+	const id = model.includes("/") ? (model.split("/").pop() ?? model) : model;
 	return MODEL_MAP[id] ?? "gpt-5.2";
 }

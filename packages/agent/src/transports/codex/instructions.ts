@@ -10,9 +10,10 @@ interface CacheMetadata {
 	lastChecked: number;
 }
 
-type ModelFamily = "gpt-5.2-codex" | "gpt-5.2";
+type ModelFamily = "gpt-5.3-codex" | "gpt-5.2-codex" | "gpt-5.2";
 
 const PROMPT_FILES: Record<ModelFamily, string> = {
+	"gpt-5.3-codex": "gpt_5_codex_prompt.md",
 	"gpt-5.2-codex": "gpt-5.2-codex_prompt.md",
 	"gpt-5.2": "gpt_5_2_prompt.md",
 };
@@ -20,6 +21,9 @@ const PROMPT_FILES: Record<ModelFamily, string> = {
 function getModelFamily(model: string): ModelFamily {
 	const normalized = model.toLowerCase();
 	// Check specific first
+	if (normalized.includes("gpt-5.3-codex") || normalized.includes("gpt 5.3 codex")) {
+		return "gpt-5.3-codex";
+	}
 	if (normalized.includes("gpt-5.2-codex") || normalized.includes("gpt 5.2 codex")) {
 		return "gpt-5.2-codex";
 	}

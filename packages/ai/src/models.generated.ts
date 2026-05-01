@@ -107,9 +107,9 @@ export const MODELS = {
 			contextWindow: 200000,
 			maxTokens: 8192,
 		} satisfies Model<"anthropic-messages">,
-		"claude-opus-4-6": {
-			id: "claude-opus-4-6",
-			name: "Claude Opus 4.6",
+		"claude-opus-4-7": {
+			id: "claude-opus-4-7",
+			name: "Claude Opus 4.7",
 			api: "anthropic-messages",
 			provider: "anthropic",
 			baseUrl: "https://api.anthropic.com",
@@ -7560,6 +7560,23 @@ export const MODELS = {
 		} satisfies Model<"openai-completions">,
 	},
 	"codex": {
+		"gpt-5.5": {
+			id: "gpt-5.5",
+			name: "GPT-5.5",
+			api: "openai-responses",
+			provider: "codex",
+			baseUrl: "https://chatgpt.com/backend-api",
+			reasoning: true,
+			input: ["text", "image"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+			contextWindow: 400000,
+			maxTokens: 128000,
+		} satisfies Model<"openai-responses">,
 		"gpt-5.2": {
 			id: "gpt-5.2",
 			name: "GPT-5.2",

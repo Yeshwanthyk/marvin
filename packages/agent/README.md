@@ -98,7 +98,7 @@ Transports abstract LLM communication:
 
 - **`ProviderTransport`**: Direct API calls using `@yeshwanthyk/ai`
 - **`AppTransport`**: Proxy through a backend server (for browser apps)
-- **`CodexTransport`**: OAuth-based access via ChatGPT subscription (gpt-5.2)
+- **`CodexTransport`**: OAuth-based access via ChatGPT subscription (gpt-5.3-codex / gpt-5.5)
 - **`RouterTransport`**: Auto-routes to correct transport based on model provider
 
 ```typescript

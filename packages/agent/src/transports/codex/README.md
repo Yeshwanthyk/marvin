@@ -79,10 +79,11 @@ export const MODEL_MAP: Record<string, string> = {
 If model needs different prompt file, update:
 
 ```ts
-type ModelFamily = "gpt-5.2-codex" | "gpt-5.2" | "gpt-X.Y-codex";  // Add new family
+type ModelFamily = "gpt-5.3-codex" | "gpt-5.2-codex" | "gpt-5.2" | "gpt-X.Y-codex";  // Add new family
 
 const PROMPT_FILES: Record<ModelFamily, string> = {
     // ... existing ...
+    "gpt-5.3-codex": "gpt_5_codex_prompt.md",
     "gpt-X.Y-codex": "gpt-X.Y-codex_prompt.md",  // Check openai/codex repo for filename
 };
 
@@ -133,7 +134,9 @@ CodexTransport
 
 | Model | Reasoning | xhigh | "none" | Notes |
 |-------|-----------|-------|--------|-------|
-| gpt-5.2-codex | ✓ | ✓ | ✗ | Newest codex model |
+| gpt-5.3-codex | ✓ | ✓ | ✗ | Latest codex-tuned model |
+| gpt-5.5 | ✓ | ✓ | ✗ | Latest general GPT-5 model |
+| gpt-5.2-codex | ✓ | ✓ | ✗ | Previous codex model |
 | gpt-5.2 | ✓ | ✓ | ✓ | General purpose |
 | gpt-5.2-mini | ✓ | ✗ | ✗ | Lightweight |
 
