@@ -1,4 +1,4 @@
-import type { Agent, ThinkingLevel } from "@yeshwanthyk/agent-core"
+import type { Agent, AppMessage, ThinkingLevel } from "@yeshwanthyk/agent-core"
 import type { CodexTransport } from "@yeshwanthyk/agent-core"
 import type { Api, Model, KnownProvider } from "@yeshwanthyk/ai"
 import type { SessionManager } from "../../session-manager.js"
@@ -44,8 +44,12 @@ export interface CommandContext {
 	launchEditor?: (command: string, args: string[], cwd: string, onError: (error: Error) => void) => void
 	openEditor?: () => Promise<void> | void
 	clearEditor?: () => void
+	setEditorText?: (text: string) => void
 	switchSession?: (sessionPath: string) => Promise<boolean>
 	showSelect?: (title: string, options: string[]) => Promise<string | undefined>
+	showInput?: (title: string, placeholder?: string) => Promise<string | undefined>
+	showTreeSelector?: () => Promise<string | undefined>
+	navigateTree?: (entryId: string, options?: { summaryMessage?: AppMessage }) => Promise<{ editorText?: string } | undefined>
 
 	onExit?: () => void
 	hookRunner?: HookRunner

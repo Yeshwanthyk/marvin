@@ -27,6 +27,7 @@ export const slashCommands: SlashCommand[] = [
   { name: 'exit', description: 'Exit' },
   { name: 'status', description: 'Show session status (model, context, turns)' },
   { name: 'sessions', description: 'List and switch to a previous session' },
+  { name: 'tree', description: 'Navigate the current session tree' },
   { name: 'login', description: 'Login to AI provider' },
   { name: 'fork', description: 'Fork current session to new session' },
   { name: 'steer', description: 'Interrupt current run: /steer <text>' },

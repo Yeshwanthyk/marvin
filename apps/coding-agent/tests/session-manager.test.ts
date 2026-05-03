@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { SessionManager } from "../src/session-manager";
-import { mkdtempSync, rmSync, existsSync } from "fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import type { AppMessage } from "@yeshwanthyk/agent-core";
@@ -156,5 +156,84 @@ describe("SessionManager", () => {
     const found = manager.findSession(id1);
     expect(found).toBeTruthy();
     expect(found!.id).toBe(id1);
+  });
+
+  it("tracks entries as a tree and loads the active branch", async () => {
+    manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
+
+    const root: AppMessage = {
+      role: "user",
+      content: [{ type: "text", text: "root" }],
+      timestamp: Date.now(),
+    };
+    const firstReply: AppMessage = {
+      role: "assistant",
+      content: [{ type: "text", text: "first" }],
+      api: "messages",
+      provider: "anthropic",
+      model: "claude-sonnet-4-20250514",
+      usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "end",
+      timestamp: Date.now(),
+    };
+    manager.appendMessage(root);
+    manager.appendMessage(firstReply);
+    await Bun.sleep(150);
+
+    const rootEntry = manager.getBranch()[0];
+    expect(rootEntry?.type).toBe("message");
+    manager.branch(rootEntry!.id);
+
+    const branchMessage: AppMessage = {
+      role: "user",
+      content: [{ type: "text", text: "alternate" }],
+      timestamp: Date.now(),
+    };
+    manager.appendMessage(branchMessage);
+    await Bun.sleep(150);
+
+    const tree = manager.getTree();
+    expect(tree).toHaveLength(1);
+    expect(tree[0]!.children).toHaveLength(2);
+
+    const loaded = manager.loadSession(manager.sessionPath!);
+    expect(loaded?.messages.map((message) => message.role)).toEqual(["user", "user"]);
+    const last = loaded?.messages.at(-1);
+    expect(Array.isArray(last?.content) && last.content[0]?.type === "text" ? last.content[0].text : "").toBe("alternate");
+  });
+
+  it("migrates legacy linear entries to tree entries", async () => {
+    const id = manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
+    const path = manager.sessionPath!;
+    const metadata = {
+      type: "session",
+      id,
+      timestamp: Date.now(),
+      cwd: process.cwd(),
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-20250514",
+      thinkingLevel: "off",
+    };
+    const first = {
+      type: "message",
+      timestamp: Date.now(),
+      message: { role: "user", content: [{ type: "text", text: "old" }], timestamp: Date.now() },
+    };
+    const second = {
+      type: "custom",
+      timestamp: Date.now(),
+      customType: "legacy",
+    };
+    writeFileSync(path, `${JSON.stringify(metadata)}\n${JSON.stringify(first)}\n${JSON.stringify(second)}\n`);
+
+    const entries = manager.getEntries();
+    expect(entries[0]?.type === "session" ? entries[0].version : undefined).toBe(3);
+    const migrated = entries.filter((entry) => entry.type !== "session");
+    expect(migrated.every((entry) => typeof entry.id === "string")).toBe(true);
+    expect(migrated[0]?.type !== "session" ? migrated[0]?.parentId : "bad").toBe(null);
+    expect(migrated[1]?.type !== "session" ? migrated[1]?.parentId : undefined).toBe(migrated[0]?.type !== "session" ? migrated[0]?.id : undefined);
+
+    const persisted = readFileSync(path, "utf8");
+    expect(persisted).toContain("\"version\":3");
   });
 });
