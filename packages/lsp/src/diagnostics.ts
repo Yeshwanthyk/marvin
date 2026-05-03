@@ -7,6 +7,18 @@ const DEFAULT_CAPS: LspDiagnosticCaps = {
   maxTotalLines: 60,
 }
 
+function positiveIntegerOrDefault(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+function normalizeCaps(caps: Partial<LspDiagnosticCaps> | undefined): LspDiagnosticCaps {
+  return {
+    maxDiagnosticsPerFile: positiveIntegerOrDefault(caps?.maxDiagnosticsPerFile, DEFAULT_CAPS.maxDiagnosticsPerFile),
+    maxProjectFiles: positiveIntegerOrDefault(caps?.maxProjectFiles, DEFAULT_CAPS.maxProjectFiles),
+    maxTotalLines: positiveIntegerOrDefault(caps?.maxTotalLines, DEFAULT_CAPS.maxTotalLines),
+  }
+}
+
 function severityLabel(sev: number | undefined): "ERROR" | "WARN" | "INFO" | "HINT" {
   switch (sev) {
     case 1: return "ERROR"
@@ -36,7 +48,7 @@ export function summarizeDiagnostics(input: {
   filePath: string
   caps?: Partial<LspDiagnosticCaps>
 }): DiagnosticSummary {
-  const caps: LspDiagnosticCaps = { ...DEFAULT_CAPS, ...(input.caps ?? {}) }
+  const caps = normalizeCaps(input.caps)
 
   const byFile = input.diagnosticsByFile
   const target = byFile[input.filePath] ?? []

@@ -31,6 +31,8 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.69.1",
+    "@opentui/core": "0.2.2",
+    "@opentui/solid": "0.2.2",
     "@types/node": "^25.0.1",
     "@typescript/native-preview": "^7.0.0-dev.20260118.1",
     "eslint": "^9.39.2",

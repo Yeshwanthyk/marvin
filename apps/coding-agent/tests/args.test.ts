@@ -49,4 +49,24 @@ describe("coding-agent args", () => {
     expect(args.configDir).toBe("/tmp/config");
     expect(args.prompt).toBeUndefined();
   });
+
+  it("does not consume following flags as option values", () => {
+    const args = parseArgs(["--model", "--headless", "hello"]);
+    expect(args.model).toBeUndefined();
+    expect(args.headless).toBe(true);
+    expect(args.prompt).toBe("--model hello");
+  });
+
+  it("keeps missing option values in prompt for visibility", () => {
+    const args = parseArgs(["--provider"]);
+    expect(args.provider).toBeUndefined();
+    expect(args.prompt).toBe("--provider");
+  });
+
+  it("does not skip flags after missing thinking value", () => {
+    const args = parseArgs(["--thinking", "--headless"]);
+    expect(args.thinking).toBeUndefined();
+    expect(args.headless).toBe(true);
+    expect(args.prompt).toBe("--thinking");
+  });
 });

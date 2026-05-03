@@ -17,6 +17,11 @@ export interface ParsedArgs {
   version: boolean;
 }
 
+const optionValue = (argv: string[], index: number): string | undefined => {
+  const value = argv[index]
+  return value && !value.startsWith("-") ? value : undefined
+}
+
 export const parseArgs = (argv: string[]): ParsedArgs => {
   const args: ParsedArgs = {
     headless: false,
@@ -59,8 +64,13 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       continue;
     }
     if (a === '--session' || a === '-s') {
-      args.session = argv[i + 1];
-      i += 1;
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.session = value
+        i += 1
+      } else {
+        rest.push(a)
+      }
       continue;
     }
     if (a === "--headless") {
@@ -72,35 +82,56 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       continue;
     }
     if (a === "--config-dir") {
-      args.configDir = argv[i + 1];
-      i += 1;
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.configDir = value
+        i += 1
+      } else {
+        rest.push(a)
+      }
       continue;
     }
     if (a === "--config") {
-      args.configPath = argv[i + 1];
-      i += 1;
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.configPath = value
+        i += 1
+      } else {
+        rest.push(a)
+      }
       continue;
     }
     if (a === '--provider') {
-      args.provider = argv[i + 1];
-      i += 1;
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.provider = value
+        i += 1
+      } else {
+        rest.push(a)
+      }
       continue;
     }
     if (a === '--model') {
-      args.model = argv[i + 1];
-      i += 1;
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.model = value
+        i += 1
+      } else {
+        rest.push(a)
+      }
       continue;
     }
     if (a === '--thinking') {
-      const level = argv[i + 1];
+      const level = optionValue(argv, i + 1)
       if (level === 'off' || level === 'minimal' || level === 'low' || level === 'medium' || level === 'high' || level === 'xhigh') {
         args.thinking = level;
+        i += 1;
       } else if (level !== undefined) {
         rest.push(a, level);
+        i += 1;
       } else {
         rest.push(a);
       }
-      i += 1;
       continue;
     }
     rest.push(a);

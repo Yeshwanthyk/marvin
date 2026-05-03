@@ -9,10 +9,10 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult
 const readSchema = Type.Object({
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
 	offset: Type.Optional(
-		Type.Number({ description: "Line number to start from (1-indexed). Only use to continue after truncation." }),
+		Type.Integer({ minimum: 1, description: "Line number to start from (1-indexed). Only use to continue after truncation." }),
 	),
 	limit: Type.Optional(
-		Type.Number({ description: "Max lines to read. Only use if you need a specific portion of the file." }),
+		Type.Integer({ minimum: 1, description: "Max lines to read. Only use if you need a specific portion of the file." }),
 	),
 });
 
@@ -30,6 +30,13 @@ export const createReadTool = (cwd: string): AgentTool<typeof readSchema> => ({
 		{ path, offset, limit }: { path: string; offset?: number; limit?: number },
 		signal?: AbortSignal,
 	) => {
+		if (offset !== undefined && (!Number.isInteger(offset) || offset < 1)) {
+			throw new Error("offset must be a positive integer");
+		}
+		if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+			throw new Error("limit must be a positive integer");
+		}
+
 		const absolutePath = resolveReadPathFromCwd(cwd, path);
 
 		return new Promise<{ content: (TextContent | ImageContent)[]; details: ReadToolDetails | undefined }>(
@@ -85,7 +92,7 @@ export const createReadTool = (cwd: string): AgentTool<typeof readSchema> => ({
 							const totalFileLines = allLines.length;
 
 							// Apply offset if specified (1-indexed to 0-indexed)
-							const startLine = offset ? Math.max(0, offset - 1) : 0;
+							const startLine = offset !== undefined ? offset - 1 : 0;
 							const startLineDisplay = startLine + 1; // For display (1-indexed)
 
 							// Check if offset is out of bounds
