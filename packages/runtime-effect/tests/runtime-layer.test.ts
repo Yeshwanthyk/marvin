@@ -162,4 +162,27 @@ describe("RuntimeLayer", () => {
       await rm(temp.dir, { recursive: true, force: true });
     }
   });
+
+  it("aligns comma-separated thinking levels with cycle models", async () => {
+    const temp = await createTempConfig();
+    const openAiModel = getModels("openai")[0]!;
+    try {
+      const services = await runLayer(
+        RuntimeLayer({
+          adapter: "headless",
+          configDir: temp.dir,
+          configPath: temp.configPath,
+          model: `anthropic/${temp.model.id},openai/${openAiModel.id}`,
+          thinking: "low,high",
+          instrumentation: { record: () => {} },
+          lspFactory: () => stubLspManager(),
+        }),
+      );
+
+      expect(services.config.thinking).toBe("low");
+      expect(services.cycleModels.map((entry) => entry.thinking)).toEqual(["low", "high"]);
+    } finally {
+      await rm(temp.dir, { recursive: true, force: true });
+    }
+  });
 });

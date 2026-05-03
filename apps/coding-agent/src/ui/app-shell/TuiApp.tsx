@@ -611,6 +611,11 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		agent.setModel(entry.model)
 		store.displayModelId.set(entry.model.id)
 		store.displayContextWindow.set(entry.model.contextWindow)
+		if (entry.thinking !== undefined) {
+			sessionController.setCurrentThinking(entry.thinking)
+			agent.setThinkingLevel(entry.thinking)
+			store.displayThinking.set(entry.thinking)
+		}
 	}
 
 	const cycleThinking = () => {

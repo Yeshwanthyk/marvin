@@ -3,6 +3,7 @@ import { Effect, Layer } from "effect";
 import * as Runtime from "effect/Runtime";
 import { getModels, type Api, type Model, type KnownProvider } from "@yeshwanthyk/ai";
 import type { AppMessage, Attachment } from "@yeshwanthyk/agent-core";
+import type { ThinkingLevel } from "@yeshwanthyk/agent-core";
 import { SessionOrchestratorLayer, SessionOrchestratorTag } from "../src/session/orchestrator.js";
 import { PromptQueueLayer } from "../src/session/prompt-queue.js";
 import { ExecutionPlanBuilderLayer, type ExecutionPlanBuilderOptions } from "../src/session/execution-plan.js";
@@ -34,12 +35,13 @@ class TestAgent {
   state: {
     systemPrompt: string;
     model: Model<Api>;
-    thinkingLevel: "off";
+    thinkingLevel: ThinkingLevel;
     tools: [];
     messages: AppMessage[];
   };
   prompts: string[] = [];
   modelsUsed: string[] = [];
+  thinkingUsed: ThinkingLevel[] = [];
   callCount = 0;
   failuresBeforeSuccess = 0;
   replaceSnapshots: AppMessage[][] = [];
@@ -58,6 +60,11 @@ class TestAgent {
   setModel(model: Model<Api>) {
     this.state.model = model;
     this.modelsUsed.push(model.id);
+  }
+
+  setThinkingLevel(level: ThinkingLevel) {
+    this.state.thinkingLevel = level;
+    this.thinkingUsed.push(level);
   }
 
   replaceMessages(messages: AppMessage[]) {
@@ -263,6 +270,39 @@ describe("SessionOrchestratorLayer", () => {
     expect(agent.callCount).toBe(2);
     expect(agent.modelsUsed).toEqual([anthropicModel.id, openAiModel.id]);
     expect(agent.replaceSnapshots).toHaveLength(1);
+  });
+
+  it("applies per-model thinking levels from execution plans", async () => {
+    const agent = new TestAgent(anthropicModel);
+    agent.failuresBeforeSuccess = 1;
+    const sessionManager = new TestSessionManager();
+    const hookRunner = new TestHookRunner();
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({
+      agent,
+      sessionManager,
+      hookRunner,
+      instrumentation,
+      executionPlanOptions: {
+        cycle: [
+          { provider: "anthropic", model: anthropicModel, thinking: "low" },
+          { provider: "openai", model: openAiModel, thinking: "high" },
+        ],
+        attempts: { primary: 1, fallback: 1 },
+      },
+    });
+
+    await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPrompt("fallback thinking please");
+        yield* waitForAgentCalls(agent, 2);
+      }),
+    );
+
+    expect(agent.modelsUsed).toEqual([anthropicModel.id, openAiModel.id]);
+    expect(agent.thinkingUsed).toEqual(["low", "high"]);
   });
 
   it("awaits prompt completion via submitPromptAndWait", async () => {

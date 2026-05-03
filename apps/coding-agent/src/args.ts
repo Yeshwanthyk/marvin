@@ -8,7 +8,8 @@ export interface ParsedArgs {
   provider?: string;
   /** Single model or comma-separated list for Ctrl+P cycling */
   model?: string;
-  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+  /** Single thinking level or comma-separated list aligned with --model */
+  thinking?: string;
   extensions: string[];
   noExtensions: boolean;
   continue: boolean;
@@ -22,6 +23,18 @@ export interface ParsedArgs {
 const optionValue = (argv: string[], index: number): string | undefined => {
   const value = argv[index]
   return value && !value.startsWith("-") ? value : undefined
+}
+
+const isThinkingSpec = (value: string): boolean => {
+  const levels = value.split(",").map((entry) => entry.trim()).filter(Boolean)
+  return levels.length > 0 && levels.every((level) =>
+    level === "off" ||
+    level === "minimal" ||
+    level === "low" ||
+    level === "medium" ||
+    level === "high" ||
+    level === "xhigh"
+  )
 }
 
 export const parseArgs = (argv: string[]): ParsedArgs => {
@@ -127,7 +140,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     }
     if (a === '--thinking') {
       const level = optionValue(argv, i + 1)
-      if (level === 'off' || level === 'minimal' || level === 'low' || level === 'medium' || level === 'high' || level === 'xhigh') {
+      if (level !== undefined && isThinkingSpec(level)) {
         args.thinking = level;
         i += 1;
       } else if (level !== undefined) {

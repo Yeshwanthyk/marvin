@@ -21,6 +21,12 @@ describe("coding-agent args", () => {
     expect(args.thinking).toBe("high");
   });
 
+  it("parses comma-separated thinking levels", () => {
+    const args = parseArgs(["--model", "codex/gpt-5.5,vibeproxy-anthropic/claude-opus-4-7", "--thinking", "low,high"]);
+    expect(args.model).toBe("codex/gpt-5.5,vibeproxy-anthropic/claude-opus-4-7");
+    expect(args.thinking).toBe("low,high");
+  });
+
   it("parses help/version short flags", () => {
     const args = parseArgs(["-h", "-v"]);
     expect(args.help).toBe(true);

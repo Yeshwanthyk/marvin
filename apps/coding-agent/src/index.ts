@@ -10,7 +10,6 @@ import { runHeadless } from './adapters/cli/headless.js';
 import { runInstall } from './adapters/cli/install.js';
 import { runValidate } from './adapters/cli/validate.js';
 import { runAcp } from './adapters/acp/index.js';
-import type { ThinkingLevel } from '@yeshwanthyk/agent-core';
 
 declare const OTUI_TREE_SITTER_WORKER_PATH: string | undefined;
 
@@ -59,7 +58,7 @@ const runTui = async (args: {
   configPath?: string;
   provider?: string;
   model?: string;
-  thinking?: ThinkingLevel;
+  thinking?: string;
   extensions?: string[];
   noExtensions?: boolean;
   continueSession?: boolean;
@@ -90,7 +89,7 @@ const printHelp = () => {
       'Options:',
       '  --provider <name>            Provider (e.g. openai, anthropic, codex)',
       '  --model <id>                 Model id or comma-separated list (Ctrl+P to cycle)',
-      '  --thinking <level>           off|minimal|low|medium|high|xhigh',
+      '  --thinking <level>           off|minimal|low|medium|high|xhigh, or comma list aligned with --model',
       '  --config-dir <dir>           Config directory (default: ~/.config/marvin)',
       '  --config <path>              Config file path (default: <config-dir>/config.json)',
       '  -e, --extension <path>       Load extension file or directory (repeatable)',

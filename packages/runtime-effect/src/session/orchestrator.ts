@@ -192,6 +192,9 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
                 const ctx = yield* ExecutionPlanStepTag;
                 const snapshot = cloneMessages(agent.state.messages);
                 agent.setModel(ctx.model);
+                if (ctx.thinking !== undefined) {
+                  agent.setThinkingLevel(ctx.thinking);
+                }
                 yield* runAgentPrompt(agent, item.text, item.attachments).pipe(
                   Effect.catchAll((error) =>
                     Effect.sync(() => agent.replaceMessages(snapshot)).pipe(Effect.flatMap(() => Effect.fail(error))),

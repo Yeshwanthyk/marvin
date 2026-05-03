@@ -118,6 +118,17 @@ const isThinkingLevel = (value: unknown): value is ThinkingLevel =>
   value === "high" ||
   value === "xhigh";
 
+export const parseThinkingLevels = (value: unknown): ThinkingLevel[] => {
+  if (typeof value !== "string") return [];
+  const levels = value.split(",").map((entry) => entry.trim()).filter(Boolean);
+  const parsed: ThinkingLevel[] = [];
+  for (const level of levels) {
+    if (!isThinkingLevel(level)) return [];
+    parsed.push(level);
+  }
+  return parsed;
+};
+
 const fileExists = async (p: string): Promise<boolean> => {
   try {
     await fs.stat(p);
@@ -427,7 +438,7 @@ export interface LoadConfigOptions {
   configPath?: string;
   provider?: string;
   model?: string;
-  thinking?: ThinkingLevel;
+  thinking?: ThinkingLevel | string;
   systemPrompt?: string;
   docs?: DocumentationPaths;
   lsp?: LspConfig;
@@ -498,7 +509,8 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
   }
 
   const thinkingRaw = options?.thinking ?? rawObj.thinking ?? piSettings.defaultThinkingLevel;
-  const thinking: ThinkingLevel = isThinkingLevel(thinkingRaw) ? thinkingRaw : "off";
+  const thinkingLevels = parseThinkingLevels(thinkingRaw);
+  const thinking: ThinkingLevel = thinkingLevels[0] ?? "off";
 
   const themeRaw = rawObj.theme;
   const theme = typeof themeRaw === "string" && themeRaw.trim() ? themeRaw.trim() : "marvin";

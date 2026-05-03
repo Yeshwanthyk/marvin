@@ -1,12 +1,14 @@
 import { Context, Duration, Effect, ExecutionPlan, Layer, Schedule } from "effect";
 import type { ExecutionPlan as ExecutionPlanType } from "effect/ExecutionPlan";
 import type { Api, Model, KnownProvider } from "@yeshwanthyk/ai";
+import type { ThinkingLevel } from "@yeshwanthyk/agent-core";
 import { ConfigTag } from "../config.js";
 import { InstrumentationTag, type InstrumentationService } from "../instrumentation.js";
 
 export interface PlanModelEntry {
   readonly provider: KnownProvider;
   readonly model: Model<Api>;
+  readonly thinking?: ThinkingLevel;
 }
 
 export interface ExecutionPlanAttempts {
@@ -120,6 +122,7 @@ export interface ExecutionPlanStepDescriptor {
   readonly provider: KnownProvider;
   readonly modelId: string;
   readonly modelName: string;
+  readonly thinking?: ThinkingLevel;
   readonly attempts: number;
   readonly isFallback: boolean;
 }
@@ -127,6 +130,7 @@ export interface ExecutionPlanStepDescriptor {
 export interface ExecutionPlanStepContext {
   readonly descriptor: ExecutionPlanStepDescriptor;
   readonly model: Model<Api>;
+  readonly thinking?: ThinkingLevel;
 }
 
 export const ExecutionPlanStepTag = Context.GenericTag<ExecutionPlanStepContext>("runtime-effect/ExecutionPlanStep");
@@ -184,6 +188,7 @@ const buildExecutionPlan = (
     provider: entry.provider,
     modelId: entry.model.id,
     modelName: entry.model.name,
+    ...(entry.thinking !== undefined ? { thinking: entry.thinking } : {}),
     attempts: index === 0 ? attempts.primary : attempts.fallback,
     isFallback: index > 0,
   }));
@@ -197,23 +202,31 @@ const buildExecutionPlan = (
         id: step.id,
         provider: step.provider,
         modelId: step.modelId,
+        thinking: step.thinking,
         attempts: step.attempts,
         isFallback: step.isFallback,
       })),
     },
   });
 
-  const planSteps = stepDescriptors.map((descriptor) => ({
-    provide: Layer.succeedContext(
-      Context.make(ExecutionPlanStepTag, {
-        descriptor,
-        model: cycle[descriptor.index]!.model,
-      }),
-    ),
-    attempts: descriptor.attempts,
-    schedule,
-    while: createRetryPredicate(),
-  }));
+  const planSteps = stepDescriptors.map((descriptor) => {
+    const entry = cycle[descriptor.index];
+    if (entry === undefined) {
+      throw new Error(`ExecutionPlan missing cycle entry for step ${descriptor.id}`);
+    }
+    return {
+      provide: Layer.succeedContext(
+        Context.make(ExecutionPlanStepTag, {
+          descriptor,
+          model: entry.model,
+          ...(entry.thinking !== undefined ? { thinking: entry.thinking } : {}),
+        }),
+      ),
+      attempts: descriptor.attempts,
+      schedule,
+      while: createRetryPredicate(),
+    };
+  });
 
   const [firstStep, ...otherSteps] = planSteps;
   if (!firstStep) {

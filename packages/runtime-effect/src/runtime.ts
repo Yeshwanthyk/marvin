@@ -43,7 +43,7 @@ import {
 } from "./extensibility/index.js";
 import type { ValidationIssue } from "./extensibility/schema.js";
 import type { LoadedCustomTool, SendRef } from "./extensibility/custom-tools/index.js";
-import { ConfigTag, loadAppConfig, type LoadConfigOptions, type LoadedAppConfig } from "./config.js";
+import { ConfigTag, loadAppConfig, parseThinkingLevels, type LoadConfigOptions, type LoadedAppConfig } from "./config.js";
 import { LazyToolLoader } from "./lazy-tool-loader.js";
 import {
   PromptQueueLayer,
@@ -105,7 +105,7 @@ export interface RuntimeServices {
   readonly lspActiveRef: { setActive: (value: boolean) => void };
   readonly sendRef: SendRef;
   readonly config: LoadedAppConfig;
-  readonly cycleModels: Array<{ provider: KnownProvider; model: Model<Api> }>;
+  readonly cycleModels: Array<{ provider: KnownProvider; model: Model<Api>; thinking?: ThinkingLevel }>;
   readonly getApiKey: ApiKeyResolver;
   readonly transport: RouterTransport;
   readonly providerTransport: ProviderTransport;
@@ -173,7 +173,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
     Effect.gen(function* () {
       const config = yield* Effect.tryPromise(() => loadAppConfig(layerOptions));
       const apiKeyResolver = createApiKeyResolver(config.configDir);
-      const cycleModels = buildCycleModels(layerOptions.model, config);
+      const cycleModels = buildCycleModels(layerOptions.model, layerOptions.thinking, config);
 
       const configLayer = Layer.succeed(ConfigTag, { config });
       const sessionManagerLayer = Layer.succeed(SessionManagerTag, {
@@ -193,7 +193,11 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
         return attempts;
       };
       const executionPlanLayer = ExecutionPlanBuilderLayer({
-        cycle: cycleModels.map((entry) => ({ provider: entry.provider, model: entry.model }) satisfies PlanModelEntry),
+        cycle: cycleModels.map((entry) => ({
+          provider: entry.provider,
+          model: entry.model,
+          ...(entry.thinking !== undefined ? { thinking: entry.thinking } : {}),
+        }) satisfies PlanModelEntry),
         ...(layerOptions.retry ? {
           attempts: buildRetryAttempts(layerOptions.retry),
           ...(layerOptions.retry.initialDelayMs !== undefined ? {
@@ -329,7 +333,7 @@ const createRuntimeServicesLayer = (options: {
   adapter: AdapterKind;
   sendRef: SendRef;
   apiKeyResolver: ApiKeyResolver;
-  cycleModels: Array<{ provider: KnownProvider; model: Model<Api> }>;
+  cycleModels: Array<{ provider: KnownProvider; model: Model<Api>; thinking?: ThinkingLevel }>;
 }) =>
   Layer.effect(
     RuntimeServicesTag,
@@ -406,10 +410,24 @@ const buildToolRegistry = (
 
 const buildCycleModels = (
   modelSpec: string | undefined,
+  thinkingSpec: ThinkingLevel | string | undefined,
   loaded: LoadedAppConfig,
-): Array<{ provider: KnownProvider; model: Model<Api> }> => {
-  const entries: Array<{ provider: KnownProvider; model: Model<Api> }> = [];
+): Array<{ provider: KnownProvider; model: Model<Api>; thinking?: ThinkingLevel }> => {
+  const entries: Array<{ provider: KnownProvider; model: Model<Api>; thinking?: ThinkingLevel }> = [];
   const requested = modelSpec?.split(",").map((value) => value.trim()).filter(Boolean) ?? [loaded.modelId];
+  const requestedThinking = parseThinkingLevels(thinkingSpec);
+  const thinkingFor = (index: number): ThinkingLevel | undefined => {
+    if (requestedThinking.length === 0) return undefined;
+    return requestedThinking[index] ?? requestedThinking[requestedThinking.length - 1];
+  };
+  const addEntry = (provider: KnownProvider, model: Model<Api>) => {
+    const thinking = thinkingFor(entries.length);
+    entries.push({
+      provider,
+      model,
+      ...(thinking !== undefined ? { thinking } : {}),
+    });
+  };
 
   for (const id of requested) {
     if (id.includes("/")) {
@@ -419,7 +437,7 @@ const buildCycleModels = (
       const provider = getKnownProvider(providerId);
       if (!provider) continue;
       const model = findModel(provider, modelId);
-      if (model) entries.push({ provider, model });
+      if (model) addEntry(provider, model);
       continue;
     }
 
@@ -427,7 +445,7 @@ const buildCycleModels = (
     // This ensures --provider codex --model gpt-5.2 uses codex's gpt-5.2, not openai's
     const loadedProviderModel = findModel(loaded.provider, id);
     if (loadedProviderModel) {
-      entries.push({ provider: loaded.provider, model: loadedProviderModel });
+      addEntry(loaded.provider, loadedProviderModel);
       continue;
     }
 
@@ -438,7 +456,7 @@ const buildCycleModels = (
       if (!known) continue;
       const model = findModel(known, id);
       if (model) {
-        entries.push({ provider: known, model });
+        addEntry(known, model);
         resolved = true;
         break;
       }
@@ -449,7 +467,12 @@ const buildCycleModels = (
   }
 
   if (entries.length === 0) {
-    entries.push({ provider: loaded.provider, model: loaded.model });
+    const thinking = thinkingFor(0);
+    entries.push({
+      provider: loaded.provider,
+      model: loaded.model,
+      ...(thinking !== undefined ? { thinking } : {}),
+    });
   }
 
   return entries;

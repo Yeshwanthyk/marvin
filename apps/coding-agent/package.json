@@ -1,6 +1,6 @@
 {
   "name": "@yeshwanthyk/coding-agent",
-  "version": "0.3.45",
+  "version": "0.3.46",
   "type": "module",
   "bin": {
     "marvin": "./dist/cli.js"
@@ -40,8 +40,8 @@
     "@yeshwanthyk/ai": "^0.2.9",
     "@yeshwanthyk/base-tools": "^0.2.5",
     "@yeshwanthyk/lsp": "^0.2.5",
-    "@yeshwanthyk/open-tui": "^0.1.6",
-    "@yeshwanthyk/runtime-effect": "^0.2.10",
+    "@yeshwanthyk/open-tui": "^0.1.11",
+    "@yeshwanthyk/runtime-effect": "^0.2.11",
     "chalk": "^5.6.2",
     "cli-highlight": "^2.1.11",
     "diff": "^8.0.2",
