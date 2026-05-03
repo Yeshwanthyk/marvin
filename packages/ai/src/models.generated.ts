@@ -2382,7 +2382,7 @@ export const MODELS = {
 	"zai": {
 		"glm-5v-turbo": {
 			id: "glm-5v-turbo",
-			name: "glm-5v-turbo",
+			name: "GLM-5V-Turbo",
 			api: "anthropic-messages",
 			provider: "zai",
 			baseUrl: "https://api.z.ai/api/anthropic",
@@ -4819,13 +4819,13 @@ export const MODELS = {
 			reasoning: true,
 			input: ["text", "image"],
 			cost: {
-				input: 0.325,
-				output: 3.25,
+				input: 0.32,
+				output: 3.1999999999999997,
 				cacheRead: 0,
 				cacheWrite: 0,
 			},
-			contextWindow: 256000,
-			maxTokens: 65536,
+			contextWindow: 262144,
+			maxTokens: 81920,
 		} satisfies Model<"openai-completions">,
 		"openai/gpt-5.5-pro": {
 			id: "openai/gpt-5.5-pro",
@@ -6927,8 +6927,8 @@ export const MODELS = {
 			reasoning: true,
 			input: ["text"],
 			cost: {
-				input: 0.21,
-				output: 0.7899999999999999,
+				input: 0.27,
+				output: 0.95,
 				cacheRead: 0.13,
 				cacheWrite: 0,
 			},
@@ -7947,13 +7947,13 @@ export const MODELS = {
 			reasoning: true,
 			input: ["text"],
 			cost: {
-				input: 0.08,
-				output: 0.28,
+				input: 0.09,
+				output: 0.44999999999999996,
 				cacheRead: 0,
 				cacheWrite: 0,
 			},
 			contextWindow: 40960,
-			maxTokens: 16384,
+			maxTokens: 20000,
 		} satisfies Model<"openai-completions">,
 		"qwen/qwen3-8b": {
 			id: "qwen/qwen3-8b",
