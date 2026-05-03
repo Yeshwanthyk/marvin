@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { homedir } from "node:os"
-import { dirname, join, resolve } from "node:path"
+import { dirname, isAbsolute, join, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import type {
 	HookAPI,
@@ -204,10 +204,50 @@ const writeCompatPackage = (packageRoot: string, packageName: string, source: st
 
 const importAllFrom = (specifier: string): string => `export * from ${JSON.stringify(specifier)};\n`
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
+
+const exportTarget = (value: unknown): string | undefined => {
+	if (typeof value === "string") return value
+	if (!isRecord(value)) return undefined
+	const imported = value.import
+	if (typeof imported === "string") return imported
+	const defaulted = value.default
+	if (typeof defaulted === "string") return defaulted
+	return undefined
+}
+
+const packageEntry = (pkg: Record<string, unknown>): string | undefined => {
+	const exportsValue = pkg.exports
+	if (typeof exportsValue === "string") return exportsValue
+	if (isRecord(exportsValue)) {
+		const rootExport = exportTarget(exportsValue["."])
+		if (rootExport) return rootExport
+		const directExport = exportTarget(exportsValue)
+		if (directExport) return directExport
+	}
+	if (typeof pkg.module === "string") return pkg.module
+	if (typeof pkg.main === "string") return pkg.main
+	return undefined
+}
+
+const toImportSpecifier = (resolvedPath: string): string =>
+	isAbsolute(resolvedPath) ? pathToFileURL(resolvedPath).href : resolvedPath
+
 const resolveBundledModule = (packageName: string, devRelativePath: string): string => {
 	const require = createRequire(import.meta.url)
 	try {
-		return require.resolve(packageName)
+		const packageJsonPath = require.resolve(`${packageName}/package.json`)
+		const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as Record<string, unknown>
+		const entry = packageEntry(pkg)
+		if (entry) {
+			const entryPath = resolve(dirname(packageJsonPath), entry)
+			if (existsSync(entryPath)) return pathToFileURL(entryPath).href
+		}
+	} catch {
+		// Fall through to package resolution and then dev source fallback.
+	}
+	try {
+		return toImportSpecifier(require.resolve(packageName))
 	} catch {
 		const devPath = fileURLToPath(new URL(devRelativePath, import.meta.url))
 		return existsSync(devPath) ? pathToFileURL(devPath).href : packageName

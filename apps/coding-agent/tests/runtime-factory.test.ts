@@ -126,6 +126,53 @@ describe("runtime factory", () => {
 		expect(runtime.validationIssues).toHaveLength(0)
 	})
 
+	it("rewrites Pi package imports to Marvin runtime packages", async () => {
+		const config = createTestConfigDir()
+		const packageDir = join(config.configDir, "extensions", "pi-shim-package")
+		mkdirSync(join(packageDir, "node_modules", "@mariozechner", "pi-ai"), { recursive: true })
+		writeFileSync(
+			join(packageDir, "package.json"),
+			JSON.stringify({
+				type: "module",
+				pi: { extensions: ["./index.ts"] },
+			}),
+		)
+		writeFileSync(
+			join(packageDir, "node_modules", "@mariozechner", "pi-ai", "package.json"),
+			JSON.stringify({
+				name: "@mariozechner/pi-ai",
+				version: "0.0.0-marvin-compat",
+				type: "module",
+				main: "./index.js",
+			}),
+		)
+		writeFileSync(
+			join(packageDir, "node_modules", "@mariozechner", "pi-ai", "index.js"),
+			`export * from "@yeshwanthyk/ai";\n`,
+		)
+		writeFileSync(
+			join(packageDir, "index.ts"),
+			`import { getModels } from "@mariozechner/pi-ai";
+			export default function (marvin) {
+				marvin.registerCommand("pi-ai-shim", {
+					description: String(getModels("codex").length),
+					handler: async () => {}
+				})
+			}`,
+		)
+
+		const runtime = await createRuntime({ configDir: config.configDir, configPath: config.configPath }, "headless")
+		runtimes.push({
+			cleanup: async () => {
+				await runtime.close().catch(() => {})
+				config.cleanup()
+			},
+		})
+
+		expect(runtime.validationIssues).toHaveLength(0)
+		expect(runtime.hookRunner.getCommand("pi-ai-shim")?.description).toBe("5")
+	})
+
 	it("invokes two-argument Pi tool execute handlers with toolCallId and params", async () => {
 		let received: { toolCallId?: unknown; params?: unknown } = {}
 		const tool: RegisteredTool = {
