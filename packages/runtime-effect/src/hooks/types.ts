@@ -75,6 +75,7 @@ export interface HookUIContext {
 	editor(title: string, initialText?: string): Promise<string | undefined>
 	notify(message: string, type?: "info" | "warning" | "error"): void
 	custom<T>(factory: (done: (result: T) => void) => JSX.Element): Promise<T | undefined>
+	setWidget(id: string, widget: JSX.Element | null): void
 	setEditorText(text: string): void
 	getEditorText(): string
 }
@@ -151,12 +152,36 @@ export interface HookToolSchema {
 	required?: string[]
 }
 
+export type ToolUpdate = {
+	content?: (TextContent | ImageContent)[]
+	details?: Record<string, unknown>
+}
+
+export type ToolExecutionResult =
+	| string
+	| {
+		content: (TextContent | ImageContent)[]
+		details?: unknown
+		isError?: boolean
+	}
+
 /** Tool registered by a hook */
 export interface RegisteredTool {
 	name: string
+	label?: string
 	description: string
-	schema: HookToolSchema
-	execute: (args: Record<string, unknown>, ctx: HookEventContext) => Promise<string>
+	promptSnippet?: string
+	schema?: HookToolSchema
+	parameters?: HookToolSchema
+	execute: (
+		toolCallIdOrArgs: string | Record<string, unknown>,
+		argsOrCtx: Record<string, unknown> | HookEventContext,
+		signal?: AbortSignal,
+		onUpdate?: (update: ToolUpdate) => void,
+		ctx?: HookEventContext,
+	) => Promise<ToolExecutionResult>
+	renderCall?: unknown
+	renderResult?: unknown
 }
 
 // ============================================================================
@@ -363,6 +388,13 @@ export type HookHandler<E, R = void> = (event: E, ctx: HookEventContext) => Prom
 /** Event type string literals */
 export type HookEventType = HookEvent["type"]
 
+export type PiHookEventType =
+	| "session_start"
+	| "session_resume"
+	| "session_tree"
+	| "session_clear"
+	| "session_shutdown"
+
 /** Map event type to event data */
 export interface HookEventMap {
 	"app.start": AppStartEvent
@@ -420,6 +452,7 @@ export interface HookAPI {
 		event: T,
 		handler: HookHandler<HookEventMap[T], HookResultMap[T]>
 	): void
+	on(event: PiHookEventType, handler: HookHandler<SessionEvent | SessionShutdownEvent, void>): void
 
 	/**
 	 * Send a message to the agent.
@@ -445,7 +478,7 @@ export interface HookAPI {
 	 */
 	sendMessage<T = unknown>(
 		message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
-		triggerTurn?: boolean,
+		triggerTurn?: boolean | { triggerTurn?: boolean; deliverAs?: PromptDeliveryMode },
 	): void
 
 	/**
@@ -468,6 +501,12 @@ export interface HookAPI {
 	 * Register a tool that will be available to the agent.
 	 */
 	registerTool(tool: RegisteredTool): void
+
+	/** Pi-compatible shortcut registration. TUI keybinding integration is best-effort. */
+	registerShortcut(
+		key: string,
+		options: { description?: string; handler: (ctx: HookEventContext) => Promise<void> | void },
+	): void
 }
 
 /**

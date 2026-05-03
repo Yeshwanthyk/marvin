@@ -45,6 +45,8 @@ export const runHeadless = async (args: HeadlessArgs) => {
 			provider: args.provider,
 			model: args.model,
 			thinking: args.thinking,
+			extensions: args.extensions,
+			noExtensions: args.noExtensions,
 		},
 		"headless",
 	)

@@ -70,6 +70,33 @@ describe("loadAppConfig", () => {
     }
   });
 
+  it("adds Marvin docs paths to the default system prompt", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-docs-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-docs-"));
+    try {
+      const model = getAnthropicModel();
+      const configPath = await writeConfig(configDir, model.id);
+
+      const config = await loadAppConfig({
+        configDir,
+        configPath,
+        cwd: projectDir,
+        docs: {
+          readmePath: "/marvin/README.md",
+          docsPath: "/marvin/docs",
+          examplesPath: "/marvin/examples",
+        },
+      });
+
+      expect(config.systemPrompt).toContain("Marvin documentation");
+      expect(config.systemPrompt).toContain("/marvin/docs");
+      expect(config.systemPrompt).toContain("docs/extensions.md");
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
   it("allows LoadConfigOptions to override lsp settings", async () => {
     const configDir = await mkdtemp(path.join(tmpdir(), "config-lsp-"));
     const projectDir = await mkdtemp(path.join(tmpdir(), "project-lsp-"));

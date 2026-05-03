@@ -57,12 +57,20 @@ export interface LoadedAppConfig {
   model: Model<Api>;
   thinking: ThinkingLevel;
   theme: string;
+  extensions: string[];
+  extensionsEnabled: boolean;
   editor?: EditorConfig;
   systemPrompt: string;
   agentsConfig: AgentsConfig;
   configDir: string;
   configPath: string;
   lsp: LspConfig;
+}
+
+export interface DocumentationPaths {
+  readmePath: string;
+  docsPath: string;
+  examplesPath: string;
 }
 
 export const loadAgentsConfig = async (options?: { cwd?: string }): Promise<AgentsConfig> => {
@@ -204,8 +212,25 @@ export interface LoadConfigOptions {
   model?: string;
   thinking?: ThinkingLevel;
   systemPrompt?: string;
+  docs?: DocumentationPaths;
   lsp?: LspConfig;
+  extensions?: string[];
+  noExtensions?: boolean;
 }
+
+const buildDocumentationPromptSection = (docs?: DocumentationPaths): string =>
+  docs
+    ? `
+
+Marvin documentation (read only when the user asks about Marvin itself, its SDK, extensions, packages, sessions, themes, or TUI):
+- Main documentation: ${docs.readmePath}
+- Additional docs: ${docs.docsPath}
+- Examples: ${docs.examplesPath}
+- When asked to create or modify Marvin/Pi-compatible extensions, read docs/extensions.md and examples/extensions/ before implementing.
+- When asked to package or install extensions, read docs/packages.md.
+- Marvin intentionally supports Pi-style extension packages; prefer the Pi-compatible API documented there, including package.json pi.extensions manifests.
+- Follow markdown cross-references before implementing.`
+    : "";
 
 export const loadAppConfig = async (options?: LoadConfigOptions): Promise<LoadedAppConfig> => {
   const configDir = options?.configDir ?? resolveConfigDir();
@@ -251,6 +276,12 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
   const themeRaw = rawObj.theme;
   const theme = typeof themeRaw === "string" && themeRaw.trim() ? themeRaw.trim() : "marvin";
 
+  const rawExtensions = Array.isArray(rawObj.extensions)
+    ? rawObj.extensions.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
+  const extensions = [...rawExtensions, ...(options?.extensions ?? [])];
+  const extensionsEnabled = options?.noExtensions === true ? false : rawObj.extensionsEnabled !== false;
+
   const editorRaw = typeof nestedConfig.editor !== "undefined" ? nestedConfig.editor : rawObj.editor;
   const editor = resolveEditorConfig(editorRaw) ?? { command: "nvim", args: [] };
 
@@ -262,7 +293,8 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
       ? rawObj.systemPrompt
       : "You are a helpful coding agent. Use tools (read, bash, edit, write) when needed.");
 
-  const systemPrompt = agentsConfig.combined ? `${basePrompt}\n\n${agentsConfig.combined}` : basePrompt;
+  const baseWithDocs = `${basePrompt}${buildDocumentationPromptSection(options?.docs)}`;
+  const systemPrompt = agentsConfig.combined ? `${baseWithDocs}\n\n${agentsConfig.combined}` : baseWithDocs;
 
   const lsp = resolveLspConfig(options?.lsp, rawObj.lsp);
 
@@ -272,6 +304,8 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
     model,
     thinking,
     theme,
+    extensions,
+    extensionsEnabled,
     editor,
     systemPrompt,
     agentsConfig,

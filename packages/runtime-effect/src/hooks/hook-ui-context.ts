@@ -7,6 +7,7 @@ import type { JSX } from "solid-js"
 export interface HookUIHandlers {
 	setEditorText: (text: string) => void
 	getEditorText: () => string
+	setWidget?: (id: string, widget: JSX.Element | null) => void
 	showSelect: (title: string, options: string[]) => Promise<string | undefined>
 	showInput: (title: string, placeholder?: string) => Promise<string | undefined>
 	showConfirm: (title: string, message: string) => Promise<boolean>
@@ -26,6 +27,7 @@ export function createHookUIContext(handlers: HookUIHandlers): HookUIContext {
 		editor: handlers.showEditor ?? (async () => undefined),
 		notify: handlers.showNotify,
 		custom: handlers.showCustom ?? (async () => undefined),
+		setWidget: handlers.setWidget ?? (() => {}),
 		setEditorText: handlers.setEditorText,
 		getEditorText: handlers.getEditorText,
 	}

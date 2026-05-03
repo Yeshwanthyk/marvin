@@ -100,13 +100,14 @@ const createHookHandlers = (
 
   const sendMessageHandler = <T = unknown>(
     message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
-    triggerTurn?: boolean,
+    triggerTurn?: boolean | { triggerTurn?: boolean },
   ) => {
+    const shouldTriggerTurn = typeof triggerTurn === "object" ? triggerTurn.triggerTurn === true : triggerTurn === true
     const hookMessage = createHookMessage(message)
     if (hookMessage.display) {
       emitHookMessage(hookMessageSink, hookMessage)
     }
-    if (triggerTurn) {
+    if (shouldTriggerTurn) {
       const text = hookMessageToText(hookMessage)
       fireAndForget(submitPromptEffect(text, { mode: "followUp" }, false))
     }

@@ -62,6 +62,7 @@ const noOpUIContext: HookUIContext = {
 	editor: async () => undefined,
 	notify: () => {},
 	custom: async () => undefined,
+	setWidget: () => {},
 	setEditorText: () => {},
 	getEditorText: () => "",
 }

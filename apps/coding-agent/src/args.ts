@@ -1,7 +1,7 @@
 export interface ParsedArgs {
   headless: boolean;
   acp: boolean;
-  command?: 'validate';
+  command?: 'validate' | 'install';
   prompt?: string;
   configDir?: string;
   configPath?: string;
@@ -9,6 +9,8 @@ export interface ParsedArgs {
   /** Single model or comma-separated list for Ctrl+P cycling */
   model?: string;
   thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+  extensions: string[];
+  noExtensions: boolean;
   continue: boolean;
   resume: boolean;
   /** Session ID (full UUID, prefix, or path) to load directly */
@@ -32,6 +34,8 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     provider: undefined,
     model: undefined,
     thinking: undefined,
+    extensions: [],
+    noExtensions: false,
     continue: false,
     resume: false,
     session: undefined,
@@ -43,8 +47,8 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === undefined) continue;
-    if (!a.startsWith('-') && !args.command && rest.length === 0 && a === 'validate') {
-      args.command = 'validate';
+    if (!a.startsWith('-') && !args.command && rest.length === 0 && (a === 'validate' || a === 'install')) {
+      args.command = a;
       continue;
     }
     if (a === '--help' || a === '-h') {
@@ -133,6 +137,20 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
         rest.push(a);
       }
       continue;
+    }
+    if (a === "--extension" || a === "-e") {
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.extensions.push(value)
+        i += 1
+      } else {
+        rest.push(a)
+      }
+      continue
+    }
+    if (a === "--no-extensions") {
+      args.noExtensions = true
+      continue
     }
     rest.push(a);
   }

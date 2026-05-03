@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from './args.js';
 import { runHeadless } from './adapters/cli/headless.js';
+import { runInstall } from './adapters/cli/install.js';
 import { runValidate } from './adapters/cli/validate.js';
 import { runAcp } from './adapters/acp/index.js';
 import type { ThinkingLevel } from '@yeshwanthyk/agent-core';
@@ -59,6 +60,8 @@ const runTui = async (args: {
   provider?: string;
   model?: string;
   thinking?: ThinkingLevel;
+  extensions?: string[];
+  noExtensions?: boolean;
   continueSession?: boolean;
   resumeSession?: boolean;
   session?: string;
@@ -82,6 +85,7 @@ const printHelp = () => {
       'Usage:',
       '  marvin [options] [prompt...]',
       '  marvin validate [options]',
+      '  marvin install <source> [options]',
       '',
       'Options:',
       '  --provider <name>            Provider (e.g. openai, anthropic, codex)',
@@ -89,6 +93,8 @@ const printHelp = () => {
       '  --thinking <level>           off|minimal|low|medium|high|xhigh',
       '  --config-dir <dir>           Config directory (default: ~/.config/marvin)',
       '  --config <path>              Config file path (default: <config-dir>/config.json)',
+      '  -e, --extension <path>       Load extension file or directory (repeatable)',
+      '  --no-extensions              Disable extension discovery',
       '  -c, --continue               Resume most recent session for current directory',
       '  -r, --resume                 Pick from recent sessions to resume',
       '  -s, --session <id>           Load session by ID (UUID, prefix, or path)',
@@ -124,6 +130,11 @@ const printHelp = () => {
       'Validation:',
       '  Run "marvin validate --config-dir <dir>" to check custom hooks/tools/commands',
       '',
+      'Extension Install:',
+      '  marvin install npm:pi-web-access',
+      '  marvin install github:owner/repo',
+      '  marvin install owner/repo@ref',
+      '',
       'Environment:',
       '  OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY / ...',
       '',
@@ -152,6 +163,17 @@ const main = async () => {
       provider: args.provider,
       model: args.model,
       thinking: args.thinking,
+      extensions: args.extensions,
+      noExtensions: args.noExtensions,
+    });
+    return;
+  }
+
+  if (args.command === 'install') {
+    await runInstall({
+      source: args.prompt,
+      configDir: args.configDir,
+      configPath: args.configPath,
     });
     return;
   }
@@ -173,6 +195,8 @@ const main = async () => {
       provider: args.provider,
       model: args.model,
       thinking: args.thinking,
+      extensions: args.extensions,
+      noExtensions: args.noExtensions,
     });
     return;
   }
@@ -183,6 +207,8 @@ const main = async () => {
     provider: args.provider,
     model: args.model,
     thinking: args.thinking,
+    extensions: args.extensions,
+    noExtensions: args.noExtensions,
     continueSession: args.continue,
     resumeSession: args.resume,
     session: args.session,

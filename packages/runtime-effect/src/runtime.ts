@@ -206,6 +206,8 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
         sendRef: layerOptions.sendRef,
         builtinToolNames: Object.keys(toolRegistry),
         hasUI: layerOptions.hasUI,
+        extensionPaths: config.extensions,
+        extensionsEnabled: config.extensionsEnabled,
       });
       const hookContextLayer = HookContextControllerLayer;
       const hookEffectsLayer = createHookEffectsLayer();

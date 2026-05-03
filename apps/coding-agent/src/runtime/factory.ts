@@ -7,6 +7,7 @@ import {
   type RuntimeServices,
 } from "@yeshwanthyk/runtime-effect/runtime.js";
 import type { LoadConfigOptions } from "@yeshwanthyk/runtime-effect/config.js";
+import { resolveMarvinDocsPaths } from "../docs.js";
 
 export type RuntimeInitArgs = LoadConfigOptions;
 
@@ -25,6 +26,10 @@ const toLayerOptions = (args: RuntimeInitArgs | undefined, adapter: AdapterKind)
   provider: args?.provider,
   model: args?.model,
   thinking: args?.thinking,
+  systemPrompt: args?.systemPrompt,
+  docs: args?.docs ?? resolveMarvinDocsPaths(),
+  extensions: args?.extensions,
+  noExtensions: args?.noExtensions,
 });
 
 export const createRuntime = async (

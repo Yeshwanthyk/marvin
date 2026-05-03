@@ -21,6 +21,10 @@ export interface ExtensibilityLoadOptions {
 	hasUI: boolean
 	/** Session manager for hook context */
 	sessionManager: ReadonlySessionManager
+	/** Explicit extension files/directories from config or CLI */
+	extensionPaths?: string[]
+	/** Disable extension discovery while leaving legacy hooks/tools/commands available */
+	extensionsEnabled?: boolean
 }
 
 export interface ExtensibilityLoadResult {
@@ -33,7 +37,10 @@ export interface ExtensibilityLoadResult {
 export const loadExtensibility = async (
 	options: ExtensibilityLoadOptions,
 ): Promise<ExtensibilityLoadResult> => {
-	const { hooks, issues: hookIssues } = await loadHooks(options.configDir)
+	const hookOptions: Parameters<typeof loadHooks>[1] = { cwd: options.cwd }
+	if (options.extensionPaths !== undefined) hookOptions.extensionPaths = options.extensionPaths
+	if (options.extensionsEnabled !== undefined) hookOptions.extensionsEnabled = options.extensionsEnabled
+	const { hooks, issues: hookIssues } = await loadHooks(options.configDir, hookOptions)
 	const hookRunner = new HookRunner(hooks, options.cwd, options.configDir, options.sessionManager)
 
 	const { tools: customTools, issues: toolIssues } = await loadCustomTools(
@@ -67,6 +74,8 @@ export interface ExtensibilityLayerOptions {
 	builtinToolNames: string[]
 	hasUI: boolean
 	cwd?: string
+	extensionPaths?: string[]
+	extensionsEnabled?: boolean
 	loader?: typeof loadExtensibility
 }
 
@@ -91,6 +100,8 @@ export const ExtensibilityLayer = (options: ExtensibilityLayerOptions) =>
 					builtinToolNames: options.builtinToolNames,
 					hasUI: options.hasUI,
 					sessionManager,
+					extensionPaths: options.extensionPaths ?? config.extensions,
+					extensionsEnabled: options.extensionsEnabled ?? config.extensionsEnabled,
 				}),
 			)
 
