@@ -3,7 +3,7 @@ import type { Api, Model, KnownProvider, AgentToolResult } from "@yeshwanthyk/ai
 import type { Theme } from "@yeshwanthyk/open-tui"
 import type { JSX } from "solid-js"
 import type { HookRunner } from "../../hooks/index.js"
-import type { SessionManager, LoadedSession } from "../../session-manager.js"
+import type { SessionManager, LoadedSession, SessionNodeEntry } from "../../session-manager.js"
 import type { UIMessage, ToolBlock, UIContentBlock, UIShellMessage } from "../../types.js"
 import {
 	extractOrderedBlocks,
@@ -50,6 +50,7 @@ export interface SessionControllerState {
 	followUp: (text: string) => Promise<void>
 	steer: (text: string) => Promise<void>
 	sendUserMessage: (text: string, options?: { deliverAs?: PromptDeliveryMode }) => Promise<void>
+	navigateTree: (entryId: string, options?: { summaryMessage?: AppMessage }) => Promise<{ editorText?: string } | undefined>
 }
 
 export function createSessionController(options: SessionControllerOptions): SessionControllerState {
@@ -68,25 +69,14 @@ export function createSessionController(options: SessionControllerOptions): Sess
 		}
 	}
 
-	const restoreSession = (session: LoadedSession) => {
-		const { metadata } = session
-		const sessionMessages = session.messages as AppMessage[]
-		const resolvedProvider = resolveProvider(metadata.provider)
-		if (resolvedProvider) {
-			const resolvedModel = resolveModel(resolvedProvider, metadata.modelId)
-			if (resolvedModel) {
-				currentProvider = resolvedProvider
-				currentModelId = resolvedModel.id
-				currentThinking = metadata.thinkingLevel
-				options.setDisplayProvider(resolvedProvider)
-				options.agent.setModel(resolvedModel)
-				options.agent.setThinkingLevel(metadata.thinkingLevel)
-				options.setDisplayModelId(resolvedModel.id)
-				options.setDisplayThinking(metadata.thinkingLevel)
-				options.setDisplayContextWindow(resolvedModel.contextWindow)
-			}
-		}
+	const textFromMessage = (message: AppMessage): string => {
+		const content = (message as { content?: unknown }).content
+		return typeof content === "string" ? content : Array.isArray(content) ? extractText(content) : ""
+	}
+
+	const renderMessages = (sessionMessages: AppMessage[]) => {
 		options.agent.replaceMessages(sessionMessages)
+		options.setContextTokens(0)
 
 		for (let i = sessionMessages.length - 1; i >= 0; i--) {
 			const msg = sessionMessages[i] as { role: string; usage?: { totalTokens?: number } }
@@ -110,7 +100,7 @@ export function createSessionController(options: SessionControllerOptions): Sess
 		const uiMessages: UIMessage[] = []
 		for (const msg of sessionMessages) {
 			if (msg.role === "user") {
-				const contentText = typeof msg.content === "string" ? msg.content : extractText(msg.content as unknown[])
+				const contentText = textFromMessage(msg)
 				if (contentText.startsWith(options.shellInjectionPrefix)) continue
 				uiMessages.push({ id: crypto.randomUUID(), role: "user", content: contentText })
 			} else if (msg.role === "assistant") {
@@ -166,8 +156,32 @@ export function createSessionController(options: SessionControllerOptions): Sess
 		}
 
 		options.setMessages(() => uiMessages)
+	}
+
+	const restoreSession = (session: LoadedSession) => {
+		const { metadata } = session
+		const sessionMessages = session.messages as AppMessage[]
+		const resolvedProvider = resolveProvider(metadata.provider)
+		if (resolvedProvider) {
+			const resolvedModel = resolveModel(resolvedProvider, metadata.modelId)
+			if (resolvedModel) {
+				currentProvider = resolvedProvider
+				currentModelId = resolvedModel.id
+				currentThinking = metadata.thinkingLevel
+				options.setDisplayProvider(resolvedProvider)
+				options.agent.setModel(resolvedModel)
+				options.agent.setThinkingLevel(metadata.thinkingLevel)
+				options.setDisplayModelId(resolvedModel.id)
+				options.setDisplayThinking(metadata.thinkingLevel)
+				options.setDisplayContextWindow(resolvedModel.contextWindow)
+			}
+		}
+		renderMessages(sessionMessages)
 		const sessionPath = options.sessionManager.listSessions().find((s) => s.id === metadata.id)?.path || ""
 		options.sessionManager.continueSession(sessionPath, metadata.id)
+		if (session.leafId) {
+			options.sessionManager.branch(session.leafId)
+		}
 		sessionStarted = true
 		void options.hookRunner.emit({ type: "session.resume", sessionId: metadata.id })
 	}
@@ -212,6 +226,36 @@ export function createSessionController(options: SessionControllerOptions): Sess
 		}
 	}
 
+	const messagesFromBranch = (branch: SessionNodeEntry[]): AppMessage[] =>
+		branch
+			.filter((entry): entry is Extract<SessionNodeEntry, { type: "message" }> => entry.type === "message")
+			.map((entry) => entry.message as AppMessage)
+
+	const navigateTree = async (entryId: string, navigateOptions: { summaryMessage?: AppMessage } = {}): Promise<{ editorText?: string } | undefined> => {
+		const target = options.sessionManager.getEntry(entryId)
+		if (!target) return undefined
+
+		let leafId: string | null = target.id
+		let editorText: string | undefined
+		if (target.type === "message" && target.message.role === "user") {
+			editorText = textFromMessage(target.message as AppMessage)
+			leafId = target.parentId
+		}
+
+		if (leafId === null) {
+			options.sessionManager.resetLeaf()
+		} else {
+			options.sessionManager.branch(leafId)
+		}
+		if (navigateOptions.summaryMessage) {
+			options.sessionManager.appendMessage(navigateOptions.summaryMessage)
+		}
+
+		renderMessages(messagesFromBranch(options.sessionManager.getBranch()))
+		void options.hookRunner.emit({ type: "session.resume", sessionId: options.sessionManager.sessionId })
+		return editorText !== undefined ? { editorText } : {}
+	}
+
 	return {
 		ensureSession,
 		restoreSession,
@@ -233,5 +277,6 @@ export function createSessionController(options: SessionControllerOptions): Sess
 		followUp: (text) => queueUserMessage(text, "followUp"),
 		steer: (text) => queueUserMessage(text, "steer"),
 		sendUserMessage: (text, options) => queueUserMessage(text, options?.deliverAs ?? "followUp"),
+		navigateTree,
 	}
 }

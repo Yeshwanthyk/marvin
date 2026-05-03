@@ -1,4 +1,4 @@
-import { getModels, getProviders } from '@yeshwanthyk/ai';
+import { getModels, getProviders, resolveProviderAlias } from '@yeshwanthyk/ai';
 
 import { THEME_NAMES } from "./theme-names.js";
 
@@ -17,8 +17,9 @@ export interface SlashCommand {
 const resolveProvider = (raw: string): KnownProvider | undefined => {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
+  const resolved = resolveProviderAlias(trimmed);
   const providers = getProviders();
-  return providers.includes(trimmed as KnownProvider) ? (trimmed as KnownProvider) : undefined;
+  return providers.includes(resolved as KnownProvider) ? (resolved as KnownProvider) : undefined;
 };
 
 export const slashCommands: SlashCommand[] = [
@@ -27,6 +28,7 @@ export const slashCommands: SlashCommand[] = [
   { name: 'exit', description: 'Exit' },
   { name: 'status', description: 'Show session status (model, context, turns)' },
   { name: 'sessions', description: 'List and switch to a previous session' },
+  { name: 'tree', description: 'Navigate the current session tree' },
   { name: 'login', description: 'Login to AI provider' },
   { name: 'fork', description: 'Fork current session to new session' },
   { name: 'steer', description: 'Interrupt current run: /steer <text>' },

@@ -121,4 +121,45 @@ describe("RuntimeLayer", () => {
       await rm(temp.dir, { recursive: true, force: true });
     }
   });
+
+  it("keeps slashes inside provider-prefixed cycle model ids", async () => {
+    const temp = await createTempConfig();
+    const provider = `slash-provider-${Date.now()}`;
+    try {
+      await writeFile(
+        path.join(temp.dir, "models.json"),
+        JSON.stringify(
+          {
+            providers: {
+              [provider]: {
+                baseUrl: "http://localhost:8317",
+                api: "anthropic-messages",
+                apiKey: "dummy",
+                models: [{ id: "nested/model-id", name: "Nested Model" }],
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const services = await runLayer(
+        RuntimeLayer({
+          adapter: "headless",
+          configDir: temp.dir,
+          configPath: temp.configPath,
+          model: `${provider}/nested/model-id`,
+          instrumentation: { record: () => {} },
+          lspFactory: () => stubLspManager(),
+        }),
+      );
+
+      expect(services.cycleModels[0]?.provider).toBe(provider);
+      expect(services.cycleModels[0]?.model.id).toBe("nested/model-id");
+    } finally {
+      await rm(temp.dir, { recursive: true, force: true });
+    }
+  });
 });

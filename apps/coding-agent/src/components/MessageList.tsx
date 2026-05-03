@@ -53,6 +53,10 @@ function truncateThinking(text: string): string {
 	return firstLine.slice(0, THINKING_MAX_WIDTH - 3) + "..."
 }
 
+function isSelectingMouseEvent(event: unknown): boolean {
+	return typeof event === "object" && event !== null && "isSelecting" in event && event.isSelecting === true
+}
+
 function ThinkingBlockWrapper(props: {
 	id: string
 	summary: string
@@ -70,8 +74,8 @@ function ThinkingBlockWrapper(props: {
 		<box paddingLeft={4} flexDirection="column">
 			<box
 				flexDirection="row"
-				onMouseUp={(e: { isSelecting?: boolean }) => {
-					if (e.isSelecting) return
+				onMouseUp={(e) => {
+					if (isSelectingMouseEvent(e)) return
 					props.onToggle(props.id)
 				}}
 			>
@@ -93,6 +97,7 @@ function ThinkingBlockWrapper(props: {
 // Per-item cache: reuse ContentItem objects when data unchanged
 // Key format: "type:id" or "type:msgId:blockIdx"
 const itemCache = new Map<string, ContentItem>()
+let activeCacheKeys = new Set<string>()
 let lastMessageCount = 0
 let lastFirstMessageId: string | null = null
 
@@ -102,6 +107,7 @@ function getCachedItem<T extends ContentItem>(
 	current: T,
 	isEqual: (a: T, b: T) => boolean
 ): T {
+	activeCacheKeys.add(key)
 	const cached = itemCache.get(key) as T | undefined
 	if (cached && cached.type === current.type && isEqual(cached, current)) {
 		return cached
@@ -126,6 +132,7 @@ export function buildContentItems(
 		lastFirstMessageId = firstMessageId
 	}
 
+	activeCacheKeys = new Set()
 	const items: ContentItem[] = []
 	const renderedToolIds = new Set<string>()
 
@@ -271,6 +278,10 @@ export function buildContentItems(
 				)
 			)
 		}
+	}
+
+	for (const key of itemCache.keys()) {
+		if (!activeCacheKeys.has(key)) itemCache.delete(key)
 	}
 
 	return items

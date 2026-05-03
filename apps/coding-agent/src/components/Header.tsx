@@ -140,6 +140,8 @@ export function Header(props: HeaderProps) {
   })
 
   const toggleExpanded = () => setExpanded((v) => !v)
+  const isSelecting = (event: unknown): boolean =>
+    typeof event === "object" && event !== null && "isSelecting" in event && event.isSelecting === true
 
   return (
 <box
@@ -150,8 +152,8 @@ export function Header(props: HeaderProps) {
       border={["top", "bottom", "left", "right"]}
       borderStyle="rounded"
       borderColor={theme.border}
-      onMouseUp={(e: { isSelecting?: boolean }) => {
-        if (e.isSelecting) return
+      onMouseUp={(e) => {
+        if (isSelecting(e)) return
         toggleExpanded()
       }}
     >

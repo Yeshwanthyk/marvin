@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getModels } from "@yeshwanthyk/ai";
+import { getApiKey, getModels } from "@yeshwanthyk/ai";
 import { loadAppConfig } from "../src/config.js";
 
 const getAnthropicModel = () => {
@@ -64,6 +64,33 @@ describe("loadAppConfig", () => {
       });
 
       expect(config.systemPrompt.startsWith("Override prompt")).toBe(true);
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it("adds Marvin docs paths to the default system prompt", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-docs-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-docs-"));
+    try {
+      const model = getAnthropicModel();
+      const configPath = await writeConfig(configDir, model.id);
+
+      const config = await loadAppConfig({
+        configDir,
+        configPath,
+        cwd: projectDir,
+        docs: {
+          readmePath: "/marvin/README.md",
+          docsPath: "/marvin/docs",
+          examplesPath: "/marvin/examples",
+        },
+      });
+
+      expect(config.systemPrompt).toContain("Marvin documentation");
+      expect(config.systemPrompt).toContain("/marvin/docs");
+      expect(config.systemPrompt).toContain("docs/extensions.md");
     } finally {
       await rm(configDir, { recursive: true, force: true });
       await rm(projectDir, { recursive: true, force: true });
@@ -134,4 +161,140 @@ describe("loadAppConfig", () => {
       await rm(projectDir, { recursive: true, force: true });
     }
   });
+
+  it("accepts Pi provider aliases", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-pi-alias-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-pi-alias-"));
+    try {
+      const config = await loadAppConfig({
+        configDir,
+        cwd: projectDir,
+        provider: "openai-codex",
+        model: "gpt-5.5",
+      });
+
+      expect(config.provider).toBe("codex");
+      expect(config.modelId).toBe("gpt-5.5");
+      expect(config.model.provider).toBe("codex");
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it("loads Pi-style custom model providers from Marvin models.json", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-custom-models-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-custom-models-"));
+    const provider = `vibeproxy-test-${Date.now()}`;
+    try {
+      await writeFile(
+        path.join(configDir, "models.json"),
+        JSON.stringify(
+          {
+            providers: {
+              [provider]: {
+                baseUrl: "http://localhost:8317",
+                api: "anthropic-messages",
+                apiKey: "dummy",
+                models: [
+                  {
+                    id: "claude-opus-4-7",
+                    name: "VP Claude Opus 4.7",
+                    reasoning: true,
+                    input: ["text", "image"],
+                    contextWindow: 200000,
+                    maxTokens: 64000,
+                  },
+                ],
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const config = await loadAppConfig({
+        configDir,
+        cwd: projectDir,
+        model: `${provider}/claude-opus-4-7`,
+      });
+
+      expect(config.provider).toBe(provider);
+      expect(config.model.provider).toBe(provider);
+      expect(config.model.api).toBe("anthropic-messages");
+      expect(config.model.baseUrl).toBe("http://localhost:8317");
+      expect(config.model.reasoning).toBe(true);
+      expect(config.model.input).toEqual(["text", "image"]);
+      expect(config.model.contextWindow).toBe(200000);
+      expect(config.model.maxTokens).toBe(64000);
+      expect(getApiKey(provider)).toBe("dummy");
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves Pi-style custom provider auth, headers, and compat", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-custom-auth-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-custom-auth-"));
+    const provider = `custom-auth-${Date.now()}`;
+    const keyEnv = `${provider.replace(/-/g, "_").toUpperCase()}_KEY`;
+    const headerEnv = `${provider.replace(/-/g, "_").toUpperCase()}_HEADER`;
+    process.env[keyEnv] = "resolved-key";
+    process.env[headerEnv] = "resolved-header";
+    try {
+      await writeFile(
+        path.join(configDir, "models.json"),
+        JSON.stringify(
+          {
+            providers: {
+              [provider]: {
+                baseUrl: "http://localhost:8317",
+                api: "anthropic-messages",
+                apiKey: keyEnv,
+                authHeader: true,
+                headers: { "X-Provider": headerEnv },
+                compat: { supportsEagerToolInputStreaming: false },
+                models: [
+                  {
+                    id: "claude-opus-4-7",
+                    headers: { "X-Model": "literal-model-header" },
+                    compat: { supportsLongCacheRetention: true },
+                  },
+                ],
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const config = await loadAppConfig({
+        configDir,
+        cwd: projectDir,
+        model: `${provider}/claude-opus-4-7`,
+      });
+
+      expect(getApiKey(provider)).toBe("resolved-key");
+      expect(config.model.headers).toEqual({
+        "X-Provider": "resolved-header",
+        Authorization: "Bearer resolved-key",
+        "X-Model": "literal-model-header",
+      });
+      expect(config.model.compat).toEqual({
+        supportsEagerToolInputStreaming: false,
+        supportsLongCacheRetention: true,
+      });
+    } finally {
+      delete process.env[keyEnv];
+      delete process.env[headerEnv];
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
 });

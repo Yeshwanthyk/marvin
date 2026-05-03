@@ -8,6 +8,7 @@ import {
 import {
   getModels,
   getProviders,
+  resolveProviderAlias,
   type AgentTool,
   type Api,
   type KnownProvider,
@@ -206,6 +207,8 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
         sendRef: layerOptions.sendRef,
         builtinToolNames: Object.keys(toolRegistry),
         hasUI: layerOptions.hasUI,
+        extensionPaths: config.extensions,
+        extensionsEnabled: config.extensionsEnabled,
       });
       const hookContextLayer = HookContextControllerLayer;
       const hookEffectsLayer = createHookEffectsLayer();
@@ -410,7 +413,9 @@ const buildCycleModels = (
 
   for (const id of requested) {
     if (id.includes("/")) {
-      const [providerId, modelId] = id.split("/");
+      const slashIndex = id.indexOf("/");
+      const providerId = id.slice(0, slashIndex);
+      const modelId = id.slice(slashIndex + 1);
       const provider = getKnownProvider(providerId);
       if (!provider) continue;
       const model = findModel(provider, modelId);
@@ -456,5 +461,6 @@ const findModel = (provider: KnownProvider, modelId: string): Model<Api> | undef
 };
 
 const getKnownProvider = (value: string): KnownProvider | undefined => {
-  return getProviders().find((provider) => provider === value) as KnownProvider | undefined;
+  const resolved = resolveProviderAlias(value);
+  return getProviders().find((provider) => provider === resolved) as KnownProvider | undefined;
 };

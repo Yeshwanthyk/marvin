@@ -15,6 +15,8 @@ export const runValidate = async (args: RuntimeInitArgs = {}): Promise<void> => 
 		provider: args.provider,
 		model: args.model,
 		thinking: args.thinking,
+		extensions: args.extensions,
+		noExtensions: args.noExtensions,
 	})
 
 	const { issues: commandIssues } = loadCustomCommands(loaded.configDir)
@@ -30,6 +32,8 @@ export const runValidate = async (args: RuntimeInitArgs = {}): Promise<void> => 
 		builtinToolNames,
 		hasUI: false,
 		sessionManager,
+		extensionPaths: loaded.extensions,
+		extensionsEnabled: loaded.extensionsEnabled,
 	})
 
 	const issues: ValidationIssue[] = [...commandIssues, ...extensibility.validationIssues]

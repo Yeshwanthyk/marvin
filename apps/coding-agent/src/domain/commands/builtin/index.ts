@@ -11,6 +11,7 @@ import { statusCommand } from "./status.js"
 import { sessionsCommand } from "./sessions.js"
 import { steerCommand } from "./steer.js"
 import { themeCommand } from "./theme.js"
+import { treeCommand } from "./tree.js"
 
 
 export const builtinCommands = [
@@ -26,4 +27,5 @@ export const builtinCommands = [
 	followupCommand,
 	forkCommand,
 	sessionsCommand,
+	treeCommand,
 ]

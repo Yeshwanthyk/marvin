@@ -263,4 +263,40 @@ describe("handleSlashCommand", () => {
 			expect(args).toEqual(["--cwd", ctx.cwd])
 		})
 	})
+
+	describe("/tree", () => {
+		it("opens tree selector and navigates", async () => {
+			const setEditorText = mock(() => {})
+			const navigateTree = mock(async () => ({ editorText: "edit me" }))
+			const ctx = createMockContext({
+				showTreeSelector: mock(async () => "entry-1"),
+				navigateTree,
+				setEditorText,
+			})
+
+			const ok = await handleSlashCommand("/tree", ctx)
+			expect(ok).toBe(true)
+			expect(navigateTree).toHaveBeenCalledWith("entry-1")
+			expect(setEditorText).toHaveBeenCalledWith("edit me")
+		})
+
+		it("offers Pi-style branch summary choices", async () => {
+			const showSelect = mock(async () => "No summary")
+			const navigateTree = mock(async () => ({}))
+			const ctx = createMockContext({
+				showTreeSelector: mock(async () => "entry-1"),
+				showSelect,
+				navigateTree,
+			})
+
+			const ok = await handleSlashCommand("/tree", ctx)
+			expect(ok).toBe(true)
+			expect(showSelect).toHaveBeenCalledWith("Summarize branch?", [
+				"No summary",
+				"Summarize",
+				"Summarize with custom prompt",
+			])
+			expect(navigateTree).toHaveBeenCalledWith("entry-1")
+		})
+	})
 })

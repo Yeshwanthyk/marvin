@@ -3,7 +3,7 @@
  */
 
 import { CodeBlock, Diff, Image, TextAttributes, useTheme, parseColor, type MouseEvent, type Theme } from "@yeshwanthyk/open-tui"
-import { Show, type JSX } from "solid-js"
+import { createMemo, Show, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
 import { getToolText, getEditDiffText } from "@domain/messaging/content.js"
 import { getAgentDelegationArgs, getAgentDelegationUi, type AgentDelegationArgs, type AgentDelegationUi, type DelegationStatus } from "./tool-ui-contracts.js"
@@ -11,6 +11,10 @@ import type { ToolArgs, ToolResultContent, RenderCallFunction, RenderResultFunct
 
 // Re-export for backwards compatibility
 export { getToolText, getEditDiffText }
+
+function isSelectingMouseEvent(event: unknown): boolean {
+	return typeof event === "object" && event !== null && "isSelecting" in event && event.isSelecting === true
+}
 
 // Design tokens - minimal symbols
 const symbols = {
@@ -526,10 +530,9 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 		}
 	}
 
-	// Use functions to ensure reactivity
-	const mode = () => renderer.mode(ctx)
-	const header = () => tryCustomRenderCall() ?? renderer.renderHeader?.(ctx) ?? defaultHeader(ctx)
-	const body = () => tryCustomRenderResult() ?? renderer.renderBody?.(ctx)
+	const mode = createMemo(() => renderer.mode(ctx))
+	const header = createMemo(() => tryCustomRenderCall() ?? renderer.renderHeader?.(ctx) ?? defaultHeader(ctx))
+	const body = createMemo(() => tryCustomRenderResult() ?? renderer.renderBody?.(ctx))
 
 	return (
 		<Show when={mode() === "inline"} fallback={
@@ -538,7 +541,7 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 				flexDirection="column"
 				gap={0}
 				onMouseUp={(e: MouseEvent) => {
-					if (e.isSelecting) return
+					if (isSelectingMouseEvent(e)) return
 					props.onToggleExpanded?.()
 				}}
 			>
@@ -555,7 +558,7 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 				flexDirection="row"
 				gap={0}
 				onMouseUp={(e: MouseEvent) => {
-					if (e.isSelecting) return
+					if (isSelectingMouseEvent(e)) return
 					props.onToggleExpanded?.()
 				}}
 			>

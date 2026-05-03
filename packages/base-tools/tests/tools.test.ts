@@ -24,6 +24,20 @@ describe("cwd-bound tools", () => {
 		}
 	});
 
+	it("rejects invalid read ranges at the runtime boundary", async () => {
+		const dir = await createTempDir("read-tool-invalid-range-");
+		try {
+			const filePath = path.join(dir, "note.txt");
+			await writeFile(filePath, "one\ntwo", "utf8");
+
+			const tool = createReadTool(dir);
+			await expect(tool.execute("test", { path: "note.txt", offset: 0 })).rejects.toThrow("offset must be a positive integer");
+			await expect(tool.execute("test", { path: "note.txt", limit: -1 })).rejects.toThrow("limit must be a positive integer");
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("write resolves relative paths against cwd", async () => {
 		const dir = await createTempDir("write-tool-");
 		try {

@@ -49,4 +49,37 @@ describe("coding-agent args", () => {
     expect(args.configDir).toBe("/tmp/config");
     expect(args.prompt).toBeUndefined();
   });
+
+  it("detects install subcommand", () => {
+    const args = parseArgs(["install", "npm:pi-web-access", "--config-dir", "/tmp/config"]);
+    expect(args.command).toBe("install");
+    expect(args.configDir).toBe("/tmp/config");
+    expect(args.prompt).toBe("npm:pi-web-access");
+  });
+
+  it("does not consume following flags as option values", () => {
+    const args = parseArgs(["--model", "--headless", "hello"]);
+    expect(args.model).toBeUndefined();
+    expect(args.headless).toBe(true);
+    expect(args.prompt).toBe("--model hello");
+  });
+
+  it("keeps missing option values in prompt for visibility", () => {
+    const args = parseArgs(["--provider"]);
+    expect(args.provider).toBeUndefined();
+    expect(args.prompt).toBe("--provider");
+  });
+
+  it("does not skip flags after missing thinking value", () => {
+    const args = parseArgs(["--thinking", "--headless"]);
+    expect(args.thinking).toBeUndefined();
+    expect(args.headless).toBe(true);
+    expect(args.prompt).toBe("--thinking");
+  });
+
+  it("parses extension flags", () => {
+    const args = parseArgs(["-e", "./one.ts", "--extension", "./two", "--no-extensions"]);
+    expect(args.extensions).toEqual(["./one.ts", "./two"]);
+    expect(args.noExtensions).toBe(true);
+  });
 });

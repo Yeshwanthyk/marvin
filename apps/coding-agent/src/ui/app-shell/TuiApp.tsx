@@ -12,7 +12,7 @@ function detectThemeMode(): ThemeMode {
 	}
 }
 import { useRuntime } from "../../runtime/context.js"
-import type { LoadedSession } from "../../session-manager.js"
+import type { LoadedSession, SessionTreeNode, SessionNodeEntry } from "../../session-manager.js"
 import { createSessionController } from "@runtime/session/session-controller.js"
 import { createPromptQueue, type PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import { appendWithCap } from "@domain/messaging/content.js"
@@ -33,6 +33,50 @@ import { useModals } from "../hooks/useModals.js"
 import { ModalContainer } from "../components/modals/ModalContainer.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
+
+const textFromEntry = (entry: SessionNodeEntry): string => {
+	if (entry.type === "custom") return `[custom:${entry.customType}]`
+	const message = entry.message as { role?: string; content?: unknown; name?: string; toolName?: string }
+	const role = message.role ?? "message"
+	if (message.content === undefined) return role
+	const text = typeof message.content === "string"
+		? message.content
+		: Array.isArray(message.content)
+			? message.content
+				.filter((part): part is { type: "text"; text: string } => Boolean(part) && part.type === "text")
+				.map((part) => part.text)
+				.join(" ")
+			: ""
+	const compact = text.replace(/\s+/g, " ").trim()
+	return `${role}: ${compact || message.name || message.toolName || entry.id}`
+}
+
+const flattenTreeOptions = (
+	nodes: SessionTreeNode[],
+	activeLeafId: string | null,
+): Array<{ id: string; label: string }> => {
+	const activePath = new Set<string>()
+	const markActivePath = (node: SessionTreeNode): boolean => {
+		const active = node.entry.id === activeLeafId || node.children.some(markActivePath)
+		if (active) activePath.add(node.entry.id)
+		return active
+	}
+	for (const node of nodes) markActivePath(node)
+
+	const rows: Array<{ id: string; label: string }> = []
+	const walk = (node: SessionTreeNode, prefix: string, isLast: boolean, isRoot: boolean) => {
+		const marker = activePath.has(node.entry.id) ? "*" : " "
+		const connector = isRoot ? "" : isLast ? "`- " : "|- "
+		rows.push({
+			id: node.entry.id,
+			label: `${marker} ${prefix}${connector}${textFromEntry(node.entry).slice(0, 100)} [${node.entry.id.slice(0, 8)}]`,
+		})
+		const childPrefix = prefix + (isRoot ? "" : isLast ? "   " : "|  ")
+		node.children.forEach((child, index) => walk(child, childPrefix, index === node.children.length - 1, false))
+	}
+	nodes.forEach((node, index) => walk(node, "", index === nodes.length - 1, true))
+	return rows
+}
 
 export interface TuiAppProps {
 	initialSession: LoadedSession | null
@@ -306,6 +350,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		setTheme: handleThemeChange,
 		openEditor: () => editorOpenRef.current(),
 		clearEditor: () => clearEditorRef.current(),
+		setEditorText: (text) => setEditorTextRef.current(text),
 		onExit: () => exitHandlerRef.current(),
 		hookRunner,
 		submitPrompt: (text, options) => submitPrompt(text, options?.mode ?? "followUp"),
@@ -313,6 +358,16 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		followUp: (text) => followUpHelper(text),
 		sendUserMessage: (text, options) => sendUserMessageHelper(text, options),
 		showSelect: modals.showSelect,
+		showInput: modals.showInput,
+		showTreeSelector: async () => {
+			const rows = flattenTreeOptions(sessionManager.getTree(), sessionManager.getLeafId())
+			if (rows.length === 0) return undefined
+			const labels = rows.map((row) => row.label)
+			const selected = await modals.showSelect("Session Tree", labels)
+			if (selected === undefined) return undefined
+			return rows[labels.indexOf(selected)]?.id
+		},
+		navigateTree: (entryId, options) => sessionController.navigateTree(entryId, options),
 		switchSession: async (sessionPath: string) => sessionController.switchSession(sessionPath),
 	}
 
@@ -487,8 +542,9 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 
 	const sendMessageHandler = <T = unknown>(
 		message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
-		triggerTurn?: boolean,
+		triggerTurn?: boolean | { triggerTurn?: boolean },
 	) => {
+		const shouldTriggerTurn = typeof triggerTurn === "object" ? triggerTurn.triggerTurn === true : triggerTurn === true
 		const hookMessage = createHookMessage(message)
 		// Add to UI messages if display is true
 		if (hookMessage.display) {
@@ -505,7 +561,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		// Persist hook message to session
 		sessionManager.appendMessage(hookMessage)
 		// Optionally trigger a new turn
-		if (triggerTurn) {
+		if (shouldTriggerTurn) {
 			void handleSubmit(typeof hookMessage.content === "string" ? hookMessage.content : "")
 		}
 	}

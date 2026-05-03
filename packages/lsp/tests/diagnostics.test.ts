@@ -109,6 +109,17 @@ describe("summarizeDiagnostics", () => {
     expect(matches.length).toBeLessThanOrEqual(3)
   })
 
+  test("falls back to default caps for invalid boundary values", () => {
+    const diags = Array.from({ length: 30 }, (_, i) => makeDiag(1, i, `Error ${i}`))
+    const result = summarizeDiagnostics({
+      diagnosticsByFile: { "/test/file.ts": diags },
+      filePath: "/test/file.ts",
+      caps: { maxDiagnosticsPerFile: 0, maxProjectFiles: -1, maxTotalLines: Number.NaN },
+    })
+    const lines = result.fileText?.split("\n").filter((l) => l.startsWith("ERROR")) ?? []
+    expect(lines.length).toBe(20)
+  })
+
   test("respects maxTotalLines cap across file and project", () => {
     const diagnosticsByFile: Record<string, Diagnostic[]> = {
       "/test/main.ts": Array.from({ length: 30 }, (_, i) => makeDiag(1, i, `Main ${i}`)),

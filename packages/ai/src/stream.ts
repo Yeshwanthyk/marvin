@@ -33,6 +33,12 @@ export function setApiKey(provider: KnownProvider | string, key: string): void {
 	apiKeys.set(provider, key);
 }
 
+export function clearApiKey(provider: KnownProvider): void;
+export function clearApiKey(provider: string): void;
+export function clearApiKey(provider: KnownProvider | string): void {
+	apiKeys.delete(provider);
+}
+
 export function getApiKey(provider: KnownProvider): string | undefined;
 export function getApiKey(provider: string): string | undefined;
 export function getApiKey(
