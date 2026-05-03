@@ -55,6 +55,7 @@ Config lives in `~/.config/marvin/`:
 ├── agents/              # subagent definitions
 ├── commands/            # custom slash commands
 ├── hooks/               # lifecycle hooks
+├── extensions/          # Pi-compatible extension modules/packages
 ├── tools/               # custom tools
 ├── sessions/            # session persistence (per cwd)
 └── codex-tokens.json    # codex OAuth tokens
@@ -158,6 +159,34 @@ $ARGUMENTS
 ```
 
 Usage: `/review src/index.ts`
+
+## Extensions
+
+Marvin loads native hooks and Pi-compatible extension modules/packages:
+
+```bash
+marvin -e ./my-extension.ts
+marvin -e ./my-package
+marvin install npm:pi-web-access
+marvin install github:owner/repo
+marvin install owner/repo@ref
+```
+
+Discovery includes `~/.config/marvin/extensions/`, `.marvin/extensions/`, and `.pi/extensions/`. `marvin install` places packages under `~/.config/marvin/extensions/` and adds the installed package directory to config `extensions`.
+
+Existing `~/.config/marvin/commands`, `hooks`, and `tools` stay supported. They are local Marvin customizations, not required extension migrations.
+
+Package directories can declare:
+
+```json
+{
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
+```
+
+Ask Marvin to read `docs/extensions.md`, `docs/packages.md`, and `examples/extensions/` before building extensions.
 
 ## Tools
 

@@ -1,0 +1,17 @@
+{
+  "name": "marvin-extension-package-example",
+  "version": "0.1.0",
+  "type": "module",
+  "keywords": ["pi-package", "marvin-extension"],
+  "dependencies": {
+    "typebox": "^1.0.0"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

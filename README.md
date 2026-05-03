@@ -54,6 +54,7 @@ marvin validate --config-dir ~/.config/marvin   # Lint hooks/tools/commands
 - **Sessions**: Per-cwd persistence, resume with `-c`/`-r`
 - **Thinking**: Configurable depth (off → xhigh)
 - **Extensibility**: Custom tools, commands, hooks, subagents
+- **Pi-compatible extensions**: Load Pi-style `pi.extensions` packages and ask Marvin to read its own docs to build new extensions
 
 ## Architecture
 
@@ -119,7 +120,26 @@ When adding new surfaces, depend on `RuntimeServices.sessionOrchestrator` instea
 --config <path>        Custom config.json
 --config-dir <path>    Custom config directory
 validate               Subcommand that runs schema validation on hooks/tools/commands
+install <source>       Install an extension from npm or GitHub
 ```
+
+## Extensions
+
+Marvin can load native hooks and Pi-compatible extension packages:
+
+```bash
+marvin -e ./my-extension.ts
+marvin -e ./my-package
+marvin install npm:pi-web-access
+marvin install github:owner/repo
+marvin install owner/repo@ref
+```
+
+Extension discovery checks `~/.config/marvin/extensions/`, `.marvin/extensions/`, `.pi/extensions/`, and config `extensions`. `marvin install` places packages under `~/.config/marvin/extensions/` and appends the resolved package directory to `~/.config/marvin/config.json`. Package directories can declare `package.json` `pi.extensions`, so Pi packages such as `pi-web-access` can run in Marvin without source changes.
+
+Existing `~/.config/marvin/commands`, `~/.config/marvin/hooks`, and `~/.config/marvin/tools` continue to work. They do not need to be converted into extensions; extensions are the package-friendly path for shared Pi-compatible capabilities.
+
+When asking Marvin to create an extension, tell it to read [apps/coding-agent/docs/extensions.md](apps/coding-agent/docs/extensions.md), [apps/coding-agent/docs/packages.md](apps/coding-agent/docs/packages.md), and [apps/coding-agent/examples/extensions](apps/coding-agent/examples/extensions). The default system prompt points the model at those paths.
 
 ## Commands
 
