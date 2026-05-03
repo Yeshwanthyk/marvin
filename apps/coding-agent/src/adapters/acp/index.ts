@@ -4,7 +4,7 @@
  */
 
 import type { Agent } from "@yeshwanthyk/agent-core"
-import { getModels, type KnownProvider, type Model, type Api } from "@yeshwanthyk/ai"
+import { getModels, getProviders, resolveProviderAlias, type KnownProvider, type Model, type Api } from "@yeshwanthyk/ai"
 import { createRuntime } from "@runtime/factory.js"
 import { Effect } from "effect"
 import {
@@ -30,11 +30,8 @@ import pkg from "../../../package.json"
 
 // Type guards and validation functions
 function isKnownProvider(value: string): value is KnownProvider {
-	const knownProviders: KnownProvider[] = [
-		"anthropic", "google", "openai", "codex", "github-copilot", 
-		"xai", "groq", "cerebras", "openrouter", "zai", "mistral", "opencode"
-	]
-	return knownProviders.includes(value as KnownProvider)
+	const resolved = resolveProviderAlias(value)
+	return getProviders().includes(resolved as KnownProvider)
 }
 
 function isJsonRpcRequest(msg: unknown): msg is JsonRpcRequest {
@@ -150,8 +147,9 @@ interface AcpServerState {
 function parseModelSpec(spec: string): { provider: KnownProvider; modelId: string } {
 	if (spec.includes("/")) {
 		const [provider, ...rest] = spec.split("/")
-		if (isKnownProvider(provider)) {
-			return { provider, modelId: rest.join("/") }
+		const resolvedProvider = resolveProviderAlias(provider)
+		if (isKnownProvider(resolvedProvider)) {
+			return { provider: resolvedProvider as KnownProvider, modelId: rest.join("/") }
 		}
 		// If provider is unknown, default to anthropic
 		return { provider: "anthropic", modelId: spec }

@@ -51,6 +51,7 @@ Config lives in `~/.config/marvin/`:
 ```
 ~/.config/marvin/
 ├── config.json          # provider, model, theme, thinking, lsp settings
+├── models.json          # Pi-style custom provider/model registry
 ├── agents.md            # global AGENTS.md instructions
 ├── agents/              # subagent definitions
 ├── commands/            # custom slash commands
@@ -85,6 +86,36 @@ Editor config (used by `/editor`):
 ```
 
 Use the object form when command/args include spaces. Defaults to `nvim` when unset. `/editor` writes a temp file, suspends the TUI, then restores the prompt with the edited contents when the editor exits. The editor runs with `cwd` set to the current working directory; include `{cwd}` if your editor needs it. For GUI editors, add `--wait` so `/editor` blocks until the file closes.
+
+### models.json
+
+Marvin loads Pi-style custom model providers from `~/.pi/agent/models.json`, then from `~/.config/marvin/models.json` so Marvin-specific entries can override imported Pi entries. API keys and header values can be literals, environment variable names, or `!command` shell resolvers.
+
+```json
+{
+  "providers": {
+    "vibeproxy-anthropic": {
+      "baseUrl": "http://localhost:8317",
+      "api": "anthropic-messages",
+      "apiKey": "dummy",
+      "headers": { "X-Custom": "CUSTOM_HEADER_ENV" },
+      "authHeader": false,
+      "models": [
+        {
+          "id": "claude-opus-4-7",
+          "name": "VP Claude Opus 4.7",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 200000,
+          "maxTokens": 64000
+        }
+      ]
+    }
+  }
+}
+```
+
+Pi's `openai-codex` provider name is accepted as an alias for Marvin's `codex` provider. When Marvin has no configured provider/model of its own, it can also use Pi defaults from `~/.pi/agent/settings.json`.
 
 ### AGENTS.md
 

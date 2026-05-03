@@ -1,13 +1,14 @@
 import { spawn } from "node:child_process"
 import type { Api, Model, KnownProvider } from "@yeshwanthyk/ai"
-import { getModels, getProviders } from "@yeshwanthyk/ai"
+import { getModels, getProviders, resolveProviderAlias } from "@yeshwanthyk/ai"
 import type { CommandContext } from "./types.js"
 
 export const resolveProvider = (raw: string): KnownProvider | undefined => {
 	const trimmed = raw.trim()
 	if (!trimmed) return undefined
+	const resolved = resolveProviderAlias(trimmed)
 	const providers = getProviders()
-	return providers.includes(trimmed as KnownProvider) ? (trimmed as KnownProvider) : undefined
+	return providers.includes(resolved as KnownProvider) ? (resolved as KnownProvider) : undefined
 }
 
 export const resolveModel = (provider: KnownProvider, raw: string): Model<Api> | undefined => {

@@ -1,4 +1,4 @@
-import { getModels, getProviders } from '@yeshwanthyk/ai';
+import { getModels, getProviders, resolveProviderAlias } from '@yeshwanthyk/ai';
 
 import { THEME_NAMES } from "./theme-names.js";
 
@@ -17,8 +17,9 @@ export interface SlashCommand {
 const resolveProvider = (raw: string): KnownProvider | undefined => {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
+  const resolved = resolveProviderAlias(trimmed);
   const providers = getProviders();
-  return providers.includes(trimmed as KnownProvider) ? (trimmed as KnownProvider) : undefined;
+  return providers.includes(resolved as KnownProvider) ? (resolved as KnownProvider) : undefined;
 };
 
 export const slashCommands: SlashCommand[] = [
