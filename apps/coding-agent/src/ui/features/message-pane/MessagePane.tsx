@@ -1,5 +1,7 @@
 import type { ToolBlock, UIMessage } from "../../../types.js"
-import { MessageList } from "../../../components/MessageList.js"
+import { useKeyboard, type ScrollBoxRenderable } from "@yeshwanthyk/open-tui"
+import { createEffect, createMemo } from "solid-js"
+import { MessageList, buildTranscriptMarkIds } from "../../../components/MessageList.js"
 
 export interface MessagePaneProps {
 	messages: UIMessage[]
@@ -15,8 +17,47 @@ export interface MessagePaneProps {
 }
 
 export function MessagePane(props: MessagePaneProps) {
+	let scrollbox: ScrollBoxRenderable | undefined
+	let activeMarkIndex = -1
+	const markIds = createMemo(() => buildTranscriptMarkIds(props.messages, props.toolBlocks, props.thinkingVisible))
+
+	const scrollToMark = (direction: "prev" | "next") => {
+		const ids = markIds()
+		if (!scrollbox || ids.length === 0) return
+		if (activeMarkIndex < 0 || activeMarkIndex >= ids.length) {
+			activeMarkIndex = direction === "prev" ? ids.length - 1 : 0
+		} else {
+			activeMarkIndex = direction === "prev"
+				? Math.max(0, activeMarkIndex - 1)
+				: Math.min(ids.length - 1, activeMarkIndex + 1)
+		}
+		scrollbox.scrollChildIntoView(ids[activeMarkIndex]!)
+	}
+
+	createEffect(() => {
+		const ids = markIds()
+		if (activeMarkIndex >= ids.length) activeMarkIndex = ids.length - 1
+	})
+
+	useKeyboard((e: { name: string; ctrl?: boolean; shift?: boolean; preventDefault?: () => void }) => {
+		if (!e.ctrl || !e.shift) return
+		if (e.name === "z") {
+			scrollToMark("prev")
+			e.preventDefault?.()
+		} else if (e.name === "x") {
+			scrollToMark("next")
+			e.preventDefault?.()
+		}
+	})
+
 	return (
-		<scrollbox stickyScroll stickyStart="bottom" flexGrow={props.messages.length > 0 ? 1 : 0} flexShrink={1}>
+		<scrollbox
+			ref={(ref) => { scrollbox = ref }}
+			stickyScroll
+			stickyStart="bottom"
+			flexGrow={props.messages.length > 0 ? 1 : 0}
+			flexShrink={1}
+		>
 			<MessageList
 				messages={props.messages}
 				toolBlocks={props.toolBlocks}

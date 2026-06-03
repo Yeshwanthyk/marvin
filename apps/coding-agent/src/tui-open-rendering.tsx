@@ -18,7 +18,7 @@ function isSelectingMouseEvent(event: unknown): boolean {
 
 // Design tokens - minimal symbols
 const symbols = {
-	running: "·",
+	running: "◌",
 	complete: "▸",
 	expanded: "▾",
 	error: "✕",
@@ -76,6 +76,13 @@ const delegationOkColor = diffAddedColor
 
 function firstLine(s: string): string {
 	return s.split("\n")[0] || ""
+}
+
+function stripInlineMarkdown(s: string): string {
+	return s
+		.replace(/\*\*([^*]+)\*\*/g, "$1")
+		.replace(/__([^_]+)__/g, "$1")
+		.replace(/`([^`]+)`/g, "$1")
 }
 
 function truncate(s: string, max: number): string {
@@ -340,33 +347,54 @@ function ToolHeader(props: ToolHeaderProps): JSX.Element {
 
 	const symbolColor = () => {
 		if (props.isError) return theme.error
+		if (!props.isComplete) return theme.accent
 		return theme.textMuted
 	}
 
-	// Tool name gets subtle accent, rest muted
+	const status = () => {
+		if (props.isError) return "failed"
+		if (!props.isComplete) return "running"
+		return ""
+	}
+
 	return (
-		<text selectable={false}>
-			<span style={{ fg: symbolColor() }}>{symbol()}</span>
-			<span style={{ fg: theme.accent }}> {props.label}</span>
-			<Show when={props.detail}>
-				<span style={{ fg: theme.textMuted }}> {props.detail}</span>
+		<box flexDirection="row" gap={1}>
+			<text selectable={false} fg={symbolColor()}>{symbol()}</text>
+			<text selectable={false}>
+				<span style={{ fg: theme.accent }}>{props.label}</span>
+				<Show when={props.detail}>
+					<span style={{ fg: theme.textMuted }}> {stripInlineMarkdown(props.detail ?? "")}</span>
+				</Show>
+				<Show when={props.suffix}>
+					<span style={{ fg: theme.textMuted }}> · {props.suffix}</span>
+				</Show>
+			</text>
+			<Show when={status()}>
+				<text selectable={false} fg={props.isError ? theme.error : theme.textMuted}>{status()}</text>
 			</Show>
-			<Show when={props.suffix}>
-				<span style={{ fg: theme.textMuted }}> · {props.suffix}</span>
-			</Show>
-		</text>
+		</box>
 	)
 }
+
+const imageBlocksForResult = (result: ToolBlockProps["result"] | null) =>
+	(result?.content ?? []).filter(
+		(block): block is { type: "image"; data: string; mimeType: string; [key: string]: unknown } =>
+			typeof block === "object" &&
+			block !== null &&
+			(block as { type?: string }).type === "image" &&
+			typeof (block as { data?: string }).data === "string" &&
+			typeof (block as { mimeType?: string }).mimeType === "string",
+	)
 
 const registry: Record<string, ToolRenderer> = {
 	bash: {
 		// Inline when collapsed (just command), block when expanded (show output)
-		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
+		mode: (ctx) => (ctx.expanded || ctx.isError ? "block" : "inline"),
 		renderHeader: (ctx) => {
 			// Prefer description if available, otherwise truncate command
 			let detail: string
 			if (ctx.args?.description) {
-				detail = truncate(String(ctx.args.description), 60)
+				detail = truncate(stripInlineMarkdown(String(ctx.args.description)), 60)
 			} else {
 				const cmd = String(ctx.args?.command || "…").split("\n")[0] || "…"
 				detail = truncate(cmd, 50)
@@ -382,21 +410,16 @@ const registry: Record<string, ToolRenderer> = {
 		},
 	},
 	read: {
-		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
+		mode: (ctx) => (ctx.expanded || ctx.isError ? "block" : "inline"),
 		renderHeader: (ctx) => {
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
-			return <ToolHeader label="read" detail={path} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
+			const imageCount = imageBlocksForResult(ctx.result).length
+			const suffix = imageCount > 0 ? `${imageCount} image${imageCount === 1 ? "" : "s"}` : undefined
+			return <ToolHeader label="read" detail={path} suffix={suffix} isComplete={ctx.isComplete} isError={ctx.isError} expanded={ctx.expanded} />
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
-			const imageBlocks = (ctx.result?.content ?? []).filter(
-				(block): block is { type: "image"; data: string; mimeType: string; [key: string]: unknown } =>
-					typeof block === "object" &&
-					block !== null &&
-					(block as { type?: string }).type === "image" &&
-					typeof (block as { data?: string }).data === "string" &&
-					typeof (block as { mimeType?: string }).mimeType === "string",
-			)
+			const imageBlocks = imageBlocksForResult(ctx.result)
 
 			if (!ctx.output && imageBlocks.length === 0) return <text fg={theme.textMuted}>reading…</text>
 			const rendered = ctx.output ? (ctx.expanded ? replaceTabs(ctx.output) : truncateLines(ctx.output, 20).text) : ""
@@ -433,7 +456,7 @@ const registry: Record<string, ToolRenderer> = {
 		},
 	},
 	edit: {
-		mode: (ctx) => (ctx.expanded ? "block" : "inline"),
+		mode: (ctx) => (ctx.expanded || ctx.isError ? "block" : "inline"),
 		renderHeader: (ctx) => {
 			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
@@ -547,7 +570,13 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 			>
 				{header()}
 				<Show when={body()}>
-					<box paddingLeft={2} paddingTop={1}>
+					<box
+						paddingLeft={1}
+						marginLeft={1}
+						paddingTop={1}
+						border={["left"]}
+						borderColor={ctx.isError ? theme.error : theme.borderSubtle}
+					>
 						{body()}
 					</box>
 				</Show>
