@@ -5,6 +5,9 @@ import { Dialog, Input, SelectList, type SelectItem, type SelectListRef } from "
 import { useTheme } from "@yeshwanthyk/open-tui"
 import { createSearchSelectItems, type SearchSelectOptionInput } from "./search-select-options.js"
 
+const searchSelectMaxVisible = 8
+const searchSelectListHeight = searchSelectMaxVisible + 1
+
 export interface SearchSelectModalProps {
 	title: string
 	options: SearchSelectOptionInput[]
@@ -23,7 +26,7 @@ export function SearchSelectModal(props: SearchSelectModalProps): JSX.Element {
 		const count = items().length
 		const total = optionCount()
 		if (query().trim()) return `${count}/${total} matches`
-		return `${total} ${total === 1 ? "session" : "sessions"}`
+		return `${total} ${total === 1 ? "item" : "items"}`
 	}
 
 	useKeyboard((e: { name: string }) => {
@@ -66,23 +69,25 @@ export function SearchSelectModal(props: SearchSelectModalProps): JSX.Element {
 				</Show>
 			</box>
 			<box height={1} />
-			<SelectList
-				items={items()}
-				onSelect={(item) => props.onSelect(item.value)}
-				onCancel={() => props.onSelect(undefined)}
-				maxVisible={8}
-				width={96}
-				theme={{
-					selectedBg: theme.backgroundElement,
-					selectedFg: theme.text,
-					description: theme.textMuted,
-					scrollInfo: theme.textMuted,
-					noMatch: theme.textMuted,
-				}}
-				ref={(ref) => { listRef = ref }}
-			/>
+			<box height={searchSelectListHeight} minHeight={searchSelectListHeight} flexDirection="column" flexShrink={0}>
+				<SelectList
+					items={items()}
+					onSelect={(item) => props.onSelect(item.value)}
+					onCancel={() => props.onSelect(undefined)}
+					maxVisible={searchSelectMaxVisible}
+					width={96}
+					theme={{
+						selectedBg: theme.backgroundElement,
+						selectedFg: theme.text,
+						description: theme.textMuted,
+						scrollInfo: theme.textMuted,
+						noMatch: theme.textMuted,
+					}}
+					ref={(ref) => { listRef = ref }}
+				/>
+			</box>
 			<box height={1} />
-			<text fg={theme.textMuted}>type to filter | up/down move | enter jump | esc close</text>
+			<text fg={theme.textMuted}>type to filter | up/down move | enter select | esc close</text>
 		</Dialog>
 	)
 }

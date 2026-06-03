@@ -15,13 +15,23 @@ const normalizeOption = (option: SearchSelectOptionInput): SearchSelectOption =>
 const searchableText = (option: SearchSelectOption): string =>
 	[option.label, option.description, option.keywords, option.value].filter(Boolean).join(" ").toLowerCase()
 
+const fuzzyIncludes = (text: string, term: string): boolean => {
+	let cursor = 0
+	for (const char of term) {
+		cursor = text.indexOf(char, cursor)
+		if (cursor === -1) return false
+		cursor += 1
+	}
+	return true
+}
+
 export const scoreSearchSelectOption = (option: SearchSelectOption, query: string): number => {
 	const q = query.toLowerCase().trim()
 	if (!q) return 1
 
 	const terms = q.split(/\s+/).filter(Boolean)
 	const haystack = searchableText(option)
-	if (!terms.every((term) => haystack.includes(term))) return 0
+	if (!terms.every((term) => haystack.includes(term) || fuzzyIncludes(haystack, term))) return 0
 
 	return terms.reduce((score, term) => {
 		const label = option.label.toLowerCase()
@@ -30,6 +40,8 @@ export const scoreSearchSelectOption = (option: SearchSelectOption, query: strin
 		if (label.includes(` ${term}`)) return score + 5
 		if (label.includes(term)) return score + 4
 		if (description.includes(term)) return score + 2
+		if (fuzzyIncludes(label, term)) return score + 2
+		if (fuzzyIncludes(description, term)) return score + 1
 		return score + 1
 	}, 0)
 }

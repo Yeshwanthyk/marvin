@@ -137,14 +137,6 @@ export function SelectList(props: SelectListProps) {
 		return { startIndex, endIndex }
 	})
 
-	if (filteredItems().length === 0) {
-		return (
-			<box>
-				<text fg={theme().noMatch}>{"  No matching items"}</text>
-			</box>
-		)
-	}
-
 	// Derive reactive values from visibleWindow memo
 	const startIndex = () => visibleWindow().startIndex
 	const endIndex = () => visibleWindow().endIndex
@@ -152,20 +144,29 @@ export function SelectList(props: SelectListProps) {
 	const showScrollInfo = () => startIndex() > 0 || endIndex() < filteredItems().length
 
 	return (
-		<box flexDirection="column">
-			<For each={visibleItems()}>
-				{(item, localIndex) => {
-					const globalIndex = () => startIndex() + localIndex()
-					const isSelected = () => globalIndex() === clampedIndex()
-					return <SelectListItem item={item} isSelected={isSelected} theme={theme} width={width} />
-				}}
-			</For>
-			<Show when={showScrollInfo()}>
-				<text fg={theme().scrollInfo}>
-					{"  "}({clampedIndex() + 1}/{filteredItems().length})
-				</text>
-			</Show>
-		</box>
+		<Show
+			when={filteredItems().length > 0}
+			fallback={
+				<box>
+					<text fg={theme().noMatch}>{"  No matching items"}</text>
+				</box>
+			}
+		>
+			<box flexDirection="column">
+				<For each={visibleItems()}>
+					{(item, localIndex) => {
+						const globalIndex = () => startIndex() + localIndex()
+						const isSelected = () => globalIndex() === clampedIndex()
+						return <SelectListItem item={item} isSelected={isSelected} theme={theme} width={width} />
+					}}
+				</For>
+				<Show when={showScrollInfo()}>
+					<text fg={theme().scrollInfo}>
+						{"  "}({clampedIndex() + 1}/{filteredItems().length})
+					</text>
+				</Show>
+			</box>
+		</Show>
 	)
 }
 
