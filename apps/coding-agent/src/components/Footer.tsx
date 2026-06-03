@@ -8,6 +8,7 @@ import { useTheme } from "@yeshwanthyk/open-tui"
 
 export interface FooterProps {
   branch: string | null
+  cwd: string
   bashMode?: boolean
 }
 
@@ -15,7 +16,7 @@ export function Footer(props: FooterProps) {
   const { theme } = useTheme()
   const dims = useTerminalDimensions()
 
-  const dirName = createMemo(() => process.cwd().split("/").pop() || "")
+  const dirName = createMemo(() => props.cwd.split("/").filter(Boolean).pop() || props.cwd)
 
   const shortBranch = createMemo(() => {
     const branch = props.branch

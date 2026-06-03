@@ -68,7 +68,7 @@ export function MainView(props: MainViewProps) {
 	const dimensions = useTerminalDimensions()
 	let textareaRef: TextareaRenderable | undefined
 	const lastCtrlC = { current: 0 }
-	const branch = useGitStatus()
+	const branch = useGitStatus(() => props.cwd)
 	const spinnerFrame = useSpinner(() => props.activityState)
 	const renderer = useRenderer()
 	const { toasts, pushToast } = useToastManager()
@@ -367,7 +367,7 @@ export function MainView(props: MainViewProps) {
 				onKeyDown={handleKeyDown}
 				terminalWidth={() => dimensions().width}
 			/>
-			<Footer branch={branch()} bashMode={isBashMode()} />
+			<Footer branch={branch()} cwd={props.cwd} bashMode={isBashMode()} />
 			<ToastViewport toasts={toasts()} />
 		</box>
 	)
