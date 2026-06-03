@@ -63,6 +63,47 @@ describe("coding-agent args", () => {
     expect(args.prompt).toBe("npm:pi-web-access");
   });
 
+  it("detects session rename subcommand", () => {
+    const args = parseArgs(["session", "rename", "fix", "lane", "navigation", "--session", "b17f0285"]);
+    expect(args.command).toBe("session");
+    expect(args.sessionAction).toBe("rename");
+    expect(args.session).toBe("b17f0285");
+    expect(args.prompt).toBe("fix lane navigation");
+  });
+
+  it("detects scratchpad subcommands and options", () => {
+    const args = parseArgs([
+      "scratchpad",
+      "add",
+      "--title",
+      "fix auth flow",
+      "--cwd",
+      "/work/nora",
+      "--tag",
+      "auth",
+      "--tag",
+      "handoff",
+      "--json",
+      "body",
+      "text",
+    ]);
+    expect(args.command).toBe("scratchpad");
+    expect(args.scratchpadAction).toBe("add");
+    expect(args.title).toBe("fix auth flow");
+    expect(args.cwd).toBe("/work/nora");
+    expect(args.tags).toEqual(["auth", "handoff"]);
+    expect(args.json).toBe(true);
+    expect(args.prompt).toBe("body text");
+  });
+
+  it("parses scratchpad list flags", () => {
+    const args = parseArgs(["scratchpad", "list", "--all", "--json"]);
+    expect(args.command).toBe("scratchpad");
+    expect(args.scratchpadAction).toBe("list");
+    expect(args.all).toBe(true);
+    expect(args.json).toBe(true);
+  });
+
   it("does not consume following flags as option values", () => {
     const args = parseArgs(["--model", "--headless", "hello"]);
     expect(args.model).toBeUndefined();

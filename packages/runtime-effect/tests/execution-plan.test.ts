@@ -29,6 +29,7 @@ const createTestConfig = (model: Model<Api>, provider: KnownProvider): LoadedApp
   configDir: "/tmp/marvin-test",
   configPath: "/tmp/marvin-test/config.json",
   lsp: { enabled: false, autoInstall: false },
+  workspace: { projectRoots: [] },
 });
 
 const TestConfigLayer = Layer.succeed(ConfigTag, { config: createTestConfig(anthropicModel, "anthropic") });

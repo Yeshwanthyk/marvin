@@ -18,6 +18,7 @@ const createConfig = () => ({
 		systemPrompt: "",
 		agentsConfig: { combined: "" },
 		lsp: { enabled: true, autoInstall: false },
+		workspace: { projectRoots: [] },
 	},
 })
 

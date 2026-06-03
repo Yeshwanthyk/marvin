@@ -9,6 +9,7 @@ import {
   findActiveCursor,
   moveLaneCursor,
   readWorkspaceLanes,
+  renameSessionLane,
   restoreSessionLane,
   selectLane,
   upsertProjectLane,
@@ -48,6 +49,20 @@ describe("workspace lanes", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it("renames a session lane without changing blank titles", () => {
+    const lanes = readWorkspaceLanes("/missing");
+    const project = upsertProjectLane(lanes, "/work/a", "2026-06-03T00:00:00.000Z");
+    const session = upsertSessionLane(lanes, project, sessionInfo("session-a", project.cwd, 1), "old", "2026-06-03T00:00:01.000Z");
+
+    const renamed = renameSessionLane(lanes, session.id, "  new title  ", "2026-06-03T00:00:02.000Z");
+    expect(renamed.sessions.find((entry) => entry.id === session.id)?.title).toBe("new title");
+    expect(renamed.sessions.find((entry) => entry.id === session.id)?.updatedAt).toBe("2026-06-03T00:00:02.000Z");
+
+    const unchanged = renameSessionLane(renamed, session.id, "   ", "2026-06-03T00:00:03.000Z");
+    expect(unchanged.sessions.find((entry) => entry.id === session.id)?.title).toBe("new title");
+    expect(unchanged.sessions.find((entry) => entry.id === session.id)?.updatedAt).toBe("2026-06-03T00:00:02.000Z");
   });
 
   it("moves left-right within sessions and up-down between projects", () => {

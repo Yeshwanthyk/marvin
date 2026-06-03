@@ -144,6 +144,48 @@ describe("loadAppConfig", () => {
     }
   });
 
+  it("parses workspace project roots", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-workspace-roots-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-workspace-roots-"));
+    try {
+      const model = getAnthropicModel();
+      const configPath = path.join(configDir, "config.json");
+      await writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            provider: "anthropic",
+            model: model.id,
+            workspace: {
+              projectRoots: [
+                "~/code",
+                { path: "~/Documents/work", depth: 2 },
+                { path: "", depth: 1 },
+              ],
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const config = await loadAppConfig({
+        configDir,
+        configPath,
+        cwd: projectDir,
+      });
+
+      expect(config.workspace.projectRoots).toEqual([
+        { path: "~/code", depth: 1 },
+        { path: "~/Documents/work", depth: 2 },
+      ]);
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
   it("parses custom lane keymap config and normalizes common aliases", async () => {
     const configDir = await mkdtemp(path.join(tmpdir(), "config-keymap-custom-"));
     const projectDir = await mkdtemp(path.join(tmpdir(), "project-keymap-custom-"));

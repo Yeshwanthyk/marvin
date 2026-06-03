@@ -15,3 +15,5 @@ export * from "./session/orchestrator.js";
 export * from "./instrumentation.js";
 export * from "./runtime.js";
 export * from "./workspace-lanes.js";
+export * from "./workspace-projects.js";
+export * from "./scratchpads.js";

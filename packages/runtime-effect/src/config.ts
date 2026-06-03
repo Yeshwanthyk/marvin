@@ -17,6 +17,7 @@ import {
   type Model,
 } from "@yeshwanthyk/ai";
 import type { ThinkingLevel } from "@yeshwanthyk/agent-core";
+import { DEFAULT_WORKSPACE_CONFIG, type WorkspaceConfig, type WorkspaceProjectRootConfig } from "./workspace-projects.js";
 
 const execFileAsync = promisify(execFile);
 const customApiKeyProviders = new Set<string>();
@@ -120,6 +121,7 @@ export interface LoadedAppConfig {
   configPath: string;
   lsp: LspConfig;
   keymap: KeymapConfig;
+  workspace: WorkspaceConfig;
 }
 
 export interface DocumentationPaths {
@@ -381,6 +383,30 @@ const resolveKeymapConfig = (raw: unknown): KeymapConfig => {
       activation: resolveLaneActivationConfig(rawLanes.activation),
       bindings: resolveLaneBindingsConfig(rawLanes.bindings),
     },
+  };
+};
+
+const resolveWorkspaceRootConfig = (raw: unknown): WorkspaceProjectRootConfig | undefined => {
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    return { path: raw.trim(), depth: 1 };
+  }
+  if (!isRecord(raw)) return undefined;
+  const rawPath = raw.path;
+  if (typeof rawPath !== "string" || rawPath.trim().length === 0) return undefined;
+  const rawDepth = raw.depth;
+  const depth = typeof rawDepth === "number" && Number.isFinite(rawDepth)
+    ? Math.max(0, Math.min(4, Math.floor(rawDepth)))
+    : 1;
+  return { path: rawPath.trim(), depth };
+};
+
+const resolveWorkspaceConfig = (raw: unknown): WorkspaceConfig => {
+  const root = isRecord(raw) ? raw : {};
+  const projectRoots = Array.isArray(root.projectRoots)
+    ? root.projectRoots.map(resolveWorkspaceRootConfig).filter((entry): entry is WorkspaceProjectRootConfig => Boolean(entry))
+    : [];
+  return {
+    projectRoots: projectRoots.length > 0 ? projectRoots : [...DEFAULT_WORKSPACE_CONFIG.projectRoots],
   };
 };
 
@@ -687,6 +713,7 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
 
   const lsp = resolveLspConfig(options?.lsp, rawObj.lsp);
   const keymap = resolveKeymapConfig(rawObj.keymap);
+  const workspace = resolveWorkspaceConfig(rawObj.workspace);
 
   return {
     provider: resolvedProvider,
@@ -703,6 +730,7 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
     configPath,
     lsp,
     keymap,
+    workspace,
   };
 };
 

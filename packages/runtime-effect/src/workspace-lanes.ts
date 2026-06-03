@@ -271,6 +271,22 @@ export const archiveSessionLane = (
   ),
 });
 
+export const renameSessionLane = (
+  lanes: WorkspaceLanes,
+  sessionLaneId: string,
+  title: string,
+  now: string = new Date().toISOString(),
+): WorkspaceLanes => {
+  const trimmed = title.trim();
+  if (!trimmed) return lanes;
+  return {
+    ...lanes,
+    sessions: lanes.sessions.map((session) =>
+      session.id === sessionLaneId ? { ...session, title: trimmed, updatedAt: now } : session,
+    ),
+  };
+};
+
 export const restoreSessionLane = (
   lanes: WorkspaceLanes,
   sessionLaneId: string,

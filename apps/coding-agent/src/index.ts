@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from './args.js';
 import { runHeadless } from './adapters/cli/headless.js';
 import { runInstall } from './adapters/cli/install.js';
+import { runSessionCommand } from './adapters/cli/session.js';
+import { runScratchpadCommand } from './adapters/cli/scratchpad.js';
 import { runValidate } from './adapters/cli/validate.js';
 import { runAcp } from './adapters/acp/index.js';
 
@@ -85,6 +87,8 @@ const printHelp = () => {
       '  marvin [options] [prompt...]',
       '  marvin validate [options]',
       '  marvin install <source> [options]',
+      '  marvin session rename "3-4 word title" [options]',
+      '  marvin scratchpad <add|list|read|archive> [options]',
       '',
       'Options:',
       '  --provider <name>            Provider (e.g. openai, anthropic, codex)',
@@ -92,6 +96,11 @@ const printHelp = () => {
       '  --thinking <level>           off|minimal|low|medium|high|xhigh, or comma list aligned with --model',
       '  --config-dir <dir>           Config directory (default: ~/.config/marvin)',
       '  --config <path>              Config file path (default: <config-dir>/config.json)',
+      '  --cwd <dir>                  Scratchpad project directory',
+      '  --title <text>               Scratchpad title for add',
+      '  --tag <tag>                  Scratchpad tag for add (repeatable)',
+      '  --json                       Print machine-readable JSON for scratchpad commands',
+      '  --all                        Include archived scratchpads in list',
       '  -e, --extension <path>       Load extension file or directory (repeatable)',
       '  --no-extensions              Disable extension discovery',
       '  -c, --continue               Resume most recent session for current directory',
@@ -108,11 +117,11 @@ const printHelp = () => {
       '  Ctrl+[ / Esc                 Enter sticky lane navigation',
       '  Left/Right                   Move between sessions in project',
       '  Up/Down                      Move between projects',
-      '  Enter                        Exit sticky lane navigation',
-      '  Cmd+K                        Jump to session',
+      '  Enter                        Leave sticky lane navigation',
+      '  Cmd+K                        Command palette',
       '  Cmd+Shift+A                  Archive current session',
       '  Cmd+Shift+R                  Restore archived session',
-      '  Ctrl+C                       Clear input / double to exit',
+      '  Ctrl+C                       Detach TUI',
       '  Esc                          Abort current request',
       '',
       'Custom Commands:',
@@ -140,6 +149,19 @@ const printHelp = () => {
       '  marvin install npm:pi-web-access',
       '  marvin install github:owner/repo',
       '  marvin install owner/repo@ref',
+      '',
+      'Session Commands:',
+      '  marvin session rename "fix lane navigation"',
+      '  marvin session rename "review org migration" --session b17f0285',
+      '',
+      'Workspace Projects:',
+      '  Configure workspace.projectRoots to populate Cmd+K project search',
+      '  Example: { "path": "~/Documents/work", "depth": 1 }',
+      '',
+      'Scratchpads:',
+      '  marvin scratchpad add --title "fix auth flow" "notes to restart from"',
+      '  marvin scratchpad list --cwd .',
+      '  marvin scratchpad read <id>',
       '',
       'Environment:',
       '  OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY / ...',
@@ -180,6 +202,30 @@ const main = async () => {
       source: args.prompt,
       configDir: args.configDir,
       configPath: args.configPath,
+    });
+    return;
+  }
+
+  if (args.command === 'session') {
+    await runSessionCommand({
+      action: args.sessionAction,
+      title: args.prompt,
+      session: args.session,
+      configDir: args.configDir,
+    });
+    return;
+  }
+
+  if (args.command === 'scratchpad') {
+    await runScratchpadCommand({
+      action: args.scratchpadAction,
+      title: args.title,
+      body: args.prompt,
+      cwd: args.cwd,
+      tags: args.tags,
+      json: args.json,
+      includeArchived: args.all,
+      configDir: args.configDir,
     });
     return;
   }

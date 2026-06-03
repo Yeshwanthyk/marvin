@@ -1,10 +1,17 @@
 export interface ParsedArgs {
   headless: boolean;
   acp: boolean;
-  command?: 'validate' | 'install';
+  command?: 'validate' | 'install' | 'session' | 'scratchpad';
+  sessionAction?: 'rename';
+  scratchpadAction?: 'add' | 'list' | 'read' | 'archive';
   prompt?: string;
   configDir?: string;
   configPath?: string;
+  cwd?: string;
+  title?: string;
+  tags: string[];
+  json: boolean;
+  all: boolean;
   provider?: string;
   /** Single model or comma-separated list for Ctrl+P cycling */
   model?: string;
@@ -41,9 +48,16 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
   const args: ParsedArgs = {
     headless: false,
     acp: false,
+    sessionAction: undefined,
+    scratchpadAction: undefined,
     prompt: undefined,
     configDir: undefined,
     configPath: undefined,
+    cwd: undefined,
+    title: undefined,
+    tags: [],
+    json: false,
+    all: false,
     provider: undefined,
     model: undefined,
     thinking: undefined,
@@ -60,8 +74,22 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === undefined) continue;
-    if (!a.startsWith('-') && !args.command && rest.length === 0 && (a === 'validate' || a === 'install')) {
+    if (!a.startsWith('-') && !args.command && rest.length === 0 && (a === 'validate' || a === 'install' || a === 'session' || a === 'scratchpad')) {
       args.command = a;
+      continue;
+    }
+    if (!a.startsWith('-') && args.command === 'session' && !args.sessionAction && rest.length === 0 && a === 'rename') {
+      args.sessionAction = a;
+      continue;
+    }
+    if (
+      !a.startsWith('-') &&
+      args.command === 'scratchpad' &&
+      !args.scratchpadAction &&
+      rest.length === 0 &&
+      (a === 'add' || a === 'list' || a === 'read' || a === 'archive')
+    ) {
+      args.scratchpadAction = a;
       continue;
     }
     if (a === '--help' || a === '-h') {
@@ -117,6 +145,44 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
         rest.push(a)
       }
       continue;
+    }
+    if (a === "--cwd") {
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.cwd = value
+        i += 1
+      } else {
+        rest.push(a)
+      }
+      continue;
+    }
+    if (a === "--title") {
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.title = value
+        i += 1
+      } else {
+        rest.push(a)
+      }
+      continue;
+    }
+    if (a === "--tag") {
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.tags.push(value)
+        i += 1
+      } else {
+        rest.push(a)
+      }
+      continue;
+    }
+    if (a === "--json") {
+      args.json = true
+      continue
+    }
+    if (a === "--all") {
+      args.all = true
+      continue
     }
     if (a === '--provider') {
       const value = optionValue(argv, i + 1)

@@ -49,6 +49,14 @@
       "types": "./dist/workspace-lanes.d.ts",
       "import": "./dist/workspace-lanes.js"
     },
+    "./workspace-projects.js": {
+      "types": "./dist/workspace-projects.d.ts",
+      "import": "./dist/workspace-projects.js"
+    },
+    "./scratchpads.js": {
+      "types": "./dist/scratchpads.d.ts",
+      "import": "./dist/scratchpads.js"
+    },
     "./session/execution-plan.js": {
       "types": "./dist/session/execution-plan.d.ts",
       "import": "./dist/session/execution-plan.js"
