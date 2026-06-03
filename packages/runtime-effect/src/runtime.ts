@@ -177,7 +177,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
 
       const configLayer = Layer.succeed(ConfigTag, { config });
       const sessionManagerLayer = Layer.succeed(SessionManagerTag, {
-        sessionManager: new SessionManager(config.configDir),
+        sessionManager: new SessionManager(config.configDir, layerOptions.cwd),
       } satisfies SessionManagerService);
       const transportLayer =
         layerOptions.transportFactory

@@ -56,6 +56,7 @@ export interface SessionInfo {
   path: string;
   provider: string;
   modelId: string;
+  cwd: string;
 }
 
 export interface SessionDetails extends SessionInfo {
@@ -167,9 +168,13 @@ export class SessionManager implements ReadonlySessionManager {
   private currentSessionId: string | null = null;
   private leafId: string | null = null;
 
-  constructor(configDir: string = join(process.env.HOME || "", ".config", "marvin")) {
-    this.cwd = process.cwd();
+  constructor(configDir: string = join(process.env.HOME || "", ".config", "marvin"), cwd: string = process.cwd()) {
+    this.cwd = cwd;
     this.sessionDir = join(configDir, "sessions", safeCwd(this.cwd));
+  }
+
+  get projectCwd(): string {
+    return this.cwd;
   }
 
   private ensureDir(): void {
@@ -295,6 +300,7 @@ export class SessionManager implements ReadonlySessionManager {
           path,
           provider: metadata.provider,
           modelId: metadata.modelId,
+          cwd: metadata.cwd,
         });
       } catch {
         // skip invalid files
@@ -351,6 +357,7 @@ export class SessionManager implements ReadonlySessionManager {
           path,
           provider: metadata.provider,
           modelId: metadata.modelId,
+          cwd: metadata.cwd,
           messageCount,
           firstMessage: firstMessage || "(empty session)",
           lastActivity,
@@ -408,6 +415,7 @@ export class SessionManager implements ReadonlySessionManager {
           path: resolvedPath,
           provider: metadata.provider,
           modelId: metadata.modelId,
+          cwd: metadata.cwd,
         };
       } catch {
         return null;
@@ -595,10 +603,10 @@ export interface SessionManagerService {
 
 export const SessionManagerTag = Context.GenericTag<SessionManagerService>("runtime-effect/SessionManager");
 
-export const SessionManagerLayer = (configDir?: string) =>
+export const SessionManagerLayer = (configDir?: string, cwd?: string) =>
   Layer.effect(
     SessionManagerTag,
     Effect.sync(() => ({
-      sessionManager: new SessionManager(configDir),
+      sessionManager: new SessionManager(configDir, cwd),
     })),
   );

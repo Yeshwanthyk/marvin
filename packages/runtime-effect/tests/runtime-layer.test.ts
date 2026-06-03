@@ -122,6 +122,28 @@ describe("RuntimeLayer", () => {
     }
   });
 
+  it("passes cwd through to session management", async () => {
+    const temp = await createTempConfig();
+    const cwd = path.join(temp.dir, "project");
+    try {
+      await mkdir(cwd, { recursive: true });
+      const services = await runLayer(
+        RuntimeLayer({
+          adapter: "headless",
+          cwd,
+          configDir: temp.dir,
+          configPath: temp.configPath,
+          instrumentation: { record: () => {} },
+          lspFactory: () => stubLspManager(),
+        }),
+      );
+
+      expect(services.sessionManager.projectCwd).toBe(cwd);
+    } finally {
+      await rm(temp.dir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps slashes inside provider-prefixed cycle model ids", async () => {
     const temp = await createTempConfig();
     const provider = `slash-provider-${Date.now()}`;
