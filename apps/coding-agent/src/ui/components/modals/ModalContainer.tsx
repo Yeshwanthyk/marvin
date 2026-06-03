@@ -6,6 +6,7 @@ import { InputModal } from "./InputModal.js"
 import { ConfirmModal } from "./ConfirmModal.js"
 import { EditorModal } from "./EditorModal.js"
 import type { JSX } from "solid-js"
+import type { SearchSelectOptionInput } from "./search-select-options.js"
 
 export interface ModalContainerProps {
 	modalState: ModalState
@@ -31,7 +32,7 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
 				{(state) => (
 					<SearchSelectModal
 						title={state().title}
-						options={(state() as { options: string[] }).options}
+						options={(state() as { options: SearchSelectOptionInput[] }).options}
 						placeholder={(state() as { placeholder?: string }).placeholder}
 						onSelect={(value) => {
 							(state() as { resolve: (v: string | undefined) => void }).resolve(value)

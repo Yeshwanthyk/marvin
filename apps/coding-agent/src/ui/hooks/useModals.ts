@@ -1,4 +1,5 @@
 import { createSignal } from "solid-js"
+import type { SearchSelectOptionInput } from "../components/modals/search-select-options.js"
 
 export type ModalType = "select" | "searchSelect" | "input" | "confirm" | "editor" | null
 
@@ -12,7 +13,7 @@ export interface SelectModalState {
 export interface SearchSelectModalState {
 	type: "searchSelect"
 	title: string
-	options: string[]
+	options: SearchSelectOptionInput[]
 	placeholder?: string
 	resolve: (value: string | undefined) => void
 }
@@ -49,7 +50,11 @@ export function useModals() {
 		})
 	}
 
-	const showSearchSelect = (title: string, options: string[], placeholder?: string): Promise<string | undefined> => {
+	const showSearchSelect = (
+		title: string,
+		options: SearchSelectOptionInput[],
+		placeholder?: string,
+	): Promise<string | undefined> => {
 		return new Promise((resolve) => {
 			setModalState({ type: "searchSelect", title, options, placeholder, resolve })
 		})

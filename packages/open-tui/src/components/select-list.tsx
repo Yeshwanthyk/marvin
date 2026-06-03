@@ -7,6 +7,8 @@ import { createEffect, createMemo, createSignal, For, Show, type JSX } from "sol
 import { useTheme, type RGBA } from "../context/theme.js"
 import { truncateToWidth, visibleWidth } from "../utils/text-width.js"
 
+const TRUNCATION_MARK = "..."
+
 export interface SelectItem {
 	value: string
 	label: string
@@ -173,17 +175,17 @@ function SelectListItem(props: {
 	theme: () => SelectListTheme
 	width: () => number
 }): JSX.Element {
-	const prefix = () => (props.isSelected() ? "→ " : "  ")
+	const prefix = () => (props.isSelected() ? "> " : "  ")
 	const prefixWidth = 2
 	const value = () => props.item.label || props.item.value
 
 	const labelWidth = () => Math.min(32, Math.max(12, props.width() - prefixWidth - 10))
-	const label = () => truncateToWidth(value(), labelWidth(), "…")
+	const label = () => truncateToWidth(value(), labelWidth(), TRUNCATION_MARK)
 	const labelPad = () => " ".repeat(Math.max(0, labelWidth() - visibleWidth(label())))
 
 	const showDescription = () => Boolean(props.item.description) && props.width() > 50
 	const descWidth = () => (showDescription() ? Math.max(0, props.width() - prefixWidth - labelWidth() - 2) : 0)
-	const desc = () => (showDescription() ? truncateToWidth(props.item.description!, descWidth(), "…") : "")
+	const desc = () => (showDescription() ? truncateToWidth(props.item.description!, descWidth(), TRUNCATION_MARK) : "")
 
 	const line = () => prefix() + label() + labelPad() + (showDescription() ? "  " + desc() : "")
 	const pad = () => " ".repeat(Math.max(0, props.width() - visibleWidth(line())))

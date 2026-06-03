@@ -67,6 +67,44 @@ export interface LspConfig {
   autoInstall: boolean;
 }
 
+export type KeyChord = string;
+
+export type LaneNavActivationConfig =
+  | {
+      behavior: "sticky";
+      enter: KeyChord[];
+      exit: KeyChord[];
+    }
+  | {
+      behavior: "oneshot";
+      prefix: KeyChord[];
+      cancel: KeyChord[];
+    }
+  | {
+      behavior: "toggle";
+      toggle: KeyChord[];
+      exit: KeyChord[];
+    };
+
+export interface LaneKeyBindingsConfig {
+  sessionPrev: KeyChord[];
+  sessionNext: KeyChord[];
+  projectPrev: KeyChord[];
+  projectNext: KeyChord[];
+  jump: KeyChord[];
+  archive: KeyChord[];
+  restore: KeyChord[];
+}
+
+export interface LaneKeymapConfig {
+  activation: LaneNavActivationConfig;
+  bindings: LaneKeyBindingsConfig;
+}
+
+export interface KeymapConfig {
+  lanes: LaneKeymapConfig;
+}
+
 export interface LoadedAppConfig {
   provider: KnownProvider;
   modelId: string;
@@ -81,6 +119,7 @@ export interface LoadedAppConfig {
   configDir: string;
   configPath: string;
   lsp: LspConfig;
+  keymap: KeymapConfig;
 }
 
 export interface DocumentationPaths {
@@ -172,13 +211,13 @@ const parseModelSpec = (raw: unknown): { provider?: KnownProvider; modelId?: str
   if (slashIndex === -1) {
     return { modelId: first };
   }
-	const providerId = first.slice(0, slashIndex).trim();
-	const modelId = first.slice(slashIndex + 1).trim();
-	const provider = getProviders().find((p) => p === resolveProviderAlias(providerId));
-	const result: { provider?: KnownProvider; modelId?: string } = {};
-	if (provider) result.provider = provider;
-	if (modelId.length > 0) result.modelId = modelId;
-	return result;
+  const providerId = first.slice(0, slashIndex).trim();
+  const modelId = first.slice(slashIndex + 1).trim();
+  const provider = getProviders().find((p) => p === resolveProviderAlias(providerId));
+  const result: { provider?: KnownProvider; modelId?: string } = {};
+  if (provider) result.provider = provider;
+  if (modelId.length > 0) result.modelId = modelId;
+  return result;
 };
 
 const resolveEditorConfig = (raw: unknown): EditorConfig | undefined => {
@@ -232,6 +271,117 @@ const resolveLspConfig = (override: LspConfig | undefined, raw: unknown): LspCon
   }
 
   return { enabled: true, autoInstall: true };
+};
+
+const normalizeKeyChord = (value: string): KeyChord[] => {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/^control\+/, "ctrl+")
+    .replace(/^(cmd|command)\+/, "mod+");
+  if (normalized === "esc") return ["escape"];
+  if (normalized === "enter") return ["return"];
+  if (normalized === "ctrl+[") return ["ctrl+[", "escape"];
+  return normalized.length > 0 ? [normalized] : [];
+};
+
+const readKeyChords = (raw: unknown): KeyChord[] | undefined => {
+  const values = typeof raw === "string" ? [raw] : Array.isArray(raw) ? raw : undefined;
+  if (!values) return undefined;
+
+  const chords: KeyChord[] = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    for (const chord of normalizeKeyChord(value)) {
+      if (!chords.includes(chord)) chords.push(chord);
+    }
+  }
+
+  return chords.length > 0 ? chords : undefined;
+};
+
+const DEFAULT_LANE_BINDINGS: LaneKeyBindingsConfig = {
+  sessionPrev: ["left"],
+  sessionNext: ["right"],
+  projectPrev: ["up"],
+  projectNext: ["down"],
+  jump: ["mod+k", "super+k", "meta+k"],
+  archive: ["mod+shift+a", "super+shift+a", "ctrl+shift+a"],
+  restore: ["mod+shift+r", "super+shift+r", "ctrl+shift+r"],
+};
+
+const defaultLaneActivation = (): Extract<LaneNavActivationConfig, { behavior: "sticky" }> => ({
+  behavior: "sticky",
+  enter: ["escape", "ctrl+["],
+  exit: ["return"],
+});
+
+const cloneLaneBindings = (bindings: LaneKeyBindingsConfig): LaneKeyBindingsConfig => ({
+  sessionPrev: [...bindings.sessionPrev],
+  sessionNext: [...bindings.sessionNext],
+  projectPrev: [...bindings.projectPrev],
+  projectNext: [...bindings.projectNext],
+  jump: [...bindings.jump],
+  archive: [...bindings.archive],
+  restore: [...bindings.restore],
+});
+
+export const DEFAULT_KEYMAP_CONFIG: KeymapConfig = {
+  lanes: {
+    activation: defaultLaneActivation(),
+    bindings: cloneLaneBindings(DEFAULT_LANE_BINDINGS),
+  },
+};
+
+const resolveLaneActivationConfig = (raw: unknown): LaneNavActivationConfig => {
+  if (!isRecord(raw)) return defaultLaneActivation();
+
+  const behavior = raw.behavior;
+  if (behavior === "oneshot") {
+    return {
+      behavior: "oneshot",
+      prefix: readKeyChords(raw.prefix) ?? ["ctrl+["],
+      cancel: readKeyChords(raw.cancel) ?? ["escape"],
+    };
+  }
+  if (behavior === "toggle") {
+    return {
+      behavior: "toggle",
+      toggle: readKeyChords(raw.toggle) ?? ["ctrl+["],
+      exit: readKeyChords(raw.exit) ?? ["escape", "return"],
+    };
+  }
+
+  const fallback = defaultLaneActivation();
+  return {
+    behavior: "sticky",
+    enter: readKeyChords(raw.enter) ?? [...fallback.enter],
+    exit: readKeyChords(raw.exit) ?? [...fallback.exit],
+  };
+};
+
+const resolveLaneBindingsConfig = (raw: unknown): LaneKeyBindingsConfig => {
+  const obj = isRecord(raw) ? raw : {};
+  return {
+    sessionPrev: readKeyChords(obj.sessionPrev) ?? [...DEFAULT_LANE_BINDINGS.sessionPrev],
+    sessionNext: readKeyChords(obj.sessionNext) ?? [...DEFAULT_LANE_BINDINGS.sessionNext],
+    projectPrev: readKeyChords(obj.projectPrev) ?? [...DEFAULT_LANE_BINDINGS.projectPrev],
+    projectNext: readKeyChords(obj.projectNext) ?? [...DEFAULT_LANE_BINDINGS.projectNext],
+    jump: readKeyChords(obj.jump) ?? [...DEFAULT_LANE_BINDINGS.jump],
+    archive: readKeyChords(obj.archive) ?? [...DEFAULT_LANE_BINDINGS.archive],
+    restore: readKeyChords(obj.restore) ?? [...DEFAULT_LANE_BINDINGS.restore],
+  };
+};
+
+const resolveKeymapConfig = (raw: unknown): KeymapConfig => {
+  const root = isRecord(raw) ? raw : {};
+  const rawLanes = isRecord(root.lanes) ? root.lanes : {};
+  return {
+    lanes: {
+      activation: resolveLaneActivationConfig(rawLanes.activation),
+      bindings: resolveLaneBindingsConfig(rawLanes.bindings),
+    },
+  };
 };
 
 const SUPPORTED_CUSTOM_MODEL_APIS: Api[] = [
@@ -536,6 +686,7 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
   const systemPrompt = agentsConfig.combined ? `${baseWithDocs}\n\n${agentsConfig.combined}` : baseWithDocs;
 
   const lsp = resolveLspConfig(options?.lsp, rawObj.lsp);
+  const keymap = resolveKeymapConfig(rawObj.keymap);
 
   return {
     provider: resolvedProvider,
@@ -551,6 +702,7 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
     configDir,
     configPath,
     lsp,
+    keymap,
   };
 };
 

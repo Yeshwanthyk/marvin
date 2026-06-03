@@ -118,6 +118,95 @@ describe("loadAppConfig", () => {
     }
   });
 
+  it("loads default lane keymap config", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-keymap-default-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-keymap-default-"));
+    try {
+      const model = getAnthropicModel();
+      const configPath = await writeConfig(configDir, model.id);
+
+      const config = await loadAppConfig({
+        configDir,
+        configPath,
+        cwd: projectDir,
+      });
+
+      expect(config.keymap.lanes.activation).toEqual({
+        behavior: "sticky",
+        enter: ["escape", "ctrl+["],
+        exit: ["return"],
+      });
+      expect(config.keymap.lanes.bindings.sessionPrev).toEqual(["left"]);
+      expect(config.keymap.lanes.bindings.restore).toEqual(["mod+shift+r", "super+shift+r", "ctrl+shift+r"]);
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it("parses custom lane keymap config and normalizes common aliases", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-keymap-custom-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-keymap-custom-"));
+    try {
+      const model = getAnthropicModel();
+      const configPath = path.join(configDir, "config.json");
+      await writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            provider: "anthropic",
+            model: model.id,
+            keymap: {
+              lanes: {
+                activation: {
+                  behavior: "oneshot",
+                  prefix: ["Ctrl+["],
+                  cancel: "Enter",
+                },
+                bindings: {
+                  sessionPrev: ["h"],
+                  sessionNext: ["l"],
+                  projectPrev: ["k"],
+                  projectNext: ["j"],
+                  jump: ["Cmd+K"],
+                  archive: ["Cmd+Shift+A"],
+                  restore: ["Cmd+Shift+R"],
+                },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const config = await loadAppConfig({
+        configDir,
+        configPath,
+        cwd: projectDir,
+      });
+
+      expect(config.keymap.lanes.activation).toEqual({
+        behavior: "oneshot",
+        prefix: ["ctrl+[", "escape"],
+        cancel: ["return"],
+      });
+      expect(config.keymap.lanes.bindings).toEqual({
+        sessionPrev: ["h"],
+        sessionNext: ["l"],
+        projectPrev: ["k"],
+        projectNext: ["j"],
+        jump: ["mod+k"],
+        archive: ["mod+shift+a"],
+        restore: ["mod+shift+r"],
+      });
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
   it("accepts comma-separated model list and uses first entry", async () => {
     const configDir = await mkdtemp(path.join(tmpdir(), "config-model-list-"));
     const projectDir = await mkdtemp(path.join(tmpdir(), "project-model-list-"));

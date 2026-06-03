@@ -24,7 +24,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "test": "bun test tests",
+    "test": "bun test --preload src/solid-preload.ts tests",
     "build": "bun scripts/build-dist.ts",
     "build:binary": "bun scripts/build.ts",
     "prepublishOnly": "npm run build -w @yeshwanthyk/open-tui && npm run clean && npm run build"

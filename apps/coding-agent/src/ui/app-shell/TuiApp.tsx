@@ -31,6 +31,7 @@ import { createHookMessage, createHookUIContext, type HookMessage, type HookSess
 import { completeSimple, type Message } from "@yeshwanthyk/ai"
 import { useModals } from "../hooks/useModals.js"
 import { ModalContainer } from "../components/modals/ModalContainer.js"
+import type { SearchSelectOption } from "../components/modals/search-select-options.js"
 import { useWorkspaceSwitch } from "../../runtime/workspace-switch.js"
 import {
 	activeSessionLanes,
@@ -46,7 +47,7 @@ import {
 	type LaneCursor,
 	type WorkspaceLanes,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
-import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection } from "./TuiLaneKeymap.js"
+import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
 
@@ -148,7 +149,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 	const modals = useModals()
 	const workspaceSwitch = useWorkspaceSwitch()
 	const [workspaceLanes, setWorkspaceLanes] = createSignal<WorkspaceLanes>(readWorkspaceLanes(config.configDir))
-	const [navMode, setNavMode] = createSignal(false)
+	const [navMode, setNavMode] = createSignal<LaneNavMode>("off")
 
 	const sessionController = createSessionController({
 		initialProvider: config.provider,
@@ -709,7 +710,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 
 		const next = selectLane(cloneWorkspaceLanes(workspaceLanes()), cursor)
 		persistWorkspaceLanes(next)
-		setNavMode(false)
+		setNavMode("off")
 		return true
 	}
 
@@ -725,18 +726,26 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 	const projectTitleFor = (projectId: string): string =>
 		workspaceLanes().projects.find((project) => project.id === projectId)?.title ?? projectId
 
-	const laneLabel = (session: ReturnType<typeof activeSessionLanes>[number]): string =>
-		`${projectTitleFor(session.projectId)} / ${session.title} [${session.sessionId.slice(0, 8)}] ${session.provider}/${session.modelId}`
+	const laneSearchOption = (session: ReturnType<typeof activeSessionLanes>[number]): SearchSelectOption => {
+		const projectTitle = projectTitleFor(session.projectId)
+		const shortId = session.sessionId.slice(0, 8)
+		const model = `${session.provider}/${session.modelId}`
+		return {
+			value: session.id,
+			label: `${projectTitle} / ${session.title || shortId}`,
+			description: `${shortId} | ${model}`,
+			keywords: `${projectTitle} ${session.title} ${session.sessionId} ${session.sessionPath} ${model}`,
+		}
+	}
 
 	const jumpToLane = () => {
 		void (async () => {
 			syncCurrentSessionLane()
 			const sessions = activeSessionLanes(workspaceLanes())
 			if (sessions.length === 0) return
-			const labels = sessions.map(laneLabel)
-			const selected = await modals.showSearchSelect("Jump", labels, "project or session")
+			const selected = await modals.showSearchSelect("Jump to session", sessions.map(laneSearchOption), "project, title, model, id")
 			if (!selected) return
-			const session = sessions[labels.indexOf(selected)]
+			const session = sessions.find((entry) => entry.id === selected)
 			const project = session ? workspaceLanes().projects.find((entry) => entry.id === session.projectId) : undefined
 			if (!session || !project) return
 			await switchToLane({ project, session })
@@ -764,10 +773,9 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		void (async () => {
 			const archivedSessions = workspaceLanes().sessions.filter((session) => session.archivedAt !== undefined)
 			if (archivedSessions.length === 0) return
-			const labels = archivedSessions.map(laneLabel)
-			const selected = await modals.showSearchSelect("Restore", labels, "project or session")
+			const selected = await modals.showSearchSelect("Restore session", archivedSessions.map(laneSearchOption), "project, title, model, id")
 			if (!selected) return
-			const session = archivedSessions[labels.indexOf(selected)]
+			const session = archivedSessions.find((entry) => entry.id === selected)
 			const project = session ? workspaceLanes().projects.find((entry) => entry.id === session.projectId) : undefined
 			if (!session || !project) return
 			const restored = restoreSessionLane(cloneWorkspaceLanes(workspaceLanes()), session.id)
@@ -784,11 +792,13 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 			<TuiLaneKeyBindings
 				navMode={navMode}
 				setNavMode={setNavMode}
+				keymap={config.keymap.lanes}
 				modalOpen={() => modals.modalState() !== null}
 				isResponding={store.isResponding.value}
 				onNavigate={navigateLane}
 				onJump={jumpToLane}
 				onArchive={archiveCurrentSession}
+				onRestore={restoreArchivedSession}
 			/>
 			<ThemeProvider mode={themeMode} themeName={store.theme.value()} onThemeChange={handleThemeChange}>
 			<MainView
