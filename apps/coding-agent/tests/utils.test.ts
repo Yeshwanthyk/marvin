@@ -82,15 +82,25 @@ describe("extractOrderedBlocks", () => {
 		expect(blocks[5].type).toBe("text")
 	})
 
-	it("assigns unique ids to thinking blocks", () => {
+	it("collapses adjacent thinking blocks into one reasoning row", () => {
 		const content = [
 			{ type: "thinking", thinking: "First thought" },
 			{ type: "thinking", thinking: "Second thought" },
 		]
 		const blocks = extractOrderedBlocks(content)
+		expect(blocks.length).toBe(1)
 		expect(blocks[0].type).toBe("thinking")
-		expect(blocks[1].type).toBe("thinking")
-		expect((blocks[0] as { type: "thinking"; id: string }).id).not.toBe((blocks[1] as { type: "thinking"; id: string }).id)
+		expect((blocks[0] as { type: "thinking"; full: string }).full).toContain("First thought")
+		expect((blocks[0] as { type: "thinking"; full: string }).full).toContain("Second thought")
+	})
+
+	it("drops empty thinking blocks", () => {
+		const content = [
+			{ type: "thinking", thinking: "   " },
+			{ type: "text", text: "visible" },
+		]
+		const blocks = extractOrderedBlocks(content)
+		expect(blocks).toEqual([{ type: "text", text: "visible" }])
 	})
 
 	it("extracts tool call arguments", () => {

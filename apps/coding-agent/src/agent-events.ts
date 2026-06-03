@@ -76,9 +76,9 @@ export interface EventHandlerContext {
 
 export type AgentEventHandler = ((event: AgentEvent) => void) & { dispose: () => void }
 
-const UPDATE_THROTTLE_MS = 150 // ~7fps during streaming - smoother perceived text flow
-const UPDATE_THROTTLE_SLOW_MS = 180
-const UPDATE_THROTTLE_SLOWEST_MS = 220
+const UPDATE_THROTTLE_MS = 60 // ~16fps during streaming: smooth without repainting every token.
+const UPDATE_THROTTLE_SLOW_MS = 90
+const UPDATE_THROTTLE_SLOWEST_MS = 130
 const TOOL_UPDATE_THROTTLE_MS = 50 // Throttle tool streaming updates
 const STREAMING_TAIL_CHARS = 4000
 
@@ -136,28 +136,21 @@ function hasContentArray(message: unknown): message is { content: unknown[] } {
 		Array.isArray((message as any).content)
 }
 
-/** Incremental extraction cache - avoids re-parsing entire content array each update */
 interface ExtractionCache {
-	// Track processed content length for incremental updates
-	lastContentLength: number
 	// Total streaming text length (full content, even if view is tailed)
 	textLength: number
 	// Tail of streaming text for display
 	textTail: string
 	thinking: { summary: string; preview: string; full: string } | null
 	contentBlocks: UIContentBlock[]
-	// For thinking block ID generation
-	thinkingCounter: number
 }
 
 function createExtractionCache(): ExtractionCache {
 	return {
-		lastContentLength: 0,
 		textLength: 0,
 		textTail: "",
 		thinking: null,
 		contentBlocks: [],
-		thinkingCounter: 0,
 	}
 }
 
@@ -167,38 +160,54 @@ function appendStreamingTail(current: string, next: string): string {
 	return (current + next).slice(-STREAMING_TAIL_CHARS)
 }
 
-/** Incrementally extract new content blocks, appending to cached results */
-function extractIncremental(content: unknown[], cache: ExtractionCache): ExtractionCache {
-	const len = content.length
-	if (len === cache.lastContentLength) return cache // No change
+const hasRenderableThinking = (text: string): boolean => text.trim().length > 0
 
-	// Process only new blocks
-	let textLength = cache.textLength
-	let textTail = cache.textTail
-	let thinking = cache.thinking
-	const contentBlocks = cache.contentBlocks
-	let thinkingCounter = cache.thinkingCounter
+function appendTextContentBlock(blocks: UIContentBlock[], text: string): void {
+	if (text.length === 0) return
+	const lastBlock = blocks[blocks.length - 1]
+	if (lastBlock?.type === "text") {
+		lastBlock.text = appendStreamingTail(lastBlock.text, text)
+		return
+	}
+	blocks.push({ type: "text", text: appendStreamingTail("", text) })
+}
 
-	for (let i = cache.lastContentLength; i < len; i++) {
+function appendThinkingContentBlock(blocks: UIContentBlock[], id: string, full: string): { summary: string; preview: string; full: string } | null {
+	if (!hasRenderableThinking(full)) return null
+	const lastBlock = blocks[blocks.length - 1]
+	const mergedFull = lastBlock?.type === "thinking"
+		? `${lastBlock.full}\n\n${full}`.trim()
+		: full
+	const { summary, preview } = buildThinkingSummary(mergedFull)
+	if (!summary && !preview) return null
+	const next = { type: "thinking" as const, id: lastBlock?.type === "thinking" ? lastBlock.id : id, summary, preview, full: mergedFull }
+	if (lastBlock?.type === "thinking") {
+		blocks[blocks.length - 1] = next
+	} else {
+		blocks.push(next)
+	}
+	return { summary, preview, full: mergedFull }
+}
+
+function extractSnapshot(content: unknown[]): ExtractionCache {
+	let textLength = 0
+	let textTail = ""
+	let thinking: { summary: string; preview: string; full: string } | null = null
+	const contentBlocks: UIContentBlock[] = []
+
+	for (let i = 0; i < content.length; i++) {
 		const block = content[i]
 		if (typeof block !== "object" || block === null) continue
 		const b = block as Record<string, unknown>
 
 		if (b.type === "text" && typeof b.text === "string") {
 			textLength += b.text.length
+			const visibleText = appendStreamingTail("", b.text)
 			textTail = appendStreamingTail(textTail, b.text)
-			// Merge with last text block or add new
-			const lastBlock = contentBlocks[contentBlocks.length - 1]
-			if (lastBlock?.type === "text") {
-				lastBlock.text = appendStreamingTail(lastBlock.text, b.text)
-			} else {
-				contentBlocks.push({ type: "text", text: appendStreamingTail("", b.text) })
-			}
+			appendTextContentBlock(contentBlocks, visibleText)
 		} else if (b.type === "thinking" && typeof b.thinking === "string") {
-			const full = b.thinking
-			const { summary, preview } = buildThinkingSummary(full)
-			thinking = { summary, preview, full }
-			contentBlocks.push({ type: "thinking", id: `thinking-${thinkingCounter++}`, summary, preview, full })
+			const nextThinking = appendThinkingContentBlock(contentBlocks, `thinking-${i}`, b.thinking)
+			if (nextThinking) thinking = nextThinking
 		} else if (b.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string") {
 			contentBlocks.push({
 				type: "tool",
@@ -207,7 +216,7 @@ function extractIncremental(content: unknown[], cache: ExtractionCache): Extract
 		}
 	}
 
-	return { lastContentLength: len, textLength, textTail, thinking, contentBlocks, thinkingCounter }
+	return { textLength, textTail, thinking, contentBlocks }
 }
 
 export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHandler {
@@ -216,7 +225,7 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 	let disposed = false
 	let turnIndex = 0
 	
-	// Incremental extraction cache - reset on new message
+	// Streaming extraction cache - reset on each new assistant message.
 	let extractionCache = createExtractionCache()
 	
 	// Tool update throttling - track pending updates per tool
@@ -240,8 +249,9 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 			if (!hasContentArray(ev.message)) return
 			const content = ev.message.content
 
-			// Use incremental extraction - only processes new blocks
-			extractionCache = extractIncremental(content, extractionCache)
+			// Rebuild the small block snapshot. Providers mutate the current content
+			// block in place, so block count alone cannot tell us whether text changed.
+			extractionCache = extractSnapshot(content)
 			const { textLength, textTail, thinking, contentBlocks } = extractionCache
 			updateThrottleMs = computeUpdateThrottleMs(textLength)
 

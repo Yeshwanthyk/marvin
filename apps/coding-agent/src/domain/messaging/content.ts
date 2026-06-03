@@ -88,26 +88,48 @@ export type OrderedBlock =
 	| { type: "text"; text: string }
 	| { type: "toolCall"; id: string; name: string; args: unknown }
 
+const appendOrderedThinking = (blocks: OrderedBlock[], id: string, full: string): void => {
+	if (!full.trim()) return
+	const last = blocks[blocks.length - 1]
+	const mergedFull = last?.type === "thinking" ? `${last.full}\n\n${full}`.trim() : full
+	const { summary, preview } = buildThinkingSummary(mergedFull)
+	if (!summary && !preview) return
+	const next: OrderedBlock = {
+		type: "thinking",
+		id: last?.type === "thinking" ? last.id : id,
+		summary,
+		preview,
+		full: mergedFull,
+	}
+	if (last?.type === "thinking") {
+		blocks[blocks.length - 1] = next
+	} else {
+		blocks.push(next)
+	}
+}
+
+const appendOrderedText = (blocks: OrderedBlock[], text: string): void => {
+	if (!text) return
+	const last = blocks[blocks.length - 1]
+	if (last?.type === "text") {
+		blocks[blocks.length - 1] = { type: "text", text: last.text + text }
+	} else {
+		blocks.push({ type: "text", text })
+	}
+}
+
 export const extractOrderedBlocks = (content: unknown[]): OrderedBlock[] => {
 	const blocks: OrderedBlock[] = []
-	let thinkingCounter = 0
 
-	for (const block of content) {
+	for (let i = 0; i < content.length; i++) {
+		const block = content[i]
 		if (typeof block !== "object" || block === null) continue
 		const b = block as Record<string, unknown>
 
 		if (b.type === "thinking" && typeof b.thinking === "string") {
-			const full = b.thinking
-			const { summary, preview } = buildThinkingSummary(full)
-			blocks.push({
-				type: "thinking",
-				id: `thinking-${thinkingCounter++}`,
-				summary,
-				preview,
-				full,
-			})
+			appendOrderedThinking(blocks, `thinking-${i}`, b.thinking)
 		} else if (b.type === "text" && typeof b.text === "string") {
-			blocks.push({ type: "text", text: b.text })
+			appendOrderedText(blocks, b.text)
 		} else if (b.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string") {
 			blocks.push({ type: "toolCall", id: b.id, name: b.name, args: b.arguments ?? {} })
 		}

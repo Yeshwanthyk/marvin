@@ -122,9 +122,45 @@ describe("createAgentEventHandler", () => {
 				},
 			} as unknown as AgentEvent)
 
-			// Wait for throttled update (150ms throttle + buffer)
-			await new Promise((r) => setTimeout(r, 180))
+			// Wait for throttled update.
+			await new Promise((r) => setTimeout(r, 100))
 			expect(ctx.setMessages).toHaveBeenCalled()
+		})
+
+		it("updates when a provider mutates the same content block", async () => {
+			const messages: any[] = [{
+				id: "stream-id",
+				role: "assistant",
+				content: "",
+				isStreaming: true,
+				tools: [],
+			}]
+			const ctx = createMockContext({
+				streamingMessageId: { current: "stream-id" },
+				setMessages: mock((updater) => {
+					const result = updater(messages as any)
+					messages.length = 0
+					messages.push(...result)
+				}),
+			})
+			const handler = createAgentEventHandler(ctx)
+			const content = [{ type: "text", text: "he" }]
+
+			handler({
+				type: "message_update",
+				message: { role: "assistant", content },
+			} as unknown as AgentEvent)
+			await new Promise((r) => setTimeout(r, 100))
+			expect(messages[0].content).toBe("he")
+
+			content[0]!.text = "hello"
+			handler({
+				type: "message_update",
+				message: { role: "assistant", content },
+			} as unknown as AgentEvent)
+			await new Promise((r) => setTimeout(r, 100))
+
+			expect(messages[0].content).toBe("hello")
 		})
 
 		it("sets thinking state when only thinking block exists", async () => {
@@ -140,8 +176,8 @@ describe("createAgentEventHandler", () => {
 				},
 			} as unknown as AgentEvent)
 
-			// Wait for throttled update (150ms throttle + buffer)
-			await new Promise((r) => setTimeout(r, 180))
+			// Wait for throttled update.
+			await new Promise((r) => setTimeout(r, 100))
 			expect(ctx.setActivityState).toHaveBeenCalledWith("thinking")
 		})
 	})

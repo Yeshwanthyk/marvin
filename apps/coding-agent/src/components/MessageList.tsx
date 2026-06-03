@@ -2,7 +2,7 @@
  * MessageList component for rendering conversation content
  */
 
-import { For, Show, Switch, Match, createMemo, type JSX } from "solid-js"
+import { For, Show, Switch, Match, createMemo, createSignal, type JSX } from "solid-js"
 import { CodeBlock, Markdown, TextAttributes, useTheme, type RGBA, type Theme } from "@yeshwanthyk/open-tui"
 import type { UIMessage, ToolBlock, ContentItem } from "../types.js"
 import type { ToolArgs } from "../types/tool-rendering.js"
@@ -20,7 +20,18 @@ export interface TranscriptMark {
 	detail?: string
 }
 
-export type TranscriptContentItem = ContentItem & { mark: TranscriptMark }
+export type TranscriptSingleItem = ContentItem & { mark: TranscriptMark }
+export type TranscriptWorkEntry =
+	| (Extract<ContentItem, { type: "thinking" }> & { mark: TranscriptMark })
+	| (Extract<ContentItem, { type: "tool" }> & { mark: TranscriptMark })
+export interface TranscriptWorkGroup {
+	type: "work"
+	entries: TranscriptWorkEntry[]
+	mark: TranscriptMark
+}
+export type TranscriptContentItem =
+	| TranscriptSingleItem
+	| TranscriptWorkGroup
 
 const sanitizeMarkId = (value: string): string => value.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "item"
 
@@ -34,13 +45,11 @@ const makeMark = (kind: TranscriptMarkKind, rawId: string, label: string, detail
 	detail,
 })
 
-const toolLabel = (tool: ToolBlock): string => {
-	if (tool.isError) return "error"
-	if (tool.name === "bash") return "cmd"
-	return tool.name.slice(0, 6) || "tool"
-}
-
 const firstLine = (text: string): string => text.split("\n")[0]?.trim() ?? ""
+const hasThinkingContent = (
+	value?: { summary: string; preview: string; full: string } | null,
+): value is { summary: string; preview: string; full: string } =>
+	Boolean(value && (value.full?.trim() || value.preview?.trim() || value.summary?.trim()))
 
 const shellStatus = (exitCode: number | null): string | undefined => {
 	if (exitCode === null || exitCode === 0) return undefined
@@ -52,57 +61,7 @@ export function buildTranscriptMarkIds(
 	toolBlocks: ToolBlock[],
 	thinkingVisible: boolean,
 ): string[] {
-	const ids: string[] = []
-	const renderedToolIds = new Set<string>()
-	let promptCount = 0
-
-	for (let i = 0; i < messages.length; i++) {
-		const msg = messages[i]
-		const isLastMessage = i === messages.length - 1
-
-		if (msg.role === "user") {
-			promptCount += 1
-			ids.push(transcriptMarkId("prompt", msg.id || String(promptCount)))
-			continue
-		}
-
-		if (msg.role === "shell") {
-			ids.push(transcriptMarkId(msg.exitCode !== null && msg.exitCode !== 0 ? "error" : "shell", msg.id))
-			continue
-		}
-
-		if (msg.contentBlocks && msg.contentBlocks.length > 0) {
-			for (let blockIdx = 0; blockIdx < msg.contentBlocks.length; blockIdx++) {
-				const block = msg.contentBlocks[blockIdx]
-				if (block.type === "thinking" && thinkingVisible) {
-					ids.push(transcriptMarkId("thinking", block.id))
-				} else if (block.type === "text" && block.text) {
-					ids.push(transcriptMarkId("assistant", `${msg.id}-${blockIdx}`))
-				} else if (block.type === "tool" && !renderedToolIds.has(block.tool.id)) {
-					ids.push(transcriptMarkId(block.tool.isError ? "error" : "tool", block.tool.id))
-					renderedToolIds.add(block.tool.id)
-				}
-			}
-		} else {
-			if (thinkingVisible && msg.thinking) ids.push(transcriptMarkId("thinking", `thinking-${msg.id}`))
-			for (const tool of msg.tools || []) {
-				if (renderedToolIds.has(tool.id)) continue
-				ids.push(transcriptMarkId(tool.isError ? "error" : "tool", tool.id))
-				renderedToolIds.add(tool.id)
-			}
-			if (msg.content) ids.push(transcriptMarkId("assistant", `${msg.id}-final`))
-		}
-
-		if (isLastMessage) {
-			for (const tool of toolBlocks) {
-				if (renderedToolIds.has(tool.id)) continue
-				ids.push(transcriptMarkId(tool.isError ? "error" : "tool", tool.id))
-				renderedToolIds.add(tool.id)
-			}
-		}
-	}
-
-	return ids
+	return buildContentItems(messages, toolBlocks, thinkingVisible).map((item) => item.mark.id)
 }
 
 function ToolBlockWrapper(props: {
@@ -165,7 +124,7 @@ function ThinkingBlockWrapper(props: {
 	const preview = () => props.preview || truncateThinking(props.summary || props.full)
 
 	return (
-		<box paddingLeft={4} flexDirection="column">
+		<box paddingLeft={1} flexDirection="column">
 			<box
 				flexDirection="row"
 				onMouseUp={(e) => {
@@ -190,13 +149,13 @@ function ThinkingBlockWrapper(props: {
 
 // Per-item cache: reuse ContentItem objects when data unchanged
 // Key format: "type:id" or "type:msgId:blockIdx"
-const itemCache = new Map<string, TranscriptContentItem>()
+const itemCache = new Map<string, TranscriptSingleItem>()
 let activeCacheKeys = new Set<string>()
 let lastMessageCount = 0
 let lastFirstMessageId: string | null = null
 
 /** Get or create a cached ContentItem, preserving object identity when data matches */
-function getCachedItem<T extends TranscriptContentItem>(
+function getCachedItem<T extends TranscriptSingleItem>(
 	key: string,
 	current: T,
 	isEqual: (a: T, b: T) => boolean
@@ -208,6 +167,130 @@ function getCachedItem<T extends TranscriptContentItem>(
 	}
 	itemCache.set(key, current)
 	return current
+}
+
+const plural = (count: number, singular: string, pluralLabel = `${singular}s`): string =>
+	`${count} ${count === 1 ? singular : pluralLabel}`
+
+const isRuntimeWorkItem = (item: TranscriptSingleItem): item is TranscriptWorkEntry =>
+	item.type === "thinking" || item.type === "tool"
+
+type WorkTone = "think" | "read" | "run" | "edit" | "tool" | "fail"
+type WorkGroupLabel = WorkTone | "work"
+
+const LOOK_COMMAND_PATTERN =
+	/^(pwd|ls\b|find\b|fd\b|rg\b|grep\b|sed\b|cat\b|nl\b|head\b|tail\b|wc\b|git\s+(status|show|diff|log|grep|ls-files|branch|rev-parse)\b)/
+
+const stringProperty = (value: unknown, key: string): string | undefined => {
+	if (typeof value !== "object" || value === null) return undefined
+	const raw = (value as Record<string, unknown>)[key]
+	return typeof raw === "string" ? raw : undefined
+}
+
+const bashCommand = (tool: ToolBlock): string | undefined =>
+	tool.name === "bash" ? stringProperty(tool.args, "command")?.trim() : undefined
+
+const workToneForTool = (tool: ToolBlock): WorkTone => {
+	if (tool.isError) return "fail"
+	if (tool.editDiff || tool.name === "edit" || tool.name === "write") return "edit"
+	const command = bashCommand(tool)
+	if (command) return LOOK_COMMAND_PATTERN.test(command) ? "read" : "run"
+	return "tool"
+}
+
+const workToneForEntry = (entry: TranscriptWorkEntry): WorkTone =>
+	entry.type === "thinking" ? "think" : workToneForTool(entry.tool)
+
+const toolLabel = (tool: ToolBlock): string => workToneForTool(tool)
+
+const workGroupLabel = (entries: TranscriptWorkEntry[]): WorkGroupLabel => {
+	const tones = entries.map(workToneForEntry)
+	if (tones.includes("fail")) return "fail"
+	const actionTones = Array.from(new Set(tones.filter((tone) => tone !== "think")))
+	if (actionTones.length > 1) return "work"
+	if (actionTones.length === 1) return actionTones[0]!
+	return "think"
+}
+
+interface WorkSummaryPart {
+	tone: WorkTone
+	count: number
+	label: string
+}
+
+const workSummaryLabel = (tone: WorkTone): string => {
+	switch (tone) {
+		case "think":
+			return "think"
+		case "read":
+			return "read"
+		case "run":
+			return "run"
+		case "edit":
+			return "edit"
+		case "tool":
+			return "tool"
+		case "fail":
+			return "fail"
+	}
+}
+
+const workSummaryParts = (entries: TranscriptWorkEntry[]): WorkSummaryPart[] => {
+	const counts: Record<WorkTone, number> = { think: 0, read: 0, run: 0, edit: 0, tool: 0, fail: 0 }
+	for (const entry of entries) counts[workToneForEntry(entry)] += 1
+	return (["think", "read", "edit", "run", "tool", "fail"] as const)
+		.filter((tone) => counts[tone] > 0)
+		.map((tone) => ({
+			tone,
+			count: counts[tone],
+			label: workSummaryLabel(tone),
+		}))
+}
+
+const summarizeWorkItems = (entries: TranscriptWorkEntry[]): string => {
+	const parts = workSummaryParts(entries).map((part) => `${part.count} ${part.label}`)
+	return parts.length > 0 ? parts.join(" · ") : plural(entries.length, "item")
+}
+
+const makeWorkGroup = (entries: TranscriptWorkEntry[]): TranscriptWorkGroup => {
+	const label = workGroupLabel(entries)
+	const firstId = entries[0]?.mark.id ?? "work"
+	return {
+		type: "work",
+		entries,
+		mark: makeMark(
+			label === "fail" ? "error" : label === "think" ? "thinking" : "tool",
+			`work-${firstId}`,
+			label,
+			summarizeWorkItems(entries),
+		),
+	}
+}
+
+const groupRuntimeWorkItems = (items: TranscriptSingleItem[]): TranscriptContentItem[] => {
+	const grouped: TranscriptContentItem[] = []
+	let run: TranscriptWorkEntry[] = []
+
+	const flushRun = () => {
+		if (run.length > 1) {
+			grouped.push(makeWorkGroup(run))
+		} else {
+			grouped.push(...run)
+		}
+		run = []
+	}
+
+	for (const item of items) {
+		if (isRuntimeWorkItem(item)) {
+			run.push(item)
+			continue
+		}
+		flushRun()
+		grouped.push(item)
+	}
+
+	flushRun()
+	return grouped
 }
 
 export function buildContentItems(
@@ -227,7 +310,7 @@ export function buildContentItems(
 	}
 
 	activeCacheKeys = new Set()
-	const items: TranscriptContentItem[] = []
+	const items: TranscriptSingleItem[] = []
 	const renderedToolIds = new Set<string>()
 	let promptCount = 0
 
@@ -237,7 +320,7 @@ export function buildContentItems(
 
 		if (msg.role === "user") {
 			promptCount += 1
-			const item: TranscriptContentItem = {
+			const item: TranscriptSingleItem = {
 				type: "user",
 				content: msg.content,
 				mark: makeMark("prompt", msg.id || String(promptCount), `§${promptCount}`, firstLine(msg.content)),
@@ -251,8 +334,8 @@ export function buildContentItems(
 				for (let blockIdx = 0; blockIdx < msg.contentBlocks.length; blockIdx++) {
 					const block = msg.contentBlocks[blockIdx]
 					if (block.type === "thinking") {
-						if (thinkingVisible) {
-							const item: TranscriptContentItem = {
+						if (thinkingVisible && hasThinkingContent(block)) {
+							const item: TranscriptSingleItem = {
 								type: "thinking",
 								id: block.id,
 								summary: block.summary,
@@ -270,7 +353,7 @@ export function buildContentItems(
 						}
 					} else if (block.type === "text") {
 						if (block.text) {
-							const item: TranscriptContentItem = {
+							const item: TranscriptSingleItem = {
 								type: "assistant",
 								content: block.text,
 								isStreaming: msg.isStreaming,
@@ -289,7 +372,7 @@ export function buildContentItems(
 						}
 					} else if (block.type === "tool") {
 						if (!renderedToolIds.has(block.tool.id)) {
-							const item: TranscriptContentItem = {
+							const item: TranscriptSingleItem = {
 								type: "tool",
 								tool: block.tool,
 								mark: makeMark(block.tool.isError ? "error" : "tool", block.tool.id, toolLabel(block.tool), block.tool.name),
@@ -308,15 +391,16 @@ export function buildContentItems(
 				}
 			} else {
 				// Fallback: legacy format without contentBlocks
-				if (thinkingVisible && msg.thinking) {
-					const item: TranscriptContentItem = {
+				const thinking = msg.thinking
+				if (thinkingVisible && hasThinkingContent(thinking)) {
+					const item: TranscriptSingleItem = {
 						type: "thinking",
 						id: `thinking-${msg.id}`,
-						summary: msg.thinking.summary,
-						preview: msg.thinking.preview || truncateThinking(msg.thinking.summary || msg.thinking.full),
-						full: msg.thinking.full,
+						summary: thinking.summary,
+						preview: thinking.preview || truncateThinking(thinking.summary || thinking.full),
+						full: thinking.full,
 						isStreaming: msg.isStreaming,
-						mark: makeMark("thinking", `thinking-${msg.id}`, "think", msg.thinking.preview || msg.thinking.summary),
+						mark: makeMark("thinking", `thinking-${msg.id}`, "think", thinking.preview || thinking.summary),
 					}
 					items.push(
 						getCachedItem(`thinking:${msg.id}`, item, (a, b) =>
@@ -328,7 +412,7 @@ export function buildContentItems(
 
 				for (const tool of msg.tools || []) {
 					if (!renderedToolIds.has(tool.id)) {
-						const item: TranscriptContentItem = {
+						const item: TranscriptSingleItem = {
 							type: "tool",
 							tool,
 							mark: makeMark(tool.isError ? "error" : "tool", tool.id, toolLabel(tool), tool.name),
@@ -346,7 +430,7 @@ export function buildContentItems(
 				}
 
 				if (msg.content) {
-					const item: TranscriptContentItem = {
+					const item: TranscriptSingleItem = {
 						type: "assistant",
 						content: msg.content,
 						isStreaming: msg.isStreaming,
@@ -369,7 +453,7 @@ export function buildContentItems(
 			if (isLastMessage) {
 				for (const tool of toolBlocks) {
 					if (!renderedToolIds.has(tool.id)) {
-						const item: TranscriptContentItem = {
+						const item: TranscriptSingleItem = {
 							type: "tool",
 							tool,
 							mark: makeMark(tool.isError ? "error" : "tool", tool.id, toolLabel(tool), tool.name),
@@ -388,14 +472,14 @@ export function buildContentItems(
 			}
 		} else if (msg.role === "shell") {
 			const isError = msg.exitCode !== null && msg.exitCode !== 0
-			const item: TranscriptContentItem = {
+			const item: TranscriptSingleItem = {
 				type: "shell",
 				command: msg.command,
 				output: msg.output,
 				exitCode: msg.exitCode,
 				truncated: msg.truncated,
 				tempFilePath: msg.tempFilePath,
-				mark: makeMark(isError ? "error" : "shell", msg.id, "$", shellStatus(msg.exitCode) ?? firstLine(msg.command)),
+				mark: makeMark(isError ? "error" : "shell", msg.id, isError ? "fail" : "shell", shellStatus(msg.exitCode) ?? firstLine(msg.command)),
 			}
 			items.push(
 				getCachedItem(`shell:${msg.id}`, item, (a, b) =>
@@ -410,7 +494,7 @@ export function buildContentItems(
 		if (!activeCacheKeys.has(key)) itemCache.delete(key)
 	}
 
-	return items
+	return groupRuntimeWorkItems(items)
 }
 
 function markColor(theme: Theme, kind: TranscriptMarkKind): RGBA {
@@ -430,6 +514,12 @@ function markColor(theme: Theme, kind: TranscriptMarkKind): RGBA {
 	}
 }
 
+function railColor(theme: Theme, kind: TranscriptMarkKind): RGBA {
+	if (kind === "error") return theme.error
+	if (kind === "prompt") return theme.primary
+	return theme.borderSubtle
+}
+
 function TranscriptRow(props: {
 	mark: TranscriptMark
 	children: JSX.Element
@@ -438,13 +528,15 @@ function TranscriptRow(props: {
 	const color = () => markColor(theme, props.mark.kind)
 	return (
 		<box id={props.mark.id} flexDirection="row" gap={1} paddingLeft={1}>
-			<box width={7} flexShrink={0}>
+			<box width={5} flexShrink={0}>
 				<text selectable={false} fg={color()}>
 					{props.mark.label}
 				</text>
 			</box>
-			<box width={1} backgroundColor={props.mark.kind === "error" ? theme.error : theme.borderSubtle} flexShrink={0} />
-			<box flexDirection="column" flexGrow={1} minWidth={0}>
+			<text selectable={false} fg={railColor(theme, props.mark.kind)}>
+				│
+			</text>
+			<box flexDirection="column" flexGrow={1} minWidth={0} paddingLeft={1}>
 				{props.children}
 			</box>
 		</box>
@@ -457,6 +549,117 @@ function StreamingCursor(): JSX.Element {
 		<text selectable={false} fg={theme.textMuted}>
 			{"▌"}
 		</text>
+	)
+}
+
+const expandedWorkGroups = new Set<string>()
+
+function WorkGroupContent(props: {
+	group: TranscriptWorkGroup
+	isToolExpanded: (id: string) => boolean
+	toggleToolExpanded: (id: string) => void
+	isThinkingExpanded: (id: string) => boolean
+	toggleThinkingExpanded: (id: string) => void
+	diffWrapMode: "word" | "none"
+	concealMarkdown?: boolean
+	onEditFile?: (path: string, line?: number) => void
+}) {
+	const { theme } = useTheme()
+	const [expanded, setExpanded] = createSignal(expandedWorkGroups.has(props.group.mark.id))
+	const summaryParts = createMemo(() => workSummaryParts(props.group.entries))
+	const toggleExpanded = () => {
+		const next = !expanded()
+		setExpanded(next)
+		if (next) expandedWorkGroups.add(props.group.mark.id)
+		else expandedWorkGroups.delete(props.group.mark.id)
+	}
+	const summaryColor = () => props.group.mark.kind === "error" ? theme.error : theme.textMuted
+	const summaryPartColor = (tone: WorkTone): RGBA => tone === "fail" ? theme.error : theme.textMuted
+
+	return (
+		<box flexDirection="column" gap={expanded() ? 1 : 0}>
+			<box
+				flexDirection="row"
+				gap={1}
+				onMouseUp={(e) => {
+					if (isSelectingMouseEvent(e)) return
+					toggleExpanded()
+				}}
+			>
+				<text selectable={false} fg={summaryColor()}>
+					{expanded() ? "▾" : "▸"}
+				</text>
+				<For each={summaryParts()}>
+					{(part, index) => (
+						<>
+							<Show when={index() > 0}>
+								<text selectable={false} fg={theme.borderSubtle}>·</text>
+							</Show>
+							<text selectable={false} fg={summaryPartColor(part.tone)}>{part.count}</text>
+							<text selectable={false} fg={summaryPartColor(part.tone)}>{part.label}</text>
+						</>
+					)}
+				</For>
+			</box>
+			<Show when={expanded()}>
+				<box flexDirection="column" gap={1} paddingLeft={1}>
+					<For each={props.group.entries}>
+						{(entry) => (
+							<WorkEntryContent
+								entry={entry}
+								isToolExpanded={props.isToolExpanded}
+								toggleToolExpanded={props.toggleToolExpanded}
+								isThinkingExpanded={props.isThinkingExpanded}
+								toggleThinkingExpanded={props.toggleThinkingExpanded}
+								diffWrapMode={props.diffWrapMode}
+								concealMarkdown={props.concealMarkdown}
+								onEditFile={props.onEditFile}
+							/>
+						)}
+					</For>
+				</box>
+			</Show>
+		</box>
+	)
+}
+
+function WorkEntryContent(props: {
+	entry: TranscriptWorkEntry
+	isToolExpanded: (id: string) => boolean
+	toggleToolExpanded: (id: string) => void
+	isThinkingExpanded: (id: string) => boolean
+	toggleThinkingExpanded: (id: string) => void
+	diffWrapMode: "word" | "none"
+	concealMarkdown?: boolean
+	onEditFile?: (path: string, line?: number) => void
+}) {
+	return (
+		<Switch>
+			<Match when={props.entry.type === "thinking" && props.entry}>
+				{(thinkingItem) => (
+					<ThinkingBlockWrapper
+						id={thinkingItem().id}
+						summary={thinkingItem().summary}
+						preview={thinkingItem().preview}
+						full={thinkingItem().full}
+						isExpanded={props.isThinkingExpanded}
+						onToggle={props.toggleThinkingExpanded}
+						concealMarkdown={props.concealMarkdown}
+					/>
+				)}
+			</Match>
+			<Match when={props.entry.type === "tool" && props.entry}>
+				{(toolItem) => (
+					<ToolBlockWrapper
+						tool={toolItem().tool}
+						isExpanded={props.isToolExpanded}
+						onToggle={props.toggleToolExpanded}
+						diffWrapMode={props.diffWrapMode}
+						onEditFile={props.onEditFile}
+					/>
+				)}
+			</Match>
+		</Switch>
 	)
 }
 
@@ -509,6 +712,22 @@ export function MessageList(props: MessageListProps) {
 										isExpanded={props.isThinkingExpanded}
 										onToggle={props.toggleThinkingExpanded}
 										concealMarkdown={props.concealMarkdown}
+									/>
+								</TranscriptRow>
+							)}
+						</Match>
+						<Match when={item.type === "work" && item}>
+							{(workItem) => (
+								<TranscriptRow mark={workItem().mark}>
+									<WorkGroupContent
+										group={workItem()}
+										isToolExpanded={props.isToolExpanded}
+										toggleToolExpanded={props.toggleToolExpanded}
+										isThinkingExpanded={props.isThinkingExpanded}
+										toggleThinkingExpanded={props.toggleThinkingExpanded}
+										diffWrapMode={props.diffWrapMode}
+										concealMarkdown={props.concealMarkdown}
+										onEditFile={props.onEditFile}
 									/>
 								</TranscriptRow>
 							)}
