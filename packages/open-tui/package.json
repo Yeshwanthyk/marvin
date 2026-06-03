@@ -10,6 +10,10 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
+		"./testing.js": {
+			"types": "./dist/testing.d.ts",
+			"import": "./dist/testing.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"scripts": {
@@ -47,17 +51,18 @@
 		"bun": ">=1.2.0"
 	},
 	"dependencies": {
-		"@opentui/core": "0.2.2",
-		"@opentui/solid": "0.2.2",
+		"@opentui/core": "0.3.1",
+		"@opentui/keymap": "0.3.1",
+		"@opentui/solid": "0.3.1",
 		"fuzzysort": "^3.1.0",
 		"opentui-spinner": "^0.0.6",
-		"solid-js": "1.9.9"
+		"solid-js": "1.9.12"
 	},
 	"devDependencies": {
 		"@babel/core": "^7.28.5",
 		"@babel/preset-typescript": "^7.28.5",
 		"@types/bun": "latest",
 		"@types/node": "^24.0.0",
-		"babel-preset-solid": "1.9.9"
+		"babel-preset-solid": "1.9.12"
 	}
 }

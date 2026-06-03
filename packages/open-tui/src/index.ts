@@ -29,6 +29,7 @@ export {
 } from "@opentui/core"
 // Re-export SolidJS render and hooks
 export { render, testRender } from "@opentui/solid"
+export * from "./testing.js"
 // App entry point
 export { type AppConfig, startApp } from "./app.js"
 export {
@@ -59,6 +60,8 @@ export {
 export type { UseKeyboardOptions } from "./hooks/use-keyboard.js"
 // Hooks
 export { useKeyboard, usePaste } from "./hooks/use-keyboard.js"
+// Keymap
+export * from "./keymap.js"
 // Utilities
 export { copyToClipboard } from "./utils/clipboard.js"
 export {
