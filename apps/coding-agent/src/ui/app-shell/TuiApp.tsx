@@ -1,5 +1,5 @@
 import { ThemeProvider, type ThemeMode } from "@yeshwanthyk/open-tui"
-import { batch, createSignal, onMount } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
 import { Effect } from "effect"
 
 /** Detect system dark/light mode (macOS only, defaults to dark) */
@@ -13,10 +13,10 @@ function detectThemeMode(): ThemeMode {
 }
 import { useRuntime } from "../../runtime/context.js"
 import type { LoadedSession, SessionTreeNode, SessionNodeEntry, SessionInfo } from "../../session-manager.js"
-import { createSessionController } from "@runtime/session/session-controller.js"
+import { createSessionController, renderLoadedSessionView } from "@runtime/session/session-controller.js"
 import { createPromptQueue, type PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import { appendWithCap } from "@domain/messaging/content.js"
-import type { UIShellMessage, UIMessage } from "../../types.js"
+import type { UIShellMessage, UIMessage, ToolBlock } from "../../types.js"
 import type { AppMessage } from "@yeshwanthyk/agent-core"
 import { runShellCommand } from "../../shell-runner.js"
 import { MainView } from "../features/main-view/MainView.js"
@@ -32,13 +32,15 @@ import { completeSimple, type Message } from "@yeshwanthyk/ai"
 import { useModals } from "../hooks/useModals.js"
 import { ModalContainer } from "../components/modals/ModalContainer.js"
 import type { SearchSelectOption } from "../components/modals/search-select-options.js"
-import { useWorkspaceSwitch } from "../../runtime/workspace-switch.js"
+import { useWorkspaceSwitch, type VisibleSession } from "../../runtime/workspace-switch.js"
+import { shouldStartFreshProjectSwitch } from "../../runtime/workspace-switch-state.js"
 import {
 	activeSessionLanes,
 	archiveSessionLane,
 	findActiveCursor,
 	moveLaneCursor,
 	readWorkspaceLanes,
+	renameSessionLane,
 	restoreSessionLane,
 	selectLane,
 	upsertProjectLane,
@@ -47,7 +49,12 @@ import {
 	type LaneCursor,
 	type WorkspaceLanes,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
+import { discoverWorkspaceProjects, type WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
+import { createScratchpadStore, type ScratchpadItem } from "@yeshwanthyk/runtime-effect/scratchpads.js"
 import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
+import { deriveLaneHeaderState } from "./lane-header-state.js"
+import { createCommandPaletteOptions, parseCommandPaletteValue } from "./command-palette-options.js"
+import { resolveModel, resolveProvider } from "@domain/commands/helpers.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
 
@@ -97,11 +104,36 @@ const flattenTreeOptions = (
 
 export interface TuiAppProps {
 	initialSession: LoadedSession | null
+	initialVisibleSession?: VisibleSession
 	/** Initial prompt to submit on startup */
 	initialPrompt?: string
+	initialScratchpadId?: string
+	initialSessionTitle?: string
+	startNewSession?: boolean
+	initialNavMode?: LaneNavMode
+	active?: () => boolean
+	activation?: () => TuiAppActivation
+	onActivityChange?: (activity: TuiAppActivity) => void
 }
 
-export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
+export interface TuiAppActivation {
+	seq: number
+	initialSession: LoadedSession | null
+	initialVisibleSession?: VisibleSession
+	initialPrompt?: string
+	initialScratchpadId?: string
+	initialSessionTitle?: string
+	startNewSession?: boolean
+	initialNavMode?: LaneNavMode
+}
+
+export interface TuiAppActivity {
+	isResponding: boolean
+	sessionId: string | null
+	sessionPath: string | null
+}
+
+export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, active, activation, onActivityChange }: TuiAppProps) => {
 	const runtime = useRuntime()
 	const {
 		agent,
@@ -148,8 +180,98 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 	const promptQueue = createPromptQueue((counts) => store.queueCounts.set(counts))
 	const modals = useModals()
 	const workspaceSwitch = useWorkspaceSwitch()
+	const scratchpadStore = createScratchpadStore(config.configDir)
 	const [workspaceLanes, setWorkspaceLanes] = createSignal<WorkspaceLanes>(readWorkspaceLanes(config.configDir))
-	const [navMode, setNavMode] = createSignal<LaneNavMode>("off")
+	const [navMode, setNavMode] = createSignal<LaneNavMode>(initialNavMode ?? "off")
+	const laneHeaderState = createMemo(() => deriveLaneHeaderState(workspaceLanes(), navMode()))
+	const configuredProjects = (): WorkspaceProject[] => discoverWorkspaceProjects(config.workspace.projectRoots)
+	const scratchpads = (): ScratchpadItem[] => scratchpadStore.list()
+	const preserveStickyLaneMode = () => navMode() === "sticky"
+	const isAppActive = () => active?.() ?? true
+
+	const visibleSessionForLoaded = (session: LoadedSession, sessionPath?: string): VisibleSession => ({
+		state: "loaded",
+		cwd: session.metadata.cwd || sessionManager.projectCwd,
+		sessionPath: sessionPath || sessionManager.listSessions().find((entry) => entry.id === session.metadata.id)?.path || "",
+		sessionId: session.metadata.id,
+		session,
+	})
+	const initialVisible = initialVisibleSession ?? (initialSession ? visibleSessionForLoaded(initialSession) : { state: "none" })
+	const [visibleSession, setVisibleSession] = createSignal<VisibleSession>(initialVisible)
+	const [activeMessages, setActiveMessagesSignal] = createSignal<UIMessage[]>([])
+	const [activeToolBlocks, setActiveToolBlocksSignal] = createSignal<ToolBlock[]>([])
+	const [activeContextTokens, setActiveContextTokensSignal] = createSignal(0)
+	const [activeDisplayProvider, setActiveDisplayProviderSignal] = createSignal(config.provider)
+	const [activeDisplayModelId, setActiveDisplayModelIdSignal] = createSignal(config.modelId)
+	const [activeDisplayThinking, setActiveDisplayThinkingSignal] = createSignal(config.thinking)
+	const [activeDisplayContextWindow, setActiveDisplayContextWindowSignal] = createSignal(config.model.contextWindow)
+
+	const visibleCwd = () => {
+		const visible = visibleSession()
+		return visible.state === "none" ? sessionManager.projectCwd : visible.cwd
+	}
+
+	const isVisibleActiveSession = (visible: VisibleSession): boolean => {
+		if (visible.state === "none") return sessionManager.sessionPath === null
+		return visible.state === "loaded" &&
+			visible.cwd === sessionManager.projectCwd &&
+			visible.sessionPath === sessionManager.sessionPath &&
+			visible.sessionId === sessionManager.sessionId
+	}
+	const isActiveSessionVisible = (): boolean => isVisibleActiveSession(visibleSession())
+
+	const showActiveSessionView = () => {
+		batch(() => {
+			store.messages.set(() => activeMessages())
+			store.toolBlocks.set(() => activeToolBlocks())
+			store.contextTokens.set(activeContextTokens())
+			store.currentProvider.set(activeDisplayProvider())
+			store.displayModelId.set(activeDisplayModelId())
+			store.displayThinking.set(activeDisplayThinking())
+			store.displayContextWindow.set(activeDisplayContextWindow())
+		})
+	}
+
+	const setActiveMessages = (updater: (prev: UIMessage[]) => UIMessage[]) => {
+		setActiveMessagesSignal((prev) => {
+			const next = updater(prev)
+			if (isActiveSessionVisible()) store.messages.set(() => next)
+			return next
+		})
+	}
+
+	const setActiveToolBlocks = (updater: (prev: ToolBlock[]) => ToolBlock[]) => {
+		setActiveToolBlocksSignal((prev) => {
+			const next = updater(prev)
+			if (isActiveSessionVisible()) store.toolBlocks.set(() => next)
+			return next
+		})
+	}
+
+	const setActiveContextTokens = (value: number) => {
+		setActiveContextTokensSignal(value)
+		if (isActiveSessionVisible()) store.contextTokens.set(value)
+	}
+
+	const setActiveDisplayProvider = (value: typeof config.provider) => {
+		setActiveDisplayProviderSignal(value)
+		if (isActiveSessionVisible()) store.currentProvider.set(value)
+	}
+
+	const setActiveDisplayModelId = (value: string) => {
+		setActiveDisplayModelIdSignal(value)
+		if (isActiveSessionVisible()) store.displayModelId.set(value)
+	}
+
+	const setActiveDisplayThinking = (value: typeof config.thinking) => {
+		setActiveDisplayThinkingSignal(value)
+		if (isActiveSessionVisible()) store.displayThinking.set(value)
+	}
+
+	const setActiveDisplayContextWindow = (value: number) => {
+		setActiveDisplayContextWindowSignal(value)
+		if (isActiveSessionVisible()) store.displayContextWindow.set(value)
+	}
 
 	const sessionController = createSessionController({
 		initialProvider: config.provider,
@@ -160,12 +282,12 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		sessionManager,
 		hookRunner,
 		toolByName: toolMetaByName,
-		setMessages: store.messages.set,
-		setContextTokens: store.contextTokens.set,
-		setDisplayProvider: store.currentProvider.set,
-		setDisplayModelId: store.displayModelId.set,
-		setDisplayThinking: store.displayThinking.set,
-		setDisplayContextWindow: store.displayContextWindow.set,
+		setMessages: setActiveMessages,
+		setContextTokens: setActiveContextTokens,
+		setDisplayProvider: setActiveDisplayProvider,
+		setDisplayModelId: setActiveDisplayModelId,
+		setDisplayThinking: setActiveDisplayThinking,
+		setDisplayContextWindow: setActiveDisplayContextWindow,
 		shellInjectionPrefix: SHELL_INJECTION_PREFIX,
 		promptQueue,
 	})
@@ -191,13 +313,14 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		}
 	}
 
-	const syncCurrentSessionLane = (title?: string): LaneCursor | null => {
+	const syncCurrentSessionLane = (title?: string, options: { select?: boolean } = {}): LaneCursor | null => {
 		const session = getCurrentSessionInfo()
 		if (!session) return null
 		const next = cloneWorkspaceLanes(workspaceLanes())
 		const project = upsertProjectLane(next, sessionManager.projectCwd)
 		const lane = upsertSessionLane(next, project, session, title)
-		const selected = selectLane(next, { project, session: lane })
+		const shouldSelect = options.select ?? isActiveSessionVisible()
+		const selected = shouldSelect ? selectLane(next, { project, session: lane }) : next
 		persistWorkspaceLanes(selected)
 		return { project, session: lane }
 	}
@@ -213,11 +336,82 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		persistWorkspaceLanes(next)
 	}
 
+	const applyLoadedSessionDisplay = (session: LoadedSession, contextTokens: number) => {
+		const provider = resolveProvider(session.metadata.provider)
+		const model = provider ? resolveModel(provider, session.metadata.modelId) : null
+		batch(() => {
+			if (provider) store.currentProvider.set(provider)
+			store.displayModelId.set(model?.id ?? session.metadata.modelId)
+			store.displayThinking.set(session.metadata.thinkingLevel)
+			if (model) store.displayContextWindow.set(model.contextWindow)
+			store.contextTokens.set(contextTokens)
+		})
+	}
+
+	const applyVisibleSession = (nextVisible: VisibleSession) => {
+		setVisibleSession(nextVisible)
+		if (isVisibleActiveSession(nextVisible)) {
+			showActiveSessionView()
+			return
+		}
+
+		if (nextVisible.state === "loaded") {
+			const view = renderLoadedSessionView(nextVisible.session.messages as AppMessage[], {
+				toolByName: toolMetaByName,
+				shellInjectionPrefix: SHELL_INJECTION_PREFIX,
+			})
+			batch(() => {
+				store.messages.set(() => view.messages)
+				store.toolBlocks.set([])
+				store.cacheStats.set(null)
+				store.retryStatus.set(null)
+			})
+			applyLoadedSessionDisplay(nextVisible.session, view.contextTokens)
+			return
+		}
+
+		const messages: UIMessage[] = nextVisible.state === "missing"
+			? [{
+				id: `missing-${nextVisible.sessionPath}`,
+				role: "assistant",
+				content: `Session file missing: ${nextVisible.sessionPath}`,
+			}]
+			: []
+		batch(() => {
+			store.messages.set(() => messages)
+			store.toolBlocks.set([])
+			store.contextTokens.set(0)
+			store.cacheStats.set(null)
+			store.retryStatus.set(null)
+			store.currentProvider.set(activeDisplayProvider())
+			store.displayModelId.set(activeDisplayModelId())
+			store.displayThinking.set(activeDisplayThinking())
+			store.displayContextWindow.set(activeDisplayContextWindow())
+		})
+	}
+
+	const markScratchpadTriggered = (id: string | undefined) => {
+		if (!id || !sessionManager.sessionId) return
+		try {
+			scratchpadStore.markTriggered(id, sessionManager.sessionId)
+		} catch {
+			// Scratchpad startup should not block the session itself.
+		}
+	}
+
 	onMount(() => {
 		seedCurrentProjectLanes()
-		if (initialSession) {
+		if (startNewSession) {
+			prepareFreshSession(initialSessionTitle)
+			ensureSession()
+		} else if (initialSession) {
 			sessionController.restoreSession(initialSession)
+			const nextVisible = initialVisibleSession ?? visibleSessionForLoaded(initialSession)
+			setVisibleSession(nextVisible)
+			showActiveSessionView()
 			syncCurrentSessionLane()
+		} else if (initialVisibleSession) {
+			applyVisibleSession(initialVisibleSession)
 		}
 	})
 
@@ -225,13 +419,51 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 	onMount(() => {
 		if (initialPrompt) {
 			// Delay slightly to let UI initialize
-			setTimeout(() => void submitPrompt(initialPrompt, "followUp"), 50)
+			setTimeout(() => {
+				void submitPrompt(initialPrompt, "followUp")
+				setTimeout(() => markScratchpadTriggered(initialScratchpadId), 250)
+			}, 50)
 		}
 	})
 
+	let pendingSessionTitle: string | undefined
+	let composerDraft = ""
+
 	const ensureSession = () => {
 		sessionController.ensureSession()
-		syncCurrentSessionLane()
+		if (sessionManager.sessionPath) {
+			const loaded = sessionManager.loadSession(sessionManager.sessionPath)
+			if (loaded && visibleSession().state === "none") {
+				setVisibleSession(visibleSessionForLoaded(loaded, sessionManager.sessionPath))
+				showActiveSessionView()
+			}
+		}
+		syncCurrentSessionLane(pendingSessionTitle, { select: true })
+		pendingSessionTitle = undefined
+	}
+
+	const prepareFreshSession = (title = "new session") => {
+		pendingSessionTitle = title
+		composerDraft = ""
+		sessionController.clearSession()
+		setVisibleSession({ state: "none" })
+		batch(() => {
+			setActiveMessagesSignal([])
+			setActiveToolBlocksSignal([])
+			setActiveContextTokensSignal(0)
+			store.messages.set([])
+			store.toolBlocks.set([])
+			store.contextTokens.set(0)
+			store.cacheStats.set(null)
+			store.retryStatus.set(null)
+		})
+		agent.reset()
+		void hookRunner.emit({ type: "session.clear", sessionId: null })
+	}
+
+	const startFreshSession = (title = "new session") => {
+		prepareFreshSession(title)
+		ensureSession()
 	}
 
 	let cycleIndex = cycleModels.findIndex(
@@ -251,11 +483,11 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 	lspActiveRef.setActive = store.lspActive.set
 
 	const eventCtx: EventHandlerContext = {
-		setMessages: store.messages.set,
-		setToolBlocks: store.toolBlocks.set,
+		setMessages: setActiveMessages,
+		setToolBlocks: setActiveToolBlocks,
 		setActivityState: store.activityState.set,
 		setIsResponding: store.isResponding.set,
-		setContextTokens: store.contextTokens.set,
+		setContextTokens: setActiveContextTokens,
 		setCacheStats: store.cacheStats.set,
 		setRetryStatus: store.retryStatus.set,
 		setTurnCount: store.turnCount.set,
@@ -272,7 +504,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		},
 		hookRunner,
 		toolByName: toolMetaByName,
-		getContextWindow: () => store.displayContextWindow.value(),
+		getContextWindow: () => activeDisplayContextWindow(),
 	}
 
 	useAgentEvents({ agent, context: eventCtx })
@@ -284,21 +516,80 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 
 	const exitHandlerRef = { current: () => process.exit(0) }
 	const editorOpenRef = { current: async () => {} }
+	const editFileRef = { current: async (_filePath: string, _line?: number) => {} }
 	const setEditorTextRef = { current: (_text: string) => {} }
 	const getEditorTextRef = { current: () => "" }
 	const clearEditorRef = { current: () => {} }
 	const showToastRef = { current: (_title: string, _message: string, _variant?: "info" | "warning" | "success" | "error") => {} }
+	let wasAppActive = isAppActive()
+
+	createEffect(() => {
+		const nowActive = isAppActive()
+		if (!wasAppActive && nowActive && composerDraft.length > 0) {
+			setTimeout(() => setEditorTextRef.current(composerDraft), 0)
+		}
+		wasAppActive = nowActive
+	})
 
 	const handleBeforeExit = async () => {
 		// Emit shutdown hook before exiting
 		await hookRunner.emit({ type: "session.shutdown", sessionId: sessionManager.sessionId })
 	}
 
+	const activateVisibleSessionForSubmit = (): boolean => {
+		const visible = visibleSession()
+		if (visible.state === "missing") {
+			showToastRef.current("Session missing", visible.sessionPath, "error")
+			return false
+		}
+
+		if (visible.state === "loaded" && !isVisibleActiveSession(visible)) {
+			if (store.isResponding.value()) {
+				showToastRef.current("Session still running", "Wait for the active stream before sending here", "warning")
+				return false
+			}
+			if (visible.cwd !== sessionManager.projectCwd) {
+				showToastRef.current("Project not loaded", visible.cwd, "error")
+				return false
+			}
+			const switched = sessionController.switchSession(visible.sessionPath)
+			if (!switched) {
+				applyVisibleSession({ state: "missing", cwd: visible.cwd, sessionPath: visible.sessionPath })
+				return false
+			}
+			setVisibleSession(visible)
+			showActiveSessionView()
+			syncCurrentSessionLane(undefined, { select: true })
+			return true
+		}
+
+		if (visible.state === "none") {
+			if (store.isResponding.value() && sessionManager.sessionPath !== null) {
+				showToastRef.current("Session still running", "Wait for the active stream before starting a new session", "warning")
+				return false
+			}
+			ensureSession()
+		}
+
+		return true
+	}
+
+	const revealLiveSession = (): boolean => {
+		if (isActiveSessionVisible()) return true
+		const sessionPath = sessionManager.sessionPath
+		if (!sessionPath) return false
+		const loaded = sessionManager.loadSession(sessionPath)
+		if (!loaded) return false
+		setVisibleSession(visibleSessionForLoaded(loaded, sessionPath))
+		showActiveSessionView()
+		syncCurrentSessionLane(undefined, { select: true })
+		return true
+	}
+
 	const submitPrompt = async (text: string, mode: PromptDeliveryMode = "followUp") => {
 		const trimmed = text.trim()
 		if (!trimmed) return
-
-		ensureSession()
+		if (!activateVisibleSessionForSubmit()) return
 
 		let beforeStartResult: Awaited<ReturnType<typeof hookRunner.emitBeforeAgentStart>> | undefined
 		try {
@@ -337,6 +628,11 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 			await Effect.runPromise(
 				runtime.sessionOrchestrator.submitPrompt(trimmed, { mode, beforeStartResult }),
 			)
+			setTimeout(() => {
+				if (!sessionManager.sessionId) return
+				syncCurrentSessionLane(pendingSessionTitle)
+				pendingSessionTitle = undefined
+			}, 100)
 		} catch (err) {
 			batch(() => {
 				store.messages.set((prev) =>
@@ -352,10 +648,53 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		}
 	}
 
+	let lastActivationSeq = activation?.().seq ?? 0
+	createEffect(() => {
+		const next = activation?.()
+		if (!next || next.seq === lastActivationSeq || !isAppActive()) return
+		lastActivationSeq = next.seq
+		setWorkspaceLanes(readWorkspaceLanes(config.configDir))
+		if (next.initialNavMode) setNavMode(next.initialNavMode)
+		if (next.startNewSession) {
+			if (store.isResponding.value()) {
+				showToastRef.current("Session still running", "Wait for the active stream before starting a new session", "warning")
+				return
+			}
+			prepareFreshSession(next.initialSessionTitle)
+			ensureSession()
+		} else if (next.initialVisibleSession) {
+			if (isVisibleActiveSession(next.initialVisibleSession)) {
+				setVisibleSession(next.initialVisibleSession)
+				showActiveSessionView()
+			} else {
+				applyVisibleSession(next.initialVisibleSession)
+			}
+		}
+		if (next.initialPrompt) {
+			const prompt = next.initialPrompt
+			setTimeout(() => {
+				void submitPrompt(prompt, "followUp")
+				setTimeout(() => markScratchpadTriggered(next.initialScratchpadId), 250)
+			}, 50)
+		}
+	})
+
+	createEffect(() => {
+		onActivityChange?.({
+			isResponding: store.isResponding.value(),
+			sessionId: sessionManager.sessionId,
+			sessionPath: sessionManager.sessionPath,
+		})
+	})
+
 	const steerHelper = async (text: string) => {
 		const trimmed = text.trim()
 		if (!trimmed) return
 		if (store.isResponding.value()) {
+			if (!revealLiveSession()) {
+				showToastRef.current("Session still running", "Switch back to the live session before steering", "warning")
+				return
+			}
 			// Inject via agent's internal queue - can interrupt during tool execution
 			await sessionController.steer(trimmed)
 			return
@@ -367,6 +706,10 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		const trimmed = text.trim()
 		if (!trimmed) return
 		if (store.isResponding.value()) {
+			if (!revealLiveSession()) {
+				showToastRef.current("Session still running", "Switch back to the live session before queueing follow-up", "warning")
+				return
+			}
 			// Enqueue to orchestrator - will be processed after current prompt completes
 			promptQueue.push({ text: trimmed, mode: "followUp" })
 			await Effect.runPromise(runtime.sessionOrchestrator.submitPrompt(trimmed, { mode: "followUp" }))
@@ -436,7 +779,13 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 			return rows[labels.indexOf(selected)]?.id
 		},
 		navigateTree: (entryId, options) => sessionController.navigateTree(entryId, options),
-		switchSession: async (sessionPath: string) => sessionController.switchSession(sessionPath),
+		switchSession: async (sessionPath: string) => {
+			const loaded = sessionManager.loadSession(sessionPath)
+			applyVisibleSession(loaded
+				? visibleSessionForLoaded(loaded, sessionPath)
+				: { state: "missing", cwd: sessionManager.projectCwd, sessionPath })
+			return loaded !== null
+		},
 		archiveCurrentSession: () => archiveCurrentSession(),
 		restoreArchivedSession: () => restoreArchivedSession(),
 	}
@@ -457,12 +806,16 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 
 	const handleSubmit = async (text: string, editorClearFn?: () => void) => {
 		if (!text.trim()) return
+		const clearSubmittedEditor = () => {
+			editorClearFn?.()
+			composerDraft = ""
+		}
 
 		if (text.startsWith("!")) {
 			const shouldInject = text.startsWith("!!")
 			const command = text.slice(shouldInject ? 2 : 1).trim()
 			if (!command) return
-			editorClearFn?.()
+			clearSubmittedEditor()
 			ensureSession()
 
 			const shellMsgId = crypto.randomUUID()
@@ -531,12 +884,16 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		}
 
 		if (store.isResponding.value()) {
+			if (!revealLiveSession()) {
+				showToastRef.current("Session still running", "Switch back to the live session before steering", "warning")
+				return
+			}
 			enqueueWhileResponding(text, "steer")
-			editorClearFn?.()
+			clearSubmittedEditor()
 			return
 		}
 
-		editorClearFn?.()
+		clearSubmittedEditor()
 		await submitPrompt(text, "followUp")
 	}
 
@@ -567,18 +924,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		getTokenUsage: () => hookRunner["tokenUsage"],
 		getContextLimit: () => hookRunner["contextLimit"],
 		newSession: async (_opts) => {
-			// Clear current session and start fresh
-			store.messages.set([])
-			store.toolBlocks.set([])
-			store.contextTokens.set(0)
-			agent.reset()
-			void hookRunner.emit({ type: "session.clear", sessionId: null })
-			// Start a new session
-			sessionManager.startSession(
-				sessionController.currentProvider(),
-				sessionController.currentModelId(),
-				sessionController.currentThinking(),
-			)
+			startFreshSession()
 			return { cancelled: false, sessionId: sessionManager.sessionId ?? undefined }
 		},
 		getApiKey: async (model) => getApiKey(model.provider),
@@ -696,30 +1042,38 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		store.displayThinking.set(next)
 	}
 
-	const switchToLane = async (cursor: LaneCursor): Promise<boolean> => {
+	const switchToLane = async (cursor: LaneCursor, options?: { preserveLaneMode?: boolean }): Promise<boolean> => {
+		const previous = workspaceLanes()
+		const selected = selectLane(cloneWorkspaceLanes(previous), cursor)
+		persistWorkspaceLanes(selected)
 		if (cursor.project.cwd === sessionManager.projectCwd) {
-			const switched = sessionController.switchSession(cursor.session.sessionPath)
-			if (!switched) return false
+			const loaded = sessionManager.loadSession(cursor.session.sessionPath)
+			applyVisibleSession(loaded
+				? visibleSessionForLoaded(loaded, cursor.session.sessionPath)
+				: { state: "missing", cwd: cursor.project.cwd, sessionPath: cursor.session.sessionPath })
 		} else {
-			const loaded = await workspaceSwitch.switchTo({
+			const result = await workspaceSwitch.switchTo({
 				cwd: cursor.project.cwd,
 				sessionPath: cursor.session.sessionPath,
+				preserveLaneMode: options?.preserveLaneMode,
 			})
-			if (!loaded) return false
+			if (!result.switched) {
+				persistWorkspaceLanes(previous)
+				return false
+			}
 		}
 
-		const next = selectLane(cloneWorkspaceLanes(workspaceLanes()), cursor)
-		persistWorkspaceLanes(next)
-		setNavMode("off")
+		if (!options?.preserveLaneMode) setNavMode("off")
 		return true
 	}
 
 	const navigateLane = (direction: LaneKeymapDirection) => {
 		void (async () => {
+			const preserveLaneMode = navMode() === "sticky"
 			syncCurrentSessionLane()
 			const cursor = moveLaneCursor(workspaceLanes(), direction)
 			if (!cursor) return
-			await switchToLane(cursor)
+			await switchToLane(cursor, { preserveLaneMode })
 		})()
 	}
 
@@ -738,17 +1092,232 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		}
 	}
 
-	const jumpToLane = () => {
+	const projectSearchOption = (project: WorkspaceProject): SearchSelectOption => ({
+		value: project.cwd,
+		label: project.title,
+		description: project.cwd,
+		keywords: `${project.title} ${project.cwd} ${project.root} project workspace folder`,
+	})
+
+	const scratchpadSearchOption = (item: ScratchpadItem): SearchSelectOption => ({
+		value: item.id,
+		label: item.title,
+		description: item.bodyPreview || item.cwd,
+		keywords: `${item.title} ${item.cwd} ${item.bodyPreview} ${item.tags.join(" ")} scratch scratchpad note`,
+	})
+
+	const pickConfiguredProject = async (title: string): Promise<WorkspaceProject | null> => {
+		const projects = configuredProjects()
+		if (projects.length === 0) {
+			showToastRef.current("No project roots", "Add workspace.projectRoots in config", "warning")
+			return null
+		}
+		const selected = await modals.showSearchSelect(title, projects.map(projectSearchOption), "project or folder")
+		return selected ? projects.find((project) => project.cwd === selected) ?? null : null
+	}
+
+	const pickScratchpad = async (title: string): Promise<ScratchpadItem | null> => {
+		const items = scratchpads()
+		if (items.length === 0) {
+			showToastRef.current("No scratchpads", "Create one with Open scratchpad first", "warning")
+			return null
+		}
+		const selected = await modals.showSearchSelect(title, items.map(scratchpadSearchOption), "scratchpad or note")
+		return selected ? items.find((item) => item.id === selected) ?? null : null
+	}
+
+	const titleFromScratchpadBody = (body: string): string => {
+		const words = body.replace(/^#+\s*/g, "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean).slice(0, 4)
+		return words.join(" ").slice(0, 80) || "scratchpad note"
+	}
+
+	const saveScratchpadBody = (body: string, options?: { title?: string }) => {
+		const trimmed = body.trim()
+		if (!trimmed) {
+			showToastRef.current("Nothing to save", "Scratchpad is empty", "warning")
+			return null
+		}
+		const item = scratchpadStore.add({
+			cwd: sessionManager.projectCwd,
+			title: options?.title ?? titleFromScratchpadBody(trimmed),
+			body: trimmed,
+			source: { kind: "tui", ...(sessionManager.sessionId ? { sessionId: sessionManager.sessionId } : {}) },
+		})
+		showToastRef.current("Scratchpad saved", item.bodyPath, "success")
+		return item
+	}
+
+	const captureScratchpad = () => {
+		void (async () => {
+			const initialText = getEditorTextRef.current()
+			const body = await modals.showEditor("Scratchpad", initialText)
+			if (body === undefined) return
+			try {
+				saveScratchpadBody(body)
+			} catch (error) {
+				showToastRef.current("Scratchpad failed", error instanceof Error ? error.message : String(error), "error")
+			}
+		})()
+	}
+
+	const switchToProject = async (project: WorkspaceProject, options?: { fresh?: boolean; preserveLaneMode?: boolean }): Promise<boolean> => {
+		const fresh = shouldStartFreshProjectSwitch(workspaceLanes(), project.cwd, options?.fresh)
+		if (project.cwd === sessionManager.projectCwd) {
+			if (fresh) startFreshSession()
+			return true
+		}
+		const result = await workspaceSwitch.switchTo({
+			cwd: project.cwd,
+			fresh,
+			preserveLaneMode: options?.preserveLaneMode,
+		})
+		if (!result.switched) return false
+		return true
+	}
+
+	const startSessionInProject = () => {
+		void (async () => {
+			const project = await pickConfiguredProject("New session in project")
+			if (!project) return
+			await switchToProject(project, { fresh: true, preserveLaneMode: preserveStickyLaneMode() })
+		})()
+	}
+
+	const saveCurrentScratchpad = () => {
+		void (async () => {
+			const body = getEditorTextRef.current().trim()
+			try {
+				saveScratchpadBody(body)
+			} catch (error) {
+				showToastRef.current("Scratchpad failed", error instanceof Error ? error.message : String(error), "error")
+			}
+		})()
+	}
+
+	const openScratchpad = (id: string) => {
+		try {
+			const { item, body } = scratchpadStore.read(id)
+			setEditorTextRef.current(body)
+			showToastRef.current("Scratchpad loaded", item.title, "success")
+		} catch (error) {
+			showToastRef.current("Scratchpad failed", error instanceof Error ? error.message : String(error), "error")
+		}
+	}
+
+	const openScratchpadPicker = () => {
+		captureScratchpad()
+	}
+
+	const startScratchpad = async (id: string): Promise<void> => {
+		let entry: { item: ScratchpadItem; body: string }
+		try {
+			entry = scratchpadStore.read(id)
+		} catch (error) {
+			showToastRef.current("Scratchpad failed", error instanceof Error ? error.message : String(error), "error")
+			return
+		}
+
+		if (entry.item.cwd === sessionManager.projectCwd) {
+			startFreshSession(entry.item.title)
+			await submitPrompt(entry.body, "followUp")
+			setTimeout(() => markScratchpadTriggered(entry.item.id), 250)
+			return
+		}
+
+		const result = await workspaceSwitch.switchTo({
+			cwd: entry.item.cwd,
+			fresh: true,
+			initialSessionTitle: entry.item.title,
+			initialPrompt: entry.body,
+			initialScratchpadId: entry.item.id,
+			preserveLaneMode: preserveStickyLaneMode(),
+		})
+		if (!result.switched) {
+			showToastRef.current("Scratchpad failed", `Could not switch to ${entry.item.cwd}`, "error")
+		}
+	}
+
+	const startScratchpadPicker = () => {
+		void (async () => {
+			const item = await pickScratchpad("Start scratchpad")
+			if (!item) return
+			await startScratchpad(item.id)
+		})()
+	}
+
+	const renameCurrentSession = () => {
+		void (async () => {
+			const current = syncCurrentSessionLane()
+			if (!current) return
+			const nextTitle = (await modals.showInput("Rename session", "session title", current.session.title))?.trim()
+			if (!nextTitle || nextTitle === current.session.title) return
+			const renamed = renameSessionLane(cloneWorkspaceLanes(workspaceLanes()), current.session.id, nextTitle)
+			persistWorkspaceLanes(selectLane(renamed, { project: current.project, session: { ...current.session, title: nextTitle } }))
+			showToastRef.current("Session renamed", nextTitle, "success")
+		})()
+	}
+
+	const openCommandPalette = () => {
 		void (async () => {
 			syncCurrentSessionLane()
-			const sessions = activeSessionLanes(workspaceLanes())
-			if (sessions.length === 0) return
-			const selected = await modals.showSearchSelect("Jump to session", sessions.map(laneSearchOption), "project, title, model, id")
+			const selected = await modals.showSearchSelect(
+				"Command",
+				createCommandPaletteOptions(workspaceLanes(), configuredProjects(), scratchpads()),
+				"session, project, scratchpad, settings, archive, detach",
+			)
 			if (!selected) return
-			const session = sessions.find((entry) => entry.id === selected)
-			const project = session ? workspaceLanes().projects.find((entry) => entry.id === session.projectId) : undefined
-			if (!session || !project) return
-			await switchToLane({ project, session })
+			const parsed = parseCommandPaletteValue(selected)
+			if (!parsed) return
+			if (parsed.type === "session") {
+				const sessions = activeSessionLanes(workspaceLanes())
+				const session = sessions.find((entry) => entry.id === parsed.sessionLaneId)
+				const project = session ? workspaceLanes().projects.find((entry) => entry.id === session.projectId) : undefined
+				if (!session || !project) return
+				await switchToLane({ project, session }, { preserveLaneMode: preserveStickyLaneMode() })
+				return
+			}
+			if (parsed.type === "project") {
+				const project = configuredProjects().find((entry) => entry.cwd === parsed.cwd) ?? {
+					cwd: parsed.cwd,
+					title: parsed.cwd.split("/").filter(Boolean).at(-1) ?? parsed.cwd,
+					root: parsed.cwd,
+				}
+				await switchToProject(project, { preserveLaneMode: preserveStickyLaneMode() })
+				return
+			}
+			if (parsed.type === "scratchpad") {
+				openScratchpad(parsed.id)
+				return
+			}
+			switch (parsed.action) {
+				case "settings":
+					await editFileRef.current(config.configPath)
+					return
+				case "rename":
+					renameCurrentSession()
+					return
+				case "newProjectSession":
+					startSessionInProject()
+					return
+				case "saveScratchpad":
+					saveCurrentScratchpad()
+					return
+				case "openScratchpad":
+					openScratchpadPicker()
+					return
+				case "startScratchpad":
+					startScratchpadPicker()
+					return
+				case "detach":
+					exitHandlerRef.current()
+					return
+				case "archive":
+					archiveCurrentSession()
+					return
+				case "restore":
+					restoreArchivedSession()
+					return
+			}
 		})()
 	}
 
@@ -788,6 +1357,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 	const themeMode = detectThemeMode()
 
 	return (
+		<Show when={isAppActive()}>
 		<TuiLaneKeymapRoot>
 			<TuiLaneKeyBindings
 				navMode={navMode}
@@ -796,9 +1366,10 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 				modalOpen={() => modals.modalState() !== null}
 				isResponding={store.isResponding.value}
 				onNavigate={navigateLane}
-				onJump={jumpToLane}
+				onJump={openCommandPalette}
 				onArchive={archiveCurrentSession}
 				onRestore={restoreArchivedSession}
+				onDetach={() => exitHandlerRef.current()}
 			/>
 			<ThemeProvider mode={themeMode} themeName={store.theme.value()} onThemeChange={handleThemeChange}>
 			<MainView
@@ -817,10 +1388,11 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 				retryStatus={store.retryStatus.value()}
 				turnCount={store.turnCount.value()}
 				lspActive={store.lspActive.value()}
+				lane={laneHeaderState()}
 				diffWrapMode={store.diffWrapMode.value()}
 				concealMarkdown={store.concealMarkdown.value()}
 				customCommands={customCommands}
-				cwd={sessionManager.projectCwd}
+				cwd={visibleCwd()}
 				onSubmit={handleSubmit}
 				onAbort={handleAbort}
 				onToggleThinking={() => store.thinkingVisible.set((v) => !v)}
@@ -828,10 +1400,12 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 				onCycleThinking={cycleThinking}
 				exitHandlerRef={exitHandlerRef}
 				editorOpenRef={editorOpenRef}
+				editFileRef={editFileRef}
 				setEditorTextRef={setEditorTextRef}
 				getEditorTextRef={getEditorTextRef}
 				showToastRef={showToastRef}
 				clearEditorRef={clearEditorRef}
+				onComposerChange={(text) => { composerDraft = text }}
 				onBeforeExit={handleBeforeExit}
 				editor={config.editor}
 				lsp={lsp}
@@ -839,5 +1413,6 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 			<ModalContainer modalState={modals.modalState()} onClose={modals.closeModal} />
 			</ThemeProvider>
 		</TuiLaneKeymapRoot>
+		</Show>
 	)
 }

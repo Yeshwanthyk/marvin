@@ -38,6 +38,8 @@ export interface SessionControllerOptions {
 
 export interface SessionControllerState {
 	ensureSession: () => void
+	startSession: () => void
+	clearSession: () => void
 	restoreSession: (session: LoadedSession) => void
 	switchSession: (path: string) => boolean
 	currentProvider: () => KnownProvider
@@ -53,6 +55,106 @@ export interface SessionControllerState {
 	navigateTree: (entryId: string, options?: { summaryMessage?: AppMessage }) => Promise<{ editorText?: string } | undefined>
 }
 
+interface SessionRenderOptions {
+	toolByName: Map<string, { label: string; source: "builtin" | "custom"; sourcePath?: string; renderCall?: (args: unknown, theme: Theme) => JSX.Element; renderResult?: (result: AgentToolResult<unknown>, opts: RenderResultOptions, theme: Theme) => JSX.Element }>
+	shellInjectionPrefix: string
+}
+
+export interface RenderedSessionView {
+	messages: UIMessage[]
+	contextTokens: number
+}
+
+const textFromMessage = (message: AppMessage): string => {
+	const content = (message as { content?: unknown }).content
+	return typeof content === "string" ? content : Array.isArray(content) ? extractText(content) : ""
+}
+
+export const renderLoadedSessionView = (
+	sessionMessages: AppMessage[],
+	options: SessionRenderOptions,
+): RenderedSessionView => {
+	let contextTokens = 0
+	for (let i = sessionMessages.length - 1; i >= 0; i--) {
+		const msg = sessionMessages[i] as { role: string; usage?: { totalTokens?: number } }
+		if (msg.role === "assistant" && msg.usage?.totalTokens) {
+			contextTokens = msg.usage.totalTokens
+			break
+		}
+	}
+
+	const toolResultMap = new Map<string, { output: string; editDiff: string | null; isError: boolean }>()
+	for (const msg of sessionMessages) {
+		if (msg.role === "toolResult") {
+			toolResultMap.set(msg.toolCallId, {
+				output: getToolText(msg),
+				editDiff: getEditDiffText(msg),
+				isError: msg.isError ?? false,
+			})
+		}
+	}
+
+	const uiMessages: UIMessage[] = []
+	for (const msg of sessionMessages) {
+		if (msg.role === "user") {
+			const contentText = textFromMessage(msg)
+			if (contentText.startsWith(options.shellInjectionPrefix)) continue
+			uiMessages.push({ id: crypto.randomUUID(), role: "user", content: contentText })
+		} else if (msg.role === "assistant") {
+			const text = extractText(msg.content as unknown[])
+			const thinking = extractThinking(msg.content as unknown[])
+			const toolCalls = extractToolCalls(msg.content as unknown[])
+			const tools: ToolBlock[] = toolCalls.map((tc) => {
+				const result = toolResultMap.get(tc.id)
+				const meta = options.toolByName.get(tc.name)
+				return {
+					id: tc.id,
+					name: tc.name,
+					args: tc.args,
+					output: result?.output,
+					editDiff: result?.editDiff || undefined,
+					isError: result?.isError ?? false,
+					isComplete: true,
+					label: meta?.label,
+					source: meta?.source,
+					sourcePath: meta?.sourcePath,
+					renderCall: meta?.renderCall,
+					renderResult: meta?.renderResult,
+				}
+			})
+			const orderedBlocks = extractOrderedBlocks(msg.content as unknown[])
+			const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
+				if (block.type === "thinking") {
+					return { type: "thinking", id: block.id, summary: block.summary, preview: block.preview, full: block.full }
+				} else if (block.type === "text") {
+					return { type: "text", text: block.text }
+				} else {
+					const tool = tools.find((t) => t.id === block.id)
+					return {
+						type: "tool",
+						tool: tool || { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
+					}
+				}
+			})
+			uiMessages.push({ id: crypto.randomUUID(), role: "assistant", content: text, thinking: thinking || undefined, isStreaming: false, tools, contentBlocks })
+		} else if ((msg as { role: string }).role === "shell") {
+			const shellMsg = msg as unknown as UIShellMessage
+			uiMessages.push({
+				id: crypto.randomUUID(),
+				role: "shell",
+				command: shellMsg.command,
+				output: shellMsg.output,
+				exitCode: shellMsg.exitCode,
+				truncated: shellMsg.truncated,
+				tempFilePath: shellMsg.tempFilePath,
+				timestamp: shellMsg.timestamp,
+			})
+		}
+	}
+
+	return { messages: uiMessages, contextTokens }
+}
+
 export function createSessionController(options: SessionControllerOptions): SessionControllerState {
 	let sessionStarted = false
 	let currentProvider = options.initialProvider
@@ -61,101 +163,26 @@ export function createSessionController(options: SessionControllerOptions): Sess
 
 	options.setDisplayProvider(currentProvider)
 
-	const ensureSession = () => {
-		if (!sessionStarted) {
-			options.sessionManager.startSession(currentProvider, currentModelId, currentThinking)
-			sessionStarted = true
-			void options.hookRunner.emit({ type: "session.start", sessionId: options.sessionManager.sessionId })
-		}
+	const startSession = () => {
+		options.sessionManager.startSession(currentProvider, currentModelId, currentThinking)
+		sessionStarted = true
+		void options.hookRunner.emit({ type: "session.start", sessionId: options.sessionManager.sessionId })
 	}
 
-	const textFromMessage = (message: AppMessage): string => {
-		const content = (message as { content?: unknown }).content
-		return typeof content === "string" ? content : Array.isArray(content) ? extractText(content) : ""
+	const clearSession = () => {
+		sessionStarted = false
+		options.sessionManager.clearCurrentSession()
+	}
+
+	const ensureSession = () => {
+		if (!sessionStarted) startSession()
 	}
 
 	const renderMessages = (sessionMessages: AppMessage[]) => {
 		options.agent.replaceMessages(sessionMessages)
-		options.setContextTokens(0)
-
-		for (let i = sessionMessages.length - 1; i >= 0; i--) {
-			const msg = sessionMessages[i] as { role: string; usage?: { totalTokens?: number } }
-			if (msg.role === "assistant" && msg.usage?.totalTokens) {
-				options.setContextTokens(msg.usage.totalTokens)
-				break
-			}
-		}
-
-		const toolResultMap = new Map<string, { output: string; editDiff: string | null; isError: boolean }>()
-		for (const msg of sessionMessages) {
-			if (msg.role === "toolResult") {
-				toolResultMap.set(msg.toolCallId, {
-					output: getToolText(msg),
-					editDiff: getEditDiffText(msg),
-					isError: msg.isError ?? false,
-				})
-			}
-		}
-
-		const uiMessages: UIMessage[] = []
-		for (const msg of sessionMessages) {
-			if (msg.role === "user") {
-				const contentText = textFromMessage(msg)
-				if (contentText.startsWith(options.shellInjectionPrefix)) continue
-				uiMessages.push({ id: crypto.randomUUID(), role: "user", content: contentText })
-			} else if (msg.role === "assistant") {
-				const text = extractText(msg.content as unknown[])
-				const thinking = extractThinking(msg.content as unknown[])
-				const toolCalls = extractToolCalls(msg.content as unknown[])
-				const tools: ToolBlock[] = toolCalls.map((tc) => {
-					const result = toolResultMap.get(tc.id)
-					const meta = options.toolByName.get(tc.name)
-					return {
-						id: tc.id,
-						name: tc.name,
-						args: tc.args,
-						output: result?.output,
-						editDiff: result?.editDiff || undefined,
-						isError: result?.isError ?? false,
-						isComplete: true,
-						label: meta?.label,
-						source: meta?.source,
-						sourcePath: meta?.sourcePath,
-						renderCall: meta?.renderCall,
-						renderResult: meta?.renderResult,
-					}
-				})
-				const orderedBlocks = extractOrderedBlocks(msg.content as unknown[])
-				const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
-					if (block.type === "thinking") {
-						return { type: "thinking", id: block.id, summary: block.summary, preview: block.preview, full: block.full }
-					} else if (block.type === "text") {
-						return { type: "text", text: block.text }
-					} else {
-						const tool = tools.find((t) => t.id === block.id)
-						return {
-							type: "tool",
-							tool: tool || { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
-						}
-					}
-				})
-				uiMessages.push({ id: crypto.randomUUID(), role: "assistant", content: text, thinking: thinking || undefined, isStreaming: false, tools, contentBlocks })
-			} else if ((msg as { role: string }).role === "shell") {
-				const shellMsg = msg as unknown as UIShellMessage
-				uiMessages.push({
-					id: crypto.randomUUID(),
-					role: "shell",
-					command: shellMsg.command,
-					output: shellMsg.output,
-					exitCode: shellMsg.exitCode,
-					truncated: shellMsg.truncated,
-					tempFilePath: shellMsg.tempFilePath,
-					timestamp: shellMsg.timestamp,
-				})
-			}
-		}
-
-		options.setMessages(() => uiMessages)
+		const view = renderLoadedSessionView(sessionMessages, options)
+		options.setContextTokens(view.contextTokens)
+		options.setMessages(() => view.messages)
 	}
 
 	const restoreSession = (session: LoadedSession) => {
@@ -258,6 +285,8 @@ export function createSessionController(options: SessionControllerOptions): Sess
 
 	return {
 		ensureSession,
+		startSession,
+		clearSession,
 		restoreSession,
 		switchSession,
 		currentProvider: () => currentProvider,

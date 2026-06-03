@@ -75,15 +75,9 @@ export function createKeyboardHandler(config: KeyboardHandlerConfig): (e: KeyEve
 			return
 		}
 
-		// Ctrl+C - clear or exit
+		// Ctrl+C - detach the TUI
 		if (e.ctrl && e.name === "c") {
-			const now = Date.now()
-			if (now - config.lastCtrlC.current < 750) {
-				config.onExit()
-			} else {
-				config.clearEditor()
-			}
-			config.lastCtrlC.current = now
+			config.onExit()
 			e.preventDefault()
 			return
 		}

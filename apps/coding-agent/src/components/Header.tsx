@@ -5,10 +5,11 @@
  */
 
 import { Show, createMemo, createSignal } from "solid-js"
-import { useTheme } from "@yeshwanthyk/open-tui"
+import { truncateToWidth, useTheme } from "@yeshwanthyk/open-tui"
 import type { ThinkingLevel } from "@yeshwanthyk/agent-core"
 import type { LspManager, LspServerId } from "@yeshwanthyk/lsp"
 import type { ActivityState } from "../types.js"
+import { laneHeaderDisplay, type LaneHeaderState } from "../ui/app-shell/lane-header-state.js"
 
 const LSP_SYMBOLS: Record<LspServerId, [string, string]> = {
   typescript: ["⬡", "⬢"],
@@ -44,6 +45,7 @@ const ACTIVITY_WIDTH = 13
 const PROGRESS_FILLED = "━"
 const PROGRESS_EMPTY = "┄"
 const PROGRESS_BAR_LENGTH = 8
+const LANE_LABEL_MAX_WIDTH = 42
 
 import type { QueueCounts } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 
@@ -56,6 +58,7 @@ export interface HeaderProps {
   activityState: ActivityState
   retryStatus: string | null
   lspActive: boolean
+  lane: LaneHeaderState
   spinnerFrame: number
   lsp: LspManager
 }
@@ -142,6 +145,16 @@ export function Header(props: HeaderProps) {
   const toggleExpanded = () => setExpanded((v) => !v)
   const isSelecting = (event: unknown): boolean =>
     typeof event === "object" && event !== null && "isSelecting" in event && event.isSelecting === true
+  const laneDisplay = createMemo(() => laneHeaderDisplay(props.lane))
+  const laneActive = createMemo(() => laneDisplay().active)
+  const laneColor = createMemo(() => {
+    if (props.lane.mode === "oneshot") return theme.warning
+    if (props.lane.mode === "sticky") return theme.secondary
+    return theme.textMuted
+  })
+  const laneBadge = createMemo(() => laneDisplay().badge)
+  const laneSummary = createMemo(() => truncateToWidth(laneDisplay().summary, LANE_LABEL_MAX_WIDTH, "…"))
+  const laneHint = createMemo(() => laneDisplay().hint)
 
   return (
 <box
@@ -151,7 +164,7 @@ export function Header(props: HeaderProps) {
       paddingRight={1}
       border={["top", "bottom", "left", "right"]}
       borderStyle="rounded"
-      borderColor={theme.border}
+      borderColor={laneActive() ? theme.borderActive : theme.border}
       onMouseUp={(e) => {
         if (isSelecting(e)) return
         toggleExpanded()
@@ -189,9 +202,22 @@ export function Header(props: HeaderProps) {
       {/* Spacer */}
       <box flexGrow={1} />
 
-      {/* Right section (only when expanded): Branch + LSP */}
-      <Show when={expanded()}>
-        <box flexDirection="row" flexShrink={0} gap={1}>
+      {/* Right section: lane context, plus LSP when expanded */}
+      <box flexDirection="row" flexShrink={1} gap={1}>
+        <Show when={laneSummary().length > 0}>
+          <text>
+            <Show when={laneBadge()}>
+              <span style={{ fg: laneColor() }}>{laneBadge()}</span>
+              <span style={{ fg: theme.textMuted }}>  </span>
+            </Show>
+            <span style={{ fg: laneActive() ? theme.text : theme.textMuted }}>{laneSummary()}</span>
+            <Show when={laneHint()}>
+              <span style={{ fg: theme.textMuted }}>  {laneHint()}</span>
+            </Show>
+          </text>
+        </Show>
+
+        <Show when={expanded()}>
 
           {/* LSP */}
           <Show when={lspStatus()} keyed>
@@ -213,8 +239,8 @@ export function Header(props: HeaderProps) {
               </text>
             )}
           </Show>
-        </box>
-      </Show>
+        </Show>
+      </box>
     </box>
   )
 }

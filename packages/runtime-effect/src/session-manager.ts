@@ -74,6 +74,7 @@ export interface LoadedSession {
 export interface ReadonlySessionManager {
   sessionId: string | null;
   sessionPath: string | null;
+  clearCurrentSession(): void;
   getCompactionState(): CompactionState | undefined;
   getEntries(): SessionEntry[];
   getTree(): SessionTreeNode[];
@@ -214,6 +215,12 @@ export class SessionManager implements ReadonlySessionManager {
     this.currentSessionPath = sessionPath;
     this.currentSessionId = sessionId;
     this.leafId = this.findLastNodeId(sessionPath);
+  }
+
+  clearCurrentSession(): void {
+    this.currentSessionPath = null;
+    this.currentSessionId = null;
+    this.leafId = null;
   }
 
   appendMessage(message: AppMessage): void {

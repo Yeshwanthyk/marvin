@@ -8,6 +8,7 @@ interface LaneKeymapHarness extends HumanTuiHarness {
 	jumps: () => number
 	archives: () => number
 	restores: () => number
+	detaches: () => number
 	directions: () => LaneKeymapDirection[]
 	navMode: () => LaneNavMode
 }
@@ -40,11 +41,13 @@ async function loadTuiModules() {
 async function renderLaneKeymap(
 	options: TestRendererOptions = {},
 	keymap: LaneKeymapConfig = cloneDefaultLaneKeymap(),
+	state: { isResponding?: boolean } = {},
 ): Promise<LaneKeymapHarness> {
 	const { createComponent, createSignal, TuiLaneKeyBindings, TuiLaneKeymapRoot, renderHumanTui } = await loadTuiModules()
 	let jumps = 0
 	let archives = 0
 	let restores = 0
+	let detaches = 0
 	const directions: LaneKeymapDirection[] = []
 	const [navMode, setNavMode] = createSignal<LaneNavMode>("off")
 
@@ -56,7 +59,7 @@ async function renderLaneKeymap(
 					setNavMode,
 					keymap,
 					modalOpen: () => false,
-					isResponding: () => false,
+					isResponding: () => state.isResponding ?? false,
 					onNavigate: (direction) => {
 						directions.push(direction)
 					},
@@ -69,6 +72,9 @@ async function renderLaneKeymap(
 					onRestore: () => {
 						restores += 1
 					},
+					onDetach: () => {
+						detaches += 1
+					},
 				})
 			},
 		})
@@ -79,6 +85,7 @@ async function renderLaneKeymap(
 		jumps: () => jumps,
 		archives: () => archives,
 		restores: () => restores,
+		detaches: () => detaches,
 		directions: () => [...directions],
 		navMode,
 	}
@@ -148,6 +155,47 @@ describe("TuiLaneKeyBindings", () => {
 		}
 	})
 
+	it("starts sticky lane mode while a stream is responding", async () => {
+		const keymap = cloneDefaultLaneKeymap()
+		keymap.activation = { behavior: "sticky", enter: ["ctrl+[", "escape"], exit: ["return"] }
+		const harness = await renderLaneKeymap({ kittyKeyboard: true }, keymap, { isResponding: true })
+		try {
+			await harness.pressShortcut("[", { ctrl: true })
+			expect(harness.navMode()).toBe("sticky")
+
+			harness.keys.pressArrow("right")
+			await harness.flush()
+			expect(harness.directions()).toEqual(["right"])
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
+	it("starts sticky lane mode from encoded Ctrl-[ while responding", async () => {
+		const keymap = cloneDefaultLaneKeymap()
+		keymap.activation = { behavior: "sticky", enter: ["ctrl+[", "escape"], exit: ["return"] }
+		const harness = await renderLaneKeymap({ kittyKeyboard: false, otherModifiersMode: true }, keymap, { isResponding: true })
+		try {
+			await harness.pressShortcut("[", { ctrl: true })
+			expect(harness.navMode()).toBe("sticky")
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
+	it("does not steal bare Escape from abort while responding", async () => {
+		const keymap = cloneDefaultLaneKeymap()
+		keymap.activation = { behavior: "sticky", enter: ["ctrl+[", "escape"], exit: ["return"] }
+		const harness = await renderLaneKeymap({ kittyKeyboard: true }, keymap, { isResponding: true })
+		try {
+			harness.keys.pressEscape()
+			await harness.flush()
+			expect(harness.navMode()).toBe("off")
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
 	it("uses one-shot lane mode as a single-move prefix", async () => {
 		const keymap = cloneDefaultLaneKeymap()
 		keymap.activation = { behavior: "oneshot", prefix: ["ctrl+[", "escape"], cancel: ["escape"] }
@@ -194,6 +242,16 @@ describe("TuiLaneKeyBindings", () => {
 			await harness.pressShortcut("r", { ctrl: true })
 			expect(harness.archives()).toBe(1)
 			expect(harness.restores()).toBe(1)
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
+	it("detaches globally with Ctrl-C", async () => {
+		const harness = await renderLaneKeymap({ kittyKeyboard: true })
+		try {
+			await harness.pressShortcut("c", { ctrl: true })
+			expect(harness.detaches()).toBe(1)
 		} finally {
 			harness.renderer.destroy()
 		}

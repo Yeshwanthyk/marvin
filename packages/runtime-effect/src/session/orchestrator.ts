@@ -53,17 +53,17 @@ const ensureSession = (
   config: import("../config.js").LoadedAppConfig,
   hookEffects: HookEffects,
 ) =>
-  Effect.flatMap(
-    Ref.get(stateRef),
-    (state) =>
-      state.hasStarted
-        ? Effect.succeed(undefined)
-        : Effect.gen(function* () {
-            sessionManager.startSession(config.provider, config.modelId, config.thinking);
-            yield* hookEffects.emit({ type: "session.start", sessionId: sessionManager.sessionId });
-            yield* Ref.set(stateRef, { hasStarted: true });
-          }),
-  );
+  Effect.gen(function* () {
+    const state = yield* Ref.get(stateRef);
+    if (state.hasStarted && sessionManager.sessionId !== null) return;
+    if (sessionManager.sessionId !== null) {
+      yield* Ref.set(stateRef, { hasStarted: true });
+      return;
+    }
+    sessionManager.startSession(config.provider, config.modelId, config.thinking);
+    yield* hookEffects.emit({ type: "session.start", sessionId: sessionManager.sessionId });
+    yield* Ref.set(stateRef, { hasStarted: true });
+  });
 
 export interface SessionOrchestratorOptions {
   readonly timeout?: number;

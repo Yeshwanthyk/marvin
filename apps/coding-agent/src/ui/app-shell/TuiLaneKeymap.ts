@@ -16,6 +16,8 @@ const COMMAND_K_RAW_SEQUENCES = new Set([
 	"\x1b[27;10;75~",
 ])
 
+const CTRL_C_RAW_SEQUENCES = new Set(["\x03"])
+
 export interface TuiLaneKeymapRootProps {
 	children: JSX.Element
 }
@@ -43,6 +45,7 @@ export interface TuiLaneKeyBindingsProps {
 	onJump: () => void
 	onArchive: () => void
 	onRestore: () => void
+	onDetach: () => void
 }
 
 const commandKChords = new Set(["mod+k", "super+k", "meta+k"])
@@ -66,9 +69,10 @@ export function TuiLaneKeyBindings(props: TuiLaneKeyBindingsProps): JSX.Element 
 	const keymap = useKeymap()
 	const navInactive = () => props.navMode() === "off"
 	const navActive = () => props.navMode() !== "off" && !props.modalOpen()
-	const canStartNav = () => !props.modalOpen() && !props.isResponding() && navInactive()
-	const canToggleNav = () => !props.modalOpen() && (!props.isResponding() || !navInactive())
+	const canStartNav = () => !props.modalOpen() && navInactive()
+	const canToggleNav = () => !props.modalOpen()
 	const canOpenCommand = () => !props.modalOpen()
+	const shouldStartFromActivationKey = (key: string): boolean => !(props.isResponding() && key === "escape")
 
 	const disposeCommandKRawInput = keymap.intercept(
 		"raw",
@@ -84,12 +88,36 @@ export function TuiLaneKeyBindings(props: TuiLaneKeyBindingsProps): JSX.Element 
 	)
 	onCleanup(disposeCommandKRawInput)
 
+	const disposeCtrlCRawInput = keymap.intercept(
+		"raw",
+		(ctx) => {
+			if (!CTRL_C_RAW_SEQUENCES.has(ctx.sequence)) return
+			ctx.stop()
+			props.onDetach()
+		},
+		{ priority: 2000 },
+	)
+	onCleanup(disposeCtrlCRawInput)
+
+	useBindings(() => ({
+		priority: 2000,
+		enabled: true,
+		bindings: [{
+			key: "ctrl+c",
+			cmd: () => {
+				props.onDetach()
+				return true
+			},
+		}],
+	}))
+
 	useBindings(() => ({
 		priority: 1000,
 		enabled: reactiveMatcherFromSignal(() => canStartNav() && props.keymap.activation.behavior === "sticky"),
 		bindings: props.keymap.activation.behavior === "sticky" ? props.keymap.activation.enter.map((key) => ({
 			key,
 			cmd: () => {
+				if (!shouldStartFromActivationKey(key)) return false
 				props.setNavMode("sticky")
 				return true
 			},
@@ -102,6 +130,7 @@ export function TuiLaneKeyBindings(props: TuiLaneKeyBindingsProps): JSX.Element 
 		bindings: props.keymap.activation.behavior === "oneshot" ? props.keymap.activation.prefix.map((key) => ({
 			key,
 			cmd: () => {
+				if (!shouldStartFromActivationKey(key)) return false
 				props.setNavMode("oneshot")
 				return true
 			},
@@ -114,6 +143,7 @@ export function TuiLaneKeyBindings(props: TuiLaneKeyBindingsProps): JSX.Element 
 		bindings: props.keymap.activation.behavior === "toggle" ? props.keymap.activation.toggle.map((key) => ({
 			key,
 			cmd: () => {
+				if (props.navMode() === "off" && !shouldStartFromActivationKey(key)) return false
 				props.setNavMode(props.navMode() === "off" ? "sticky" : "off")
 				return true
 			},

@@ -22,6 +22,7 @@ export interface InputModalState {
 	type: "input"
 	title: string
 	placeholder?: string
+	initialValue?: string
 	resolve: (value: string | undefined) => void
 }
 
@@ -60,9 +61,9 @@ export function useModals() {
 		})
 	}
 
-	const showInput = (title: string, placeholder?: string): Promise<string | undefined> => {
+	const showInput = (title: string, placeholder?: string, initialValue?: string): Promise<string | undefined> => {
 		return new Promise((resolve) => {
-			setModalState({ type: "input", title, placeholder, resolve })
+			setModalState({ type: "input", title, placeholder, initialValue, resolve })
 		})
 	}
 

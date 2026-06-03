@@ -28,6 +28,18 @@ describe("SessionManager", () => {
     expect(existsSync(manager.sessionPath!)).toBe(true);
   });
 
+  it("clears the active session without deleting the session file", () => {
+    const id = manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
+    const path = manager.sessionPath!;
+
+    manager.clearCurrentSession();
+
+    expect(manager.sessionId).toBe(null);
+    expect(manager.sessionPath).toBe(null);
+    expect(existsSync(path)).toBe(true);
+    expect(manager.findSession(id)?.path).toBe(path);
+  });
+
   it("appends messages to session", async () => {
     manager.startSession("anthropic", "claude-sonnet-4-20250514", "off");
     

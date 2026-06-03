@@ -26,6 +26,7 @@ import { MessagePane } from "../message-pane/MessagePane.js"
 import { Composer } from "../composer/Composer.js"
 import { createComposerKeyboardHandler } from "../composer/keyboard.js"
 import type { ValidationIssue } from "@yeshwanthyk/runtime-effect/extensibility/schema.js"
+import type { LaneHeaderState } from "../../app-shell/lane-header-state.js"
 
 export interface MainViewProps {
 	validationIssues?: ValidationIssue[]
@@ -43,6 +44,7 @@ export interface MainViewProps {
 	retryStatus: string | null
 	turnCount: number
 	lspActive: boolean
+	lane: LaneHeaderState
 	diffWrapMode: "word" | "none"
 	concealMarkdown: boolean
 	customCommands: Map<string, CustomCommand>
@@ -54,10 +56,12 @@ export interface MainViewProps {
 	onCycleThinking: () => void
 	exitHandlerRef: { current: () => void }
 	editorOpenRef: { current: () => Promise<void> | void }
+	editFileRef: { current: (filePath: string, line?: number) => Promise<void> | void }
 	setEditorTextRef: { current: (text: string) => void }
 	getEditorTextRef: { current: () => string }
 	showToastRef: { current: (title: string, message: string, variant?: "info" | "warning" | "success" | "error") => void }
 	clearEditorRef: { current: () => void }
+	onComposerChange?: (text: string) => void
 	onBeforeExit?: () => Promise<void>
 	editor?: import("../../../config.js").EditorConfig
 	lsp: LspManager
@@ -216,6 +220,7 @@ export function MainView(props: MainViewProps) {
 		updateAutocomplete(content, lastLine, lastCol)
 	}
 	props.editorOpenRef.current = openEditorFromTui
+	props.editFileRef.current = editFile
 
 	const handleEditFile = (filePath: string, line?: number) => {
 		void editFile(filePath, line)
@@ -302,11 +307,12 @@ export function MainView(props: MainViewProps) {
 
 	const handleComposerContentChange = () => {
 		if (!textareaRef) return
+		const text = textareaRef.plainText
+		props.onComposerChange?.(text)
 		if (suppressNextAutocompleteUpdate) {
 			suppressNextAutocompleteUpdate = false
 			return
 		}
-		const text = textareaRef.plainText
 		setIsBashMode(text.trimStart().startsWith("!"))
 		const cursor = textareaRef.logicalCursor
 		updateAutocomplete(text, cursor.row, cursor.col)
@@ -331,6 +337,7 @@ export function MainView(props: MainViewProps) {
 				activityState={props.activityState}
 				retryStatus={props.retryStatus}
 				lspActive={props.lspActive}
+				lane={props.lane}
 				spinnerFrame={spinnerFrame()}
 				lsp={props.lsp}
 			/>

@@ -3,9 +3,10 @@ import { RuntimeProvider } from "../../runtime/context.js"
 import { createRuntime, type RuntimeInitArgs } from "@runtime/factory.js"
 import type { LoadedSession } from "../../session-manager.js"
 import { selectSession as selectSessionOpen } from "../../session-picker.js"
-import { TuiApp } from "@ui/app-shell/TuiApp.js"
-import { WorkspaceSwitchProvider, type WorkspaceSwitchController, type WorkspaceSwitchRequest } from "../../runtime/workspace-switch.js"
-import { createSignal, onCleanup, Show } from "solid-js"
+import { TuiApp, type TuiAppActivation, type TuiAppActivity } from "@ui/app-shell/TuiApp.js"
+import { WorkspaceSwitchProvider, type VisibleSession, type WorkspaceSwitchController, type WorkspaceSwitchRequest } from "../../runtime/workspace-switch.js"
+import { shouldStartFreshWorkspaceSession } from "../../runtime/workspace-switch-state.js"
+import { createSignal, Index, onCleanup } from "solid-js"
 import type { RuntimeContext } from "../../runtime/factory.js"
 
 interface RunTuiArgs extends RuntimeInitArgs {
@@ -18,16 +19,57 @@ interface RunTuiArgs extends RuntimeInitArgs {
 }
 
 interface RuntimeHostState {
+	activeCwd: string
+	slots: RuntimeSlot[]
+}
+
+interface RuntimeSlot {
+	cwd: string
 	runtime: RuntimeContext
-	initialSession: LoadedSession | null
-	initialPrompt?: string
+	activation: TuiAppActivation
+	isResponding: boolean
+	lastViewedAt: number
+	lastActivityAt: number
+}
+
+const MAX_IDLE_RUNTIMES = 4
+const IDLE_RUNTIME_TTL_MS = 10 * 60 * 1000
+
+const visibleSessionForLoaded = (
+	runtime: RuntimeContext,
+	session: LoadedSession,
+	sessionPath?: string,
+): VisibleSession => {
+	const resolvedPath = sessionPath || runtime.sessionManager.listSessions().find((entry) => entry.id === session.metadata.id)?.path || ""
+	return {
+		state: "loaded",
+		cwd: runtime.sessionManager.projectCwd,
+		sessionPath: resolvedPath,
+		sessionId: session.metadata.id,
+		session,
+	}
 }
 
 function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeContext; initialSession: LoadedSession | null; initialPrompt?: string }) {
-	const [state, setState] = createSignal<RuntimeHostState>({
-		runtime: props.initialRuntime,
+	let nextActivationSeq = 1
+	const pendingSlots = new Map<string, Promise<RuntimeSlot>>()
+	const initialCwd = props.initialRuntime.sessionManager.projectCwd
+	const initialActivation: TuiAppActivation = {
+		seq: 0,
 		initialSession: props.initialSession,
+		...(props.initialSession ? { initialVisibleSession: visibleSessionForLoaded(props.initialRuntime, props.initialSession) } : {}),
 		...(props.initialPrompt !== undefined ? { initialPrompt: props.initialPrompt } : {}),
+	}
+	const [state, setState] = createSignal<RuntimeHostState>({
+		activeCwd: initialCwd,
+		slots: [{
+			cwd: initialCwd,
+			runtime: props.initialRuntime,
+			activation: initialActivation,
+			isResponding: false,
+			lastViewedAt: Date.now(),
+			lastActivityAt: Date.now(),
+		}],
 	})
 
 	let closed = false
@@ -36,43 +78,154 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 		void runtime.close()
 	}
 
-	const controller: WorkspaceSwitchController = {
-		currentCwd: () => state().runtime.sessionManager.projectCwd,
-		switchTo: async (request: WorkspaceSwitchRequest) => {
-			const current = state().runtime
-			if (request.cwd === current.sessionManager.projectCwd) {
-				return current.sessionManager.loadSession(request.sessionPath)
-			}
+	const runtimeArgsFor = (cwd: string): RuntimeInitArgs => {
+		const { continueSession: _continueSession, resumeSession: _resumeSession, session: _session, prompt: _prompt, ...runtimeArgs } = props.args ?? {}
+		return { ...runtimeArgs, cwd }
+	}
 
-			const { continueSession: _continueSession, resumeSession: _resumeSession, session: _session, prompt: _prompt, ...runtimeArgs } = props.args ?? {}
-			const nextRuntime = await createRuntime({ ...runtimeArgs, cwd: request.cwd }, "tui")
-			const loaded = nextRuntime.sessionManager.loadSession(request.sessionPath)
-			if (!loaded) {
-				await nextRuntime.close()
-				return null
-			}
+	const createSlot = async (cwd: string): Promise<RuntimeSlot> => {
+		const runtime = await createRuntime(runtimeArgsFor(cwd), "tui")
+		const now = Date.now()
+		return {
+			cwd,
+			runtime,
+			activation: { seq: nextActivationSeq++, initialSession: null },
+			isResponding: false,
+			lastViewedAt: now,
+			lastActivityAt: now,
+		}
+	}
 
-			setState({ runtime: nextRuntime, initialSession: loaded })
-			queueMicrotask(() => closeRuntime(current))
+	const findSlot = (cwd: string): RuntimeSlot | undefined => state().slots.find((slot) => slot.cwd === cwd)
+
+	const getOrCreateSlot = async (cwd: string): Promise<RuntimeSlot> => {
+		const existing = findSlot(cwd)
+		if (existing) return existing
+		const pending = pendingSlots.get(cwd)
+		if (pending) return pending
+		const creating = createSlot(cwd).then((created) => {
+			setState((prev) => prev.slots.some((slot) => slot.cwd === cwd)
+				? prev
+				: { ...prev, slots: [...prev.slots, created] })
+			return created
+		}).finally(() => {
+			pendingSlots.delete(cwd)
+		})
+		pendingSlots.set(cwd, creating)
+		return creating
+	}
+
+	const loadRequestedSession = (runtime: RuntimeContext, request: WorkspaceSwitchRequest): LoadedSession | null => {
+		if (request.sessionPath) return runtime.sessionManager.loadSession(request.sessionPath)
+		if (request.fresh) return null
+		return runtime.sessionManager.loadLatest()
+	}
+
+	const visibleSessionForRequest = (
+		runtime: RuntimeContext,
+		request: WorkspaceSwitchRequest,
+		loaded: LoadedSession | null,
+	): VisibleSession => {
+		if (request.sessionPath) {
 			return loaded
+				? visibleSessionForLoaded(runtime, loaded, request.sessionPath)
+				: { state: "missing", cwd: request.cwd, sessionPath: request.sessionPath }
+		}
+		return loaded ? visibleSessionForLoaded(runtime, loaded) : { state: "none" }
+	}
+
+	const evictIdleRuntimes = () => {
+		const now = Date.now()
+		const current = state()
+		const idleHidden = current.slots
+			.filter((slot) =>
+				slot.cwd !== current.activeCwd &&
+				!slot.isResponding
+			)
+			.sort((a, b) => a.lastViewedAt - b.lastViewedAt)
+		const overflow = Math.max(0, current.slots.length - MAX_IDLE_RUNTIMES)
+		const expired = idleHidden.filter((slot) => now - slot.lastActivityAt >= IDLE_RUNTIME_TTL_MS)
+		const toClose = new Set([...expired, ...idleHidden.slice(0, overflow)].map((slot) => slot.cwd))
+		if (toClose.size === 0) return
+		const closing = current.slots.filter((slot) => toClose.has(slot.cwd))
+		setState((prev) => ({ ...prev, slots: prev.slots.filter((slot) => !toClose.has(slot.cwd)) }))
+		for (const slot of closing) closeRuntime(slot.runtime)
+	}
+
+	const updateSlotActivity = (cwd: string, activity: TuiAppActivity) => {
+		setState((prev) => {
+			let changed = false
+			const slots = prev.slots.map((slot) => {
+				if (slot.cwd !== cwd) return slot
+				if (slot.isResponding === activity.isResponding) return slot
+				changed = true
+				return {
+					...slot,
+					isResponding: activity.isResponding,
+					lastActivityAt: Date.now(),
+				}
+			})
+			return changed ? { ...prev, slots } : prev
+		})
+	}
+
+	const controller: WorkspaceSwitchController = {
+		currentCwd: () => state().activeCwd,
+		switchTo: async (request: WorkspaceSwitchRequest) => {
+			const slot = await getOrCreateSlot(request.cwd)
+			const loaded = loadRequestedSession(slot.runtime, request)
+			const visibleSession = visibleSessionForRequest(slot.runtime, request, loaded)
+			const now = Date.now()
+			const activation: TuiAppActivation = {
+				seq: nextActivationSeq++,
+				initialSession: loaded,
+				initialVisibleSession: visibleSession,
+				...(request.initialPrompt !== undefined ? { initialPrompt: request.initialPrompt } : {}),
+				...(request.initialScratchpadId !== undefined ? { initialScratchpadId: request.initialScratchpadId } : {}),
+				...(request.initialSessionTitle !== undefined ? { initialSessionTitle: request.initialSessionTitle } : {}),
+				startNewSession: shouldStartFreshWorkspaceSession(request, loaded),
+				initialNavMode: request.preserveLaneMode ? "sticky" : undefined,
+			}
+
+			setState((prev) => ({
+				activeCwd: request.cwd,
+				slots: prev.slots.map((entry) => entry.cwd === request.cwd
+					? { ...entry, activation, lastViewedAt: now, lastActivityAt: now }
+					: entry),
+			}))
+			queueMicrotask(evictIdleRuntimes)
+			return { switched: true, session: loaded, visibleSession }
 		},
 	}
 
 	onCleanup(() => {
 		closed = true
-		void state().runtime.close()
+		for (const slot of state().slots) {
+			void slot.runtime.close()
+		}
 	})
 
 	return (
-		<Show keyed when={state()}>
-			{(current) => (
-				<WorkspaceSwitchProvider controller={controller}>
-					<RuntimeProvider runtime={current.runtime}>
-						<TuiApp initialSession={current.initialSession} initialPrompt={current.initialPrompt} />
+		<WorkspaceSwitchProvider controller={controller}>
+			<Index each={state().slots}>
+				{(slot) => (
+					<RuntimeProvider runtime={slot().runtime}>
+						<TuiApp
+							initialSession={slot().activation.initialSession}
+							initialVisibleSession={slot().activation.initialVisibleSession}
+							initialPrompt={slot().activation.initialPrompt}
+							initialScratchpadId={slot().activation.initialScratchpadId}
+							initialSessionTitle={slot().activation.initialSessionTitle}
+							startNewSession={slot().activation.startNewSession}
+							initialNavMode={slot().activation.initialNavMode}
+							active={() => state().activeCwd === slot().cwd}
+							activation={() => slot().activation}
+							onActivityChange={(activity) => updateSlotActivity(slot().cwd, activity)}
+						/>
 					</RuntimeProvider>
-				</WorkspaceSwitchProvider>
-			)}
-		</Show>
+				)}
+			</Index>
+		</WorkspaceSwitchProvider>
 	)
 }
 

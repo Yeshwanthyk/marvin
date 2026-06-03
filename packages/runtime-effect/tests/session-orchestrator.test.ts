@@ -29,6 +29,7 @@ const createTestConfig = (model: Model<Api>, provider: KnownProvider): LoadedApp
   configDir: "/tmp/marvin-test",
   configPath: "/tmp/marvin-test/config.json",
   lsp: { enabled: false, autoInstall: false },
+  workspace: { projectRoots: [] },
 });
 
 class TestAgent {
@@ -236,6 +237,49 @@ describe("SessionOrchestratorLayer", () => {
     expect(instrumentation.events.some((ev) => ev.type === "tmux:log" && ev.message === "prompt:process:complete")).toBe(
       true,
     );
+  });
+
+  it("continues an existing session manager session without starting a new one", async () => {
+    const agent = new TestAgent(anthropicModel);
+    const sessionManager = new TestSessionManager();
+    sessionManager.sessionIdValue = "restored-session";
+    const hookRunner = new TestHookRunner();
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({ agent, sessionManager, hookRunner, instrumentation });
+
+    await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPrompt("continue restored");
+        yield* waitForAgentCalls(agent, 1);
+      }),
+    );
+
+    expect(sessionManager.startCount).toBe(0);
+    expect(sessionManager.appended[0]?.role).toBe("user");
+  });
+
+  it("starts a new session after the current session identity is cleared", async () => {
+    const agent = new TestAgent(anthropicModel);
+    const sessionManager = new TestSessionManager();
+    const hookRunner = new TestHookRunner();
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({ agent, sessionManager, hookRunner, instrumentation });
+
+    await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPrompt("first");
+        yield* waitForAgentCalls(agent, 1);
+        sessionManager.sessionIdValue = null;
+        yield* orchestrator.submitPrompt("second");
+        yield* waitForAgentCalls(agent, 2);
+      }),
+    );
+
+    expect(sessionManager.startCount).toBe(2);
   });
 
   it("retries prompts with execution plans and restores state on failure", async () => {

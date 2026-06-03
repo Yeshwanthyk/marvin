@@ -46,6 +46,7 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
 					<InputModal
 						title={state().title}
 						placeholder={(state() as { placeholder?: string }).placeholder}
+						initialValue={(state() as { initialValue?: string }).initialValue}
 						onSubmit={(value) => {
 							(state() as { resolve: (v: string | undefined) => void }).resolve(value)
 							props.onClose()
