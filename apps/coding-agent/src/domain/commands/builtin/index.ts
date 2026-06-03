@@ -1,3 +1,4 @@
+import { archiveCommand } from "./archive.js"
 import { clearCommand } from "./clear.js"
 import { compactCommand } from "./compact.js"
 
@@ -7,6 +8,7 @@ import { followupCommand } from "./followup.js"
 import { forkCommand } from "./fork.js"
 import { loginCommand } from "./login.js"
 import { modelCommand } from "./model.js"
+import { restoreCommand } from "./restore.js"
 import { statusCommand } from "./status.js"
 import { sessionsCommand } from "./sessions.js"
 import { steerCommand } from "./steer.js"
@@ -26,6 +28,8 @@ export const builtinCommands = [
 	steerCommand,
 	followupCommand,
 	forkCommand,
+	archiveCommand,
+	restoreCommand,
 	sessionsCommand,
 	treeCommand,
 ]

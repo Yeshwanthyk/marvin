@@ -1,11 +1,19 @@
 import { createSignal } from "solid-js"
 
-export type ModalType = "select" | "input" | "confirm" | "editor" | null
+export type ModalType = "select" | "searchSelect" | "input" | "confirm" | "editor" | null
 
 export interface SelectModalState {
 	type: "select"
 	title: string
 	options: string[]
+	resolve: (value: string | undefined) => void
+}
+
+export interface SearchSelectModalState {
+	type: "searchSelect"
+	title: string
+	options: string[]
+	placeholder?: string
 	resolve: (value: string | undefined) => void
 }
 
@@ -30,7 +38,7 @@ export interface EditorModalState {
 	resolve: (value: string | undefined) => void
 }
 
-export type ModalState = SelectModalState | InputModalState | ConfirmModalState | EditorModalState | null
+export type ModalState = SelectModalState | SearchSelectModalState | InputModalState | ConfirmModalState | EditorModalState | null
 
 export function useModals() {
 	const [modalState, setModalState] = createSignal<ModalState>(null)
@@ -38,6 +46,12 @@ export function useModals() {
 	const showSelect = (title: string, options: string[]): Promise<string | undefined> => {
 		return new Promise((resolve) => {
 			setModalState({ type: "select", title, options, resolve })
+		})
+	}
+
+	const showSearchSelect = (title: string, options: string[], placeholder?: string): Promise<string | undefined> => {
+		return new Promise((resolve) => {
+			setModalState({ type: "searchSelect", title, options, placeholder, resolve })
 		})
 	}
 
@@ -66,6 +80,7 @@ export function useModals() {
 	return {
 		modalState,
 		showSelect,
+		showSearchSelect,
 		showInput,
 		showConfirm,
 		showEditor,

@@ -50,6 +50,8 @@ export interface CommandContext {
 	showInput?: (title: string, placeholder?: string) => Promise<string | undefined>
 	showTreeSelector?: () => Promise<string | undefined>
 	navigateTree?: (entryId: string, options?: { summaryMessage?: AppMessage }) => Promise<{ editorText?: string } | undefined>
+	archiveCurrentSession?: () => void
+	restoreArchivedSession?: () => void
 
 	onExit?: () => void
 	hookRunner?: HookRunner

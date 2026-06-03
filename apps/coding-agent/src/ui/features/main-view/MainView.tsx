@@ -46,6 +46,7 @@ export interface MainViewProps {
 	diffWrapMode: "word" | "none"
 	concealMarkdown: boolean
 	customCommands: Map<string, CustomCommand>
+	cwd: string
 	onSubmit: (text: string, clearFn?: () => void) => void
 	onAbort: () => string | null
 	onToggleThinking: () => void
@@ -103,7 +104,7 @@ export function MainView(props: MainViewProps) {
 		name: cmd.name,
 		description: cmd.description,
 	}))
-	const autocompleteProvider = new CombinedAutocompleteProvider([...builtInAutocomplete, ...customAutocomplete], process.cwd())
+	const autocompleteProvider = new CombinedAutocompleteProvider([...builtInAutocomplete, ...customAutocomplete], props.cwd)
 	const [autocompleteItems, setAutocompleteItems] = createSignal<AutocompleteItem[]>([])
 	const [autocompletePrefix, setAutocompletePrefix] = createSignal("")
 	const [autocompleteIndex, setAutocompleteIndex] = createSignal(0)

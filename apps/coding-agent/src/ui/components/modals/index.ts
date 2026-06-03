@@ -1,4 +1,5 @@
 export { SelectModal, type SelectModalProps } from "./SelectModal.js"
+export { SearchSelectModal, type SearchSelectModalProps } from "./SearchSelectModal.js"
 export { InputModal, type InputModalProps } from "./InputModal.js"
 export { ConfirmModal, type ConfirmModalProps } from "./ConfirmModal.js"
 export { EditorModal, type EditorModalProps } from "./EditorModal.js"

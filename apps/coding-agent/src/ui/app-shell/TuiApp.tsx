@@ -1,5 +1,5 @@
 import { ThemeProvider, type ThemeMode } from "@yeshwanthyk/open-tui"
-import { batch, onMount } from "solid-js"
+import { batch, createSignal, onMount } from "solid-js"
 import { Effect } from "effect"
 
 /** Detect system dark/light mode (macOS only, defaults to dark) */
@@ -12,7 +12,7 @@ function detectThemeMode(): ThemeMode {
 	}
 }
 import { useRuntime } from "../../runtime/context.js"
-import type { LoadedSession, SessionTreeNode, SessionNodeEntry } from "../../session-manager.js"
+import type { LoadedSession, SessionTreeNode, SessionNodeEntry, SessionInfo } from "../../session-manager.js"
 import { createSessionController } from "@runtime/session/session-controller.js"
 import { createPromptQueue, type PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import { appendWithCap } from "@domain/messaging/content.js"
@@ -31,6 +31,22 @@ import { createHookMessage, createHookUIContext, type HookMessage, type HookSess
 import { completeSimple, type Message } from "@yeshwanthyk/ai"
 import { useModals } from "../hooks/useModals.js"
 import { ModalContainer } from "../components/modals/ModalContainer.js"
+import { useWorkspaceSwitch } from "../../runtime/workspace-switch.js"
+import {
+	activeSessionLanes,
+	archiveSessionLane,
+	findActiveCursor,
+	moveLaneCursor,
+	readWorkspaceLanes,
+	restoreSessionLane,
+	selectLane,
+	upsertProjectLane,
+	upsertSessionLane,
+	writeWorkspaceLanes,
+	type LaneCursor,
+	type WorkspaceLanes,
+} from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
+import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection } from "./TuiLaneKeymap.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
 
@@ -130,6 +146,9 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 
 	const promptQueue = createPromptQueue((counts) => store.queueCounts.set(counts))
 	const modals = useModals()
+	const workspaceSwitch = useWorkspaceSwitch()
+	const [workspaceLanes, setWorkspaceLanes] = createSignal<WorkspaceLanes>(readWorkspaceLanes(config.configDir))
+	const [navMode, setNavMode] = createSignal(false)
 
 	const sessionController = createSessionController({
 		initialProvider: config.provider,
@@ -150,9 +169,54 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		promptQueue,
 	})
 
+	const cloneWorkspaceLanes = (value: WorkspaceLanes): WorkspaceLanes => JSON.parse(JSON.stringify(value)) as WorkspaceLanes
+
+	const persistWorkspaceLanes = (next: WorkspaceLanes) => {
+		writeWorkspaceLanes(config.configDir, next)
+		setWorkspaceLanes(next)
+	}
+
+	const getCurrentSessionInfo = (): SessionInfo | null => {
+		const sessionId = sessionManager.sessionId
+		const sessionPath = sessionManager.sessionPath
+		if (!sessionId || !sessionPath) return null
+		return sessionManager.findSession(sessionPath) ?? {
+			id: sessionId,
+			timestamp: Date.now(),
+			path: sessionPath,
+			provider: sessionController.currentProvider(),
+			modelId: sessionController.currentModelId(),
+			cwd: sessionManager.projectCwd,
+		}
+	}
+
+	const syncCurrentSessionLane = (title?: string): LaneCursor | null => {
+		const session = getCurrentSessionInfo()
+		if (!session) return null
+		const next = cloneWorkspaceLanes(workspaceLanes())
+		const project = upsertProjectLane(next, sessionManager.projectCwd)
+		const lane = upsertSessionLane(next, project, session, title)
+		const selected = selectLane(next, { project, session: lane })
+		persistWorkspaceLanes(selected)
+		return { project, session: lane }
+	}
+
+	const seedCurrentProjectLanes = () => {
+		const next = cloneWorkspaceLanes(workspaceLanes())
+		const project = upsertProjectLane(next, sessionManager.projectCwd)
+		for (const session of sessionManager.loadAllSessions()) {
+			if (session.messageCount === 0 || session.firstMessage.startsWith("System context:")) continue
+			const title = session.firstMessage.replace(/\s+/g, " ").trim().slice(0, 80) || session.id.slice(0, 8)
+			upsertSessionLane(next, project, session, title)
+		}
+		persistWorkspaceLanes(next)
+	}
+
 	onMount(() => {
+		seedCurrentProjectLanes()
 		if (initialSession) {
 			sessionController.restoreSession(initialSession)
+			syncCurrentSessionLane()
 		}
 	})
 
@@ -164,7 +228,10 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		}
 	})
 
-	const ensureSession = () => sessionController.ensureSession()
+	const ensureSession = () => {
+		sessionController.ensureSession()
+		syncCurrentSessionLane()
+	}
 
 	let cycleIndex = cycleModels.findIndex(
 		(entry) => entry.model.id === config.modelId && entry.provider === config.provider,
@@ -321,7 +388,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		sessionManager,
 		configDir: config.configDir,
 		configPath: config.configPath,
-		cwd: process.cwd(),
+		cwd: sessionManager.projectCwd,
 		editor: config.editor,
 		codexTransport,
 		getApiKey,
@@ -369,6 +436,8 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		},
 		navigateTree: (entryId, options) => sessionController.navigateTree(entryId, options),
 		switchSession: async (sessionPath: string) => sessionController.switchSession(sessionPath),
+		archiveCurrentSession: () => archiveCurrentSession(),
+		restoreArchivedSession: () => restoreArchivedSession(),
 	}
 
 	const builtInCommandNames = new Set(slashCommands.map((c) => c.name))
@@ -626,10 +695,102 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 		store.displayThinking.set(next)
 	}
 
+	const switchToLane = async (cursor: LaneCursor): Promise<boolean> => {
+		if (cursor.project.cwd === sessionManager.projectCwd) {
+			const switched = sessionController.switchSession(cursor.session.sessionPath)
+			if (!switched) return false
+		} else {
+			const loaded = await workspaceSwitch.switchTo({
+				cwd: cursor.project.cwd,
+				sessionPath: cursor.session.sessionPath,
+			})
+			if (!loaded) return false
+		}
+
+		const next = selectLane(cloneWorkspaceLanes(workspaceLanes()), cursor)
+		persistWorkspaceLanes(next)
+		setNavMode(false)
+		return true
+	}
+
+	const navigateLane = (direction: LaneKeymapDirection) => {
+		void (async () => {
+			syncCurrentSessionLane()
+			const cursor = moveLaneCursor(workspaceLanes(), direction)
+			if (!cursor) return
+			await switchToLane(cursor)
+		})()
+	}
+
+	const projectTitleFor = (projectId: string): string =>
+		workspaceLanes().projects.find((project) => project.id === projectId)?.title ?? projectId
+
+	const laneLabel = (session: ReturnType<typeof activeSessionLanes>[number]): string =>
+		`${projectTitleFor(session.projectId)} / ${session.title} [${session.sessionId.slice(0, 8)}] ${session.provider}/${session.modelId}`
+
+	const jumpToLane = () => {
+		void (async () => {
+			syncCurrentSessionLane()
+			const sessions = activeSessionLanes(workspaceLanes())
+			if (sessions.length === 0) return
+			const labels = sessions.map(laneLabel)
+			const selected = await modals.showSearchSelect("Jump", labels, "project or session")
+			if (!selected) return
+			const session = sessions[labels.indexOf(selected)]
+			const project = session ? workspaceLanes().projects.find((entry) => entry.id === session.projectId) : undefined
+			if (!session || !project) return
+			await switchToLane({ project, session })
+		})()
+	}
+
+	const archiveCurrentSession = () => {
+		void (async () => {
+			const current = syncCurrentSessionLane()
+			if (!current) return
+			const archived = archiveSessionLane(cloneWorkspaceLanes(workspaceLanes()), current.session.id)
+			const nextCursor = findActiveCursor(archived)
+			if (!nextCursor) {
+				persistWorkspaceLanes(archived)
+				showToastRef.current("Session archived", "No active sessions left", "info")
+				return
+			}
+			persistWorkspaceLanes(selectLane(archived, nextCursor))
+			await switchToLane(nextCursor)
+			showToastRef.current("Session archived", "Moved to next active session", "success")
+		})()
+	}
+
+	const restoreArchivedSession = () => {
+		void (async () => {
+			const archivedSessions = workspaceLanes().sessions.filter((session) => session.archivedAt !== undefined)
+			if (archivedSessions.length === 0) return
+			const labels = archivedSessions.map(laneLabel)
+			const selected = await modals.showSearchSelect("Restore", labels, "project or session")
+			if (!selected) return
+			const session = archivedSessions[labels.indexOf(selected)]
+			const project = session ? workspaceLanes().projects.find((entry) => entry.id === session.projectId) : undefined
+			if (!session || !project) return
+			const restored = restoreSessionLane(cloneWorkspaceLanes(workspaceLanes()), session.id)
+			persistWorkspaceLanes(selectLane(restored, { project, session: { ...session, archivedAt: undefined } }))
+			await switchToLane({ project, session: { ...session, archivedAt: undefined } })
+			showToastRef.current("Session restored", "Returned to active lanes", "success")
+		})()
+	}
+
 	const themeMode = detectThemeMode()
 
 	return (
-		<ThemeProvider mode={themeMode} themeName={store.theme.value()} onThemeChange={handleThemeChange}>
+		<TuiLaneKeymapRoot>
+			<TuiLaneKeyBindings
+				navMode={navMode}
+				setNavMode={setNavMode}
+				modalOpen={() => modals.modalState() !== null}
+				isResponding={store.isResponding.value}
+				onNavigate={navigateLane}
+				onJump={jumpToLane}
+				onArchive={archiveCurrentSession}
+			/>
+			<ThemeProvider mode={themeMode} themeName={store.theme.value()} onThemeChange={handleThemeChange}>
 			<MainView
 				validationIssues={validationIssues}
 				messages={store.messages.value()}
@@ -649,6 +810,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 				diffWrapMode={store.diffWrapMode.value()}
 				concealMarkdown={store.concealMarkdown.value()}
 				customCommands={customCommands}
+				cwd={sessionManager.projectCwd}
 				onSubmit={handleSubmit}
 				onAbort={handleAbort}
 				onToggleThinking={() => store.thinkingVisible.set((v) => !v)}
@@ -665,6 +827,7 @@ export const TuiApp = ({ initialSession, initialPrompt }: TuiAppProps) => {
 				lsp={lsp}
 			/>
 			<ModalContainer modalState={modals.modalState()} onClose={modals.closeModal} />
-		</ThemeProvider>
+			</ThemeProvider>
+		</TuiLaneKeymapRoot>
 	)
 }

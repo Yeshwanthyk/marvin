@@ -1,6 +1,7 @@
 import { Match, Switch } from "solid-js"
 import type { ModalState } from "../../hooks/useModals.js"
 import { SelectModal } from "./SelectModal.js"
+import { SearchSelectModal } from "./SearchSelectModal.js"
 import { InputModal } from "./InputModal.js"
 import { ConfirmModal } from "./ConfirmModal.js"
 import { EditorModal } from "./EditorModal.js"
@@ -19,6 +20,19 @@ export function ModalContainer(props: ModalContainerProps): JSX.Element {
 					<SelectModal
 						title={state().title}
 						options={(state() as { options: string[] }).options}
+						onSelect={(value) => {
+							(state() as { resolve: (v: string | undefined) => void }).resolve(value)
+							props.onClose()
+						}}
+					/>
+				)}
+			</Match>
+			<Match when={props.modalState?.type === "searchSelect" && props.modalState}>
+				{(state) => (
+					<SearchSelectModal
+						title={state().title}
+						options={(state() as { options: string[] }).options}
+						placeholder={(state() as { placeholder?: string }).placeholder}
 						onSelect={(value) => {
 							(state() as { resolve: (v: string | undefined) => void }).resolve(value)
 							props.onClose()

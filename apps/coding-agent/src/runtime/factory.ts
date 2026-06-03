@@ -9,7 +9,7 @@ import {
 import type { LoadConfigOptions } from "@yeshwanthyk/runtime-effect/config.js";
 import { resolveMarvinDocsPaths } from "../docs.js";
 
-export type RuntimeInitArgs = LoadConfigOptions;
+export type RuntimeInitArgs = LoadConfigOptions & RuntimeLayerOptions;
 
 export type RuntimeContext = RuntimeServices & {
   /**
@@ -28,6 +28,15 @@ const toLayerOptions = (args: RuntimeInitArgs | undefined, adapter: AdapterKind)
   thinking: args?.thinking,
   systemPrompt: args?.systemPrompt,
   docs: args?.docs ?? resolveMarvinDocsPaths(),
+  cwd: args?.cwd,
+  hasUI: args?.hasUI,
+  sendRef: args?.sendRef,
+  instrumentation: args?.instrumentation,
+  lsp: args?.lsp,
+  lspFactory: args?.lspFactory,
+  transportFactory: args?.transportFactory,
+  retry: args?.retry,
+  timeout: args?.timeout,
   extensions: args?.extensions,
   noExtensions: args?.noExtensions,
 });
