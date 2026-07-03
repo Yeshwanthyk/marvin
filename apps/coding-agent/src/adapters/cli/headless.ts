@@ -61,7 +61,7 @@ export const runHeadless = async (args: HeadlessArgs) => {
 		isIdleHandler: () => true,
 		appendEntryHandler: (customType, data) => runtime.sessionManager.appendEntry(customType, data),
 		getSessionId: () => runtime.sessionManager.sessionId,
-		getModel: () => runtime.agent.state.model,
+		getModel: () => runtime.agent.getModel(),
 		hasUI: false,
 	})
 

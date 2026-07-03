@@ -88,15 +88,12 @@ export const useHookBridge = ({
 		},
 		getApiKey: async (model) => getApiKey(model.provider),
 		complete: async (systemPrompt, userText) => {
-			const model = agent.state.model
-			if (!model) {
-				return { text: "No model configured", stopReason: "error" as const }
-			}
-			const apiKey = getApiKey(model.provider)
-			if (!apiKey) {
-				return { text: "", stopReason: "error" as const }
-			}
 			try {
+				const model = agent.getModel()
+				const apiKey = getApiKey(model.provider)
+				if (!apiKey) {
+					return { text: "", stopReason: "error" as const }
+				}
 				const userMessage: Message = {
 					role: "user",
 					content: [{ type: "text", text: userText }],
@@ -145,7 +142,7 @@ export const useHookBridge = ({
 		isIdleHandler: () => !isResponding(),
 		appendEntryHandler: (customType, data) => sessionManager.appendEntry(customType, data),
 		getSessionId: () => sessionManager.sessionId,
-		getModel: () => agent.state.model,
+		getModel: () => agent.getModel(),
 		uiContext: hookUIContext,
 		sessionContext: hookSessionContext,
 		hasUI: true,

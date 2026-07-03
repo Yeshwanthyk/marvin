@@ -123,7 +123,7 @@ const createHookHandlers = (
     appendEntryHandler: (customType: string, data?: unknown) =>
       runtime.sessionManager.appendEntry(customType, data),
     getSessionId: () => runtime.sessionManager.sessionId,
-    getModel: () => runtime.agent.state.model,
+    getModel: () => runtime.agent.getModel(),
     hasUI: false,
   })
 

@@ -1,4 +1,4 @@
-import type { ImageContent, Message, QueuedMessage, ReasoningEffort, TextContent } from "@yeshwanthyk/ai";
+import type { Api, ImageContent, Message, Model, QueuedMessage, ReasoningEffort, TextContent } from "@yeshwanthyk/ai";
 import type { AgentRunConfig, AgentTransport } from "./transports/types.js";
 import type { AgentEvent, AgentState, AppMessage, Attachment, ThinkingLevel } from "./types.js";
 
@@ -93,6 +93,17 @@ export class Agent {
 
 	get state(): AgentState {
 		return this._state;
+	}
+
+	/**
+	 * Returns the configured model. Use this instead of state.model when a model is expected.
+	 */
+	getModel(): Model<Api> {
+		const model = this._state.model;
+		if (!model) {
+			throw new Error("No model configured");
+		}
+		return model;
 	}
 
 	subscribe(fn: (e: AgentEvent) => void): () => void {
@@ -219,10 +230,7 @@ export class Agent {
 			return;
 		}
 
-		const model = this._state.model;
-		if (!model) {
-			throw new Error("No model configured");
-		}
+		this.getModel();
 
 		// Build user message with attachments
 		const content: Array<TextContent | ImageContent> = [{ type: "text", text: input }];
@@ -251,10 +259,7 @@ export class Agent {
 	}
 
 	async promptMessage(userMessage: AppMessage): Promise<void> {
-		const model = this._state.model;
-		if (!model) {
-			throw new Error("No model configured");
-		}
+		this.getModel();
 		if (userMessage.role !== "user") {
 			throw new Error(`Cannot prompt with message role: ${userMessage.role}`);
 		}
@@ -306,10 +311,7 @@ export class Agent {
 	 * Prepare for running the agent loop.
 	 */
 	private async _prepareRun() {
-		const model = this._state.model;
-		if (!model) {
-			throw new Error("No model configured");
-		}
+		const model = this.getModel();
 
 		this.runningPrompt = new Promise<void>((resolve) => {
 			this.resolveRunningPrompt = resolve;
@@ -368,10 +370,7 @@ export class Agent {
 	 * Process events from the transport.
 	 */
 	private async _processEvents(events: AsyncIterable<AgentEvent>) {
-		const model = this._state.model;
-		if (!model) {
-			throw new Error("No model configured");
-		}
+		const model = this.getModel();
 		const generatedMessages: AppMessage[] = [];
 		let partial: AppMessage | null = null;
 

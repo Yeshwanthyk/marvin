@@ -183,11 +183,7 @@ export interface CompactOptions {
 
 export async function handleCompact(opts: CompactOptions): Promise<CompactResult> {
   const { agent, currentProvider, getApiKey, codexTransport, customInstructions, previousSummary, previousFileOps } = opts;
-  const model = agent.state.model;
-  
-  if (!model) {
-    throw new Error('No model configured');
-  }
+  const model = agent.getModel();
 
   // Build messages for summarization (filter to LLM-compatible roles)
   const messages = agent.state.messages.filter(

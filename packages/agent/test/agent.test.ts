@@ -40,6 +40,12 @@ function createUserAppMessage(text: string): AppMessage {
 	};
 }
 
+function createConfiguredAgent(transport: AgentTransport = new ProviderTransport()): Agent {
+	const agent = new Agent({ transport });
+	agent.setModel(getModel("openai", "gpt-4o-mini"));
+	return agent;
+}
+
 afterEach(() => {
 	vi.restoreAllMocks();
 });
@@ -76,6 +82,18 @@ describe("Agent", () => {
 		expect(agent.state.systemPrompt).toBe("You are a helpful assistant.");
 		expect(agent.state.model).toBe(customModel);
 		expect(agent.state.thinkingLevel).toBe("low");
+	});
+
+	it("getModel throws before a model is set and returns the model after setModel", () => {
+		const agent = new Agent({
+			transport: new ProviderTransport(),
+		});
+		const model = getModel("openai", "gpt-4o-mini");
+
+		expect(() => agent.getModel()).toThrow(new Error("No model configured"));
+
+		agent.setModel(model);
+		expect(agent.getModel()).toBe(model);
 	});
 
 	it("should subscribe to events", () => {
@@ -165,7 +183,7 @@ describe("Agent", () => {
 
 	it("queueMessage should warn once and enqueue as follow-up", async () => {
 		const transport = new QueueCapturingTransport();
-		const agent = new Agent({ transport });
+		const agent = createConfiguredAgent(transport);
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 		const queued = createUserAppMessage("queued via alias");
@@ -180,7 +198,7 @@ describe("Agent", () => {
 
 	it("promptMessage should pass the provided user message to transport verbatim", async () => {
 		const transport = new QueueCapturingTransport();
-		const agent = new Agent({ transport });
+		const agent = createConfiguredAgent(transport);
 		const message: AppMessage = {
 			role: "user",
 			content: [{ type: "text", text: "canonical prompt" }],
@@ -194,7 +212,7 @@ describe("Agent", () => {
 
 	it("prompt overload should accept a provided user message", async () => {
 		const transport = new QueueCapturingTransport();
-		const agent = new Agent({ transport });
+		const agent = createConfiguredAgent(transport);
 		const message: AppMessage = {
 			role: "user",
 			content: [{ type: "text", text: "canonical overload prompt" }],
@@ -208,7 +226,7 @@ describe("Agent", () => {
 
 	it("string prompt should keep building a user message", async () => {
 		const transport = new QueueCapturingTransport();
-		const agent = new Agent({ transport });
+		const agent = createConfiguredAgent(transport);
 
 		await agent.prompt("string prompt");
 
@@ -220,7 +238,7 @@ describe("Agent", () => {
 
 	it("followUp should respect one-at-a-time queue mode", async () => {
 		const transport = new QueueCapturingTransport();
-		const agent = new Agent({ transport });
+		const agent = createConfiguredAgent(transport);
 
 		const first = createUserAppMessage("first follow up");
 		const second = createUserAppMessage("second follow up");
@@ -239,7 +257,7 @@ describe("Agent", () => {
 
 	it("followUp should respect 'all' queue mode", async () => {
 		const transport = new QueueCapturingTransport();
-		const agent = new Agent({ transport });
+		const agent = createConfiguredAgent(transport);
 
 		agent.setQueueMode("all");
 		const first = createUserAppMessage("first all message");
@@ -256,7 +274,7 @@ describe("Agent", () => {
 
 	it("steer should enqueue steering messages separately from follow-ups", async () => {
 		const transport = new QueueCapturingTransport();
-		const agent = new Agent({ transport });
+		const agent = createConfiguredAgent(transport);
 
 		await agent.steer(createUserAppMessage("steer now"));
 		await agent.followUp(createUserAppMessage("follow later"));
