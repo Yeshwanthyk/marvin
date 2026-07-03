@@ -10,6 +10,8 @@ async function loadMessageListModel() {
 		buildContentItems: messageList.buildContentItems,
 		buildTranscriptMarkIds: messageList.buildTranscriptMarkIds,
 		createTranscriptContentCache: messageList.createTranscriptContentCache,
+		expandedTranscriptWindowSizeForIndex: messageList.expandedTranscriptWindowSizeForIndex,
+		transcriptWindowForItems: messageList.transcriptWindowForItems,
 	}
 }
 
@@ -52,6 +54,66 @@ const bashTool = (overrides: Partial<ToolBlock> = {}): ToolBlock => ({
 })
 
 describe("MessageList transcript model", () => {
+	it("keeps short transcripts unwindowed", async () => {
+		const model = await loadMessageListModel()
+		const messages: UIMessage[] = Array.from({ length: 4 }, (_, index) => ({
+			id: `user-${index}`,
+			role: "user",
+			content: `prompt ${index}`,
+		}))
+		const items = model.buildContentItems(messages, [], true)
+		const window = model.transcriptWindowForItems(items, 75)
+
+		expect(window.startIndex).toBe(0)
+		expect(window.endIndex).toBe(items.length)
+		expect(window.hiddenBefore).toBe(0)
+		expect(window.items).toEqual(items)
+	})
+
+	it("windows long transcripts from the tail by item index", async () => {
+		const model = await loadMessageListModel()
+		const messages: UIMessage[] = Array.from({ length: 100 }, (_, index) => ({
+			id: `user-${index}`,
+			role: "user",
+			content: `prompt ${index}`,
+		}))
+		const items = model.buildContentItems(messages, [], true)
+		const window = model.transcriptWindowForItems(items, 75)
+
+		expect(window.startIndex).toBe(25)
+		expect(window.endIndex).toBe(100)
+		expect(window.hiddenBefore).toBe(25)
+		expect(window.items).toHaveLength(75)
+		expect(window.items[0]?.mark.id).toBe(items[25]?.mark.id)
+		expect(window.items[74]?.mark.id).toBe(items[99]?.mark.id)
+	})
+
+	it("expands by chunks to include a hidden mark", async () => {
+		const model = await loadMessageListModel()
+
+		expect(model.expandedTranscriptWindowSizeForIndex(200, 75, 124)).toBe(150)
+		expect(model.expandedTranscriptWindowSizeForIndex(200, 75, 49)).toBe(200)
+		expect(model.expandedTranscriptWindowSizeForIndex(200, 180, 120)).toBe(180)
+		expect(model.expandedTranscriptWindowSizeForIndex(10, 75, 0)).toBe(10)
+	})
+
+	it("preserves mark ids when expanding the transcript window", async () => {
+		const model = await loadMessageListModel()
+		const messages: UIMessage[] = Array.from({ length: 90 }, (_, index) => ({
+			id: `user-${index}`,
+			role: "user",
+			content: `prompt ${index}`,
+		}))
+		const items = model.buildContentItems(messages, [], true)
+		const initialWindow = model.transcriptWindowForItems(items, 75)
+		const expandedWindow = model.transcriptWindowForItems(items, 90)
+
+		expect(initialWindow.items.map((item) => item.mark.id)).toEqual(
+			expandedWindow.items.slice(15).map((item) => item.mark.id)
+		)
+		expect(model.buildTranscriptMarkIds(messages, [], true)).toEqual(items.map((item) => item.mark.id))
+	})
+
 	it("assigns stable marks to prompts, streamed text, tools, and shell output", async () => {
 		const model = await loadMessageListModel()
 		const tool = bashTool()

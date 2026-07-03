@@ -32,6 +32,15 @@ export type TranscriptContentItem =
 	| TranscriptSingleItem
 	| TranscriptWorkGroup
 
+export const TRANSCRIPT_WINDOW_CHUNK_SIZE = 75
+
+export interface TranscriptWindow {
+	items: TranscriptContentItem[]
+	startIndex: number
+	endIndex: number
+	hiddenBefore: number
+}
+
 const sanitizeMarkId = (value: string): string => value.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "item"
 
 export const transcriptMarkId = (kind: TranscriptMarkKind, rawId: string): string =>
@@ -62,6 +71,36 @@ export function buildTranscriptMarkIds(
 	cache?: TranscriptContentCache,
 ): string[] {
 	return buildContentItems(messages, toolBlocks, thinkingVisible, cache).map((item) => item.mark.id)
+}
+
+export function transcriptWindowForItems(
+	items: TranscriptContentItem[],
+	visibleCount: number,
+): TranscriptWindow {
+	const boundedVisibleCount = Math.max(0, Math.floor(visibleCount))
+	const startIndex = Math.max(0, items.length - boundedVisibleCount)
+	return {
+		items: items.slice(startIndex),
+		startIndex,
+		endIndex: items.length,
+		hiddenBefore: startIndex,
+	}
+}
+
+export function expandedTranscriptWindowSizeForIndex(
+	totalItems: number,
+	currentVisibleCount: number,
+	targetIndex: number,
+	chunkSize = TRANSCRIPT_WINDOW_CHUNK_SIZE,
+): number {
+	if (totalItems <= 0) return 0
+	const boundedTargetIndex = Math.max(0, Math.min(totalItems - 1, Math.floor(targetIndex)))
+	const current = Math.max(0, Math.floor(currentVisibleCount))
+	if (boundedTargetIndex >= Math.max(0, totalItems - current)) return Math.min(totalItems, current)
+	const minimumVisibleCount = totalItems - boundedTargetIndex
+	const chunk = Math.max(1, Math.floor(chunkSize))
+	const expanded = Math.max(current, minimumVisibleCount)
+	return Math.min(totalItems, Math.ceil(expanded / chunk) * chunk)
 }
 
 function ToolBlockWrapper(props: {
@@ -770,6 +809,8 @@ function WorkEntryContent(props: {
 
 export interface MessageListProps {
 	contentItems: TranscriptContentItem[]
+	hiddenBefore?: number
+	onExpandOlder?: () => void
 	sessionKey: string
 	diffWrapMode: "word" | "none"
 	concealMarkdown?: boolean
@@ -804,6 +845,20 @@ export function MessageList(props: MessageListProps) {
 
 	return (
 		<box flexDirection="column" gap={1} paddingTop={1}>
+			<Show when={(props.hiddenBefore ?? 0) > 0}>
+				<box
+					id="transcript-older-messages"
+					paddingLeft={1}
+					onMouseUp={(e) => {
+						if (isSelectingMouseEvent(e)) return
+						props.onExpandOlder?.()
+					}}
+				>
+					<text selectable={false} fg={theme.textMuted}>
+						{`… ${props.hiddenBefore ?? 0} older messages hidden (Ctrl+Shift+U)`}
+					</text>
+				</box>
+			</Show>
 			<For each={props.contentItems}>
 				{(item) => (
 					<Switch>
