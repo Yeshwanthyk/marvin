@@ -94,7 +94,6 @@ The repo has excellent documentation and testing infrastructure, making it suita
 | packages/ai | 20 |
 | packages/runtime-effect | 9 |
 | packages/sdk | 5 |
-| packages/lsp | 2 |
 | packages/open-tui | 2 |
 | packages/agent | 2 |
 | packages/base-tools | 1 |
@@ -150,7 +149,6 @@ bun run test               # bun test (all packages)
 
 **Strengths:**
 - Package manager version pinned: `"packageManager": "bun@1.3.5"`
-- LSP auto-installer for language servers
 
 **Gaps:**
 - **No Dockerfile** — environment not containerized
@@ -179,7 +177,7 @@ bun install  # And hope it works
 - **Clean module boundaries** with no circular dependencies
 - **Clear package dependency graph:**
   ```
-  sdk → runtime-effect → agent-core, ai, base-tools, lsp
+  sdk → runtime-effect → agent-core, ai, base-tools
   ```
 - **ESLint boundaries plugin** enforcing architectural layers
 - **Reasonable file sizes** — only 3 non-generated files >600 lines:
