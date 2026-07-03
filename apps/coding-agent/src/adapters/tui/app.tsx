@@ -4,9 +4,14 @@ import { createRuntime, type RuntimeInitArgs } from "@runtime/factory.js"
 import type { LoadedSession } from "../../session-manager.js"
 import { selectSession as selectSessionOpen } from "../../session-picker.js"
 import { TuiApp, type TuiAppActivation, type TuiAppActivity } from "@ui/app-shell/TuiApp.js"
+import {
+	applyTuiActivityTransition,
+	createActivityIndex,
+	createNotificationService,
+} from "@ui/app-shell/activity-index.js"
 import { WorkspaceSwitchProvider, type VisibleSession, type WorkspaceSwitchController, type WorkspaceSwitchRequest } from "../../runtime/workspace-switch.js"
 import { shouldStartFreshWorkspaceSession } from "../../runtime/workspace-switch-state.js"
-import { createSignal, Index, onCleanup } from "solid-js"
+import { createEffect, createSignal, Index, onCleanup } from "solid-js"
 import type { RuntimeContext } from "../../runtime/factory.js"
 import {
 	createWorkspaceLaneStore,
@@ -64,6 +69,8 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 	const laneStore: WorkspaceLaneStore = createWorkspaceLaneStore(props.initialRuntime.config.configDir, (lanes) => {
 		setWorkspaceLanes(lanes)
 	})
+	const activityIndex = createActivityIndex()
+	const notificationService = createNotificationService()
 	setWorkspaceLanes(laneStore.lanes())
 	const initialActivation: TuiAppActivation = {
 		seq: 0,
@@ -173,20 +180,44 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 		for (const slot of closing) closeRuntime(slot.runtime)
 	}
 
+	createEffect(() => {
+		const selected = workspaceLanes().selection
+		if (selected) activityIndex.patch(selected.laneId, { unread: false })
+	})
+
 	const updateSlotActivity = (cwd: string, activity: TuiAppActivity) => {
+		let transition: { wasResponding: boolean; isFocused: boolean } | undefined
 		setState((prev) => {
 			let changed = false
 			const slots = prev.slots.map((slot) => {
 				if (slot.cwd !== cwd) return slot
-				if (slot.isResponding === activity.isResponding) return slot
+				transition = {
+					wasResponding: slot.isResponding,
+					isFocused: prev.activeCwd === cwd,
+				}
+				if (
+					slot.isResponding === activity.isResponding &&
+					slot.lastActivityAt === activity.lastObservedAt
+				) return slot
 				changed = true
 				return {
 					...slot,
 					isResponding: activity.isResponding,
-					lastActivityAt: Date.now(),
+					lastActivityAt: activity.lastObservedAt,
 				}
 			})
 			return changed ? { ...prev, slots } : prev
+		})
+		if (!transition) return
+		applyTuiActivityTransition({
+			activity,
+			projectId: cwd,
+			laneStore,
+			activityIndex,
+			notifications: notificationService,
+			wasResponding: transition.wasResponding,
+			isFocused: transition.isFocused,
+			now: activity.lastObservedAt,
 		})
 	}
 
@@ -242,6 +273,8 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 							initialNavMode={slot().activation.initialNavMode}
 							laneStore={laneStore}
 							workspaceLanes={workspaceLanes}
+							hostNotifications={notificationService.notifications}
+							acknowledgeHostNotification={(id) => notificationService.acknowledge(id)}
 							active={() => state().activeCwd === slot().cwd}
 							activation={() => slot().activation}
 							onActivityChange={(activity) => updateSlotActivity(slot().cwd, activity)}

@@ -1,5 +1,5 @@
 import { ThemeProvider } from "@yeshwanthyk/open-tui"
-import { batch, createEffect, onMount, Show } from "solid-js"
+import { batch, createEffect, createSignal, onMount, Show } from "solid-js"
 import type { Accessor } from "solid-js"
 import { useRuntime } from "../../runtime/context.js"
 import type { LoadedSession, SessionTreeNode, SessionNodeEntry } from "../../session-manager.js"
@@ -38,6 +38,7 @@ import { usePromptSubmission } from "./usePromptSubmission.js"
 import { useSessionLaneController } from "./useSessionLaneController.js"
 import { useScratchpadActions } from "./useScratchpadActions.js"
 import { useWorkspaceProjectDiscovery } from "./useWorkspaceProjectDiscovery.js"
+import type { HostNotification } from "./activity-index.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
 
@@ -107,6 +108,8 @@ export interface TuiAppProps {
 	initialNavMode?: LaneNavMode
 	laneStore: WorkspaceLaneStore
 	workspaceLanes: Accessor<WorkspaceLanesV2>
+	hostNotifications?: Accessor<readonly HostNotification[]>
+	acknowledgeHostNotification?: (id: string) => void
 	active?: () => boolean
 	activation?: () => TuiAppActivation
 	onActivityChange?: (activity: TuiAppActivity) => void
@@ -128,9 +131,13 @@ export interface TuiAppActivity {
 	isResponding: boolean
 	sessionId: string | null
 	sessionPath: string | null
+	sessionTitle?: string
+	lastError: string | null
+	tokenCount: number
+	lastObservedAt: number
 }
 
-export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, active, activation, onActivityChange, onExit }: TuiAppProps) => {
+export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, hostNotifications, acknowledgeHostNotification, active, activation, onActivityChange, onExit }: TuiAppProps) => {
 	const runtime = useRuntime()
 	const {
 		agent,
@@ -180,6 +187,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	})
 	const isAppActive = () => active?.() ?? true
 	const showToastRef = { current: (_title: string, _message: string, _variant?: "info" | "warning" | "success" | "error") => {} }
+	const [lastError, setLastError] = createSignal<string | null>(null)
 	let submitPromptImpl = async (_text: string, _mode: PromptDeliveryMode = "followUp") => {}
 
 	const laneController = useSessionLaneController({
@@ -300,6 +308,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		setCacheStats: store.cacheStats.set,
 		setRetryStatus: store.retryStatus.set,
 		setTurnCount: store.turnCount.set,
+		setLastError,
 		promptQueue,
 		sessionManager,
 		streamingMessageId: streamingMessageIdRef,
@@ -444,10 +453,20 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	})
 
 	createEffect(() => {
+		const sessionId = sessionManager.sessionId
+		const sessionPath = sessionManager.sessionPath
+		const lane = Object.values(workspaceLanes().sessionsById).find((entry) =>
+			(sessionPath !== null && entry.sessionPath === sessionPath) ||
+			(sessionId !== null && entry.sessionId === sessionId)
+		)
 		onActivityChange?.({
 			isResponding: store.isResponding.value(),
-			sessionId: sessionManager.sessionId,
-			sessionPath: sessionManager.sessionPath,
+			sessionId,
+			sessionPath,
+			...(lane?.title ? { sessionTitle: lane.title } : {}),
+			lastError: lastError(),
+			tokenCount: store.contextTokens.value(),
+			lastObservedAt: Date.now(),
 		})
 	})
 
@@ -933,6 +952,8 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				retryStatus={store.retryStatus.value()}
 				turnCount={store.turnCount.value()}
 				lane={laneHeaderState()}
+				hostNotifications={hostNotifications?.() ?? []}
+				onAcknowledgeHostNotification={acknowledgeHostNotification}
 				diffWrapMode={store.diffWrapMode.value()}
 				concealMarkdown={store.concealMarkdown.value()}
 				customCommands={customCommands}

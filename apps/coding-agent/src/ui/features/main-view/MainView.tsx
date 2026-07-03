@@ -26,6 +26,7 @@ import { Composer } from "../composer/Composer.js"
 import { createKeyboardHandler } from "../../../keyboard-handler.js"
 import type { ValidationIssue } from "@yeshwanthyk/runtime-effect/extensibility/schema.js"
 import type { LaneHeaderState } from "../../app-shell/lane-header-state.js"
+import type { HostNotification } from "../../app-shell/activity-index.js"
 
 export interface MainViewProps {
 	validationIssues?: ValidationIssue[]
@@ -43,6 +44,8 @@ export interface MainViewProps {
 	retryStatus: string | null
 	turnCount: number
 	lane: LaneHeaderState
+	hostNotifications?: readonly HostNotification[]
+	onAcknowledgeHostNotification?: (id: string) => void
 	diffWrapMode: "word" | "none"
 	concealMarkdown: boolean
 	customCommands: Map<string, CustomCommand>
@@ -74,6 +77,7 @@ export function MainView(props: MainViewProps) {
 	const renderer = useRenderer()
 	const { toasts, pushToast } = useToastManager()
 	const shownValidationKeys = new Set<string>()
+	const shownHostNotificationIds = new Set<string>()
 	createEffect(() => {
 		const issues = props.validationIssues ?? []
 		const showList = issues.slice(0, 3)
@@ -90,6 +94,22 @@ export function MainView(props: MainViewProps) {
 				},
 				6000,
 			)
+		}
+	})
+	createEffect(() => {
+		const notifications = props.hostNotifications ?? []
+		for (const notification of notifications) {
+			if (shownHostNotificationIds.has(notification.id)) continue
+			shownHostNotificationIds.add(notification.id)
+			pushToast(
+				{
+					title: notification.title,
+					message: notification.message,
+					variant: notification.level,
+				},
+				5000,
+			)
+			props.onAcknowledgeHostNotification?.(notification.id)
 		}
 	})
 	const { openBuffer, editFile } = useEditorBridge({

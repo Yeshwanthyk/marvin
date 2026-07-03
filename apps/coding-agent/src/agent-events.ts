@@ -41,6 +41,7 @@ export interface EventHandlerContext {
 	setCacheStats: (v: { cacheRead: number; input: number } | null) => void
 	setRetryStatus: (v: string | null) => void
 	setTurnCount: (v: number) => void
+	setLastError?: (v: string | null) => void
 
 	// Queue management
 	promptQueue: PromptQueue
@@ -232,6 +233,7 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 		if (event.type === "agent_start") {
 			turnIndex = 0
 			ctx.setTurnCount(0) // Reset turn count for new agent run
+			ctx.setLastError?.(null)
 			extractionCache = createExtractionCache() // Reset for new agent run
 			void ctx.hookRunner?.emit({
 				type: "agent.start",
@@ -592,6 +594,7 @@ function handleAgentEnd(
 	const currentMessages = ctx.agent.getMessages()
 	const lastMsg = currentMessages[currentMessages.length - 1]
 	const errorMsg = isAssistantMessage(lastMsg) ? lastMsg.errorMessage : undefined
+	ctx.setLastError?.(errorMsg ?? null)
 	const isRetryable = errorMsg && ctx.retryablePattern.test(errorMsg)
 
 	if (isRetryable && ctx.retryConfig.enabled && ctx.retryState.attempt < ctx.retryConfig.maxRetries) {
