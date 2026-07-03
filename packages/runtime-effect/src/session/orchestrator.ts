@@ -47,6 +47,15 @@ const runPromiseEffect = <T>(thunk: () => Promise<T>): Effect.Effect<T, unknown>
 const runAgentPrompt = (agent: Agent, text: string, attachments?: Attachment[]) =>
   runPromiseEffect(() => agent.prompt(text, attachments));
 
+const runAgentSteer = (agent: Agent, text: string) =>
+  runPromiseEffect(() =>
+    agent.steer({
+      role: "user",
+      content: [{ type: "text", text }],
+      timestamp: Date.now(),
+    }),
+  );
+
 const ensureSession = (
   stateRef: Ref.Ref<SessionState>,
   sessionManager: import("../session-manager.js").SessionManager,
@@ -85,6 +94,8 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
       const sessionStateRef = yield* Ref.make<SessionState>({
         hasStarted: sessionManager.sessionId !== null,
       });
+      const isProcessingRef = yield* Ref.make(false);
+      const immediateSteerItemsRef = yield* Ref.make<ReadonlyArray<PromptQueueItem>>([]);
       const completionWaitersRef = yield* Ref.make(
         new Map<string, Deferred.Deferred<void, unknown>>(),
       );
@@ -124,25 +135,72 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
             }),
         );
 
-      const enqueuePrompt = (text: string, options?: PromptSubmitOptions, completionId?: string) => {
-        const payload: PromptQueueItem = {
+      const createPromptItem = (text: string, options?: PromptSubmitOptions, completionId?: string) => {
+        const item: PromptQueueItem = {
           text,
           mode: options?.mode ?? "followUp",
         };
         if (options?.attachments !== undefined) {
-          payload.attachments = options.attachments;
+          item.attachments = options.attachments;
         }
         if (options?.beforeStartResult !== undefined) {
-          payload.beforeStartResult = options.beforeStartResult;
+          item.beforeStartResult = options.beforeStartResult;
         }
         if (completionId !== undefined) {
-          payload.completionId = completionId;
+          item.completionId = completionId;
         }
-        return queue.enqueue(payload);
+        return item;
       };
 
+      const acknowledgeProcessedItems = (item: PromptQueueItem) =>
+        Effect.gen(function* () {
+          const immediateSteerItems = yield* Ref.modify(immediateSteerItemsRef, (items) => [items, []] as const);
+          yield* queue.acknowledgeHead(item);
+          yield* Effect.forEach(immediateSteerItems, (steerItem) => queue.acknowledgeHead(steerItem), {
+            discard: true,
+          });
+        });
+
+      const submitPrompt = (text: string, options?: PromptSubmitOptions, completionId?: string) =>
+        Effect.gen(function* () {
+          const item = createPromptItem(text, options, completionId);
+          const isProcessing = yield* Ref.get(isProcessingRef);
+          if (item.mode !== "steer" || !isProcessing) {
+            yield* queue.enqueue(item);
+            return;
+          }
+
+          const agent = yield* Ref.get(agentRef);
+          yield* queue.trackImmediate(item);
+          yield* Ref.update(immediateSteerItemsRef, (items) => [...items, item]);
+          yield* runAgentSteer(agent, item.text).pipe(
+            Effect.catchAll((error) =>
+              Effect.gen(function* () {
+                instrumentation.record({
+                  type: "tmux:log",
+                  level: "error",
+                  message: "prompt:steer:error",
+                  details: { error: error instanceof Error ? error.message : String(error) },
+                });
+                if (completionId !== undefined) {
+                  const deferred = yield* takeCompletion(completionId);
+                  if (deferred) {
+                    yield* Deferred.fail(deferred, error);
+                  }
+                }
+              }),
+            ),
+          );
+          if (completionId !== undefined) {
+            const deferred = yield* takeCompletion(completionId);
+            if (deferred) {
+              yield* Deferred.succeed(deferred, undefined);
+            }
+          }
+        });
+
       const loop = Effect.forever(
-        Effect.flatMap(queue.take, (item) =>
+        Effect.flatMap(queue.takeForProcessing, (item) =>
           Effect.flatMap(takeCompletion(item.completionId), (completionDeferred) =>
             Effect.gen(function* () {
               const agent = yield* Ref.get(agentRef);
@@ -188,6 +246,7 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
               });
 
               const plan = defaultPlan ?? build();
+              yield* Ref.set(immediateSteerItemsRef, []);
               const attempt = Effect.gen(function* () {
                 const ctx = yield* ExecutionPlanStepTag;
                 const snapshot = cloneMessages(agent.state.messages);
@@ -195,10 +254,12 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
                 if (ctx.thinking !== undefined) {
                   agent.setThinkingLevel(ctx.thinking);
                 }
+                yield* Ref.set(isProcessingRef, true);
                 yield* runAgentPrompt(agent, item.text, item.attachments).pipe(
                   Effect.catchAll((error) =>
                     Effect.sync(() => agent.replaceMessages(snapshot)).pipe(Effect.flatMap(() => Effect.fail(error))),
                   ),
+                  Effect.ensuring(Ref.set(isProcessingRef, false)),
                 );
               });
 
@@ -218,9 +279,11 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
               if (completionDeferred) {
                 yield* Deferred.succeed(completionDeferred, undefined);
               }
+              yield* acknowledgeProcessedItems(item);
             }).pipe(
               Effect.catchAll((error) =>
                 Effect.gen(function* () {
+                  yield* Ref.set(isProcessingRef, false);
                   instrumentation.record({
                     type: "tmux:log",
                     level: "error",
@@ -230,6 +293,7 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
                   if (completionDeferred) {
                     yield* Deferred.fail(completionDeferred, error);
                   }
+                  yield* acknowledgeProcessedItems(item);
                 }),
               ),
             ),
@@ -240,10 +304,10 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
 
       return {
         queue,
-        submitPrompt: (text: string, options?: PromptSubmitOptions) => enqueuePrompt(text, options),
+        submitPrompt: (text: string, options?: PromptSubmitOptions) => submitPrompt(text, options),
         submitPromptAndWait: Effect.fn(function* (text: string, options?: PromptSubmitOptions) {
           const { id, deferred } = yield* registerCompletion;
-          yield* enqueuePrompt(text, options, id);
+          yield* submitPrompt(text, options, id);
           return yield* Deferred.await(deferred);
         }),
         snapshot: queue.snapshot,

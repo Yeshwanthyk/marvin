@@ -1,10 +1,10 @@
 import { ThemeProvider } from "@yeshwanthyk/open-tui"
-import { batch, createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
-import { Effect } from "effect"
+import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
+import { Effect, Fiber, Stream } from "effect"
 import { useRuntime } from "../../runtime/context.js"
 import type { LoadedSession, SessionTreeNode, SessionNodeEntry, SessionInfo } from "../../session-manager.js"
 import { createSessionController, renderLoadedSessionView } from "@runtime/session/session-controller.js"
-import { createPromptQueue, type PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
+import type { PromptDeliveryMode, PromptQueueItem } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import { appendWithCap } from "@domain/messaging/content.js"
 import type { UIShellMessage, UIMessage, ToolBlock } from "../../types.js"
 import type { AppMessage } from "@yeshwanthyk/agent-core"
@@ -168,7 +168,32 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		initialProvider: config.provider,
 	})
 
-	const promptQueue = createPromptQueue((counts) => store.queueCounts.set(counts))
+	let promptQueueItems: ReadonlyArray<PromptQueueItem> = []
+	const promptQueue = {
+		push: (_item: PromptQueueItem) => {},
+		shift: () => {
+			const item = promptQueueItems[0]
+			if (item !== undefined) {
+				promptQueueItems = promptQueueItems.slice(1)
+				store.queueCounts.set({
+					steer: promptQueueItems.filter((entry) => entry.mode === "steer").length,
+					followUp: promptQueueItems.filter((entry) => entry.mode === "followUp").length,
+				})
+				Effect.runFork(runtime.promptQueue.acknowledgeHead(item))
+			}
+			return item
+		},
+		drainToScript: () => Effect.runSync(
+			Effect.catchAll(runtime.sessionOrchestrator.drainToScript, () => Effect.succeed(null)),
+		),
+		clear: () => {
+			Effect.runFork(runtime.promptQueue.clear)
+		},
+		size: () => promptQueueItems.length,
+		peekAll: () => [...promptQueueItems],
+		peek: () => promptQueueItems[0],
+		counts: () => store.queueCounts.value(),
+	}
 	const modals = useModals()
 	const workspaceSwitch = useWorkspaceSwitch()
 	const scratchpadStore = createScratchpadStore(config.configDir)
@@ -179,6 +204,18 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	const scratchpads = (): ScratchpadItem[] => scratchpadStore.list()
 	const preserveStickyLaneMode = () => navMode() === "sticky"
 	const isAppActive = () => active?.() ?? true
+
+	const queueFiber = Effect.runFork(
+		Stream.runForEach(runtime.promptQueue.stateStream, (snapshot) =>
+			Effect.sync(() => {
+				promptQueueItems = snapshot.pending
+				store.queueCounts.set(snapshot.counts)
+			}),
+		),
+	)
+	onCleanup(() => {
+		Effect.runFork(Fiber.interrupt(queueFiber))
+	})
 
 	const visibleSessionForLoaded = (session: LoadedSession, sessionPath?: string): VisibleSession => ({
 		state: "loaded",
@@ -280,7 +317,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		setDisplayThinking: setActiveDisplayThinking,
 		setDisplayContextWindow: setActiveDisplayContextWindow,
 		shellInjectionPrefix: SHELL_INJECTION_PREFIX,
-		promptQueue,
+		submitPrompt: (text, options) => submitPrompt(text, options?.mode ?? "followUp"),
 	})
 
 	const cloneWorkspaceLanes = (value: WorkspaceLanes): WorkspaceLanes => JSON.parse(JSON.stringify(value)) as WorkspaceLanes
@@ -609,7 +646,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 			)
 		}
 
-		promptQueue.push({ text: trimmed, mode })
 		batch(() => {
 			store.toolBlocks.set([])
 			store.isResponding.set(true)
@@ -686,8 +722,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				showToastRef.current("Session still running", "Switch back to the live session before steering", "warning")
 				return
 			}
-			// Inject via agent's internal queue - can interrupt during tool execution
-			await sessionController.steer(trimmed)
+			await Effect.runPromise(runtime.sessionOrchestrator.submitPrompt(trimmed, { mode: "steer" }))
 			return
 		}
 		await submitPrompt(trimmed, "steer")
@@ -701,8 +736,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				showToastRef.current("Session still running", "Switch back to the live session before queueing follow-up", "warning")
 				return
 			}
-			// Enqueue to orchestrator - will be processed after current prompt completes
-			promptQueue.push({ text: trimmed, mode: "followUp" })
 			await Effect.runPromise(runtime.sessionOrchestrator.submitPrompt(trimmed, { mode: "followUp" }))
 			return
 		}
@@ -1000,7 +1033,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		agent.abort()
 		agent.clearMessageQueue()
 		const restore = promptQueue.drainToScript()
-		Effect.runFork(Effect.catchAll(runtime.sessionOrchestrator.drainToScript, () => Effect.succeed(null)))
 		batch(() => {
 			store.isResponding.set(false)
 			store.activityState.set("idle")

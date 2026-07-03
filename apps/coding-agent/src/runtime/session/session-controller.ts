@@ -7,7 +7,7 @@ import type { SessionManager, LoadedSession, SessionNodeEntry } from "../../sess
 import type { UIMessage } from "../../types.js"
 import { sessionMessagesToView, textFromUserMessage } from "@domain/messaging/projection.js"
 import { resolveProvider, resolveModel } from "@domain/commands/helpers.js"
-import type { PromptDeliveryMode, PromptQueue } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
+import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import type { RenderResultOptions } from "@yeshwanthyk/runtime-effect/extensibility/custom-tools/types.js"
 
 export interface SessionControllerOptions {
@@ -26,7 +26,7 @@ export interface SessionControllerOptions {
 	setDisplayThinking: (v: ThinkingLevel) => void
 	setDisplayContextWindow: (v: number) => void
 	shellInjectionPrefix: string
-	promptQueue?: PromptQueue
+	submitPrompt?: (text: string, options?: { mode?: PromptDeliveryMode }) => Promise<void>
 }
 
 export interface SessionControllerState {
@@ -131,17 +131,7 @@ export function createSessionController(options: SessionControllerOptions): Sess
 	const queueUserMessage = async (text: string, mode: PromptDeliveryMode) => {
 		const trimmed = text
 		if (!trimmed) return
-		const message: AppMessage = {
-			role: "user",
-			content: [{ type: "text", text: trimmed }],
-			timestamp: Date.now(),
-		}
-		options.promptQueue?.push({ text: trimmed, mode })
-		if (mode === "steer") {
-			await options.agent.steer(message)
-		} else {
-			await options.agent.followUp(message)
-		}
+		await options.submitPrompt?.(trimmed, { mode })
 	}
 
 	const switchSession = (path: string): boolean => {

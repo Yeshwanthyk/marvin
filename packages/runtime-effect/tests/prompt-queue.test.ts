@@ -65,6 +65,44 @@ describe("PromptQueueLayer", () => {
     expect(result.pending).toEqual([]);
   });
 
+  it("keeps processing items visible until acknowledged", async () => {
+    const result = await runWithPromptQueue((service) =>
+      Effect.gen(function* () {
+        yield* service.enqueue({ text: "visible while running", mode: "steer" });
+        const processing = yield* service.takeForProcessing;
+        const during = yield* service.snapshot;
+        yield* service.acknowledgeHead(processing);
+        const after = yield* service.snapshot;
+        return { processing, during, after };
+      }),
+    );
+
+    expect(result.processing).toEqual({ text: "visible while running", mode: "steer" });
+    expect(result.during.pending).toEqual([{ text: "visible while running", mode: "steer" }]);
+    expect(result.during.counts).toEqual({ followUp: 0, steer: 1 });
+    expect(result.after.pending).toEqual([]);
+    expect(result.after.counts).toEqual({ followUp: 0, steer: 0 });
+  });
+
+  it("tracks immediate items without making them available for processing", async () => {
+    const result = await runWithPromptQueue((service) =>
+      Effect.gen(function* () {
+        yield* service.trackImmediate({ text: "interrupt", mode: "steer" });
+        const during = yield* service.snapshot;
+        const next = yield* Effect.timeoutOption(service.takeForProcessing, "10 millis");
+        yield* service.acknowledgeHead({ text: "interrupt", mode: "steer" });
+        const after = yield* service.snapshot;
+        return { during, next, after };
+      }),
+    );
+
+    expect(result.during.pending).toEqual([{ text: "interrupt", mode: "steer" }]);
+    expect(result.during.counts).toEqual({ followUp: 0, steer: 1 });
+    expect(result.next._tag).toBe("None");
+    expect(result.after.pending).toEqual([]);
+    expect(result.after.counts).toEqual({ followUp: 0, steer: 0 });
+  });
+
   it("restores items from script and exposes snapshots", async () => {
     const script = "/steer do something\n/followup verify";
     const result = await runWithPromptQueue((service) =>

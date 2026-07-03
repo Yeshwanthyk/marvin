@@ -1,5 +1,8 @@
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it, mock } from "bun:test"
+import type { Agent, AppMessage } from "@yeshwanthyk/agent-core"
+import { getModels } from "@yeshwanthyk/ai"
 import { createPromptQueue, type PromptQueueItem } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
+import { createSessionController, type SessionControllerOptions } from "../src/runtime/session/session-controller.js"
 
 describe("prompt queue", () => {
 	it("tracks size when pushing and shifting", () => {
@@ -40,5 +43,62 @@ describe("prompt queue", () => {
 		const script = queue.drainToScript()
 		expect(script).toBe(`/followup multi line\nvalue`)
 		expect(queue.size()).toBe(0)
+	})
+
+	it("routes user-message queueing through the runtime submitter exactly once", async () => {
+		const model = getModels("anthropic")[0]
+		if (!model) throw new Error("missing test model")
+
+		const steer = mock(async (_message: AppMessage) => {})
+		const followUp = mock(async (_message: AppMessage) => {})
+		const submitPrompt = mock(async (_text: string, _options?: { mode?: "steer" | "followUp" }) => {})
+
+		const options: SessionControllerOptions = {
+			initialProvider: "anthropic",
+			initialModel: model,
+			initialModelId: model.id,
+			initialThinking: "off",
+			agent: {
+				steer,
+				followUp,
+				replaceMessages: (_messages: AppMessage[]) => {},
+			} as unknown as Agent,
+			sessionManager: {
+				startSession: () => "session",
+				clearCurrentSession: () => {},
+				listSessions: () => [],
+				loadSession: () => null,
+				continueSession: () => {},
+				branch: () => {},
+				getEntry: () => null,
+				resetLeaf: () => {},
+				appendMessage: () => {},
+				getBranch: () => [],
+				getTree: () => [],
+				getLeafId: () => null,
+				sessionId: null,
+				projectCwd: "/tmp",
+			} as unknown as SessionControllerOptions["sessionManager"],
+			hookRunner: {
+				emit: async () => {},
+			} as unknown as SessionControllerOptions["hookRunner"],
+			toolByName: new Map(),
+			setMessages: () => {},
+			setContextTokens: () => {},
+			setDisplayProvider: () => {},
+			setDisplayModelId: () => {},
+			setDisplayThinking: () => {},
+			setDisplayContextWindow: () => {},
+			shellInjectionPrefix: "[Shell output]",
+			submitPrompt,
+		}
+
+		const controller = createSessionController(options)
+		await controller.sendUserMessage("run once", { deliverAs: "steer" })
+
+		expect(submitPrompt).toHaveBeenCalledTimes(1)
+		expect(submitPrompt).toHaveBeenCalledWith("run once", { mode: "steer" })
+		expect(steer).not.toHaveBeenCalled()
+		expect(followUp).not.toHaveBeenCalled()
 	})
 })

@@ -47,6 +47,8 @@ class TestAgent {
   failuresBeforeSuccess = 0;
   replaceSnapshots: AppMessage[][] = [];
   attachmentsReceived: Attachment[][] = [];
+  steerMessages: AppMessage[] = [];
+  promptGate: Promise<void> | undefined;
 
   constructor(model: Model<Api>) {
     this.state = {
@@ -77,6 +79,9 @@ class TestAgent {
     this.callCount++;
     this.prompts.push(text);
     this.attachmentsReceived.push(attachments ? [...attachments] : []);
+    if (this.promptGate) {
+      await this.promptGate;
+    }
     if (this.callCount <= this.failuresBeforeSuccess) {
       throw new Error("planned failure");
     }
@@ -85,6 +90,10 @@ class TestAgent {
       content: [{ type: "text", text: `ok:${text}` }],
       timestamp: Date.now(),
     } as AppMessage);
+  }
+
+  async steer(message: AppMessage) {
+    this.steerMessages.push(message);
   }
 }
 
@@ -151,6 +160,25 @@ const waitForAgentCalls = (agent: TestAgent, expected: number) =>
     const timeout = setTimeout(() => {
       clearInterval(interval);
       resume(Effect.fail(new Error("timed out waiting for agent calls")));
+    }, 1000);
+    return Effect.sync(() => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    });
+  });
+
+const waitForSteerCalls = (agent: TestAgent, expected: number) =>
+  Effect.async<void>((resume) => {
+    const interval = setInterval(() => {
+      if (agent.steerMessages.length >= expected) {
+        clearInterval(interval);
+        clearTimeout(timeout);
+        resume(Effect.succeed(undefined));
+      }
+    }, 5);
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      resume(Effect.fail(new Error("timed out waiting for steer calls")));
     }, 1000);
     return Effect.sync(() => {
       clearInterval(interval);
@@ -237,6 +265,101 @@ describe("SessionOrchestratorLayer", () => {
     expect(instrumentation.events.some((ev) => ev.type === "tmux:log" && ev.message === "prompt:process:complete")).toBe(
       true,
     );
+  });
+
+  it("exposes each submitted prompt once while processing, then clears it", async () => {
+    const agent = new TestAgent(anthropicModel);
+    let releaseGate: () => void = () => {};
+    agent.promptGate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    const sessionManager = new TestSessionManager();
+    const hookRunner = new TestHookRunner();
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({ agent, sessionManager, hookRunner, instrumentation });
+
+    const result = await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPrompt("from ui");
+        yield* waitForAgentCalls(agent, 1);
+        const during = yield* orchestrator.snapshot;
+        yield* Effect.sync(releaseGate);
+        yield* Effect.sleep(20);
+        const after = yield* orchestrator.snapshot;
+        return { during, after };
+      }),
+    );
+
+    expect(result.during.pending).toEqual([{ text: "from ui", mode: "followUp" }]);
+    expect(result.during.counts).toEqual({ followUp: 1, steer: 0 });
+    expect(result.after.pending).toEqual([]);
+    expect(result.after.counts).toEqual({ followUp: 0, steer: 0 });
+  });
+
+  it("delivers steer immediately while a prompt is processing", async () => {
+    const agent = new TestAgent(anthropicModel);
+    let releaseGate: () => void = () => {};
+    agent.promptGate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    const sessionManager = new TestSessionManager();
+    const hookRunner = new TestHookRunner();
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({ agent, sessionManager, hookRunner, instrumentation });
+
+    const result = await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPrompt("active turn");
+        yield* waitForAgentCalls(agent, 1);
+
+        yield* orchestrator.submitPrompt("interrupt now", { mode: "steer" });
+        yield* waitForSteerCalls(agent, 1);
+        const during = yield* orchestrator.snapshot;
+
+        yield* Effect.sync(releaseGate);
+        yield* Effect.sleep(20);
+        const after = yield* orchestrator.snapshot;
+        return { during, after };
+      }),
+    );
+
+    expect(agent.prompts).toEqual(["active turn"]);
+    expect(agent.steerMessages).toHaveLength(1);
+    expect(agent.steerMessages[0]).toMatchObject({
+      role: "user",
+      content: [{ type: "text", text: "interrupt now" }],
+    });
+    expect(result.during.pending).toEqual([
+      { text: "active turn", mode: "followUp" },
+      { text: "interrupt now", mode: "steer" },
+    ]);
+    expect(result.during.counts).toEqual({ followUp: 1, steer: 1 });
+    expect(result.after.pending).toEqual([]);
+    expect(result.after.counts).toEqual({ followUp: 0, steer: 0 });
+  });
+
+  it("processes steer through the normal loop while idle", async () => {
+    const agent = new TestAgent(anthropicModel);
+    const sessionManager = new TestSessionManager();
+    const hookRunner = new TestHookRunner();
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({ agent, sessionManager, hookRunner, instrumentation });
+
+    await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPrompt("idle steer", { mode: "steer" });
+        yield* waitForAgentCalls(agent, 1);
+      }),
+    );
+
+    expect(agent.prompts).toEqual(["idle steer"]);
+    expect(agent.steerMessages).toEqual([]);
   });
 
   it("continues an existing session manager session without starting a new one", async () => {

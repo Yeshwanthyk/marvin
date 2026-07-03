@@ -148,8 +148,11 @@ export function createPromptQueue(updateCounts: (counts: QueueCounts) => void): 
 export interface PromptQueueService {
   readonly enqueue: (item: PromptQueueItem) => Effect.Effect<void>;
   readonly enqueueMany: (items: Iterable<PromptQueueItem>) => Effect.Effect<void>;
+  readonly trackImmediate: (item: PromptQueueItem) => Effect.Effect<void>;
   readonly take: Effect.Effect<PromptQueueItem>;
+  readonly takeForProcessing: Effect.Effect<PromptQueueItem>;
   readonly takeAll: Effect.Effect<ReadonlyArray<PromptQueueItem>>;
+  readonly acknowledgeHead: (item?: PromptQueueItem) => Effect.Effect<void>;
   readonly drainToScript: Effect.Effect<string | null>;
   readonly clear: Effect.Effect<void>;
   readonly pendingSnapshot: Effect.Effect<ReadonlyArray<PromptQueueItem>>;
@@ -208,10 +211,20 @@ export const PromptQueueLayer = Layer.scoped(
           Queue.offerAll(queue, entries),
         );
       },
+      trackImmediate: (item) => SubscriptionRef.update(stateRef, (state) => appendItem(state, item)),
       take: Effect.flatMap(Queue.take(queue), (item) =>
         Effect.as(SubscriptionRef.update(stateRef, (state) => dropFromState(state, 1)), item),
       ),
+      takeForProcessing: Queue.take(queue),
       takeAll: takeAllEffect,
+      acknowledgeHead: (item) =>
+        SubscriptionRef.update(stateRef, (state) => {
+          if (state.pending.length === 0) return state;
+          if (item === undefined) return dropFromState(state, 1);
+          const head = state.pending[0];
+          if (head?.text === item.text && head.mode === item.mode) return dropFromState(state, 1);
+          return state;
+        }),
       drainToScript: Effect.flatMap(takeAllEffect, (items) => Effect.succeed(promptQueueToScript(items))),
       clear: Effect.zipRight(Queue.takeAll(queue), SubscriptionRef.set(stateRef, emptySnapshot)),
       pendingSnapshot: Effect.map(SubscriptionRef.get(stateRef), (state) => state.pending),
