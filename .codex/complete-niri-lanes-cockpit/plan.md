@@ -157,26 +157,27 @@ Verification
 - [x] Review gate completed locally; no blockers found.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `2206193 chore: prepare lanes release`.
 
 ## Phase C1: Cockpit Spool, Hook Template, Ingest
-Status: pending
+Status: complete
 
 Implementation
-- [ ] Add normalized external-agent event schema.
-- [ ] Add hook template source.
-- [ ] Add durable spool tailer with offset.
-- [ ] Map events to lane store, ActivityIndex, notifications.
-- [ ] Add provider tolerance guards for external lanes.
-- [ ] Document manual hook JSON snippet for testing.
+- [x] Add normalized external-agent event schema.
+- [x] Add hook template source.
+- [x] Add durable spool tailer with offset.
+- [x] Map events to lane store, ActivityIndex, notifications.
+- [x] Add provider tolerance guards for external lanes.
+- [x] Document manual hook JSON snippet for testing.
 
 Verification
-- [ ] Tests: spool parse/offset/rotation basics.
-- [ ] Tests: event-to-patch mapping.
-- [ ] Tests: needs_input notification.
-- [ ] Tests: provider-tolerance guards.
-- [ ] `bun run check` passes.
-- [ ] Review gate completed and blockers fixed.
+- [x] Tests: spool parse/offset/rotation basics.
+- [x] Tests: event-to-patch mapping.
+- [x] Tests: needs_input notification.
+- [x] Tests: provider-tolerance guards.
+- [x] `bun run check` passes.
+- [x] isolated tmux smoke: manual `needs_input` JSONL event appears as queued external lane + warning notification.
+- [x] Review gate completed locally; no blockers found.
 
 Exit criteria
 - [ ] Phase commit created.

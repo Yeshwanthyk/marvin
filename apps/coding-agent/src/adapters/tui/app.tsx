@@ -16,6 +16,7 @@ import {
 import { RuntimeProvider } from "../../runtime/context.js"
 import { createRuntime, type RuntimeInitArgs, type RuntimeContext } from "@runtime/factory.js"
 import { createFocusedRuntimeFacade, type FocusedRuntimeBinding } from "../../runtime/focused-runtime.js"
+import { startCockpitTailer } from "../../runtime/cockpit-ingest.js"
 import { createSessionActorRegistry } from "../../runtime/session-actor-registry.js"
 import type { SessionActor } from "../../runtime/session-actor.js"
 import type { LoadedSession } from "../../session-manager.js"
@@ -145,6 +146,12 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 	})
 	const activityIndex = createActivityIndex()
 	const notificationService = createNotificationService()
+	const cockpitTailer = startCockpitTailer(props.initialRuntime.config.configDir, {
+		laneStore,
+		activityIndex,
+		notifications: notificationService,
+		isFocusedLane: (laneId) => laneStore.lanes().selection?.laneId === laneId,
+	})
 	const bundleCache = new Map<string, Promise<ProjectRuntimeBundle>>()
 	const actorSubscriptions = new Map<LaneId, () => void>()
 	const [, setFocusedLaneId] = createSignal<LaneId | null>(null)
@@ -338,6 +345,7 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 			void Promise.all([
 				props.initialRuntime.close(),
 				Promise.resolve(clearInterval(idleSweepTimer)),
+				Promise.resolve(cockpitTailer.close()),
 				...Array.from(actorSubscriptions.values()).map((unsubscribe) => {
 					unsubscribe()
 					return Promise.resolve()
@@ -381,6 +389,7 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 	onCleanup(() => {
 		void laneStore.flush()
 		clearInterval(idleSweepTimer)
+		cockpitTailer.close()
 		void props.initialRuntime.close()
 		for (const unsubscribe of actorSubscriptions.values()) unsubscribe()
 		for (const actor of registry.list()) void actor.close()
