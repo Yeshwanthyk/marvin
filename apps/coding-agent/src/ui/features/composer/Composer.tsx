@@ -1,5 +1,5 @@
 import { TextareaRenderable, type KeyEvent } from "@opentui/core"
-import { Show } from "solid-js"
+import { createMemo, Show } from "solid-js"
 import { SelectList, type AutocompleteItem, type SelectItem, type Theme } from "@yeshwanthyk/open-tui"
 
 export interface ComposerProps {
@@ -16,16 +16,20 @@ export interface ComposerProps {
 }
 
 export function Composer(props: ComposerProps) {
+	const selectItems = createMemo(() =>
+		props.autocompleteItems().map((item): SelectItem => ({
+			value: item.value,
+			label: item.label,
+			description: item.description,
+		})),
+	)
+
 	return (
 		<>
 			<Show when={props.showAutocomplete() && props.autocompleteItems().length > 0}>
 				<box flexDirection="column" borderColor={props.theme.border} maxHeight={15} flexShrink={0}>
 					<SelectList
-						items={props.autocompleteItems().map((item): SelectItem => ({
-							value: item.value,
-							label: item.label,
-							description: item.description,
-						}))}
+						items={selectItems()}
 						selectedIndex={props.autocompleteIndex()}
 						maxVisible={12}
 						width={Math.max(10, props.terminalWidth() - 2)}

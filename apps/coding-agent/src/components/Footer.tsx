@@ -31,9 +31,11 @@ export function Footer(props: FooterProps) {
     return branch ? `${dir} · ${branch}` : dir
   })
 
+  const terminalWidth = createMemo(() => dims().width)
+
   const dashedLine = createMemo(() => {
     const textLen = rightText().length + 2
-    const lineLen = Math.max(0, dims().width - textLen - 1)
+    const lineLen = Math.max(0, terminalWidth() - textLen - 1)
     return "┄".repeat(lineLen)
   })
 

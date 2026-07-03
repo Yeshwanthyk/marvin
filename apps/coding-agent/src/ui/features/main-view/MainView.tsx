@@ -11,7 +11,7 @@ import {
 import type { ThinkingLevel } from "@yeshwanthyk/agent-core"
 import type { KnownProvider } from "@yeshwanthyk/ai"
 import type { LspManager } from "@yeshwanthyk/lsp"
-import { createSignal, createEffect, onMount } from "solid-js"
+import { createSignal, createEffect, createMemo, onMount } from "solid-js"
 import { createAutocompleteCommands } from "../../../autocomplete-commands.js"
 import type { CustomCommand } from "@yeshwanthyk/runtime-effect/extensibility/custom-commands.js"
 import { Footer } from "../../../components/Footer.js"
@@ -103,12 +103,18 @@ export function MainView(props: MainViewProps) {
 		onSubmit: (text) => props.onSubmit(text),
 	})
 
-	const builtInAutocomplete = createAutocompleteCommands(() => ({ currentProvider: props.provider }))
-	const customAutocomplete = Array.from(props.customCommands.values()).map((cmd) => ({
-		name: cmd.name,
-		description: cmd.description,
-	}))
-	const autocompleteProvider = new CombinedAutocompleteProvider([...builtInAutocomplete, ...customAutocomplete], props.cwd)
+	const terminalWidth = createMemo(() => dimensions().width)
+	const terminalHeight = createMemo(() => dimensions().height)
+	const builtInAutocomplete = createMemo(() => createAutocompleteCommands(() => ({ currentProvider: props.provider })))
+	const customAutocomplete = createMemo(() =>
+		Array.from(props.customCommands.values()).map((cmd) => ({
+			name: cmd.name,
+			description: cmd.description,
+		})),
+	)
+	const autocompleteProvider = createMemo(
+		() => new CombinedAutocompleteProvider([...builtInAutocomplete(), ...customAutocomplete()], props.cwd),
+	)
 	const [autocompleteItems, setAutocompleteItems] = createSignal<AutocompleteItem[]>([])
 	const [autocompletePrefix, setAutocompletePrefix] = createSignal("")
 	const [autocompleteIndex, setAutocompleteIndex] = createSignal(0)
@@ -127,7 +133,7 @@ export function MainView(props: MainViewProps) {
 			return
 		}
 
-		const result = autocompleteProvider.getSuggestions(lines, cursorLine, cursorCol)
+		const result = autocompleteProvider().getSuggestions(lines, cursorLine, cursorCol)
 		if (result && result.items.length > 0) {
 			const prevPrefix = autocompletePrefix()
 			const newItems = result.items.slice(0, 30)
@@ -154,7 +160,7 @@ export function MainView(props: MainViewProps) {
 		const cursor = textareaRef.logicalCursor
 		const text = textareaRef.plainText
 		const lines = text.split("\n")
-		const result = autocompleteProvider.applyCompletion(lines, cursor.row, cursor.col, selectedItem, autocompletePrefix())
+		const result = autocompleteProvider().applyCompletion(lines, cursor.row, cursor.col, selectedItem, autocompletePrefix())
 		const newText = result.lines.join("\n")
 		if (newText === text) {
 			setShowAutocomplete(false)
@@ -321,8 +327,8 @@ export function MainView(props: MainViewProps) {
 	return (
 		<box
 			flexDirection="column"
-			width={dimensions().width}
-			height={dimensions().height}
+			width={terminalWidth()}
+			height={terminalHeight()}
 			onMouseUp={() => {
 				const sel = renderer.getSelection()
 				if (sel && sel.getSelectedText()) copySelectionToClipboard()
@@ -372,7 +378,7 @@ export function MainView(props: MainViewProps) {
 					})
 				}}
 				onKeyDown={handleKeyDown}
-				terminalWidth={() => dimensions().width}
+				terminalWidth={terminalWidth}
 			/>
 			<Footer branch={branch()} cwd={props.cwd} bashMode={isBashMode()} />
 			<ToastViewport toasts={toasts()} />

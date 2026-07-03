@@ -176,35 +176,38 @@ function SelectListItem(props: {
 	theme: () => SelectListTheme
 	width: () => number
 }): JSX.Element {
-	const prefix = () => (props.isSelected() ? "> " : "  ")
 	const prefixWidth = 2
-	const value = () => props.item.label || props.item.value
-
-	const labelWidth = () => Math.min(32, Math.max(12, props.width() - prefixWidth - 10))
-	const label = () => truncateToWidth(value(), labelWidth(), TRUNCATION_MARK)
-	const labelPad = () => " ".repeat(Math.max(0, labelWidth() - visibleWidth(label())))
-
-	const showDescription = () => Boolean(props.item.description) && props.width() > 50
-	const descWidth = () => (showDescription() ? Math.max(0, props.width() - prefixWidth - labelWidth() - 2) : 0)
-	const desc = () => (showDescription() ? truncateToWidth(props.item.description!, descWidth(), TRUNCATION_MARK) : "")
-
-	const line = () => prefix() + label() + labelPad() + (showDescription() ? "  " + desc() : "")
-	const pad = () => " ".repeat(Math.max(0, props.width() - visibleWidth(line())))
+	const row = createMemo(() => {
+		const width = props.width()
+		const prefix = props.isSelected() ? "> " : "  "
+		const value = props.item.label || props.item.value
+		const labelWidth = Math.min(32, Math.max(12, width - prefixWidth - 10))
+		const label = truncateToWidth(value, labelWidth, TRUNCATION_MARK)
+		const labelPad = " ".repeat(Math.max(0, labelWidth - visibleWidth(label)))
+		const prefixLabel = prefix + label + labelPad
+		const description = props.item.description
+		const showDescription = Boolean(description) && width > 50
+		const descWidth = showDescription ? Math.max(0, width - prefixWidth - labelWidth - 2) : 0
+		const desc = showDescription && description ? truncateToWidth(description, descWidth, TRUNCATION_MARK) : ""
+		const line = prefixLabel + (showDescription ? "  " + desc : "")
+		const pad = " ".repeat(Math.max(0, width - visibleWidth(line)))
+		return { prefixLabel, showDescription, desc, line, paddedLine: line + pad }
+	})
 
 	return (
 		<Show
 			when={props.isSelected()}
 			fallback={
 				<text>
-					<span style={{ fg: props.theme().text }}>{prefix() + label() + labelPad()}</span>
-					<Show when={showDescription()}>
-						<span style={{ fg: props.theme().description }}>{"  " + desc()}</span>
+					<span style={{ fg: props.theme().text }}>{row().prefixLabel}</span>
+					<Show when={row().showDescription}>
+						<span style={{ fg: props.theme().description }}>{"  " + row().desc}</span>
 					</Show>
 				</text>
 			}
 		>
 			<text fg={props.theme().selectedFg} bg={props.theme().selectedBg} attributes={TextAttributes.BOLD}>
-				{line() + pad()}
+				{row().paddedLine}
 			</text>
 		</Show>
 	)

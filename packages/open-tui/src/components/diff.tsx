@@ -1,5 +1,5 @@
 import type { JSX } from "@opentui/solid"
-import { splitProps } from "solid-js"
+import { createMemo, splitProps } from "solid-js"
 import { getTreeSitterClient } from "@opentui/core"
 import { useTerminalDimensions } from "../context/terminal.js"
 import { useTheme } from "../context/theme.js"
@@ -20,12 +20,13 @@ export function Diff(props: DiffProps): JSX.Element {
 	const { theme, syntaxStyle } = useTheme()
 
 	const [local, rest] = splitProps(props, ["diffText", "filetype", "view", "wrapMode"])
+	const terminalWidth = createMemo(() => dimensions().width)
 
-	const computedView = (): "unified" | "split" => {
+	const computedView = createMemo((): "unified" | "split" => {
 		const requested = local.view ?? "auto"
 		if (requested === "unified" || requested === "split") return requested
-		return dimensions().width > 120 ? "split" : "unified"
-	}
+		return terminalWidth() > 120 ? "split" : "unified"
+	})
 
 	return (
 		<diff

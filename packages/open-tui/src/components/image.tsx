@@ -255,6 +255,14 @@ function imageFallback(mimeType: string, dimensions?: ImageDimensions, filename?
 // Track rendered images to avoid duplicate writes
 const renderedImages = new Set<string>()
 
+function hashImageData(data: string): string {
+	let hash = 5381
+	for (let i = 0; i < data.length; i++) {
+		hash = ((hash << 5) + hash + data.charCodeAt(i)) >>> 0
+	}
+	return `${data.length.toString(36)}-${hash.toString(36)}`
+}
+
 /**
  * Write image escape sequence directly to stdout
  * This bypasses OpenTUI's text buffer which doesn't handle OSC sequences properly
@@ -300,15 +308,12 @@ export function Image(props: ImageProps) {
 	// Dynamic maxWidth based on terminal size
 	const maxWidth = createMemo(() => Math.min(props.maxWidth ?? 60, termDimensions().width - 4))
 	const maxHeight = () => props.maxHeight ?? 24
+	const dataHash = createMemo(() => hashImageData(props.data))
 
 	// Generate content-based key for caching (re-render if data or size changes)
-	const imageKey = createMemo(() => {
+	const imageCacheBase = createMemo(() => {
 		const dims = dimensions()
-		const mw = maxWidth()
-		const mh = maxHeight()
-		// Use first 32 chars of data for key
-		const dataPrefix = props.data.slice(0, 32)
-		return `img-${dataPrefix}-${dims.widthPx}x${dims.heightPx}-${mw}x${mh}`
+		return `img-${dataHash()}-${dims.widthPx}x${dims.heightPx}`
 	})
 
 	// Render image or fallback
@@ -325,41 +330,43 @@ export function Image(props: ImageProps) {
 			rows = maxHeight()
 		}
 
+		const key = `${imageCacheBase()}-${width}x${rows}`
+
 		if (caps.images === "kitty") {
 			const sequence = encodeKitty(props.data, width, rows)
-			return { type: "image" as const, sequence, rows }
+			return { type: "image" as const, sequence, rows, key }
 		}
 
 		if (caps.images === "iterm2") {
 			const sequence = encodeITerm2(props.data, width)
-			return { type: "image" as const, sequence, rows }
+			return { type: "image" as const, sequence, rows, key }
 		}
 
 		return { type: "fallback" as const, text: imageFallback(props.mimeType, dimensions(), props.filename) }
 	})
 
+	let lastImageKey: string | undefined
+
 	// Write image directly to stdout when component renders
 	createEffect(() => {
 		const result = renderResult()
-		const key = imageKey()
 		if (result.type === "image") {
+			if (result.key === lastImageKey) return
+			if (lastImageKey) renderedImages.delete(lastImageKey)
+			lastImageKey = result.key
 			// Small delay to ensure the box has been rendered and positioned
 			setTimeout(() => {
-				writeImageToStdout(result.sequence, result.rows, key)
+				writeImageToStdout(result.sequence, result.rows, result.key)
 			}, 50)
+		} else if (lastImageKey) {
+			renderedImages.delete(lastImageKey)
+			lastImageKey = undefined
 		}
-	})
-
-	// Re-render on terminal resize - imageKey already depends on maxWidth which depends on termDimensions
-	createEffect(() => {
-		const key = imageKey()
-		// Remove from cache to force re-render when dimensions change
-		renderedImages.delete(key)
 	})
 
 	// Cleanup: remove from rendered set when component unmounts
 	onCleanup(() => {
-		renderedImages.delete(imageKey())
+		if (lastImageKey) renderedImages.delete(lastImageKey)
 	})
 
 	return (
