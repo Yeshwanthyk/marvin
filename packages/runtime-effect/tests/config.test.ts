@@ -160,6 +160,82 @@ describe("loadAppConfig", () => {
     }
   });
 
+  it("loads default cockpit config disabled with enabled agents", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-cockpit-default-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-cockpit-default-"));
+    try {
+      const model = getAnthropicModel();
+      const configPath = await writeConfig(configDir, model.id);
+
+      const config = await loadAppConfig({
+        configDir,
+        configPath,
+        cwd: projectDir,
+      });
+
+      expect(config.cockpit).toEqual({
+        enabled: false,
+        autoRepair: false,
+        agents: {
+          claude: { enabled: true },
+          codex: { enabled: true },
+          pi: { enabled: true },
+        },
+      });
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it("parses cockpit config overrides", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-cockpit-custom-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-cockpit-custom-"));
+    try {
+      const model = getAnthropicModel();
+      const configPath = path.join(configDir, "config.json");
+      await writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            provider: "anthropic",
+            model: model.id,
+            cockpit: {
+              enabled: true,
+              autoRepair: true,
+              agents: {
+                claude: { enabled: false },
+                pi: { enabled: false },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+
+      const config = await loadAppConfig({
+        configDir,
+        configPath,
+        cwd: projectDir,
+      });
+
+      expect(config.cockpit).toEqual({
+        enabled: true,
+        autoRepair: true,
+        agents: {
+          claude: { enabled: false },
+          codex: { enabled: true },
+          pi: { enabled: false },
+        },
+      });
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+      await rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
   it("parses workspace project roots", async () => {
     const configDir = await mkdtemp(path.join(tmpdir(), "config-workspace-roots-"));
     const projectDir = await mkdtemp(path.join(tmpdir(), "project-workspace-roots-"));

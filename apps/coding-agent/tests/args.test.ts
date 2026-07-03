@@ -104,6 +104,14 @@ describe("coding-agent args", () => {
     expect(args.json).toBe(true);
   });
 
+  it("detects cockpit subcommands and agent selector", () => {
+    const args = parseArgs(["cockpit", "install", "--agent", "codex"]);
+    expect(args.command).toBe("cockpit");
+    expect(args.cockpitAction).toBe("install");
+    expect(args.agent).toBe("codex");
+    expect(args.prompt).toBeUndefined();
+  });
+
   it("does not consume following flags as option values", () => {
     const args = parseArgs(["--model", "--headless", "hello"]);
     expect(args.model).toBeUndefined();
@@ -115,6 +123,14 @@ describe("coding-agent args", () => {
     const args = parseArgs(["--provider"]);
     expect(args.provider).toBeUndefined();
     expect(args.prompt).toBe("--provider");
+  });
+
+  it("keeps missing cockpit agent value in prompt for visibility", () => {
+    const args = parseArgs(["cockpit", "status", "--agent"]);
+    expect(args.command).toBe("cockpit");
+    expect(args.cockpitAction).toBe("status");
+    expect(args.agent).toBeUndefined();
+    expect(args.prompt).toBe("--agent");
   });
 
   it("does not skip flags after missing thinking value", () => {

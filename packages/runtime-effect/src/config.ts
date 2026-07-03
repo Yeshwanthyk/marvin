@@ -118,6 +118,20 @@ export interface KeymapConfig {
   lanes: LaneKeymapConfig;
 }
 
+export interface CockpitAgentConfig {
+  enabled: boolean;
+}
+
+export interface CockpitConfig {
+  enabled: boolean;
+  autoRepair: boolean;
+  agents: {
+    claude: CockpitAgentConfig;
+    codex: CockpitAgentConfig;
+    pi: CockpitAgentConfig;
+  };
+}
+
 export interface LoadedAppConfig {
   provider: KnownProvider;
   modelId: string;
@@ -133,6 +147,7 @@ export interface LoadedAppConfig {
   configPath: string;
   keymap: KeymapConfig;
   workspace: WorkspaceConfig;
+  cockpit: CockpitConfig;
 }
 
 export interface DocumentationPaths {
@@ -450,6 +465,28 @@ const resolveWorkspaceConfig = (raw: unknown): WorkspaceConfig => {
   };
 };
 
+const readBoolean = (value: unknown, fallback: boolean): boolean =>
+  typeof value === "boolean" ? value : fallback;
+
+const resolveCockpitAgentConfig = (raw: unknown): CockpitAgentConfig => {
+  const root = isRecord(raw) ? raw : {};
+  return { enabled: readBoolean(root.enabled, true) };
+};
+
+const resolveCockpitConfig = (raw: unknown): CockpitConfig => {
+  const root = isRecord(raw) ? raw : {};
+  const agents = isRecord(root.agents) ? root.agents : {};
+  return {
+    enabled: readBoolean(root.enabled, false),
+    autoRepair: readBoolean(root.autoRepair, false),
+    agents: {
+      claude: resolveCockpitAgentConfig(agents.claude),
+      codex: resolveCockpitAgentConfig(agents.codex),
+      pi: resolveCockpitAgentConfig(agents.pi),
+    },
+  };
+};
+
 const SUPPORTED_CUSTOM_MODEL_APIS: Api[] = [
   "anthropic-messages",
   "openai-completions",
@@ -752,6 +789,7 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
 
   const keymap = resolveKeymapConfig(rawObj.keymap);
   const workspace = resolveWorkspaceConfig(rawObj.workspace);
+  const cockpit = resolveCockpitConfig(rawObj.cockpit);
 
   return {
     provider: resolvedProvider,
@@ -768,6 +806,7 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
     configPath,
     keymap,
     workspace,
+    cockpit,
   };
 };
 

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from './args.js';
 import { runHeadless } from './adapters/cli/headless.js';
 import { runInstall } from './adapters/cli/install.js';
+import { runCockpitCommand } from './adapters/cli/cockpit.js';
 import { runSessionCommand } from './adapters/cli/session.js';
 import { runScratchpadCommand } from './adapters/cli/scratchpad.js';
 import { runValidate } from './adapters/cli/validate.js';
@@ -89,9 +90,11 @@ const printHelp = () => {
       '  marvin install <source> [options]',
       '  marvin session rename "3-4 word title" [options]',
       '  marvin scratchpad <add|list|read|archive> [options]',
+      '  marvin cockpit <install|uninstall|status> [--agent claude|codex|pi]',
       '',
       'Options:',
       '  --provider <name>            Provider (e.g. openai, anthropic, codex)',
+      '  --agent <name>               Cockpit agent for cockpit commands',
       '  --model <id>                 Model id or comma-separated list (Ctrl+P to cycle)',
       '  --thinking <level>           off|minimal|low|medium|high|xhigh, or comma list aligned with --model',
       '  --config-dir <dir>           Config directory (default: ~/.config/marvin)',
@@ -168,6 +171,10 @@ const printHelp = () => {
       '  marvin scratchpad list --cwd .',
       '  marvin scratchpad read <id>',
       '',
+      'Cockpit:',
+      '  marvin cockpit install',
+      '  marvin cockpit status --agent codex',
+      '',
       'Environment:',
       '  OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY / ...',
       '',
@@ -231,6 +238,14 @@ const main = async () => {
       json: args.json,
       includeArchived: args.all,
       configDir: args.configDir,
+    });
+    return;
+  }
+
+  if (args.command === 'cockpit') {
+    await runCockpitCommand({
+      action: args.cockpitAction,
+      agent: args.agent,
     });
     return;
   }

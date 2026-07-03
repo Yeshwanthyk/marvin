@@ -17,6 +17,10 @@
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js"
     },
+    "./cockpit/installers.js": {
+      "types": "./dist/cockpit/installers.d.ts",
+      "import": "./dist/cockpit/installers.js"
+    },
     "./instrumentation.js": {
       "types": "./dist/instrumentation.d.ts",
       "import": "./dist/instrumentation.js"

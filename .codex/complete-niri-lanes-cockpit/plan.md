@@ -180,26 +180,28 @@ Verification
 - [x] Review gate completed locally; no blockers found.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `1281bef feat: ingest external agent cockpit events`.
 
 ## Phase C2: Cockpit Installers And CLI
-Status: pending
+Status: complete
 
 Implementation
-- [ ] Add Claude/Codex/pi installers with marker ownership.
-- [ ] Add `marvin cockpit install|uninstall|status`.
-- [ ] Add status/outdated detection and rollback.
-- [ ] Add config parsing for cockpit settings.
+- [x] Add Claude/Codex/pi installers with marker ownership.
+- [x] Add `marvin cockpit install|uninstall|status`.
+- [x] Add status/outdated detection and rollback.
+- [x] Add config parsing for cockpit settings.
 
 Verification
-- [ ] Fixture tests: idempotent install/uninstall.
-- [ ] Fixture tests: preserve foreign entries.
-- [ ] Fixture tests: refuse unowned pi extension.
-- [ ] Fixture tests: rollback on partial failure.
-- [ ] Verify against copies of real configs and diff the result.
-- [ ] Ask for approval before real config install.
-- [ ] `bun run check` passes.
-- [ ] Review gate completed and blockers fixed.
+- [x] Fixture tests: idempotent install/uninstall.
+- [x] Fixture tests: preserve foreign entries.
+- [x] Fixture tests: refuse unowned pi extension.
+- [x] Fixture tests: rollback on partial failure.
+- [x] Verify against copies of real configs and diff the result.
+- [x] Real config install not run; temp-copy smoke only.
+- [x] `bun run check` passes.
+- [x] `git diff --check` passes.
+- [x] `npm run build:packages` passes.
+- [x] Review gate completed locally; idempotency, shell quoting, and exact rollback blockers fixed.
 
 Exit criteria
 - [ ] Phase commit created.

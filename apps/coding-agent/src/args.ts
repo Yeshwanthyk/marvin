@@ -1,9 +1,10 @@
 export interface ParsedArgs {
   headless: boolean;
   acp: boolean;
-  command?: 'validate' | 'install' | 'session' | 'scratchpad';
+  command?: 'validate' | 'install' | 'session' | 'scratchpad' | 'cockpit';
   sessionAction?: 'rename';
   scratchpadAction?: 'add' | 'list' | 'read' | 'archive';
+  cockpitAction?: 'install' | 'uninstall' | 'status';
   prompt?: string;
   configDir?: string;
   configPath?: string;
@@ -13,6 +14,7 @@ export interface ParsedArgs {
   json: boolean;
   all: boolean;
   provider?: string;
+  agent?: string;
   /** Single model or comma-separated list for Ctrl+P cycling */
   model?: string;
   /** Single thinking level or comma-separated list aligned with --model */
@@ -50,6 +52,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     acp: false,
     sessionAction: undefined,
     scratchpadAction: undefined,
+    cockpitAction: undefined,
     prompt: undefined,
     configDir: undefined,
     configPath: undefined,
@@ -59,6 +62,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
     json: false,
     all: false,
     provider: undefined,
+    agent: undefined,
     model: undefined,
     thinking: undefined,
     extensions: [],
@@ -74,7 +78,7 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === undefined) continue;
-    if (!a.startsWith('-') && !args.command && rest.length === 0 && (a === 'validate' || a === 'install' || a === 'session' || a === 'scratchpad')) {
+    if (!a.startsWith('-') && !args.command && rest.length === 0 && (a === 'validate' || a === 'install' || a === 'session' || a === 'scratchpad' || a === 'cockpit')) {
       args.command = a;
       continue;
     }
@@ -90,6 +94,16 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       (a === 'add' || a === 'list' || a === 'read' || a === 'archive')
     ) {
       args.scratchpadAction = a;
+      continue;
+    }
+    if (
+      !a.startsWith('-') &&
+      args.command === 'cockpit' &&
+      !args.cockpitAction &&
+      rest.length === 0 &&
+      (a === 'install' || a === 'uninstall' || a === 'status')
+    ) {
+      args.cockpitAction = a;
       continue;
     }
     if (a === '--help' || a === '-h') {
@@ -188,6 +202,16 @@ export const parseArgs = (argv: string[]): ParsedArgs => {
       const value = optionValue(argv, i + 1)
       if (value) {
         args.provider = value
+        i += 1
+      } else {
+        rest.push(a)
+      }
+      continue;
+    }
+    if (a === '--agent') {
+      const value = optionValue(argv, i + 1)
+      if (value) {
+        args.agent = value
         i += 1
       } else {
         rest.push(a)
