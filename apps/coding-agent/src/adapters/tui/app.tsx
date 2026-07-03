@@ -17,6 +17,8 @@ import { RuntimeProvider } from "../../runtime/context.js"
 import { createRuntime, type RuntimeInitArgs, type RuntimeContext } from "@runtime/factory.js"
 import { createFocusedRuntimeFacade, type FocusedRuntimeBinding } from "../../runtime/focused-runtime.js"
 import { startCockpitTailer } from "../../runtime/cockpit-ingest.js"
+import { runCockpitAutoRepair } from "../../runtime/cockpit-autorepair.js"
+import { COCKPIT_HOOK_BINARY_SOURCE } from "../cli/cockpit.js"
 import { createSessionActorRegistry } from "../../runtime/session-actor-registry.js"
 import type { SessionActor } from "../../runtime/session-actor.js"
 import type { LoadedSession } from "../../session-manager.js"
@@ -146,6 +148,15 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 	})
 	const activityIndex = createActivityIndex()
 	const notificationService = createNotificationService()
+	void runCockpitAutoRepair(props.initialRuntime.config, COCKPIT_HOOK_BINARY_SOURCE).catch((error: unknown) => {
+		notificationService.enqueue({
+			laneId: "cockpit:auto-repair",
+			projectId: initialCwd,
+			level: "warning",
+			title: "Cockpit auto-repair failed",
+			message: error instanceof Error ? error.message : "Unknown installer error",
+		})
+	})
 	const cockpitTailer = startCockpitTailer(props.initialRuntime.config.configDir, {
 		laneStore,
 		activityIndex,

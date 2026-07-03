@@ -40,6 +40,7 @@ export interface CockpitIngestState {
 	readonly offset: number
 	readonly titleOverlay: Record<string, string>
 	readonly sessions: Record<string, CockpitSessionMeta>
+	readonly flap: Record<string, CockpitFlapEntry>
 }
 
 export interface CockpitIngestPaths {
@@ -59,6 +60,11 @@ export interface CockpitSessionMeta {
 	readonly lastEventAt: string
 }
 
+export interface CockpitFlapEntry {
+	readonly signature: string
+	readonly at: string
+}
+
 export interface CockpitIngestServices {
 	readonly laneStore: WorkspaceLaneStore
 	readonly activityIndex: ActivityIndex
@@ -75,6 +81,7 @@ const COCKPIT_DIR = "cockpit"
 const SPOOL_FILE = "events.jsonl"
 const STATE_FILE = "state.json"
 const MAX_SPOOL_BYTES = 1024 * 1024
+const FLAP_DEBOUNCE_MS = 750
 const EXTERNAL_MODEL_ID = "external"
 
 const CLI_VALUES: readonly ExternalAgentCli[] = ["claude", "codex", "pi"]
@@ -132,7 +139,7 @@ export const cockpitIngestPaths = (configDir: string): CockpitIngestPaths => ({
 	statePath: join(configDir, COCKPIT_DIR, STATE_FILE),
 })
 
-export const emptyCockpitIngestState = (): CockpitIngestState => ({ offset: 0, titleOverlay: {}, sessions: {} })
+export const emptyCockpitIngestState = (): CockpitIngestState => ({ offset: 0, titleOverlay: {}, sessions: {}, flap: {} })
 
 const parseSessionMeta = (laneId: string, value: unknown): CockpitSessionMeta | null => {
 	if (!isRecord(value)) return null
@@ -162,6 +169,7 @@ export const loadCockpitIngestState = (statePath: string): CockpitIngestState =>
 		const offsetRaw = parsed["offset"]
 		const overlayRaw = parsed["titleOverlay"]
 		const sessionsRaw = parsed["sessions"]
+		const flapRaw = parsed["flap"]
 		const offset = typeof offsetRaw === "number" && Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0
 		const titleOverlay = isRecord(overlayRaw)
 			? Object.fromEntries(Object.entries(overlayRaw).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
@@ -173,7 +181,19 @@ export const loadCockpitIngestState = (statePath: string): CockpitIngestState =>
 					.filter((entry): entry is readonly [string, CockpitSessionMeta] => entry[1] !== null),
 			)
 			: {}
-		return { offset, titleOverlay, sessions }
+		const flap = isRecord(flapRaw)
+			? Object.fromEntries(
+				Object.entries(flapRaw)
+					.filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]))
+					.map(([laneId, value]) => {
+						const signature = readString(value, "signature")
+						const at = normalizeIso(readString(value, "at"))
+						return signature && at ? [laneId, { signature, at }] as const : null
+					})
+					.filter((entry): entry is readonly [string, CockpitFlapEntry] => entry !== null),
+			)
+			: {}
+		return { offset, titleOverlay, sessions, flap }
 	} catch {
 		return emptyCockpitIngestState()
 	}
@@ -254,6 +274,35 @@ export const readCockpitEventsFromOffset = (
 	return { events, offset: safeOffset + Buffer.byteLength(complete) }
 }
 
+const eventSignature = (event: ExternalAgentEvent): string =>
+	[
+		event.kind,
+		event.ok === undefined ? "" : String(event.ok),
+		event.reason ?? "",
+		event.lastMessage ?? "",
+		event.title ?? "",
+	].join("|")
+
+export const debounceCockpitEvent = (
+	event: ExternalAgentEvent,
+	state: CockpitIngestState,
+	options: { readonly windowMs?: number } = {},
+): { readonly state: CockpitIngestState; readonly drop: boolean } => {
+	const laneId = laneIdFor(event)
+	const signature = eventSignature(event)
+	const previous = state.flap[laneId]
+	const eventAt = Date.parse(event.at)
+	const previousAt = previous ? Date.parse(previous.at) : Number.NaN
+	const drop =
+		previous?.signature === signature &&
+		Number.isFinite(eventAt) &&
+		Number.isFinite(previousAt) &&
+		eventAt >= previousAt &&
+		eventAt - previousAt <= (options.windowMs ?? FLAP_DEBOUNCE_MS)
+	const flap = { ...state.flap, [laneId]: { signature, at: event.at } }
+	return { state: { ...state, flap }, drop }
+}
+
 export const rotateCockpitSpoolIfIdle = (spoolPath: string, state: CockpitIngestState): CockpitIngestState => {
 	if (!existsSync(spoolPath)) return state
 	const size = statSync(spoolPath).size
@@ -262,11 +311,45 @@ export const rotateCockpitSpoolIfIdle = (spoolPath: string, state: CockpitIngest
 	return { ...state, offset: 0 }
 }
 
+export const isPidAlive = (pid: number): boolean => {
+	try {
+		process.kill(pid, 0)
+		return true
+	} catch {
+		return false
+	}
+}
+
+export const sweepCockpitPidLiveness = (
+	state: CockpitIngestState,
+	services: Pick<CockpitIngestServices, "activityIndex">,
+	options: { readonly now?: string; readonly isAlive?: (pid: number) => boolean } = {},
+): CockpitIngestState => {
+	const isAlive = options.isAlive ?? isPidAlive
+	const now = options.now ?? new Date().toISOString()
+	let changed = false
+	const sessions: Record<string, CockpitSessionMeta> = {}
+	for (const [laneId, meta] of Object.entries(state.sessions)) {
+		if (meta.pid !== undefined && !isAlive(meta.pid)) {
+			const { pid: _pid, ...withoutPid } = meta
+			sessions[laneId] = { ...withoutPid, lastEventAt: now }
+			services.activityIndex.patch(laneId, { status: "cold", isResponding: false, lastActivityAt: Date.parse(now) })
+			changed = true
+		} else {
+			sessions[laneId] = meta
+		}
+	}
+	return changed ? { ...state, sessions } : state
+}
+
 export const applyExternalAgentEvent = (
 	event: ExternalAgentEvent,
 	state: CockpitIngestState,
 	services: CockpitIngestServices,
 ): CockpitIngestState => {
+	const debounced = debounceCockpitEvent(event, state)
+	if (debounced.drop) return debounced.state
+	state = debounced.state
 	const lanes = services.laneStore.lanes()
 	const now = event.at
 	const laneId = laneIdFor(event)
@@ -360,13 +443,21 @@ export const ingestCockpitSpool = (
 	services: CockpitIngestServices,
 ): CockpitIngestState => {
 	let state = loadCockpitIngestState(paths.statePath)
-	if (!existsSync(paths.spoolPath)) return state
-	const read = readCockpitEventsFromOffset(paths.spoolPath, state.offset)
-	state = { ...state, offset: read.offset }
-	for (const event of read.events) {
-		state = applyExternalAgentEvent(event, state, services)
+	const spoolExists = existsSync(paths.spoolPath)
+	let shouldSave = false
+	if (spoolExists) {
+		const read = readCockpitEventsFromOffset(paths.spoolPath, state.offset)
+		state = { ...state, offset: read.offset }
+		for (const event of read.events) {
+			state = applyExternalAgentEvent(event, state, services)
+		}
+		state = rotateCockpitSpoolIfIdle(paths.spoolPath, state)
+		shouldSave = true
 	}
-	state = rotateCockpitSpoolIfIdle(paths.spoolPath, state)
+	const swept = sweepCockpitPidLiveness(state, services)
+	shouldSave = shouldSave || swept !== state
+	state = swept
+	if (!shouldSave) return state
 	saveCockpitIngestState(paths.statePath, state)
 	return state
 }

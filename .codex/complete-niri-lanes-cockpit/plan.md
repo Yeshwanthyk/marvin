@@ -226,24 +226,25 @@ Verification
 - [x] Review gate completed locally; overlay persistence test gap fixed.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `a26ab4d feat: add cockpit lane actions`.
 
 ## Phase C4: Cockpit Polish
-Status: pending
+Status: complete
 
 Implementation
-- [ ] Add flap debounce.
-- [ ] Add pid liveness sweep.
-- [ ] Add spool rotation.
-- [ ] Add `cockpit.autoRepair` opt-in behavior.
+- [x] Add flap debounce.
+- [x] Add pid liveness sweep.
+- [x] Add spool rotation.
+- [x] Add `cockpit.autoRepair` opt-in behavior.
 
 Verification
-- [ ] Tests: debounce.
-- [ ] Tests: pid liveness.
-- [ ] Tests: spool rotation.
-- [ ] Tests: autoRepair disabled by default.
-- [ ] `bun run check` passes.
-- [ ] Review gate completed and blockers fixed.
+- [x] Tests: debounce.
+- [x] Tests: pid liveness.
+- [x] Tests: spool rotation.
+- [x] Tests: autoRepair disabled by default.
+- [x] `bun run check` passes.
+- [x] `git diff --check` passes.
+- [x] Review gate completed locally; no blockers found.
 
 Exit criteria
 - [ ] Phase commit created.

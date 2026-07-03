@@ -9,6 +9,7 @@ import { createOverviewOptions } from "../src/ui/app-shell/overview-options.js"
 import {
 	applyExternalAgentEvent,
 	cockpitIngestPaths,
+	debounceCockpitEvent,
 	emptyCockpitIngestState,
 	ingestCockpitSpool,
 	loadCockpitIngestState,
@@ -18,6 +19,7 @@ import {
 	rotateCockpitSpoolIfIdle,
 	saveCockpitIngestState,
 	saveCockpitTitleOverlay,
+	sweepCockpitPidLiveness,
 	type ExternalAgentEvent,
 } from "../src/runtime/cockpit-ingest.js"
 
@@ -100,6 +102,10 @@ describe("cockpit ingest", () => {
 			unread: true,
 		})
 		expect(state.titleOverlay).toEqual({})
+		expect(state.flap["external:claude:session-a"]).toEqual({
+			signature: "busy||||review migration",
+			at: "2026-07-03T12:00:00.000Z",
+		})
 		expect(state.sessions["external:claude:session-a"]).toEqual({
 			laneId: "external:claude:session-a",
 			cli: "claude",
@@ -138,6 +144,51 @@ describe("cockpit ingest", () => {
 				message: "claude-code / better title: permission",
 			},
 		])
+	})
+
+	it("debounces identical flap events inside the debounce window", async () => {
+		const { laneStore, activityIndex, notifications } = await createTempStore()
+		const first = applyExternalAgentEvent(
+			event({ kind: "needs_input", reason: "permission", at: "2026-07-03T12:00:00.000Z" }),
+			emptyCockpitIngestState(),
+			{ laneStore, activityIndex, notifications },
+		)
+		const second = applyExternalAgentEvent(
+			event({ kind: "needs_input", reason: "permission", at: "2026-07-03T12:00:00.500Z" }),
+			first,
+			{ laneStore, activityIndex, notifications },
+		)
+		const third = applyExternalAgentEvent(
+			event({ kind: "needs_input", reason: "permission", at: "2026-07-03T12:00:01.300Z" }),
+			second,
+			{ laneStore, activityIndex, notifications },
+		)
+
+		expect(notifications.list()).toHaveLength(2)
+		expect(second.flap["external:claude:session-a"]?.at).toBe("2026-07-03T12:00:00.500Z")
+		expect(third.flap["external:claude:session-a"]?.at).toBe("2026-07-03T12:00:01.300Z")
+		expect(debounceCockpitEvent(event({ kind: "busy" }), emptyCockpitIngestState()).drop).toBe(false)
+	})
+
+	it("marks dead reported pids cold and clears pid ownership", async () => {
+		const { laneStore, activityIndex, notifications } = await createTempStore()
+		const state = applyExternalAgentEvent(
+			event({ kind: "busy", pid: 4242 }),
+			emptyCockpitIngestState(),
+			{ laneStore, activityIndex, notifications },
+		)
+
+		const swept = sweepCockpitPidLiveness(state, { activityIndex }, {
+			now: "2026-07-03T12:01:00.000Z",
+			isAlive: () => false,
+		})
+
+		expect(swept.sessions["external:claude:session-a"]?.pid).toBeUndefined()
+		expect(swept.sessions["external:claude:session-a"]?.lastEventAt).toBe("2026-07-03T12:01:00.000Z")
+		expect(activityIndex.get("external:claude:session-a")).toMatchObject({
+			status: "cold",
+			isResponding: false,
+		})
 	})
 
 	it("persists metadata and local rename overlays for later events", async () => {
@@ -200,6 +251,7 @@ describe("cockpit ingest", () => {
 			offset: 0,
 			titleOverlay: {},
 			sessions: {},
+			flap: {},
 		})
 		expect(existsSync(paths.statePath)).toBe(false)
 	})

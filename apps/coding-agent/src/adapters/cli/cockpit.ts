@@ -12,7 +12,7 @@ export interface RunCockpitCommandOptions {
 const isAgent = (value: string | undefined): value is CockpitAgent =>
 	value === "claude" || value === "codex" || value === "pi"
 
-const COCKPIT_HOOK_BINARY_SOURCE = `#!/usr/bin/env bun
+export const COCKPIT_HOOK_BINARY_SOURCE = `#!/usr/bin/env bun
 // # marvin-cockpit-hook
 
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
