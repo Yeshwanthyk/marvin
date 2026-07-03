@@ -400,6 +400,7 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 						laneStore={laneStore}
 						workspaceLanes={workspaceLanes}
 						hostNotifications={notificationService.notifications}
+						activityEntries={activityIndex.entries}
 						acknowledgeHostNotification={(id) => notificationService.acknowledge(id)}
 						focusedActor={focusController.focusedActor}
 						canStartPrompt={() => {

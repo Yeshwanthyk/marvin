@@ -363,6 +363,7 @@ export function MainView(props: MainViewProps) {
 				retryStatus={props.retryStatus}
 				lane={props.lane}
 				spinnerFrame={spinnerFrame()}
+				width={terminalWidth()}
 			/>
 			<MessagePane
 				messages={props.messages}

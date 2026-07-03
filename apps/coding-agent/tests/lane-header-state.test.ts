@@ -5,6 +5,13 @@ import { deriveLaneHeaderState, laneHeaderDisplay } from "../src/ui/app-shell/la
 const lanesFixture = (): WorkspaceLanesV2 => ({
 	version: 2,
 	projectsById: {
+		"/work/kiri": {
+			id: "/work/kiri",
+			cwd: "/work/kiri",
+			title: "kiri",
+			createdAt: "2026-06-03T12:00:00.000Z",
+			updatedAt: "2026-06-03T12:00:00.000Z",
+		},
 		"/work/nora": {
 			id: "/work/nora",
 			cwd: "/work/nora",
@@ -12,9 +19,27 @@ const lanesFixture = (): WorkspaceLanesV2 => ({
 			createdAt: "2026-06-03T12:00:00.000Z",
 			updatedAt: "2026-06-03T12:00:00.000Z",
 		},
+		"/work/marvin": {
+			id: "/work/marvin",
+			cwd: "/work/marvin",
+			title: "marvin",
+			createdAt: "2026-06-03T12:00:00.000Z",
+			updatedAt: "2026-06-03T12:00:00.000Z",
+		},
 	},
-	projectOrder: ["/work/nora"],
+	projectOrder: ["/work/kiri", "/work/nora", "/work/marvin"],
 	sessionsById: {
+		"kiri-1": {
+			laneId: "kiri-1",
+			projectId: "/work/kiri",
+			sessionId: "dddddddd-0000-0000-0000-000000000000",
+			sessionPath: "/sessions/kiri.jsonl",
+			title: "kiri work",
+			provider: "codex",
+			modelId: "gpt-5.3-codex",
+			createdAt: "2026-06-03T12:00:00.000Z",
+			updatedAt: "2026-06-03T12:02:00.000Z",
+		},
 		"lane-b": {
 			laneId: "lane-b",
 			projectId: "/work/nora",
@@ -49,12 +74,27 @@ const lanesFixture = (): WorkspaceLanesV2 => ({
 			updatedAt: "2026-06-03T12:03:00.000Z",
 			archivedAt: "2026-06-03T12:04:00.000Z",
 		},
+		"marvin-1": {
+			laneId: "marvin-1",
+			projectId: "/work/marvin",
+			sessionId: "eeeeeeee-0000-0000-0000-000000000000",
+			sessionPath: "/sessions/marvin.jsonl",
+			title: "marvin work",
+			provider: "codex",
+			modelId: "gpt-5.3-codex",
+			createdAt: "2026-06-03T12:00:00.000Z",
+			updatedAt: "2026-06-03T12:02:00.000Z",
+		},
 	},
 	sessionOrderByProject: {
+		"/work/kiri": ["kiri-1"],
 		"/work/nora": ["lane-b", "lane-a", "lane-c"],
+		"/work/marvin": ["marvin-1"],
 	},
 	focusByProject: {
+		"/work/kiri": { focusedLaneId: "kiri-1", focusedColumn: 0 },
 		"/work/nora": { focusedLaneId: "lane-a", focusedColumn: 1 },
+		"/work/marvin": { focusedLaneId: "marvin-1", focusedColumn: 0 },
 	},
 	selection: {
 		projectId: "/work/nora",
@@ -74,16 +114,27 @@ describe("deriveLaneHeaderState", () => {
 	it("summarizes selected lane context and active session position", () => {
 		const state = deriveLaneHeaderState(lanesFixture(), "sticky")
 
-		expect(state).toEqual({
-			mode: "sticky",
-			archivedCount: 1,
-			current: {
-				projectTitle: "nora",
-				sessionTitle: "first task",
-				sessionShortId: "aaaaaaaa",
-				sessionIndex: 2,
-				sessionCount: 2,
-			},
+		expect(state.mode).toBe("sticky")
+		expect(state.archivedCount).toBe(1)
+		expect(state.activity).toEqual({
+			runningAbove: 0,
+			runningBelow: 0,
+			unreadAbove: 0,
+			unreadBelow: 0,
+			runningHere: 0,
+			unreadHere: 0,
+		})
+		expect(state.current).toEqual({
+			projectTitle: "nora",
+			sessionTitle: "first task",
+			sessionShortId: "aaaaaaaa",
+			projectIndex: 2,
+			projectCount: 3,
+			sessionIndex: 2,
+			sessionCount: 2,
+			previousSessionTitle: "second task",
+			previousProjectTitle: "kiri",
+			nextProjectTitle: "marvin",
 		})
 	})
 
@@ -93,7 +144,15 @@ describe("deriveLaneHeaderState", () => {
 		expect(deriveLaneHeaderState(lanes, "off")).toEqual({
 			mode: "off",
 			current: null,
-			archivedCount: 3,
+			archivedCount: 5,
+			activity: {
+				runningAbove: 0,
+				runningBelow: 0,
+				unreadAbove: 0,
+				unreadBelow: 0,
+				runningHere: 0,
+				unreadHere: 0,
+			},
 		})
 	})
 
@@ -102,7 +161,10 @@ describe("deriveLaneHeaderState", () => {
 		expect(sticky).toEqual({
 			active: true,
 			badge: "lane",
-			summary: "nora · first task 2/2",
+			summary: "nora 2/3 · 2/2 · first task",
+			position: "nora 2/3 · 2/2",
+			adjacent: "←second task ↑kiri ↓marvin",
+			activityBadges: "",
 			hint: "enter exits",
 		})
 
@@ -110,9 +172,30 @@ describe("deriveLaneHeaderState", () => {
 		expect(idle).toEqual({
 			active: false,
 			badge: "",
-			summary: "nora · first task 2/2",
+			summary: "nora 2/3 · 2/2 · first task",
+			position: "nora 2/3 · 2/2",
+			adjacent: "←second task ↑kiri ↓marvin",
+			activityBadges: "",
 			hint: "",
 		})
+	})
+
+	it("derives vertical activity badges relative to the focused project", () => {
+		const state = deriveLaneHeaderState(lanesFixture(), "off", [
+			{ laneId: "kiri-1", status: "streaming", isResponding: true, unread: true, lastActivityAt: 1 },
+			{ laneId: "marvin-1", status: "completed", isResponding: false, unread: true, lastActivityAt: 2 },
+			{ laneId: "lane-b", status: "queued", isResponding: false, unread: true, lastActivityAt: 3 },
+		])
+
+		expect(state.activity).toEqual({
+			runningAbove: 1,
+			runningBelow: 0,
+			unreadAbove: 1,
+			unreadBelow: 1,
+			runningHere: 1,
+			unreadHere: 1,
+		})
+		expect(laneHeaderDisplay(state).activityBadges).toBe("↑1● ↑1• ↓1• ↔1● ↔1•")
 	})
 
 	it("uses soft copy when lane mode has no selected session", () => {
@@ -122,6 +205,9 @@ describe("deriveLaneHeaderState", () => {
 			active: true,
 			badge: "lane",
 			summary: "no session selected",
+			position: "",
+			adjacent: "",
+			activityBadges: "",
 			hint: "enter exits",
 		})
 	})

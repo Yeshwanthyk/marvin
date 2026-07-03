@@ -15,6 +15,7 @@ import {
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { LoadedSession, SessionInfo } from "../../session-manager.js"
 import type { EventHandlerContext, ToolMeta } from "../../agent-events.js"
+import type { SessionActivity } from "./activity-index.js"
 import type { useRuntime } from "../../runtime/context.js"
 import type { VisibleSession } from "../../runtime/workspace-switch.js"
 import type { UIMessage, ToolBlock } from "../../types.js"
@@ -43,6 +44,7 @@ export interface UseSessionLaneControllerDeps {
 	store: AppStore
 	laneStore: WorkspaceLaneStore
 	workspaceLanes: Accessor<WorkspaceLanesV2>
+	activityEntries?: Accessor<readonly SessionActivity[]>
 	shellInjectionPrefix: string
 	submitPrompt: (text: string, options?: { mode?: PromptDeliveryMode }) => Promise<void>
 }
@@ -177,11 +179,12 @@ export const useSessionLaneController = ({
 	store,
 	laneStore,
 	workspaceLanes,
+	activityEntries,
 	shellInjectionPrefix,
 	submitPrompt,
 }: UseSessionLaneControllerDeps): SessionLaneController => {
 	const [navMode, setNavMode] = createSignal<LaneNavMode>(initialNavMode ?? "off")
-	const laneHeaderState = createMemo(() => deriveLaneHeaderState(workspaceLanes(), navMode()))
+	const laneHeaderState = createMemo(() => deriveLaneHeaderState(workspaceLanes(), navMode(), activityEntries?.() ?? []))
 
 	const visibleSessionForLoaded = (session: LoadedSession, sessionPath?: string): VisibleSession => ({
 		state: "loaded",

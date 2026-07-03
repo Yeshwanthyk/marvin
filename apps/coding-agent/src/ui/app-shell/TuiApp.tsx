@@ -38,7 +38,7 @@ import { usePromptSubmission } from "./usePromptSubmission.js"
 import { useSessionLaneController } from "./useSessionLaneController.js"
 import { useScratchpadActions } from "./useScratchpadActions.js"
 import { useWorkspaceProjectDiscovery } from "./useWorkspaceProjectDiscovery.js"
-import type { HostNotification } from "./activity-index.js"
+import type { HostNotification, SessionActivity } from "./activity-index.js"
 import { SessionView } from "./SessionView.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
@@ -113,6 +113,7 @@ export interface TuiAppProps {
 	laneStore: WorkspaceLaneStore
 	workspaceLanes: Accessor<WorkspaceLanesV2>
 	hostNotifications?: Accessor<readonly HostNotification[]>
+	activityEntries?: Accessor<readonly SessionActivity[]>
 	acknowledgeHostNotification?: (id: string) => void
 	focusedActor?: Accessor<SessionActor | null>
 	canStartPrompt?: () => { ok: true } | { ok: false; maxStreaming: number }
@@ -132,7 +133,7 @@ export interface TuiAppActivity {
 	lastObservedAt: number
 }
 
-export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, hostNotifications, acknowledgeHostNotification, focusedActor, canStartPrompt, removeLaneActor, active, onActivityChange, onExit }: TuiAppProps) => {
+export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, hostNotifications, activityEntries, acknowledgeHostNotification, focusedActor, canStartPrompt, removeLaneActor, active, onActivityChange, onExit }: TuiAppProps) => {
 	const runtime = useRuntime()
 	const {
 		agent,
@@ -203,6 +204,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		store,
 		laneStore,
 		workspaceLanes,
+		activityEntries,
 		shellInjectionPrefix: SHELL_INJECTION_PREFIX,
 		submitPrompt: (text, options) => submitPromptImpl(text, options?.mode ?? "followUp"),
 	})

@@ -34,7 +34,8 @@ const ACTIVITY_WIDTH = 13
 const PROGRESS_FILLED = "━"
 const PROGRESS_EMPTY = "┄"
 const PROGRESS_BAR_LENGTH = 8
-const LANE_LABEL_MAX_WIDTH = 42
+const LANE_SESSION_MAX_WIDTH = 26
+const LANE_ADJACENT_MAX_WIDTH = 30
 
 import type { QueueCounts } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 
@@ -48,6 +49,7 @@ export interface HeaderProps {
   retryStatus: string | null
   lane: LaneHeaderState
   spinnerFrame: number
+  width: number
 }
 
 export function Header(props: HeaderProps) {
@@ -125,9 +127,24 @@ export function Header(props: HeaderProps) {
     if (props.lane.mode === "prefix") return theme.accent
     return theme.textMuted
   })
+  const showSessionTitle = createMemo(() => props.width >= 84)
+  const showAdjacent = createMemo(() => props.width >= 96 && props.lane.mode !== "prefix")
+  const showHint = createMemo(() => props.width >= 110 || props.lane.mode === "prefix")
   const laneBadge = createMemo(() => laneDisplay().badge)
-  const laneSummary = createMemo(() => truncateToWidth(laneDisplay().summary, LANE_LABEL_MAX_WIDTH, "…"))
+  const lanePosition = createMemo(() => laneDisplay().position)
+  const laneSessionTitle = createMemo(() => {
+    const title = props.lane.current?.sessionTitle ?? ""
+    return title.length > 0 ? truncateToWidth(title, LANE_SESSION_MAX_WIDTH, "…") : ""
+  })
+  const laneAdjacent = createMemo(() => truncateToWidth(laneDisplay().adjacent, LANE_ADJACENT_MAX_WIDTH, "…"))
+  const laneActivityBadges = createMemo(() => laneDisplay().activityBadges)
   const laneHint = createMemo(() => laneDisplay().hint)
+  const laneSummary = createMemo(() => {
+    const position = lanePosition()
+    if (!position) return laneDisplay().summary
+    if (!showSessionTitle() || laneSessionTitle().length === 0) return position
+    return `${position} · ${laneSessionTitle()}`
+  })
 
   return (
 <box
@@ -172,7 +189,7 @@ export function Header(props: HeaderProps) {
       <box flexGrow={1} />
 
       {/* Right section: lane context */}
-      <box flexDirection="row" flexShrink={1} gap={1}>
+      <box flexDirection="row" flexShrink={1} paddingLeft={1} gap={1}>
         <Show when={laneSummary().length > 0}>
           <text>
             <Show when={laneBadge()}>
@@ -180,7 +197,13 @@ export function Header(props: HeaderProps) {
               <span style={{ fg: theme.textMuted }}>  </span>
             </Show>
             <span style={{ fg: laneActive() ? theme.text : theme.textMuted }}>{laneSummary()}</span>
-            <Show when={laneHint()}>
+            <Show when={laneActivityBadges()}>
+              <span style={{ fg: theme.warning }}>  {laneActivityBadges()}</span>
+            </Show>
+            <Show when={showAdjacent() && laneAdjacent()}>
+              <span style={{ fg: theme.textMuted }}>  {laneAdjacent()}</span>
+            </Show>
+            <Show when={showHint() && laneHint()}>
               <span style={{ fg: theme.textMuted }}>  {laneHint()}</span>
             </Show>
           </text>

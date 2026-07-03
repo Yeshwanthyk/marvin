@@ -99,22 +99,23 @@ Verification
 - [x] Review gate completed; two blockers fixed.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `379aa20 feat: add lane prefix keymap`.
 
 ## Phase H: Header Redesign
-Status: pending
+Status: complete
 
 Implementation
-- [ ] Redesign header for spatial lane context.
-- [ ] Add activity badges.
-- [ ] Add which-key hints.
-- [ ] Add width degradation behavior.
+- [x] Redesign header for spatial lane context.
+- [x] Add activity badges.
+- [x] Add which-key hints.
+- [x] Add width degradation behavior.
 
 Verification
-- [ ] Targeted rendering tests or snapshots where available.
-- [ ] `bun run check` passes.
-- [ ] isolated tmux smoke across narrow and wide widths.
-- [ ] Review gate completed and blockers fixed.
+- [x] Targeted lane-header derivation tests cover position, adjacent hints, and activity badges.
+- [x] `bun run check` passes.
+- [x] `git diff --check` passes.
+- [x] isolated tmux smoke across narrow and wide widths passed.
+- [x] Review gate completed locally; narrow-width blocker fixed.
 
 Exit criteria
 - [ ] Phase commit created.
