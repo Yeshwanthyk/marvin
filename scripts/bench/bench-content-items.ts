@@ -9,8 +9,18 @@ interface CaseResult {
 	maxMs: number
 }
 
+interface StreamingResult {
+	settledMessages: number
+	tailUpdates: number
+	items: number
+	totalMs: number
+	avgMs: number
+	maxMs: number
+}
+
 const iterations = 25
 const sizes = [100, 1_000, 5_000]
+const streamingTailUpdates = 200
 
 const formatMs = (value: number): string => value.toFixed(4)
 
@@ -65,16 +75,20 @@ async function loadBuildContentItems() {
 	await import("@opentui/solid/preload")
 	await import("../../apps/coding-agent/src/solid-preload.js")
 	const messageList = await import("../../apps/coding-agent/src/components/MessageList.js")
-	return messageList.buildContentItems
+	return {
+		buildContentItems: messageList.buildContentItems,
+		createTranscriptContentCache: messageList.createTranscriptContentCache,
+	}
 }
 
 async function runBench(): Promise<void> {
-	const buildContentItems = await loadBuildContentItems()
+	const { buildContentItems, createTranscriptContentCache } = await loadBuildContentItems()
 	const results: CaseResult[] = []
 
 	for (const size of sizes) {
 		const { messages, toolBlocks } = makeMessages(size)
-		buildContentItems(messages, toolBlocks, true)
+		const cache = createTranscriptContentCache()
+		buildContentItems(messages, toolBlocks, true, cache)
 
 		let totalMs = 0
 		let maxMs = 0
@@ -82,7 +96,7 @@ async function runBench(): Promise<void> {
 
 		for (let i = 0; i < iterations; i++) {
 			const start = performance.now()
-			const contentItems = buildContentItems(messages, toolBlocks, true)
+			const contentItems = buildContentItems(messages, toolBlocks, true, cache)
 			const elapsedMs = performance.now() - start
 			totalMs += elapsedMs
 			if (elapsedMs > maxMs) maxMs = elapsedMs
@@ -90,6 +104,47 @@ async function runBench(): Promise<void> {
 		}
 
 		results.push({ size, items, totalMs, avgMs: totalMs / iterations, maxMs })
+	}
+
+	const settled = makeMessages(500).messages
+	let streamingMessages: UIMessage[] = [
+		...settled,
+		{
+			id: "assistant-streaming-tail",
+			role: "assistant",
+			content: "",
+			isStreaming: true,
+			contentBlocks: [{ type: "text", text: "stream" }],
+		},
+	]
+	const streamingCache = createTranscriptContentCache()
+	buildContentItems(streamingMessages, [], true, streamingCache)
+	let streamingTotalMs = 0
+	let streamingMaxMs = 0
+	let streamingItems = 0
+	for (let i = 0; i < streamingTailUpdates; i++) {
+		const tail: UIMessage = {
+			id: "assistant-streaming-tail",
+			role: "assistant",
+			content: "",
+			isStreaming: true,
+			contentBlocks: [{ type: "text", text: `stream ${i} ${"token ".repeat((i % 20) + 1)}` }],
+		}
+		streamingMessages = [...settled, tail]
+		const start = performance.now()
+		const contentItems = buildContentItems(streamingMessages, [], true, streamingCache)
+		const elapsedMs = performance.now() - start
+		streamingTotalMs += elapsedMs
+		if (elapsedMs > streamingMaxMs) streamingMaxMs = elapsedMs
+		streamingItems = contentItems.length
+	}
+	const streamingResult: StreamingResult = {
+		settledMessages: settled.length,
+		tailUpdates: streamingTailUpdates,
+		items: streamingItems,
+		totalMs: streamingTotalMs,
+		avgMs: streamingTotalMs / streamingTailUpdates,
+		maxMs: streamingMaxMs,
 	}
 
 	console.log("# bench-content-items")
@@ -106,6 +161,17 @@ async function runBench(): Promise<void> {
 			formatMs(result.maxMs),
 		].join(","))
 	}
+	console.log("")
+	console.log("# bench-content-items-streaming")
+	console.log("settledMessages,tailUpdates,items,total_ms,avg_ms,max_ms")
+	console.log([
+		streamingResult.settledMessages,
+		streamingResult.tailUpdates,
+		streamingResult.items,
+		formatMs(streamingResult.totalMs),
+		formatMs(streamingResult.avgMs),
+		formatMs(streamingResult.maxMs),
+	].join(","))
 }
 
 await runBench()

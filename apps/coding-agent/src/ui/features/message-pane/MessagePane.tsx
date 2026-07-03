@@ -1,7 +1,8 @@
 import type { ToolBlock, UIMessage } from "../../../types.js"
 import { useKeyboard, type ScrollBoxRenderable } from "@yeshwanthyk/open-tui"
 import { createEffect, createMemo } from "solid-js"
-import { MessageList, buildTranscriptMarkIds } from "../../../components/MessageList.js"
+import { MessageList, buildContentItems, createTranscriptContentCache } from "../../../components/MessageList.js"
+import { profile } from "../../../profiler.js"
 
 export interface MessagePaneProps {
 	messages: UIMessage[]
@@ -19,7 +20,18 @@ export interface MessagePaneProps {
 export function MessagePane(props: MessagePaneProps) {
 	let scrollbox: ScrollBoxRenderable | undefined
 	let activeMarkIndex = -1
-	const markIds = createMemo(() => buildTranscriptMarkIds(props.messages, props.toolBlocks, props.thinkingVisible))
+	const contentCache = createTranscriptContentCache()
+	const contentItems = createMemo(() =>
+		profile("build_content_items", () =>
+			buildContentItems(props.messages, props.toolBlocks, props.thinkingVisible, contentCache)
+		)
+	)
+	const markIds = createMemo(() => contentItems().map((item) => item.mark.id))
+	const sessionKey = createMemo(() => {
+		const first = props.messages[0]?.id ?? "empty"
+		const last = props.messages[props.messages.length - 1]?.id ?? "empty"
+		return `${first}:${last}:${props.messages.length}`
+	})
 
 	const scrollToMark = (direction: "prev" | "next") => {
 		const ids = markIds()
@@ -59,9 +71,8 @@ export function MessagePane(props: MessagePaneProps) {
 			flexShrink={1}
 		>
 			<MessageList
-				messages={props.messages}
-				toolBlocks={props.toolBlocks}
-				thinkingVisible={props.thinkingVisible}
+				contentItems={contentItems()}
+				sessionKey={sessionKey()}
 				diffWrapMode={props.diffWrapMode}
 				concealMarkdown={props.concealMarkdown}
 				isToolExpanded={props.isToolExpanded}

@@ -6,7 +6,6 @@ import { For, Show, Switch, Match, createMemo, createSignal, type JSX } from "so
 import { CodeBlock, Markdown, TextAttributes, useTheme, type RGBA, type Theme } from "@yeshwanthyk/open-tui"
 import type { UIMessage, ToolBlock, ContentItem } from "../types.js"
 import type { ToolArgs } from "../types/tool-rendering.js"
-import { profile } from "../profiler.js"
 import { ToolBlock as ToolBlockComponent } from "../tui-open-rendering.js"
 
 // ----- Tool Block Wrapper -----
@@ -60,8 +59,9 @@ export function buildTranscriptMarkIds(
 	messages: UIMessage[],
 	toolBlocks: ToolBlock[],
 	thinkingVisible: boolean,
+	cache?: TranscriptContentCache,
 ): string[] {
-	return buildContentItems(messages, toolBlocks, thinkingVisible).map((item) => item.mark.id)
+	return buildContentItems(messages, toolBlocks, thinkingVisible, cache).map((item) => item.mark.id)
 }
 
 function ToolBlockWrapper(props: {
@@ -147,27 +147,47 @@ function ThinkingBlockWrapper(props: {
 
 // ----- Content Items Builder -----
 
-// Per-item cache: reuse ContentItem objects when data unchanged
-// Key format: "type:id" or "type:msgId:blockIdx"
-const itemCache = new Map<string, TranscriptSingleItem>()
-let activeCacheKeys = new Set<string>()
-let lastMessageCount = 0
-let lastFirstMessageId: string | null = null
+export interface TranscriptContentCache {
+	itemCache: Map<string, TranscriptSingleItem>
+	settledMessageRefs: UIMessage[]
+	settledThinkingVisible: boolean
+	settledItems: TranscriptSingleItem[]
+	settledGroupedItems: TranscriptContentItem[]
+	settledPromptCount: number
+	settledRenderedToolIds: Set<string>
+}
+
+export function createTranscriptContentCache(): TranscriptContentCache {
+	return {
+		itemCache: new Map(),
+		settledMessageRefs: [],
+		settledThinkingVisible: true,
+		settledItems: [],
+		settledGroupedItems: [],
+		settledPromptCount: 0,
+		settledRenderedToolIds: new Set(),
+	}
+}
 
 /** Get or create a cached ContentItem, preserving object identity when data matches */
-function getCachedItem<T extends TranscriptSingleItem>(
+function getCachedItem(
+	cache: TranscriptContentCache,
+	activeCacheKeys: Set<string>,
 	key: string,
-	current: T,
-	isEqual: (a: T, b: T) => boolean
-): T {
+	current: TranscriptSingleItem,
+	isEqual: (a: TranscriptSingleItem, b: TranscriptSingleItem) => boolean
+): TranscriptSingleItem {
 	activeCacheKeys.add(key)
-	const cached = itemCache.get(key) as T | undefined
+	const cached = cache.itemCache.get(key)
 	if (cached && cached.type === current.type && isEqual(cached, current)) {
 		return cached
 	}
-	itemCache.set(key, current)
+	cache.itemCache.set(key, current)
 	return current
 }
+
+const sameMark = (a: TranscriptSingleItem, b: TranscriptSingleItem): boolean =>
+	a.mark.id === b.mark.id && a.mark.kind === b.mark.kind && a.mark.label === b.mark.label && a.mark.detail === b.mark.detail
 
 const plural = (count: number, singular: string, pluralLabel = `${singular}s`): string =>
 	`${count} ${count === 1 ? singular : pluralLabel}`
@@ -208,7 +228,8 @@ const workGroupLabel = (entries: TranscriptWorkEntry[]): WorkGroupLabel => {
 	if (tones.includes("fail")) return "fail"
 	const actionTones = Array.from(new Set(tones.filter((tone) => tone !== "think")))
 	if (actionTones.length > 1) return "work"
-	if (actionTones.length === 1) return actionTones[0]!
+	const onlyActionTone = actionTones[0]
+	if (onlyActionTone) return onlyActionTone
 	return "think"
 }
 
@@ -293,28 +314,65 @@ const groupRuntimeWorkItems = (items: TranscriptSingleItem[]): TranscriptContent
 	return grouped
 }
 
-export function buildContentItems(
+const workEntriesForItem = (item: TranscriptContentItem): TranscriptWorkEntry[] | null => {
+	if (item.type === "work") return item.entries
+	if (item.type === "thinking" || item.type === "tool") return [item]
+	return null
+}
+
+const mergeGroupedItems = (
+	prefixItems: TranscriptContentItem[],
+	tailItems: TranscriptContentItem[],
+): TranscriptContentItem[] => {
+	if (prefixItems.length === 0) return tailItems
+	if (tailItems.length === 0) return prefixItems
+	const prefixLast = prefixItems[prefixItems.length - 1]
+	const tailFirst = tailItems[0]
+	if (!prefixLast || !tailFirst) return [...prefixItems, ...tailItems]
+	const prefixEntries = workEntriesForItem(prefixLast)
+	const tailEntries = workEntriesForItem(tailFirst)
+	if (!prefixEntries || !tailEntries) return [...prefixItems, ...tailItems]
+	const mergedWork = makeWorkGroup([...prefixEntries, ...tailEntries])
+	return [...prefixItems.slice(0, -1), mergedWork, ...tailItems.slice(1)]
+}
+
+interface MessageBuildResult {
+	items: TranscriptSingleItem[]
+	renderedToolIds: Set<string>
+	promptCount: number
+}
+
+const sameSettledRefs = (
+	refs: UIMessage[],
 	messages: UIMessage[],
+	length: number,
+	thinkingVisible: boolean,
+	cachedThinkingVisible: boolean,
+): boolean => {
+	if (refs.length !== length || thinkingVisible !== cachedThinkingVisible) return false
+	for (let i = 0; i < length; i++) {
+		if (refs[i] !== messages[i]) return false
+	}
+	return true
+}
+
+function buildMessageItems(
+	messages: UIMessage[],
+	startIndex: number,
+	endIndex: number,
 	toolBlocks: ToolBlock[],
-	thinkingVisible: boolean
-): TranscriptContentItem[] {
-	// Prune stale cache entries when message count decreases (e.g., clear)
-	if (messages.length < lastMessageCount) {
-		itemCache.clear()
-	}
-	lastMessageCount = messages.length
-	const firstMessageId = messages.length > 0 ? messages[0].id : null
-	if (firstMessageId !== lastFirstMessageId) {
-		if (lastFirstMessageId !== null) itemCache.clear()
-		lastFirstMessageId = firstMessageId
-	}
-
-	activeCacheKeys = new Set()
+	thinkingVisible: boolean,
+	includeOrphanToolBlocks: boolean,
+	cache: TranscriptContentCache,
+	activeCacheKeys: Set<string>,
+	initialRenderedToolIds: Set<string>,
+	initialPromptCount: number,
+): MessageBuildResult {
 	const items: TranscriptSingleItem[] = []
-	const renderedToolIds = new Set<string>()
-	let promptCount = 0
+	const renderedToolIds = new Set(initialRenderedToolIds)
+	let promptCount = initialPromptCount
 
-	for (let i = 0; i < messages.length; i++) {
+	for (let i = startIndex; i < endIndex; i++) {
 		const msg = messages[i]
 		const isLastMessage = i === messages.length - 1
 
@@ -326,10 +384,11 @@ export function buildContentItems(
 				mark: makeMark("prompt", msg.id || String(promptCount), `§${promptCount}`, firstLine(msg.content)),
 			}
 			items.push(
-				getCachedItem(`user:${msg.id}`, item, (a, b) => a.content === b.content)
+				getCachedItem(cache, activeCacheKeys, `user:${msg.id}`, item, (a, b) =>
+					a.type === "user" && b.type === "user" && a.content === b.content && sameMark(a, b)
+				)
 			)
 		} else if (msg.role === "assistant") {
-			// Use contentBlocks if available (preserves interleaved order)
 			if (msg.contentBlocks && msg.contentBlocks.length > 0) {
 				for (let blockIdx = 0; blockIdx < msg.contentBlocks.length; blockIdx++) {
 					const block = msg.contentBlocks[blockIdx]
@@ -345,9 +404,9 @@ export function buildContentItems(
 								mark: makeMark("thinking", block.id, "think", block.preview || block.summary),
 							}
 							items.push(
-								getCachedItem(`thinking:${msg.id}:${block.id}`, item, (a, b) =>
+								getCachedItem(cache, activeCacheKeys, `thinking:${msg.id}:${block.id}`, item, (a, b) =>
 									a.type === "thinking" && b.type === "thinking" &&
-									a.full === b.full && a.isStreaming === b.isStreaming
+									a.full === b.full && a.isStreaming === b.isStreaming && sameMark(a, b)
 								)
 							)
 						}
@@ -363,9 +422,9 @@ export function buildContentItems(
 								items.push(item)
 							} else {
 								items.push(
-									getCachedItem(`text:${msg.id}:${blockIdx}:final`, item, (a, b) =>
+									getCachedItem(cache, activeCacheKeys, `text:${msg.id}:${blockIdx}:final`, item, (a, b) =>
 										a.type === "assistant" && b.type === "assistant" &&
-										a.content === b.content && a.isStreaming === b.isStreaming
+										a.content === b.content && a.isStreaming === b.isStreaming && sameMark(a, b)
 									)
 								)
 							}
@@ -378,11 +437,12 @@ export function buildContentItems(
 								mark: makeMark(block.tool.isError ? "error" : "tool", block.tool.id, toolLabel(block.tool), block.tool.name),
 							}
 							items.push(
-								getCachedItem(`tool:${block.tool.id}:${block.tool.isComplete}`, item, (a, b) =>
+								getCachedItem(cache, activeCacheKeys, `tool:${block.tool.id}:${block.tool.isComplete}`, item, (a, b) =>
 									a.type === "tool" && b.type === "tool" &&
 									a.tool.id === b.tool.id && a.tool.isComplete === b.tool.isComplete &&
 									a.tool.output === b.tool.output &&
-									(a.tool.updateSeq ?? 0) === (b.tool.updateSeq ?? 0)
+									(a.tool.updateSeq ?? 0) === (b.tool.updateSeq ?? 0) &&
+									sameMark(a, b)
 								)
 							)
 							renderedToolIds.add(block.tool.id)
@@ -390,7 +450,6 @@ export function buildContentItems(
 					}
 				}
 			} else {
-				// Fallback: legacy format without contentBlocks
 				const thinking = msg.thinking
 				if (thinkingVisible && hasThinkingContent(thinking)) {
 					const item: TranscriptSingleItem = {
@@ -403,9 +462,9 @@ export function buildContentItems(
 						mark: makeMark("thinking", `thinking-${msg.id}`, "think", thinking.preview || thinking.summary),
 					}
 					items.push(
-						getCachedItem(`thinking:${msg.id}`, item, (a, b) =>
+						getCachedItem(cache, activeCacheKeys, `thinking:${msg.id}`, item, (a, b) =>
 							a.type === "thinking" && b.type === "thinking" &&
-							a.full === b.full && a.isStreaming === b.isStreaming
+							a.full === b.full && a.isStreaming === b.isStreaming && sameMark(a, b)
 						)
 					)
 				}
@@ -418,11 +477,12 @@ export function buildContentItems(
 							mark: makeMark(tool.isError ? "error" : "tool", tool.id, toolLabel(tool), tool.name),
 						}
 						items.push(
-							getCachedItem(`tool:${tool.id}:${tool.isComplete}`, item, (a, b) =>
+							getCachedItem(cache, activeCacheKeys, `tool:${tool.id}:${tool.isComplete}`, item, (a, b) =>
 								a.type === "tool" && b.type === "tool" &&
 								a.tool.id === b.tool.id && a.tool.isComplete === b.tool.isComplete &&
 								a.tool.output === b.tool.output &&
-								(a.tool.updateSeq ?? 0) === (b.tool.updateSeq ?? 0)
+								(a.tool.updateSeq ?? 0) === (b.tool.updateSeq ?? 0) &&
+								sameMark(a, b)
 							)
 						)
 						renderedToolIds.add(tool.id)
@@ -440,17 +500,16 @@ export function buildContentItems(
 						items.push(item)
 					} else {
 						items.push(
-							getCachedItem(`text:${msg.id}:final`, item, (a, b) =>
+							getCachedItem(cache, activeCacheKeys, `text:${msg.id}:final`, item, (a, b) =>
 								a.type === "assistant" && b.type === "assistant" &&
-								a.content === b.content && a.isStreaming === b.isStreaming
+								a.content === b.content && a.isStreaming === b.isStreaming && sameMark(a, b)
 							)
 						)
 					}
 				}
 			}
 
-			// For last message, include orphan toolBlocks from global state
-			if (isLastMessage) {
+			if (includeOrphanToolBlocks && isLastMessage) {
 				for (const tool of toolBlocks) {
 					if (!renderedToolIds.has(tool.id)) {
 						const item: TranscriptSingleItem = {
@@ -459,11 +518,12 @@ export function buildContentItems(
 							mark: makeMark(tool.isError ? "error" : "tool", tool.id, toolLabel(tool), tool.name),
 						}
 						items.push(
-							getCachedItem(`tool:${tool.id}:${tool.isComplete}`, item, (a, b) =>
+							getCachedItem(cache, activeCacheKeys, `tool:${tool.id}:${tool.isComplete}`, item, (a, b) =>
 								a.type === "tool" && b.type === "tool" &&
 								a.tool.id === b.tool.id && a.tool.isComplete === b.tool.isComplete &&
 								a.tool.output === b.tool.output &&
-								(a.tool.updateSeq ?? 0) === (b.tool.updateSeq ?? 0)
+								(a.tool.updateSeq ?? 0) === (b.tool.updateSeq ?? 0) &&
+								sameMark(a, b)
 							)
 						)
 						renderedToolIds.add(tool.id)
@@ -482,19 +542,65 @@ export function buildContentItems(
 				mark: makeMark(isError ? "error" : "shell", msg.id, isError ? "fail" : "shell", shellStatus(msg.exitCode) ?? firstLine(msg.command)),
 			}
 			items.push(
-				getCachedItem(`shell:${msg.id}`, item, (a, b) =>
+				getCachedItem(cache, activeCacheKeys, `shell:${msg.id}`, item, (a, b) =>
 					a.type === "shell" && b.type === "shell" &&
-					a.command === b.command && a.output === b.output
+					a.command === b.command && a.output === b.output && sameMark(a, b)
 				)
 			)
 		}
 	}
 
-	for (const key of itemCache.keys()) {
-		if (!activeCacheKeys.has(key)) itemCache.delete(key)
+	return { items, renderedToolIds, promptCount }
+}
+
+export function buildContentItems(
+	messages: UIMessage[],
+	toolBlocks: ToolBlock[],
+	thinkingVisible: boolean,
+	cache: TranscriptContentCache = createTranscriptContentCache(),
+): TranscriptContentItem[] {
+	const lastMessage = messages[messages.length - 1]
+	const hasLiveTail = Boolean(lastMessage && lastMessage.role === "assistant" && lastMessage.isStreaming) || toolBlocks.length > 0
+	const settledLength = hasLiveTail ? Math.max(0, messages.length - 1) : messages.length
+	const activeCacheKeys = new Set<string>()
+
+	if (!sameSettledRefs(cache.settledMessageRefs, messages, settledLength, thinkingVisible, cache.settledThinkingVisible)) {
+		const settled = buildMessageItems(
+			messages,
+			0,
+			settledLength,
+			[],
+			thinkingVisible,
+			false,
+			cache,
+			activeCacheKeys,
+			new Set(),
+			0,
+		)
+		cache.settledMessageRefs = messages.slice(0, settledLength)
+		cache.settledThinkingVisible = thinkingVisible
+		cache.settledItems = settled.items
+		cache.settledGroupedItems = groupRuntimeWorkItems(settled.items)
+		cache.settledPromptCount = settled.promptCount
+		cache.settledRenderedToolIds = settled.renderedToolIds
 	}
 
-	return groupRuntimeWorkItems(items)
+	const tail = buildMessageItems(
+		messages,
+		settledLength,
+		messages.length,
+		toolBlocks,
+		thinkingVisible,
+		true,
+		cache,
+		activeCacheKeys,
+		cache.settledRenderedToolIds,
+		cache.settledPromptCount,
+	)
+	const tailGroupedItems = groupRuntimeWorkItems(tail.items)
+	const contentItems = mergeGroupedItems(cache.settledGroupedItems, tailGroupedItems)
+
+	return contentItems
 }
 
 function markColor(theme: Theme, kind: TranscriptMarkKind): RGBA {
@@ -552,10 +658,10 @@ function StreamingCursor(): JSX.Element {
 	)
 }
 
-const expandedWorkGroups = new Set<string>()
-
 function WorkGroupContent(props: {
 	group: TranscriptWorkGroup
+	isWorkExpanded: (id: string) => boolean
+	toggleWorkExpanded: (id: string) => void
 	isToolExpanded: (id: string) => boolean
 	toggleToolExpanded: (id: string) => void
 	isThinkingExpanded: (id: string) => boolean
@@ -565,13 +671,10 @@ function WorkGroupContent(props: {
 	onEditFile?: (path: string, line?: number) => void
 }) {
 	const { theme } = useTheme()
-	const [expanded, setExpanded] = createSignal(expandedWorkGroups.has(props.group.mark.id))
+	const expanded = createMemo(() => props.isWorkExpanded(props.group.mark.id))
 	const summaryParts = createMemo(() => workSummaryParts(props.group.entries))
 	const toggleExpanded = () => {
-		const next = !expanded()
-		setExpanded(next)
-		if (next) expandedWorkGroups.add(props.group.mark.id)
-		else expandedWorkGroups.delete(props.group.mark.id)
+		props.toggleWorkExpanded(props.group.mark.id)
 	}
 	const summaryColor = () => props.group.mark.kind === "error" ? theme.error : theme.textMuted
 	const summaryPartColor = (tone: WorkTone): RGBA => tone === "fail" ? theme.error : theme.textMuted
@@ -666,9 +769,8 @@ function WorkEntryContent(props: {
 // ----- MessageList Component -----
 
 export interface MessageListProps {
-	messages: UIMessage[]
-	toolBlocks: ToolBlock[]
-	thinkingVisible: boolean
+	contentItems: TranscriptContentItem[]
+	sessionKey: string
 	diffWrapMode: "word" | "none"
 	concealMarkdown?: boolean
 	isToolExpanded: (id: string) => boolean
@@ -680,16 +782,29 @@ export interface MessageListProps {
 
 export function MessageList(props: MessageListProps) {
 	const { theme } = useTheme()
-
-	const contentItems = createMemo(() =>
-		profile("build_content_items", () =>
-			buildContentItems(props.messages, props.toolBlocks, props.thinkingVisible)
-		)
-	)
+	const expandedWorkGroupsBySession = new Map<string, Set<string>>()
+	const [workGroupExpansionVersion, setWorkGroupExpansionVersion] = createSignal(0)
+	const workGroupSet = (): Set<string> => {
+		const existing = expandedWorkGroupsBySession.get(props.sessionKey)
+		if (existing) return existing
+		const next = new Set<string>()
+		expandedWorkGroupsBySession.set(props.sessionKey, next)
+		return next
+	}
+	const isWorkExpanded = (id: string) => {
+		workGroupExpansionVersion()
+		return workGroupSet().has(id)
+	}
+	const toggleWorkExpanded = (id: string) => {
+		const expanded = workGroupSet()
+		if (expanded.has(id)) expanded.delete(id)
+		else expanded.add(id)
+		setWorkGroupExpansionVersion((version) => version + 1)
+	}
 
 	return (
 		<box flexDirection="column" gap={1} paddingTop={1}>
-			<For each={contentItems()}>
+			<For each={props.contentItems}>
 				{(item) => (
 					<Switch>
 						<Match when={item.type === "user" && item}>
@@ -721,6 +836,8 @@ export function MessageList(props: MessageListProps) {
 								<TranscriptRow mark={workItem().mark}>
 									<WorkGroupContent
 										group={workItem()}
+										isWorkExpanded={isWorkExpanded}
+										toggleWorkExpanded={toggleWorkExpanded}
 										isToolExpanded={props.isToolExpanded}
 										toggleToolExpanded={props.toggleToolExpanded}
 										isThinkingExpanded={props.isThinkingExpanded}

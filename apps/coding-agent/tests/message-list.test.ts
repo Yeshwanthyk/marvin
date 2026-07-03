@@ -9,6 +9,7 @@ async function loadMessageListModel() {
 	return {
 		buildContentItems: messageList.buildContentItems,
 		buildTranscriptMarkIds: messageList.buildTranscriptMarkIds,
+		createTranscriptContentCache: messageList.createTranscriptContentCache,
 	}
 }
 
@@ -17,8 +18,9 @@ async function renderMessageList(messages: UIMessage[]): Promise<HumanTuiHarness
 	await import("../src/solid-preload.js")
 	const { createComponent } = await import("solid-js")
 	const { ThemeProvider } = await import("@yeshwanthyk/open-tui")
-	const { MessageList } = await import("../src/components/MessageList.js")
+	const { MessageList, buildContentItems } = await import("../src/components/MessageList.js")
 	const { renderHumanTui } = await import("./helpers/tui-harness.js")
+	const contentItems = buildContentItems(messages, [], true)
 
 	return renderHumanTui(() => (
 		createComponent(ThemeProvider, {
@@ -26,9 +28,8 @@ async function renderMessageList(messages: UIMessage[]): Promise<HumanTuiHarness
 			themeName: "marvin",
 			get children() {
 				return createComponent(MessageList, {
-					messages,
-					toolBlocks: [],
-					thinkingVisible: true,
+					contentItems,
+					sessionKey: "test-session",
 					diffWrapMode: "word",
 					isToolExpanded: () => false,
 					toggleToolExpanded: () => {},
@@ -177,5 +178,40 @@ describe("MessageList transcript model", () => {
 
 		expect(items.map((item) => item.type)).toEqual(["assistant"])
 		expect(model.buildTranscriptMarkIds(messages, [], true)).toEqual(items.map((item) => item.mark.id))
+	})
+
+	it("reuses settled content items when only the streaming tail changes", async () => {
+		const model = await loadMessageListModel()
+		const cache = model.createTranscriptContentCache()
+		const settled: UIMessage[] = [
+			{ id: "user-1", role: "user", content: "inspect transcript rendering" },
+			{
+				id: "assistant-1",
+				role: "assistant",
+				content: "",
+				contentBlocks: [{ type: "text", text: "settled answer" }],
+			},
+		]
+		const firstTail: UIMessage = {
+			id: "assistant-live",
+			role: "assistant",
+			content: "",
+			isStreaming: true,
+			contentBlocks: [{ type: "text", text: "one" }],
+		}
+		const secondTail: UIMessage = {
+			id: "assistant-live",
+			role: "assistant",
+			content: "",
+			isStreaming: true,
+			contentBlocks: [{ type: "text", text: "one two" }],
+		}
+
+		const firstItems = model.buildContentItems([...settled, firstTail], [], true, cache)
+		const secondItems = model.buildContentItems([...settled, secondTail], [], true, cache)
+
+		expect(secondItems[0]).toBe(firstItems[0])
+		expect(secondItems[1]).toBe(firstItems[1])
+		expect(secondItems[2]).not.toBe(firstItems[2])
 	})
 })
