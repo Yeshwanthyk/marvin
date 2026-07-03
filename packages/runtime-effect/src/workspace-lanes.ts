@@ -72,6 +72,12 @@ export const workspaceLanesTempPath = (configDir: string): string => `${workspac
 
 const laneIndexCache = new WeakMap<WorkspaceLanes, CachedLaneIndex>();
 const pendingWorkspaceLanesWrites = new Map<string, PendingWorkspaceLanesWrite>();
+let workspaceLanesTempPathCounter = 0;
+
+const uniqueWorkspaceLanesTempPath = (path: string): string => {
+  workspaceLanesTempPathCounter += 1;
+  return `${path}.${process.pid}.${workspaceLanesTempPathCounter}.tmp`;
+};
 
 const emptyWorkspaceLanes = (): WorkspaceLanes => ({
   version: WORKSPACE_LANES_VERSION,
@@ -183,7 +189,7 @@ const fsyncDirSync = (path: string): void => {
 
 const atomicWriteWorkspaceLanesSync = (path: string, data: string): void => {
   mkdirSync(dirname(path), { recursive: true });
-  const tempPath = `${path}.tmp`;
+  const tempPath = uniqueWorkspaceLanesTempPath(path);
   let fd: number | null = null;
   try {
     fd = openSync(tempPath, "w");
@@ -210,7 +216,7 @@ const fsyncDir = async (path: string): Promise<void> => {
 
 const atomicWriteWorkspaceLanes = async (path: string, data: string): Promise<void> => {
   await mkdir(dirname(path), { recursive: true });
-  const tempPath = `${path}.tmp`;
+  const tempPath = uniqueWorkspaceLanesTempPath(path);
   const handle = await open(tempPath, "w");
   try {
     await writeFile(handle, data, "utf8");
