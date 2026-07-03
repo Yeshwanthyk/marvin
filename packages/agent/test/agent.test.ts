@@ -7,10 +7,12 @@ import type { AgentEvent, AppMessage } from "../src/types.js";
 class QueueCapturingTransport implements AgentTransport {
 	public lastSteering: QueuedMessage[] = [];
 	public lastFollowUps: QueuedMessage[] = [];
+	public lastUserMessage: Message | undefined;
 
 	reset() {
 		this.lastSteering = [];
 		this.lastFollowUps = [];
+		this.lastUserMessage = undefined;
 	}
 
 	private async captureQueues(cfg: AgentRunConfig) {
@@ -18,7 +20,8 @@ class QueueCapturingTransport implements AgentTransport {
 		this.lastFollowUps = (await cfg.getFollowUpMessages?.()) ?? [];
 	}
 
-	async *run(_messages: Message[], _userMessage: Message, cfg: AgentRunConfig) {
+	async *run(_messages: Message[], userMessage: Message, cfg: AgentRunConfig) {
+		this.lastUserMessage = userMessage;
 		await this.captureQueues(cfg);
 		yield { type: "agent_end", messages: [] as AppMessage[] } as AgentEvent;
 	}
@@ -173,6 +176,46 @@ describe("Agent", () => {
 		expect((transport.lastFollowUps[0].original as AppMessage).content).toEqual(queued.content);
 		expect(transport.lastFollowUps[0].mode).toBe("followUp");
 		expect(warnSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("promptMessage should pass the provided user message to transport verbatim", async () => {
+		const transport = new QueueCapturingTransport();
+		const agent = new Agent({ transport });
+		const message: AppMessage = {
+			role: "user",
+			content: [{ type: "text", text: "canonical prompt" }],
+			timestamp: Date.now(),
+		};
+
+		await agent.promptMessage(message);
+
+		expect(transport.lastUserMessage).toBe(message);
+	});
+
+	it("prompt overload should accept a provided user message", async () => {
+		const transport = new QueueCapturingTransport();
+		const agent = new Agent({ transport });
+		const message: AppMessage = {
+			role: "user",
+			content: [{ type: "text", text: "canonical overload prompt" }],
+			timestamp: Date.now(),
+		};
+
+		await agent.prompt(message);
+
+		expect(transport.lastUserMessage).toBe(message);
+	});
+
+	it("string prompt should keep building a user message", async () => {
+		const transport = new QueueCapturingTransport();
+		const agent = new Agent({ transport });
+
+		await agent.prompt("string prompt");
+
+		expect(transport.lastUserMessage).toMatchObject({
+			role: "user",
+			content: [{ type: "text", text: "string prompt" }],
+		});
 	});
 
 	it("followUp should respect one-at-a-time queue mode", async () => {

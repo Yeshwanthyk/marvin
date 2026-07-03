@@ -8,7 +8,7 @@ import { AgentFactoryTag } from "../agent.js";
 import { ConfigTag } from "../config.js";
 import type { HookEffects } from "../hooks/effects.js";
 import { HookEffectsTag } from "../hooks/effects.js";
-import type { BeforeAgentStartResult } from "../hooks/types.js";
+import type { BeforeAgentStartResult, MessagePart } from "../hooks/types.js";
 import { InstrumentationTag } from "../instrumentation.js";
 import { SessionManagerTag } from "../session-manager.js";
 
@@ -44,8 +44,8 @@ const cloneMessages = (messages: AppMessage[]): AppMessage[] => {
 
 const runPromiseEffect = <T>(thunk: () => Promise<T>): Effect.Effect<T, unknown> => Effect.tryPromise(thunk);
 
-const runAgentPrompt = (agent: Agent, text: string, attachments?: Attachment[]) =>
-  runPromiseEffect(() => agent.prompt(text, attachments));
+const runAgentPromptMessage = (agent: Agent, message: AppMessage) =>
+  runPromiseEffect(() => agent.promptMessage(message));
 
 const runAgentSteer = (agent: Agent, text: string) =>
   runPromiseEffect(() =>
@@ -55,6 +55,32 @@ const runAgentSteer = (agent: Agent, text: string) =>
       timestamp: Date.now(),
     }),
   );
+
+const buildChatMessageParts = (text: string, attachments?: readonly Attachment[]): MessagePart[] => {
+  const parts: MessagePart[] = [{ type: "text", text }];
+  for (const attachment of attachments ?? []) {
+    if (attachment.type === "image") {
+      parts.push({
+        type: "image",
+        data: attachment.content,
+        mimeType: attachment.mimeType,
+      });
+    }
+  }
+  return parts;
+};
+
+const buildUserMessage = (parts: MessagePart[], attachments?: readonly Attachment[]): AppMessage => {
+  const message: AppMessage = {
+    role: "user",
+    content: parts,
+    timestamp: Date.now(),
+  };
+  if (attachments !== undefined && attachments.length > 0) {
+    return { ...message, attachments: [...attachments] };
+  }
+  return message;
+};
 
 const ensureSession = (
   stateRef: Ref.Ref<SessionState>,
@@ -110,17 +136,20 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
         return { id, deferred };
       });
 
-      const takeCompletion = (id?: string) =>
-        id
-          ? Ref.modify(completionWaitersRef, (map) => {
-              if (!map.has(id)) {
-                return [undefined, map] as const;
-              }
-              const deferred = map.get(id)!;
-              map.delete(id);
-              return [deferred, map] as const;
-            })
-          : Effect.succeed<Deferred.Deferred<void, unknown> | undefined>(undefined);
+      const takeCompletion = (id: string) =>
+        Ref.modify(completionWaitersRef, (map) => {
+          const deferred = map.get(id);
+          if (deferred === undefined) {
+            return [undefined, map] as const;
+          }
+          map.delete(id);
+          return [deferred, map] as const;
+        });
+
+      const takeItemCompletion = (item: PromptQueueItem) =>
+        item.completionId === undefined
+          ? Effect.succeed<Deferred.Deferred<void, unknown> | undefined>(undefined)
+          : takeCompletion(item.completionId);
 
       const failPendingCompletions = (error: unknown) =>
         Effect.flatMap(
@@ -135,7 +164,7 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
             }),
         );
 
-      const createPromptItem = (text: string, options?: PromptSubmitOptions, completionId?: string) => {
+      const createPromptItem = (text: string, options?: PromptSubmitOptions) => {
         const item: PromptQueueItem = {
           text,
           mode: options?.mode ?? "followUp",
@@ -145,9 +174,6 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
         }
         if (options?.beforeStartResult !== undefined) {
           item.beforeStartResult = options.beforeStartResult;
-        }
-        if (completionId !== undefined) {
-          item.completionId = completionId;
         }
         return item;
       };
@@ -161,9 +187,8 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
           });
         });
 
-      const submitPrompt = (text: string, options?: PromptSubmitOptions, completionId?: string) =>
+      const submitPromptItem = (item: PromptQueueItem) =>
         Effect.gen(function* () {
-          const item = createPromptItem(text, options, completionId);
           const isProcessing = yield* Ref.get(isProcessingRef);
           if (item.mode !== "steer" || !isProcessing) {
             yield* queue.enqueue(item);
@@ -182,8 +207,8 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
                   message: "prompt:steer:error",
                   details: { error: error instanceof Error ? error.message : String(error) },
                 });
-                if (completionId !== undefined) {
-                  const deferred = yield* takeCompletion(completionId);
+                if (item.completionId !== undefined) {
+                  const deferred = yield* takeCompletion(item.completionId);
                   if (deferred) {
                     yield* Deferred.fail(deferred, error);
                   }
@@ -191,17 +216,20 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
               }),
             ),
           );
-          if (completionId !== undefined) {
-            const deferred = yield* takeCompletion(completionId);
+          if (item.completionId !== undefined) {
+            const deferred = yield* takeCompletion(item.completionId);
             if (deferred) {
               yield* Deferred.succeed(deferred, undefined);
             }
           }
         });
 
+      const submitPrompt = (text: string, options?: PromptSubmitOptions) =>
+        submitPromptItem(createPromptItem(text, options));
+
       const loop = Effect.forever(
         Effect.flatMap(queue.takeForProcessing, (item) =>
-          Effect.flatMap(takeCompletion(item.completionId), (completionDeferred) =>
+          Effect.flatMap(takeItemCompletion(item), (completionDeferred) =>
             Effect.gen(function* () {
               const agent = yield* Ref.get(agentRef);
               yield* ensureSession(sessionStateRef, sessionManager, config, hookEffects);
@@ -219,31 +247,16 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
                 sessionManager.appendMessage(beforeStartResult.message as unknown as AppMessage);
               }
 
-              const chatMessageOutput: {
-                parts: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
-              } = {
-                parts: [{ type: "text", text: item.text }],
+              const chatMessageOutput = {
+                parts: buildChatMessageParts(item.text, item.attachments),
               };
-              for (const attachment of item.attachments ?? []) {
-                if (attachment.type === "image") {
-                  chatMessageOutput.parts.push({
-                    type: "image",
-                    data: attachment.content,
-                    mimeType: attachment.mimeType,
-                  });
-                }
-              }
               yield* hookEffects.emitChatMessage(
                 { sessionId: sessionManager.sessionId, text: item.text },
                 chatMessageOutput,
               );
 
-              sessionManager.appendMessage({
-                role: "user",
-                content: chatMessageOutput.parts,
-                attachments: item.attachments && item.attachments.length > 0 ? item.attachments : undefined,
-                timestamp: Date.now(),
-              });
+              const userMessage = buildUserMessage(chatMessageOutput.parts, item.attachments);
+              sessionManager.appendMessage(userMessage);
 
               const plan = defaultPlan ?? build();
               yield* Ref.set(immediateSteerItemsRef, []);
@@ -255,7 +268,7 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
                   agent.setThinkingLevel(ctx.thinking);
                 }
                 yield* Ref.set(isProcessingRef, true);
-                yield* runAgentPrompt(agent, item.text, item.attachments).pipe(
+                yield* runAgentPromptMessage(agent, userMessage).pipe(
                   Effect.catchAll((error) =>
                     Effect.sync(() => agent.replaceMessages(snapshot)).pipe(Effect.flatMap(() => Effect.fail(error))),
                   ),
@@ -307,7 +320,7 @@ export const SessionOrchestratorLayer = (options?: SessionOrchestratorOptions) =
         submitPrompt: (text: string, options?: PromptSubmitOptions) => submitPrompt(text, options),
         submitPromptAndWait: Effect.fn(function* (text: string, options?: PromptSubmitOptions) {
           const { id, deferred } = yield* registerCompletion;
-          yield* submitPrompt(text, options, id);
+          yield* submitPromptItem({ ...createPromptItem(text, options), completionId: id });
           return yield* Deferred.await(deferred);
         }),
         snapshot: queue.snapshot,

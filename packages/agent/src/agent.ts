@@ -212,7 +212,14 @@ export class Agent {
 		this.clearMessageQueue();
 	}
 
-	async prompt(input: string, attachments?: Attachment[]) {
+	async prompt(input: string, attachments?: Attachment[]): Promise<void>;
+	async prompt(input: AppMessage): Promise<void>;
+	async prompt(input: string | AppMessage, attachments?: Attachment[]): Promise<void> {
+		if (typeof input !== "string") {
+			await this.promptMessage(input);
+			return;
+		}
+
 		const model = this._state.model;
 		if (!model) {
 			throw new Error("No model configured");
@@ -244,6 +251,18 @@ export class Agent {
 		await this._runAgentLoop(userMessage);
 	}
 
+	async promptMessage(userMessage: AppMessage): Promise<void> {
+		const model = this._state.model;
+		if (!model) {
+			throw new Error("No model configured");
+		}
+		if (userMessage.role !== "user") {
+			throw new Error(`Cannot prompt with message role: ${userMessage.role}`);
+		}
+
+		await this._runAgentLoop(userMessage);
+	}
+
 	/**
 	 * Continue from the current context without adding a new user message.
 	 * Used for retry after overflow recovery when context already has user message or tool results.
@@ -266,9 +285,9 @@ export class Agent {
 	 * Internal: Run the agent loop with a new user message.
 	 */
 	private async _runAgentLoop(userMessage: AppMessage) {
-		const { llmMessages, cfg } = await this._prepareRun();
+		const { llmMessages, cfg, signal } = await this._prepareRun();
 
-		const events = this.transport.run(llmMessages, userMessage as Message, cfg, this.abortController!.signal);
+		const events = this.transport.run(llmMessages, userMessage as Message, cfg, signal);
 
 		await this._processEvents(events);
 	}
@@ -277,9 +296,9 @@ export class Agent {
 	 * Internal: Continue the agent loop from current context.
 	 */
 	private async _runAgentLoopContinue() {
-		const { llmMessages, cfg } = await this._prepareRun();
+		const { llmMessages, cfg, signal } = await this._prepareRun();
 
-		const events = this.transport.continue(llmMessages, cfg, this.abortController!.signal);
+		const events = this.transport.continue(llmMessages, cfg, signal);
 
 		await this._processEvents(events);
 	}
@@ -298,6 +317,7 @@ export class Agent {
 		});
 
 		this.abortController = new AbortController();
+		const signal = this.abortController.signal;
 		this._state.isStreaming = true;
 		this._state.streamMessage = null;
 		delete this._state.error;
@@ -342,14 +362,17 @@ export class Agent {
 
 		const llmMessages = await this.messageTransformer(this._state.messages);
 
-		return { llmMessages, cfg, model };
+		return { llmMessages, cfg, model, signal };
 	}
 
 	/**
 	 * Process events from the transport.
 	 */
 	private async _processEvents(events: AsyncIterable<AgentEvent>) {
-		const model = this._state.model!;
+		const model = this._state.model;
+		if (!model) {
+			throw new Error("No model configured");
+		}
 		const generatedMessages: AppMessage[] = [];
 		let partial: AppMessage | null = null;
 
@@ -417,7 +440,8 @@ export class Agent {
 					}
 				}
 			}
-		} catch (err: any) {
+		} catch (err: unknown) {
+			const errorMessage = err instanceof Error ? err.message : String(err);
 			const msg: Message = {
 				role: "assistant",
 				content: [{ type: "text", text: "" }],
@@ -433,12 +457,12 @@ export class Agent {
 					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 				},
 				stopReason: this.abortController?.signal.aborted ? "aborted" : "error",
-				errorMessage: err?.message || String(err),
+				errorMessage,
 				timestamp: Date.now(),
 			};
 			this.appendMessage(msg as AppMessage);
 			generatedMessages.push(msg as AppMessage);
-			this._state.error = err?.message || String(err);
+			this._state.error = errorMessage;
 		} finally {
 			this._state.isStreaming = false;
 			this._state.streamMessage = null;

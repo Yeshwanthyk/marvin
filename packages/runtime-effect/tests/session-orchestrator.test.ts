@@ -41,6 +41,7 @@ class TestAgent {
     messages: AppMessage[];
   };
   prompts: string[] = [];
+  promptMessages: AppMessage[] = [];
   modelsUsed: string[] = [];
   thinkingUsed: ThinkingLevel[] = [];
   callCount = 0;
@@ -92,6 +93,34 @@ class TestAgent {
     } as AppMessage);
   }
 
+  async promptMessage(message: AppMessage) {
+    this.callCount++;
+    this.promptMessages.push(message);
+    const text = message.role === "user" && Array.isArray(message.content)
+      ? message.content
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n")
+      : "";
+    this.prompts.push(text);
+    if (message.role === "user" && message.attachments !== undefined) {
+      this.attachmentsReceived.push([...message.attachments]);
+    } else {
+      this.attachmentsReceived.push([]);
+    }
+    if (this.promptGate) {
+      await this.promptGate;
+    }
+    if (this.callCount <= this.failuresBeforeSuccess) {
+      throw new Error("planned failure");
+    }
+    this.state.messages.push({
+      role: "assistant",
+      content: [{ type: "text", text: `ok:${text}` }],
+      timestamp: Date.now(),
+    } as AppMessage);
+  }
+
   async steer(message: AppMessage) {
     this.steerMessages.push(message);
   }
@@ -121,14 +150,19 @@ class TestHookRunner {
   beforeStart: string[] = [];
   chatEvents: Array<{ text: string }> = [];
   emitted: Array<{ type: string }> = [];
+  transformChatOutput: ((output: { parts: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> }) => void) | undefined;
 
   async emitBeforeAgentStart(text: string) {
     this.beforeStart.push(text);
     return undefined;
   }
 
-  async emitChatMessage(input: { text: string }, _output: unknown) {
+  async emitChatMessage(
+    input: { text: string },
+    output: { parts: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> },
+  ) {
     this.chatEvents.push({ text: input.text });
+    this.transformChatOutput?.(output);
   }
 
   async emit(event: { type: string }) {
@@ -259,6 +293,7 @@ describe("SessionOrchestratorLayer", () => {
     );
 
     expect(agent.prompts).toEqual(["build the feature"]);
+    expect(agent.promptMessages[0]).toBe(sessionManager.appended[0]);
     expect(sessionManager.startCount).toBe(1);
     expect(sessionManager.appended[0]?.role).toBe("user");
     expect(hookRunner.beforeStart).toEqual(["build the feature"]);
@@ -519,6 +554,34 @@ describe("SessionOrchestratorLayer", () => {
     );
 
     expect(agent.attachmentsReceived[0]).toEqual(attachments);
+    expect(agent.promptMessages[0]).toBe(sessionManager.appended[0]);
+  });
+
+  it("sends the same hook-transformed user message that it persists", async () => {
+    const agent = new TestAgent(anthropicModel);
+    const sessionManager = new TestSessionManager();
+    const hookRunner = new TestHookRunner();
+    hookRunner.transformChatOutput = (output) => {
+      output.parts = [{ type: "text", text: "transformed prompt" }];
+    };
+    const instrumentation = new TestInstrumentation();
+    const layer = createTestLayer({ agent, sessionManager, hookRunner, instrumentation });
+
+    await runWithLayer(
+      layer,
+      Effect.gen(function* () {
+        const orchestrator = yield* SessionOrchestratorTag;
+        yield* orchestrator.submitPrompt("original prompt");
+        yield* waitForAgentCalls(agent, 1);
+      }),
+    );
+
+    expect(sessionManager.appended[0]).toBe(agent.promptMessages[0]);
+    expect(agent.promptMessages[0]).toMatchObject({
+      role: "user",
+      content: [{ type: "text", text: "transformed prompt" }],
+    });
+    expect(agent.prompts).toEqual(["transformed prompt"]);
   });
 
   it("respects provided beforeStartResult without re-running hooks", async () => {
