@@ -247,14 +247,15 @@ Verification
 - [x] Review gate completed locally; no blockers found.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `1497100 fix: harden cockpit lifecycle`.
 
 ## Final Completion
-Status: pending
+Status: complete
 
 Verification
-- [ ] Final `bun run check`.
-- [ ] Final `git diff --check`.
-- [ ] Final isolated tmux smoke.
-- [ ] Final `git status --short` reviewed.
-- [ ] Goal marked complete only after all phase exit criteria pass.
+- [x] Final `bun run check` passed.
+- [x] Final `npm run build:packages && cd apps/coding-agent && bun run build` passed.
+- [x] Final `git diff --check` passed.
+- [x] Final isolated cockpit smoke passed: spool ingest, external overview/header labeling, tmux jump command construction, transcript preview.
+- [x] Final `git status --short` reviewed: only unrelated untracked `.pi/`.
+- [x] Goal marked complete only after all phase exit criteria pass.
