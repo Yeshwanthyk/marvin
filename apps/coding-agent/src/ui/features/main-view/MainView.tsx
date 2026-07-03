@@ -10,7 +10,6 @@ import {
 } from "@yeshwanthyk/open-tui"
 import type { ThinkingLevel } from "@yeshwanthyk/agent-core"
 import type { KnownProvider } from "@yeshwanthyk/ai"
-import type { LspManager } from "@yeshwanthyk/lsp"
 import { createSignal, createEffect, createMemo, onMount } from "solid-js"
 import { createAutocompleteCommands } from "../../../autocomplete-commands.js"
 import type { CustomCommand } from "@yeshwanthyk/runtime-effect/extensibility/custom-commands.js"
@@ -43,7 +42,6 @@ export interface MainViewProps {
 	queueCounts: QueueCounts
 	retryStatus: string | null
 	turnCount: number
-	lspActive: boolean
 	lane: LaneHeaderState
 	diffWrapMode: "word" | "none"
 	concealMarkdown: boolean
@@ -64,7 +62,6 @@ export interface MainViewProps {
 	onComposerChange?: (text: string) => void
 	onBeforeExit?: () => Promise<void>
 	editor?: import("@yeshwanthyk/runtime-effect/config.js").EditorConfig
-	lsp: LspManager
 }
 
 export function MainView(props: MainViewProps) {
@@ -342,10 +339,8 @@ export function MainView(props: MainViewProps) {
 				queueCounts={props.queueCounts}
 				activityState={props.activityState}
 				retryStatus={props.retryStatus}
-				lspActive={props.lspActive}
 				lane={props.lane}
 				spinnerFrame={spinnerFrame()}
-				lsp={props.lsp}
 			/>
 			<MessagePane
 				messages={props.messages}

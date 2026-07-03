@@ -29,7 +29,6 @@ export const createTempConfig = async (): Promise<TempConfig> => {
         provider: "anthropic",
         model: model.id,
         thinking: "off",
-        lsp: { enabled: false, autoInstall: false },
       },
       null,
       2,

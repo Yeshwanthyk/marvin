@@ -15,10 +15,9 @@ Bottom-up dependency sketch:
         |
         v
 [packages/ai]        Types + streaming + providers + agent loop
-       / \
-      v   v
-[base-tools]       [lsp]
-read/write/edit    tool wrappers + diagnostics
+        |
+        v
+[base-tools]       read/write/edit/bash
 ```
 
 ## Review Chunks (read in order)
@@ -123,24 +122,7 @@ Files (read order):
 - packages/base-tools/src/tools/bash.ts
 - packages/base-tools/src/index.ts
 
-### Chunk 6: LSP Integration (packages/lsp)
-Goal: LSP lifecycle and diagnostics injection for write/edit tools.
-
-Files:
-- packages/lsp/src/types.ts
-- packages/lsp/src/path.ts
-- packages/lsp/src/registry.ts
-- packages/lsp/src/install.ts
-- packages/lsp/src/client.ts
-- packages/lsp/src/manager.ts
-- packages/lsp/src/diagnostics.ts
-- packages/lsp/src/tool-wrapper.ts
-- packages/lsp/src/index.ts
-
-Tests:
-- packages/lsp/tests/*.test.ts
-
-### Chunk 7: UI Primitives (packages/open-tui)
+### Chunk 6: UI Primitives (packages/open-tui)
 Goal: terminal UI components, theme system, and autocomplete.
 
 Files (core):

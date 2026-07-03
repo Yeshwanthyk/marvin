@@ -1,6 +1,6 @@
 # marvin
 
-Terminal-native coding agent. Multi-provider, extensible, LSP-aware.
+Terminal-native coding agent. Multi-provider and extensible.
 
 ## Install
 
@@ -29,7 +29,6 @@ ln -s /path/to/marvin/apps/coding-agent/dist/marvin ~/.local/bin/marvin
 | [`@yeshwanthyk/ai`](packages/ai) | Unified LLM API with automatic model discovery and provider configuration |
 | [`@yeshwanthyk/agent-core`](packages/agent) | General-purpose agent with transport abstraction, state management, and attachment support |
 | [`@yeshwanthyk/base-tools`](packages/base-tools) | Core tools: read, write, edit, bash |
-| [`@yeshwanthyk/lsp`](packages/lsp) | Language server integration |
 | [`@yeshwanthyk/open-tui`](packages/open-tui) | OpenTUI-based Terminal UI with SolidJS reactive rendering |
 | [`@yeshwanthyk/runtime-effect`](packages/runtime-effect) | Effect-powered runtime with layers, session orchestrator, and instrumentation |
 | [`@yeshwanthyk/sdk`](packages/sdk) | SDK for building integrations |
@@ -50,7 +49,6 @@ marvin validate --config-dir ~/.config/marvin   # Lint hooks/tools/commands
 - **Providers**: Anthropic, OpenAI, Google, Codex, OpenRouter, Groq, xAI, Mistral, Cerebras
 - **TUI**: SolidJS terminal UI, 30+ themes, precision diff viewing
 - **Tools**: read, write, edit, bash, subagent, interview
-- **LSP**: Auto-spawns language servers, injects diagnostics
 - **Sessions**: Per-cwd persistence, resume with `-c`/`-r`
 - **Thinking**: Configurable depth (off → xhigh)
 - **Extensibility**: Custom tools, commands, hooks, subagents
@@ -64,7 +62,6 @@ packages/
 ├── ai/                # LLM provider abstraction
 ├── agent/             # Agent-core state management
 ├── base-tools/        # read, write, edit, bash
-├── lsp/               # Language server integration
 └── open-tui/          # Terminal UI (SolidJS + OpenTUI)
 ```
 
@@ -74,7 +71,7 @@ See [docs/architecture.md](docs/architecture.md) for layer diagrams, runtime flo
 
 All adapters build on the Effect-powered runtime located in `packages/runtime-effect/`:
 
-- **RuntimeLayer** composes config loading, transports, custom extensions, hooks, tools, prompt queue, LSP, and instrumentation via Effect `Layer`s. Adapters call `createRuntime()` once and receive a scoped bundle of services plus a `close()` hook for clean shutdown.
+- **RuntimeLayer** composes config loading, transports, custom extensions, hooks, tools, prompt queue, and instrumentation via Effect `Layer`s. Adapters call `createRuntime()` once and receive a scoped bundle of services plus a `close()` hook for clean shutdown.
 - **SessionOrchestrator** owns the prompt queue. `submitPrompt()` enqueues fire-and-forget work for long-running UIs, while `submitPromptAndWait()` blocks (headless/ACP) until retries, fallbacks, and hooks finish. Attachments (images/documents) flow through the queue so every surface benefits from the same ExecutionPlan.
 - **Execution Plans** describe retry/fallback behavior per provider + model cycle. Plans leverage `Effect.ExecutionPlan` so transient errors (429/500) trigger exponential backoff, while provider outages fall back to the next model.
 - **Instrumentation + tmux**: each prompt lifecycle emits `tmux:log` events (start, complete, error) so tmux panes or other observers can tail runtime progress without coupling to adapter state.
@@ -86,7 +83,7 @@ When adding new surfaces, depend on `RuntimeServices.sessionOrchestrator` instea
 `~/.config/marvin/`:
 
 ```
-├── config.json        # provider, model, theme, thinking, lsp
+├── config.json        # provider, model, theme, thinking
 ├── agents.md          # global instructions
 ├── agents/            # subagent definitions
 ├── commands/          # custom slash commands (.md)
@@ -103,8 +100,7 @@ When adding new surfaces, depend on `RuntimeServices.sessionOrchestrator` instea
   "model": "claude-sonnet-4-20250514",
   "thinking": "high",
   "theme": "catppuccin",
-  "editor": "code --wait",
-  "lsp": { "enabled": true, "autoInstall": true }
+  "editor": "code --wait"
 }
 ```
 

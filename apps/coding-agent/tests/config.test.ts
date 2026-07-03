@@ -12,30 +12,14 @@ describe('coding-agent config overrides', () => {
     expect(loaded.modelId).toBe('gpt-4.1');
   });
 
-  it('defaults lsp to enabled with autoInstall', async () => {
-    const configDir = path.join(os.tmpdir(), `marvin-lsp-default-${Date.now()}`);
-    const loaded = await loadAppConfig({ configDir, provider: 'openai', model: 'gpt-4.1' });
-    expect(loaded.lsp).toEqual({ enabled: true, autoInstall: true });
-  });
-
-  it('respects lsp: false in config', async () => {
-    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'marvin-lsp-false-'));
-    await fs.writeFile(
-      path.join(configDir, 'config.json'),
-      JSON.stringify({ provider: 'openai', model: 'gpt-4.1', lsp: false }, null, 2)
-    );
-    const loaded = await loadAppConfig({ configDir });
-    expect(loaded.lsp).toEqual({ enabled: false, autoInstall: false });
-  });
-
-  it('respects lsp.enabled and lsp.autoInstall in config', async () => {
-    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'marvin-lsp-partial-'));
+  it('ignores stale lsp config', async () => {
+    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'marvin-stale-config-'));
     await fs.writeFile(
       path.join(configDir, 'config.json'),
       JSON.stringify({ provider: 'openai', model: 'gpt-4.1', lsp: { enabled: true, autoInstall: false } }, null, 2)
     );
     const loaded = await loadAppConfig({ configDir });
-    expect(loaded.lsp).toEqual({ enabled: true, autoInstall: false });
+    expect('lsp' in loaded).toBe(false);
   });
 
   it('CLI overrides config file values', async () => {

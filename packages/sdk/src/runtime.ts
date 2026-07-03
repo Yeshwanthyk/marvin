@@ -1,6 +1,6 @@
 import { Context, Effect, Exit, Layer, Scope } from "effect"
 import type { Attachment } from "@yeshwanthyk/agent-core"
-import type { LoadConfigOptions, LspConfig } from "@yeshwanthyk/runtime-effect/config.js"
+import type { LoadConfigOptions } from "@yeshwanthyk/runtime-effect/config.js"
 import type { BeforeAgentStartResult, HookMessage } from "@yeshwanthyk/runtime-effect/hooks/types.js"
 import { createHookMessage, hookMessageToText } from "@yeshwanthyk/runtime-effect/hooks/hook-messages.js"
 import type { InstrumentationEvent, InstrumentationService } from "@yeshwanthyk/runtime-effect/instrumentation.js"
@@ -42,8 +42,6 @@ export interface SdkRuntime {
   submitPrompt: (text: string, options?: PromptOptions) => Effect.Effect<void, SdkError>
   submitPromptAndWait: (text: string, options?: PromptOptions) => Effect.Effect<void, SdkError>
 }
-
-const defaultLspConfig = (): LspConfig => ({ enabled: false, autoInstall: false })
 
 const normalizePrompt = (text: string): string | null => {
   const trimmed = text.trim()
@@ -132,14 +130,12 @@ const createHookHandlers = (
 
 const createSdkRuntimeImpl = Effect.fn(function* (options: SdkRuntimeOptions) {
     const sendRef: SendRef = { current: () => {} }
-    const lsp = options.lsp ?? defaultLspConfig()
 
     const runtimeOptions: RuntimeLayerOptions = {
       adapter: "headless",
       hasUI: false,
       sendRef,
       instrumentation: createInstrumentationService(options),
-      lsp,
       ...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
       ...(options.configDir !== undefined ? { configDir: options.configDir } : {}),
       ...(options.configPath !== undefined ? { configPath: options.configPath } : {}),

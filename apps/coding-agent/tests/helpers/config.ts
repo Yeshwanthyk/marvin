@@ -13,7 +13,6 @@ const DEFAULT_CONFIG = {
 	model: "claude-3-5-sonnet-20241022",
 	thinking: "off",
 	theme: "marvin",
-	lsp: { enabled: false, autoInstall: false },
 }
 
 export const createTestConfigDir = (overrides: Record<string, unknown> = {}): TestConfigDir => {

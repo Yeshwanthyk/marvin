@@ -636,11 +636,7 @@ The SDK reads from `~/.config/marvin/config.json`:
 {
   "provider": "anthropic",
   "model": "claude-sonnet-4-20250514",
-  "thinking": "high",
-  "lsp": {
-    "enabled": true,
-    "autoInstall": true
-  }
+  "thinking": "high"
 }
 ```
 

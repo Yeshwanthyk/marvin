@@ -12,7 +12,6 @@ export type InstrumentationEvent =
 			count: number
 			entries: Array<{ name: string; path: string }>
 	  }
-	| { type: "lsp:activity"; active: boolean }
 	| {
 			type: "execution-plan:registered"
 			steps: Array<{ id: string; provider: string; modelId: string; attempts: number; isFallback: boolean }>

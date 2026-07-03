@@ -1,25 +1,14 @@
 /**
  * Header - Single row, minimal by default, click to expand.
  * Left: activity + model·thinking + progress bar + queue
- * Right (expanded): branch + LSP
+ * Right: lane context
  */
 
-import { Show, createMemo, createSignal } from "solid-js"
+import { Show, createMemo } from "solid-js"
 import { truncateToWidth, useTheme } from "@yeshwanthyk/open-tui"
 import type { ThinkingLevel } from "@yeshwanthyk/agent-core"
-import type { LspManager, LspServerId } from "@yeshwanthyk/lsp"
 import type { ActivityState } from "../types.js"
 import { laneHeaderDisplay, type LaneHeaderState } from "../ui/app-shell/lane-header-state.js"
-
-const LSP_SYMBOLS: Record<LspServerId, [string, string]> = {
-  typescript: ["⬡", "⬢"],
-  biome: ["✧", "✦"],
-  basedpyright: ["ψ", "Ψ"],
-  ruff: ["△", "▲"],
-  ty: ["τ", "Τ"],
-  gopls: ["◎", "◉"],
-  "rust-analyzer": ["⛭", "⚙"],
-}
 
 /** Robot face icons for each activity state */
 const ACTIVITY_FACES: Record<ActivityState, { face: string; label: string }> = {
@@ -57,15 +46,12 @@ export interface HeaderProps {
   queueCounts: QueueCounts
   activityState: ActivityState
   retryStatus: string | null
-  lspActive: boolean
   lane: LaneHeaderState
   spinnerFrame: number
-  lsp: LspManager
 }
 
 export function Header(props: HeaderProps) {
   const { theme } = useTheme()
-  const [expanded, setExpanded] = createSignal(false)
 
   // Model·thinking combined
   const modelThinking = createMemo(() => {
@@ -131,20 +117,6 @@ export function Header(props: HeaderProps) {
   })
 
 
-  // LSP status
-  const lspStatus = createMemo(() => {
-    const servers = props.lsp.activeServers()
-    if (servers.length === 0) return null
-    const uniqueIds = [...new Set(servers.map((s) => s.serverId))]
-    const symbolIndex = props.lspActive ? 1 : 0
-    const symbols = uniqueIds.map((id) => LSP_SYMBOLS[id]?.[symbolIndex] ?? id).join("")
-    const counts = props.lsp.diagnosticCounts()
-    return { symbols, errors: counts.errors, warnings: counts.warnings }
-  })
-
-  const toggleExpanded = () => setExpanded((v) => !v)
-  const isSelecting = (event: unknown): boolean =>
-    typeof event === "object" && event !== null && "isSelecting" in event && event.isSelecting === true
   const laneDisplay = createMemo(() => laneHeaderDisplay(props.lane))
   const laneActive = createMemo(() => laneDisplay().active)
   const laneColor = createMemo(() => {
@@ -165,10 +137,6 @@ export function Header(props: HeaderProps) {
       border={["top", "bottom", "left", "right"]}
       borderStyle="rounded"
       borderColor={laneActive() ? theme.borderActive : theme.border}
-      onMouseUp={(e) => {
-        if (isSelecting(e)) return
-        toggleExpanded()
-      }}
     >
       {/* Left section: Activity + Model·Thinking + Progress + Queue */}
       <box flexDirection="row" flexShrink={0} gap={1}>
@@ -202,7 +170,7 @@ export function Header(props: HeaderProps) {
       {/* Spacer */}
       <box flexGrow={1} />
 
-      {/* Right section: lane context, plus LSP when expanded */}
+      {/* Right section: lane context */}
       <box flexDirection="row" flexShrink={1} gap={1}>
         <Show when={laneSummary().length > 0}>
           <text>
@@ -215,30 +183,6 @@ export function Header(props: HeaderProps) {
               <span style={{ fg: theme.textMuted }}>  {laneHint()}</span>
             </Show>
           </text>
-        </Show>
-
-        <Show when={expanded()}>
-
-          {/* LSP */}
-          <Show when={lspStatus()} keyed>
-            {(lsp) => (
-              <text>
-                <span style={{ fg: props.lspActive ? theme.accent : theme.success }}>{lsp.symbols}</span>
-                <Show when={lsp.errors > 0 || lsp.warnings > 0}>
-                  <span style={{ fg: theme.textMuted }}> </span>
-                  <Show when={lsp.errors > 0}>
-                    <span style={{ fg: theme.error }}>{lsp.errors}</span>
-                  </Show>
-                  <Show when={lsp.errors > 0 && lsp.warnings > 0}>
-                    <span style={{ fg: theme.textMuted }}>/</span>
-                  </Show>
-                  <Show when={lsp.warnings > 0}>
-                    <span style={{ fg: theme.warning }}>{lsp.warnings}</span>
-                  </Show>
-                </Show>
-              </text>
-            )}
-          </Show>
         </Show>
       </box>
     </box>

@@ -30,7 +30,6 @@ export interface AppStore {
 	cacheStats: SignalRef<{ cacheRead: number; input: number } | null>
 	retryStatus: SignalRef<string | null>
 	turnCount: SignalRef<number>
-	lspActive: SignalRef<boolean>
 	queueCounts: SignalRef<QueueCounts>
 	currentProvider: SignalRef<KnownProvider>
 }
@@ -60,7 +59,6 @@ export const createAppStore = (config: AppStoreConfig): AppStore => {
 		cacheStats: createSignalRef<{ cacheRead: number; input: number } | null>(null),
 		retryStatus: createSignalRef<string | null>(null),
 		turnCount: createSignalRef(0),
-		lspActive: createSignalRef(false),
 		queueCounts: createSignalRef<QueueCounts>({ steer: 0, followUp: 0 }),
 		currentProvider: createSignalRef(config.initialProvider),
 	}

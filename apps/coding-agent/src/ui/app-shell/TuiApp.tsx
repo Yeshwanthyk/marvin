@@ -135,12 +135,10 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		hookRunner,
 		toolByName,
 		customCommands,
-		lsp,
 		config,
 		codexTransport,
 		getApiKey,
 		sendRef,
-		lspActiveRef,
 		cycleModels,
 		validationIssues,
 	} = runtime
@@ -291,8 +289,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		attempt: 0, 
 		abortController: null 
 	}
-
-	lspActiveRef.setActive = store.lspActive.set
 
 	const eventCtx: EventHandlerContext = {
 		setMessages: setActiveMessages,
@@ -917,7 +913,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				queueCounts={store.queueCounts.value()}
 				retryStatus={store.retryStatus.value()}
 				turnCount={store.turnCount.value()}
-				lspActive={store.lspActive.value()}
 				lane={laneHeaderState()}
 				diffWrapMode={store.diffWrapMode.value()}
 				concealMarkdown={store.concealMarkdown.value()}
@@ -938,7 +933,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				onComposerChange={(text) => { composerDraft = text }}
 				onBeforeExit={handleBeforeExit}
 				editor={config.editor}
-				lsp={lsp}
 			/>
 			<ModalContainer modalState={modals.modalState()} onClose={modals.closeModal} />
 			</ThemeProvider>

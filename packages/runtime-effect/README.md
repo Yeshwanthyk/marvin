@@ -1,6 +1,6 @@
 # @yeshwanthyk/runtime-effect
 
-Effect-powered runtime layer for Marvin agents (config, hooks, tools, LSP, sessions).
+Effect-powered runtime layer for Marvin agents (config, hooks, tools, sessions).
 
 ## Installation
 

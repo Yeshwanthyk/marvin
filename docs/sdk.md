@@ -58,7 +58,6 @@ All SDK calls accept the same base options:
 - `configDir` / `configPath`: override config location (default: `~/.config/marvin`).
 - `provider` / `model` / `thinking`: override model selection.
 - `systemPrompt`: override base system prompt (AGENTS.md is appended).
-- `lsp`: `{ enabled, autoInstall }` (SDK defaults to disabled).
 - `instrumentation`: callback for runtime instrumentation events.
 - `transportFactory`: inject a transport bundle (useful for tests).
 
@@ -69,5 +68,4 @@ The SDK loads the same hooks, commands, and custom tools as the CLI/TUI from the
 ## Notes
 
 - The SDK does not bypass runtime-effect; it builds `RuntimeLayer` internally.
-- LSP is disabled by default to avoid background processes in headless environments.
 - Use `transportFactory` in tests to avoid network calls.

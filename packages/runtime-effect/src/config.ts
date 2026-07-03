@@ -63,11 +63,6 @@ export interface EditorConfig {
   args: string[];
 }
 
-export interface LspConfig {
-  enabled: boolean;
-  autoInstall: boolean;
-}
-
 export type KeyChord = string;
 
 export type LaneNavActivationConfig =
@@ -119,7 +114,6 @@ export interface LoadedAppConfig {
   agentsConfig: AgentsConfig;
   configDir: string;
   configPath: string;
-  lsp: LspConfig;
   keymap: KeymapConfig;
   workspace: WorkspaceConfig;
 }
@@ -251,29 +245,6 @@ const resolveEditorConfig = (raw: unknown): EditorConfig | undefined => {
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
-
-const readBoolean = (value: Record<string, unknown>, key: string): boolean | undefined => {
-  const raw = value[key];
-  return typeof raw === "boolean" ? raw : undefined;
-};
-
-const resolveLspConfig = (override: LspConfig | undefined, raw: unknown): LspConfig => {
-  if (override) {
-    return { enabled: override.enabled, autoInstall: override.autoInstall };
-  }
-
-  if (raw === false) {
-    return { enabled: false, autoInstall: false };
-  }
-
-  if (isRecord(raw)) {
-    const enabled = readBoolean(raw, "enabled");
-    const autoInstall = readBoolean(raw, "autoInstall");
-    return { enabled: enabled ?? true, autoInstall: autoInstall ?? true };
-  }
-
-  return { enabled: true, autoInstall: true };
-};
 
 const normalizeKeyChord = (value: string): KeyChord[] => {
   const normalized = value
@@ -617,7 +588,6 @@ export interface LoadConfigOptions {
   thinking?: ThinkingLevel | string;
   systemPrompt?: string;
   docs?: DocumentationPaths;
-  lsp?: LspConfig;
   extensions?: string[];
   noExtensions?: boolean;
 }
@@ -711,7 +681,6 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
   const baseWithDocs = `${basePrompt}${buildDocumentationPromptSection(options?.docs)}`;
   const systemPrompt = agentsConfig.combined ? `${baseWithDocs}\n\n${agentsConfig.combined}` : baseWithDocs;
 
-  const lsp = resolveLspConfig(options?.lsp, rawObj.lsp);
   const keymap = resolveKeymapConfig(rawObj.keymap);
   const workspace = resolveWorkspaceConfig(rawObj.workspace);
 
@@ -728,7 +697,6 @@ export const loadAppConfig = async (options?: LoadConfigOptions): Promise<Loaded
     agentsConfig,
     configDir,
     configPath,
-    lsp,
     keymap,
     workspace,
   };

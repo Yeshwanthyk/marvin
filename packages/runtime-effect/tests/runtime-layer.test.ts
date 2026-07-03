@@ -4,7 +4,6 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { Agent, CodexTransport, ProviderTransport, RouterTransport } from "@yeshwanthyk/agent-core";
 import { getModels } from "@yeshwanthyk/ai";
-import type { LspManager } from "@yeshwanthyk/lsp";
 import { Effect, Layer } from "effect";
 import * as Runtime from "effect/Runtime";
 import { RuntimeLayer, RuntimeServicesTag } from "../src/runtime.js";
@@ -25,7 +24,6 @@ const createTempConfig = async () => {
         model: model.id,
         thinking: "medium",
         theme: "marvin",
-        lsp: { enabled: false, autoInstall: false },
       },
       null,
       2,
@@ -35,14 +33,6 @@ const createTempConfig = async () => {
 
   return { dir, configPath, model };
 };
-
-const stubLspManager = (): LspManager => ({
-  touchFile: async () => {},
-  diagnostics: async () => ({}),
-  shutdown: async () => {},
-  activeServers: () => [],
-  diagnosticCounts: () => ({ errors: 0, warnings: 0 }),
-});
 
 const runLayer = async <A>(layer: Layer.Layer<never, never, A>) => {
   const scoped = Effect.scoped(
@@ -72,7 +62,6 @@ describe("RuntimeLayer", () => {
           configDir: temp.dir,
           configPath: temp.configPath,
           instrumentation: { record: () => {} },
-          lspFactory: () => stubLspManager(),
         }),
       );
 
@@ -105,7 +94,6 @@ describe("RuntimeLayer", () => {
           configDir: temp.dir,
           configPath: temp.configPath,
           instrumentation: { record: () => {} },
-          lspFactory: () => stubLspManager(),
           transportFactory: (_config, _resolver) => ({
             provider: providerTransport,
             codex: codexTransport,
@@ -134,7 +122,6 @@ describe("RuntimeLayer", () => {
           configDir: temp.dir,
           configPath: temp.configPath,
           instrumentation: { record: () => {} },
-          lspFactory: () => stubLspManager(),
         }),
       );
 
@@ -174,7 +161,6 @@ describe("RuntimeLayer", () => {
           configPath: temp.configPath,
           model: `${provider}/nested/model-id`,
           instrumentation: { record: () => {} },
-          lspFactory: () => stubLspManager(),
         }),
       );
 
@@ -197,7 +183,6 @@ describe("RuntimeLayer", () => {
           model: `anthropic/${temp.model.id},openai/${openAiModel.id}`,
           thinking: "low,high",
           instrumentation: { record: () => {} },
-          lspFactory: () => stubLspManager(),
         }),
       );
 

@@ -13,8 +13,7 @@ export type RuntimeInitArgs = LoadConfigOptions & RuntimeLayerOptions;
 
 export type RuntimeContext = RuntimeServices & {
   /**
-   * Explicitly shuts down the runtime scope, allowing services like the LSP
-   * manager to flush state before the process exits.
+   * Explicitly shuts down the runtime scope before the process exits.
    */
   close: () => Promise<void>;
 };
@@ -32,8 +31,6 @@ const toLayerOptions = (args: RuntimeInitArgs | undefined, adapter: AdapterKind)
   hasUI: args?.hasUI,
   sendRef: args?.sendRef,
   instrumentation: args?.instrumentation,
-  lsp: args?.lsp,
-  lspFactory: args?.lspFactory,
   transportFactory: args?.transportFactory,
   retry: args?.retry,
   timeout: args?.timeout,

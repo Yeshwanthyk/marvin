@@ -25,10 +25,6 @@
       "types": "./dist/lazy-tool-loader.d.ts",
       "import": "./dist/lazy-tool-loader.js"
     },
-    "./lsp.js": {
-      "types": "./dist/lsp.d.ts",
-      "import": "./dist/lsp.js"
-    },
     "./runtime.js": {
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"
@@ -48,6 +44,10 @@
     "./workspace-lanes.js": {
       "types": "./dist/workspace-lanes.d.ts",
       "import": "./dist/workspace-lanes.js"
+    },
+    "./workspace-lanes-v2.js": {
+      "types": "./dist/workspace-lanes-v2.d.ts",
+      "import": "./dist/workspace-lanes-v2.js"
     },
     "./workspace-projects.js": {
       "types": "./dist/workspace-projects.d.ts",
@@ -162,7 +162,6 @@
     "@yeshwanthyk/agent-core": "^0.3.1",
     "@yeshwanthyk/ai": "^0.3.1",
     "@yeshwanthyk/base-tools": "^0.3.1",
-    "@yeshwanthyk/lsp": "^0.3.1",
     "effect": "^3.19.14",
     "solid-js": "1.9.9"
   },

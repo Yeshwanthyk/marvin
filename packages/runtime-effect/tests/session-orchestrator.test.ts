@@ -28,7 +28,6 @@ const createTestConfig = (model: Model<Api>, provider: KnownProvider): LoadedApp
   agentsConfig: { combined: "" },
   configDir: "/tmp/marvin-test",
   configPath: "/tmp/marvin-test/config.json",
-  lsp: { enabled: false, autoInstall: false },
   workspace: { projectRoots: [] },
 });
 

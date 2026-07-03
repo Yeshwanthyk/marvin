@@ -15,11 +15,6 @@ import {
   type Model,
 } from "@yeshwanthyk/ai";
 import { createToolRegistry, type ToolRegistry } from "@yeshwanthyk/base-tools";
-import {
-  createLspManager,
-  wrapToolsWithLspDiagnostics,
-  type LspManager,
-} from "@yeshwanthyk/lsp";
 import { Context, Duration, Effect, Layer, Schedule } from "effect";
 import {
 	HookRunner,
@@ -80,7 +75,6 @@ import {
   type ApiKeyResolver,
   type TransportBundle,
 } from "./transports.js";
-import { LspLayer, LspServiceTag } from "./lsp.js";
 
 export type AdapterKind = "tui" | "headless" | "acp";
 
@@ -101,8 +95,6 @@ export interface RuntimeServices {
   readonly hookContext: HookContextController;
   readonly customCommands: Map<string, CustomCommand>;
   readonly toolByName: Map<string, ToolRegistryEntry>;
-  readonly lsp: LspManager;
-  readonly lspActiveRef: { setActive: (value: boolean) => void };
   readonly sendRef: SendRef;
   readonly config: LoadedAppConfig;
   readonly cycleModels: Array<{ provider: KnownProvider; model: Model<Api>; thinking?: ThinkingLevel }>;
@@ -131,7 +123,6 @@ export interface RuntimeLayerOptions extends LoadConfigOptions {
   readonly hasUI?: boolean;
   readonly sendRef?: SendRef;
   readonly instrumentation?: InstrumentationService;
-  readonly lspFactory?: typeof createLspManager;
   readonly transportFactory?: (config: LoadedAppConfig, resolver: ApiKeyResolver) => TransportBundle;
   readonly retry?: {
     readonly primary?: number;
@@ -217,10 +208,6 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
       const hookContextLayer = HookContextControllerLayer;
       const hookEffectsLayer = createHookEffectsLayer();
       const promptQueueLayer = PromptQueueLayer;
-      const lspLayer = LspLayer({
-        cwd: layerOptions.cwd,
-        ...(layerOptions.lspFactory ? { lspFactory: layerOptions.lspFactory } : {}),
-      });
       const toolRuntimeLayer = createToolRuntimeLayer({
         cwd: layerOptions.cwd,
         toolRegistry,
@@ -242,8 +229,7 @@ export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<Runtime
       const withExtensibility = Layer.provideMerge(extensibilityLayer, withPromptQueue);
       const withHookContext = Layer.provideMerge(hookContextLayer, withExtensibility);
       const withHookEffects = Layer.provideMerge(hookEffectsLayer, withHookContext);
-      const withLsp = Layer.provideMerge(lspLayer, withHookEffects);
-      const withToolRuntime = Layer.provideMerge(toolRuntimeLayer, withLsp);
+      const withToolRuntime = Layer.provideMerge(toolRuntimeLayer, withHookEffects);
       const withAgentFactory = Layer.provideMerge(agentFactoryLayer, withToolRuntime);
       const withOrchestrator = Layer.provideMerge(
         SessionOrchestratorLayer(
@@ -262,7 +248,6 @@ const createToolRuntimeLayer = (options: { cwd: string; toolRegistry: ToolRegist
     ToolRuntimeTag,
     Effect.gen(function* () {
       const { hookRunner, customTools } = yield* ExtensibilityTag;
-      const lspService = yield* LspServiceTag;
 
       const loader = new LazyToolLoader(
         options.toolRegistry,
@@ -271,15 +256,7 @@ const createToolRuntimeLayer = (options: { cwd: string; toolRegistry: ToolRegist
       );
       yield* Effect.promise(() => loader.preloadCoreTools());
 
-      const tools = wrapToolsWithLspDiagnostics(
-        wrapToolsWithHooks(loader.getToolsProxy().toArray(), hookRunner),
-        lspService.manager,
-        {
-          cwd: options.cwd,
-          onCheckStart: () => lspService.notifyActivity(true),
-          onCheckEnd: () => lspService.notifyActivity(false),
-        },
-      );
+      const tools = wrapToolsWithHooks(loader.getToolsProxy().toArray(), hookRunner);
 
       return {
         loader,
@@ -348,7 +325,6 @@ const createRuntimeServicesLayer = (options: {
       const sessionOrchestrator = yield* SessionOrchestratorTag;
       const agentFactory = yield* AgentFactoryTag;
       const hookContext = yield* HookContextControllerTag;
-      const lspService = yield* LspServiceTag;
 
       attachHookErrorLogging(hookRunner, (message) => process.stderr.write(`${message}\n`));
       yield* Effect.promise(() => hookRunner.emit({ type: "app.start" }));
@@ -369,8 +345,6 @@ const createRuntimeServicesLayer = (options: {
         hookContext,
         customCommands: commands,
         toolByName: toolRuntime.toolByName,
-        lsp: lspService.manager,
-        lspActiveRef: lspService.activityRef,
         sendRef: options.sendRef,
         config,
         cycleModels: options.cycleModels,

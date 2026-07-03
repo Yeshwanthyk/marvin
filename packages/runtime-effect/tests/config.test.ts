@@ -20,7 +20,6 @@ const writeConfig = async (dir: string, modelId: string) => {
     model: modelId,
     thinking: "medium",
     theme: "marvin",
-    lsp: { enabled: true, autoInstall: true },
   };
   await writeFile(configPath, JSON.stringify(payload, null, 2), "utf8");
   return configPath;
@@ -97,21 +96,33 @@ describe("loadAppConfig", () => {
     }
   });
 
-  it("allows LoadConfigOptions to override lsp settings", async () => {
-    const configDir = await mkdtemp(path.join(tmpdir(), "config-lsp-"));
-    const projectDir = await mkdtemp(path.join(tmpdir(), "project-lsp-"));
+  it("ignores stale lsp config", async () => {
+    const configDir = await mkdtemp(path.join(tmpdir(), "config-stale-"));
+    const projectDir = await mkdtemp(path.join(tmpdir(), "project-stale-"));
     try {
       const model = getAnthropicModel();
-      const configPath = await writeConfig(configDir, model.id);
+      const configPath = path.join(configDir, "config.json");
+      await writeFile(
+        configPath,
+        JSON.stringify(
+          {
+            provider: "anthropic",
+            model: model.id,
+            lsp: { enabled: true, autoInstall: false },
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
 
       const config = await loadAppConfig({
         configDir,
         configPath,
         cwd: projectDir,
-        lsp: { enabled: false, autoInstall: false },
       });
 
-      expect(config.lsp).toEqual({ enabled: false, autoInstall: false });
+      expect("lsp" in config).toBe(false);
     } finally {
       await rm(configDir, { recursive: true, force: true });
       await rm(projectDir, { recursive: true, force: true });

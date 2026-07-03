@@ -47,7 +47,7 @@ runTuiOpen()
     │
     ├─► createRuntime() ────────────────► Builds RuntimeLayer (runtime-effect)
     │
-    ├─► RuntimeLayer ───────────────────► Config + transports + tools + hooks + LSP
+    ├─► RuntimeLayer ───────────────────► Config + transports + tools + hooks
     │
     ├─► SessionOrchestrator ───────────► Prompt queue + execution plan
     │
@@ -92,8 +92,7 @@ loadAppConfig()
     │   ├─ provider: "anthropic"
     │   ├─ model: "claude-sonnet-4-20250514"
     │   ├─ thinking: "off"
-    │   ├─ theme: "marvin"
-    │   └─ lsp: { enabled: true, autoInstall: true }
+    │   └─ theme: "marvin"
     │
     ├─► Load agents config (AGENTS.md)
     │   └─ Combines system + agents prompts (cwd-aware)
@@ -367,86 +366,6 @@ built-in tools (base)
     │           ├─ Call original execute
     │           ├─ Emit tool.execute.after
     │           └─ Apply result modifications
-    │
-    └─► wrapToolsWithLspDiagnostics(tools, lsp, opts)
-        │
-        └─► For write/edit tools:
-            └─► Wrap execute():
-                ├─ Call original execute
-                ├─ lsp.touchFile(path)
-                ├─ Collect diagnostics
-                └─ Append to result
-```
-
-## LSP Integration
-
-### Manager: `packages/lsp/src/manager.ts`
-
-```
-createLspManager(options)
-    │
-    ├─► State
-    │   ├─ clients: Map<key, LspClient>
-    │   ├─ spawning: Map<key, Promise>
-    │   └─ brokenUntil: Map<key, timestamp>
-    │
-    ├─► touchFile(path, opts)
-    │   ├─ Check if enabled
-    │   ├─ Find server definitions for file type
-    │   ├─ Ensure server is installed
-    │   ├─ Get or spawn client
-    │   ├─ Notify file change
-    │   └─ Wait for diagnostics if requested
-    │
-    ├─► diagnostics()
-    │   └─ Collect all diagnostics from all clients
-    │
-    └─► shutdown()
-        └─ Gracefully stop all servers
-```
-
-### Client: `packages/lsp/src/client.ts`
-
-Handles JSON-RPC communication with language servers:
-
-```
-LspClient
-    │
-    ├─► Initialization
-    │   ├─ Spawn server process
-    │   ├─ Send initialize request
-    │   └─ Send initialized notification
-    │
-    ├─► File operations
-    │   ├─ openOrChangeFile(path, languageId)
-    │   └─ waitForDiagnostics(path)
-    │
-    ├─► Diagnostic tracking
-    │   ├─ Handle textDocument/publishDiagnostics
-    │   └─ Store per-file diagnostic arrays
-    │
-    └─► Shutdown
-        ├─ Send shutdown request
-        └─ Kill process
-```
-
-### Server Registry: `packages/lsp/src/registry.ts`
-
-Defines file extension to language ID mapping:
-
-```typescript
-const LANGUAGE_ID_BY_EXT = {
-  ".ts": "typescript",
-  ".tsx": "typescriptreact",
-  ".js": "javascript",
-  ".jsx": "javascriptreact",
-  ".mjs": "javascript",
-  ".cjs": "javascript",
-  ".py": "python",
-  ".pyi": "python",
-  ".go": "go",
-  ".rs": "rust",
-}
 ```
 
 ## TUI Components
@@ -741,7 +660,6 @@ coding-agent can import from:
   ├─ @yeshwanthyk/ai (types, models, streaming)
   ├─ @yeshwanthyk/agent-core (Agent, transports)
   ├─ @yeshwanthyk/base-tools (tool registry + factories)
-  ├─ @yeshwanthyk/lsp (LspManager)
   └─ @yeshwanthyk/open-tui (components, hooks)
 
 agent-core can import from:
@@ -749,9 +667,6 @@ agent-core can import from:
 
 base-tools can import from:
   └─ @yeshwanthyk/ai (types only)
-
-lsp cannot import from:
-  └─ (standalone, only vscode-languageserver-types)
 
 open-tui cannot import from:
   └─ (standalone UI library)
@@ -780,7 +695,6 @@ packages/runtime-effect/tests/
 ├── execution-plan.test.ts    Execution planning behavior
 ├── hook-effects.test.ts      Hook effect helpers
 ├── hook-context-controller.test.ts
-├── lsp-layer.test.ts         LSP layer wiring
 ├── prompt-queue.test.ts      Prompt queue semantics
 ├── runtime-layer.test.ts     Runtime assembly
 └── session-orchestrator.test.ts
@@ -796,10 +710,6 @@ packages/ai/test/
 ├── stream.test.ts            Provider streaming
 ├── tool-validation.test.ts   Tool parameter validation
 └── ... (many provider-specific tests)
-
-packages/lsp/tests/
-├── diagnostics.test.ts       Diagnostic formatting
-└── tool-wrapper.test.ts      LSP tool wrapper
 
 packages/open-tui/tests/
 └── index.test.ts             Component tests
@@ -875,10 +785,6 @@ agent.subscribe((ev) => {
   console.log(`[${ev.type}]`, ev);
 });
 ```
-
-### Inspect LSP Communication
-
-Set `DEBUG=lsp:*` or add logging in `packages/lsp/src/client.ts`.
 
 ### Profile Performance
 

@@ -13,7 +13,7 @@ import { join } from "node:path";
 const packagesDir = join(process.cwd(), "packages");
 const appsDir = join(process.cwd(), "apps");
 
-const SYNC_PACKAGES = ["ai", "agent", "base-tools", "lsp", "open-tui", "runtime-effect", "sdk"];
+const SYNC_PACKAGES = ["ai", "agent", "base-tools", "open-tui", "runtime-effect", "sdk"];
 
 function readPkg(dir) {
   const pkgPath = join(dir, "package.json");

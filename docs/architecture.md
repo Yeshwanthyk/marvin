@@ -53,10 +53,9 @@ Marvin supports a terminal UI and a headless SDK built on the same core agent in
 │  │  Token Tracking → usage, cost estimation                               │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                     Base Tools + LSP (base-tools, lsp)                      │
+│                         Base Tools (base-tools)                             │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  read, write, edit, bash → file operations with validation             │ │
-│  │  LSP Manager → TypeScript server, diagnostics injection                │ │
+│  │  read, write, edit, bash → file operations and command execution       │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -83,7 +82,6 @@ packages/
 ├── agent/         @yeshwanthyk/agent-core - Agent state machine, transports
 ├── ai/            @yeshwanthyk/ai - LLM provider abstraction, streaming
 ├── base-tools/    @yeshwanthyk/base-tools - read, write, edit, bash tools
-├── lsp/           @yeshwanthyk/lsp - Language server protocol integration
 ├── open-tui/      @yeshwanthyk/open-tui - TUI components (terminal)
 ├── runtime-effect @yeshwanthyk/runtime-effect - Effect runtime composition
 └── sdk/           @yeshwanthyk/sdk - Headless SDK on runtime-effect
@@ -98,11 +96,11 @@ apps/
                     @yeshwanthyk/ai
                            │
               ┌────────────┼────────────┐
-              ▼            ▼            ▼
-    @yeshwanthyk/    @yeshwanthyk/  @yeshwanthyk/
-       agent-core       base-tools         lsp
-              │            │                │
-              └────────────┼────────────────┘
+              ▼            ▼
+    @yeshwanthyk/    @yeshwanthyk/
+       agent-core       base-tools
+              │            │
+              └────────────┘
                            │
                   @yeshwanthyk/
                    runtime-effect
@@ -147,9 +145,9 @@ The shared runtime lives in `packages/runtime-effect` and is composed entirely w
    - `submitPrompt()` for asynchronous surfaces (TUI) that just enqueue work.
    - `submitPromptAndWait()` for synchronous surfaces (headless CLI, ACP) that need completion before responding.
    - `drainToScript()` to serialize outstanding queue items when aborting or persisting state.
-6. **RuntimeLayer** wires everything together and hands adapters a scoped `RuntimeServices` bundle (agent, orchestrator, LSP, extensibility metadata, instrumentation handles, etc.).
+6. **RuntimeLayer** wires everything together and hands adapters a scoped `RuntimeServices` bundle (agent, orchestrator, extensibility metadata, instrumentation handles, etc.).
 
-All adapters—TUI, headless CLI, ACP, or future surfaces—call `createRuntime()` which builds `RuntimeLayer` under a managed Effect scope and returns both the services and a `close()` helper that shuts down the scope (LSP, hooks, prompt loop) deterministically. The SDK (`@yeshwanthyk/sdk`) wraps the same runtime and exposes `runAgent`, session, and streaming APIs without bypassing Effect.
+All adapters—TUI, headless CLI, ACP, or future surfaces—call `createRuntime()` which builds `RuntimeLayer` under a managed Effect scope and returns both the services and a `close()` helper that shuts down hooks and the prompt loop deterministically. The SDK (`@yeshwanthyk/sdk`) wraps the same runtime and exposes `runAgent`, session, and streaming APIs without bypassing Effect.
 
 ## Slash Command Registry
 
@@ -376,18 +374,6 @@ Tools are wrapped in multiple layers for interception and enhancement:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│         wrapToolsWithLspDiagnostics() (packages/lsp)            │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  For write/edit tools:                                    │  │
-│  │  1. Execute original tool                                 │  │
-│  │  2. Touch file with LSP manager                           │  │
-│  │  3. Wait for diagnostics                                  │  │
-│  │  4. Inject diagnostics into result                        │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
 │     wrapToolsWithHooks() (packages/runtime-effect/src/hooks)    │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  1. Emit tool.execute.before                              │  │
@@ -408,74 +394,6 @@ Tools are wrapped in multiple layers for interception and enhancement:
 │  │  bash: command execution with timeout                     │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
-```
-
-## LSP Integration
-
-The LSP package provides language server integration for TypeScript:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│               LspManager (packages/lsp/src/manager.ts)          │
-├─────────────────────────────────────────────────────────────────┤
-│  touchFile(path, opts)     Notify server of file change         │
-│  diagnostics()             Get all current diagnostics          │
-│  shutdown()                Clean up all servers                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│               LspClient (packages/lsp/src/client.ts)            │
-├─────────────────────────────────────────────────────────────────┤
-│  JSON-RPC communication with language server                    │
-│  Tracks open files and their diagnostics                        │
-│  Handles initialization handshake                               │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   typescript-language-server                    │
-│             (auto-installed to ~/.config/marvin/lsp/)           │
-└─────────────────────────────────────────────────────────────────┘
-
-Flow:
-─────
-
-1. File modified via write/edit tool
-2. Tool wrapper calls lsp.touchFile(path)
-3. LspManager finds/spawns appropriate server
-4. Server analyzes file, emits diagnostics
-5. LspClient collects diagnostics via JSON-RPC
-6. Tool wrapper appends diagnostics to result
-
-Diagnostic Format:
-─────────────────
-
-{
-  "file": "src/index.ts",
-  "line": 42,
-  "severity": "error",
-  "message": "Property 'foo' does not exist on type 'Bar'"
-}
-```
-
-### LSP Registry (packages/lsp/src/registry.ts)
-
-Maps file extensions to language servers:
-
-```typescript
-LANGUAGE_ID_BY_EXT: {
-  ".ts": "typescript",
-  ".tsx": "typescriptreact",
-  ".js": "javascript",
-  ".jsx": "javascriptreact",
-  ".mjs": "javascript",
-  ".cjs": "javascript",
-  ".py": "python",
-  ".pyi": "python",
-  ".go": "go",
-  ".rs": "rust",
-}
 ```
 
 ## Hook System

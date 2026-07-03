@@ -9,8 +9,6 @@
       "@yeshwanthyk/agent-core/*": ["./packages/agent/src/*"],
       "@yeshwanthyk/base-tools": ["./packages/base-tools/src/index.ts"],
       "@yeshwanthyk/base-tools/*": ["./packages/base-tools/src/*"],
-      "@yeshwanthyk/lsp": ["./packages/lsp/src/index.ts"],
-      "@yeshwanthyk/lsp/*": ["./packages/lsp/src/*"],
       "@yeshwanthyk/runtime-effect": ["./packages/runtime-effect/src/index.ts"],
       "@yeshwanthyk/runtime-effect/*": ["./packages/runtime-effect/src/*"],
       "@yeshwanthyk/sdk": ["./packages/sdk/src/index.ts"],

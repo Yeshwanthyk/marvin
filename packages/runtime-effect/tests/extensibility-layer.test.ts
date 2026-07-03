@@ -40,7 +40,6 @@ const createConfig = (): LoadedAppConfig => {
 		agentsConfig: { combined: "" },
 		configDir: "/tmp",
 		configPath: "/tmp/config.json",
-		lsp: { enabled: false, autoInstall: false },
 		workspace: { projectRoots: [] },
 	}
 }

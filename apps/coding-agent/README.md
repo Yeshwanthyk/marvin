@@ -1,6 +1,6 @@
 # Marvin
 
-Terminal-native coding agent with multi-provider support, extensible tooling, and LSP integration.
+Terminal-native coding agent with multi-provider support and extensible tooling.
 
 ## Install
 
@@ -50,7 +50,7 @@ Config lives in `~/.config/marvin/`:
 
 ```
 ~/.config/marvin/
-├── config.json          # provider, model, theme, thinking, lsp settings
+├── config.json          # provider, model, theme, thinking
 ├── models.json          # Pi-style custom provider/model registry
 ├── agents.md            # global AGENTS.md instructions
 ├── agents/              # subagent definitions
@@ -70,8 +70,7 @@ Config lives in `~/.config/marvin/`:
   "model": "claude-sonnet-4-20250514",
   "thinking": "high",
   "theme": "catppuccin",
-  "editor": "code --wait",
-  "lsp": { "enabled": true, "autoInstall": true }
+  "editor": "code --wait"
 }
 ```
 
@@ -332,23 +331,7 @@ Hook context provides:
 - `ctx.cwd` — Current working directory
 - `ctx.configDir` — Config directory path
 
-## LSP Integration
-
-Language servers spawn automatically per file type. Diagnostics are injected into tool results after edit/write/bash operations.
-
-```json
-// config.json
-{
-  "lsp": {
-    "enabled": true,
-    "autoInstall": true
-  }
-}
-```
-
-Supported: TypeScript/JavaScript (auto-installed), with registry for more.
-
-Custom LSP config: `~/.config/marvin/lsp/`
+Write and edit tool results no longer include language-server diagnostics.
 
 ## Themes
 
@@ -429,6 +412,5 @@ packages/
 ├── ai/                # LLM provider abstraction
 ├── agent/             # Agent-core state management
 ├── base-tools/        # read, write, edit, bash
-├── lsp/               # Language server integration
 └── open-tui/          # Terminal UI framework (SolidJS + OpenTUI)
 ```
