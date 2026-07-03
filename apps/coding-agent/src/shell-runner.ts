@@ -36,11 +36,12 @@ function getTempFilePath(): string {
  */
 export function runShellCommand(
 	command: string,
-	options?: { signal?: AbortSignal; timeout?: number }
+	options?: { signal?: AbortSignal; timeout?: number; cwd?: string }
 ): Promise<ShellResult> {
 	return new Promise((resolve) => {
 		const { shell, args } = getShellConfig()
 		const child = spawn(shell, [...args, command], {
+			cwd: options?.cwd,
 			detached: true,
 			stdio: ["ignore", "pipe", "pipe"],
 		})

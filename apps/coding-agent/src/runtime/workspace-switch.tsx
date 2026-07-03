@@ -3,6 +3,7 @@ import type { LoadedSession } from "../session-manager.js"
 
 export interface WorkspaceSwitchRequest {
 	cwd: string
+	laneId?: string
 	sessionPath?: string
 	fresh?: boolean
 	initialSessionTitle?: string

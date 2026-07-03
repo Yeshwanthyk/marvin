@@ -1,4 +1,4 @@
-import { batch, onCleanup } from "solid-js"
+import { batch, createEffect, onCleanup } from "solid-js"
 import { Effect, Fiber, Stream } from "effect"
 import { createHookMessage } from "@yeshwanthyk/runtime-effect/hooks/index.js"
 import type { PromptDeliveryMode, PromptQueueItem } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
@@ -43,6 +43,7 @@ export interface UsePromptSubmissionDeps {
 	getPendingSessionTitle: () => string | undefined
 	clearPendingSessionTitle: () => void
 	showToast: (title: string, message: string, variant?: "info" | "warning" | "success" | "error") => void
+	activeKey?: () => unknown
 }
 
 export interface PromptSubmissionController {
@@ -65,8 +66,10 @@ export const usePromptSubmission = ({
 	getPendingSessionTitle,
 	clearPendingSessionTitle,
 	showToast,
+	activeKey,
 }: UsePromptSubmissionDeps): PromptSubmissionController => {
 	let promptQueueItems: ReadonlyArray<PromptQueueItem> = []
+	let queueFiber: ReturnType<typeof Effect.runFork> | null = null
 	const promptQueue: EventHandlerContext["promptQueue"] = {
 		push: (_item: PromptQueueItem) => {},
 		shift: () => {
@@ -92,16 +95,25 @@ export const usePromptSubmission = ({
 		counts: () => store.queueCounts.value(),
 	}
 
-	const queueFiber = Effect.runFork(
-		Stream.runForEach(runtime.promptQueue.stateStream, (snapshot) =>
-			Effect.sync(() => {
-				promptQueueItems = snapshot.pending
-				store.queueCounts.set(snapshot.counts)
-			}),
-		),
-	)
+	createEffect(() => {
+		activeKey?.()
+		if (queueFiber !== null) {
+			Effect.runFork(Fiber.interrupt(queueFiber))
+			queueFiber = null
+		}
+		promptQueueItems = []
+		store.queueCounts.set({ steer: 0, followUp: 0 })
+		queueFiber = Effect.runFork(
+			Stream.runForEach(runtime.promptQueue.stateStream, (snapshot) =>
+				Effect.sync(() => {
+					promptQueueItems = snapshot.pending
+					store.queueCounts.set(snapshot.counts)
+				}),
+			),
+		)
+	})
 	onCleanup(() => {
-		Effect.runFork(Fiber.interrupt(queueFiber))
+		if (queueFiber !== null) Effect.runFork(Fiber.interrupt(queueFiber))
 	})
 
 	const submitPrompt = async (text: string, mode: PromptDeliveryMode = "followUp") => {

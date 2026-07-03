@@ -5,6 +5,7 @@ import type { CustomCommand } from "@yeshwanthyk/runtime-effect/extensibility/cu
 import type { PromptQueue } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import type { RuntimeContext } from "../../runtime/factory.js"
 import type { SessionControllerState } from "../../runtime/session/session-controller.js"
+import type { SessionActorProjectionStore } from "../../runtime/actor-projection.js"
 import type { EventHandlerContext, ToolMeta } from "../../agent-events.js"
 import type { HostNotification } from "./activity-index.js"
 import type { LaneHeaderState } from "./lane-header-state.js"
@@ -29,6 +30,7 @@ export interface SessionViewProps {
 	setActiveToolBlocks: EventHandlerContext["setToolBlocks"]
 	setActiveContextTokens: EventHandlerContext["setContextTokens"]
 	activeDisplayContextWindow: Accessor<number>
+	projection?: Accessor<SessionActorProjectionStore | null>
 	promptQueue: PromptQueue
 	setLastError: Setter<string | null>
 	laneHeaderState: Accessor<LaneHeaderState>
@@ -89,7 +91,16 @@ export function SessionView(props: SessionViewProps) {
 		getContextWindow: () => props.activeDisplayContextWindow(),
 	}
 
-	useAgentEvents({ agent: props.agent, context: eventCtx })
+	if (props.projection === undefined) {
+		useAgentEvents({ agent: props.agent, context: eventCtx })
+	}
+
+	const messages = () => props.projection?.()?.messages() ?? props.store.messages.value()
+	const toolBlocks = () => props.projection?.()?.toolBlocks() ?? props.store.toolBlocks.value()
+	const isResponding = () => props.projection?.()?.isResponding() ?? props.store.isResponding.value()
+	const activityState = () => props.projection?.()?.activityState() ?? props.store.activityState.value()
+	const contextTokens = () => props.projection?.()?.contextTokens() ?? props.store.contextTokens.value()
+	const retryStatus = () => props.projection?.()?.retryStatus() ?? props.store.retryStatus.value()
 
 	const handleAbort = (): string | null => {
 		if (retryState.abortController) {
@@ -139,18 +150,18 @@ export function SessionView(props: SessionViewProps) {
 		<Show when={props.active()}>
 		<MainView
 			validationIssues={props.validationIssues}
-			messages={props.store.messages.value()}
-			toolBlocks={props.store.toolBlocks.value()}
-			isResponding={props.store.isResponding.value()}
-			activityState={props.store.activityState.value()}
+			messages={messages()}
+			toolBlocks={toolBlocks()}
+			isResponding={isResponding()}
+			activityState={activityState()}
 			thinkingVisible={props.store.thinkingVisible.value()}
 			modelId={props.store.displayModelId.value()}
 			thinking={props.store.displayThinking.value()}
 			provider={props.store.currentProvider.value()}
-			contextTokens={props.store.contextTokens.value()}
+			contextTokens={contextTokens()}
 			contextWindow={props.store.displayContextWindow.value()}
 			queueCounts={props.store.queueCounts.value()}
-			retryStatus={props.store.retryStatus.value()}
+			retryStatus={retryStatus()}
 			turnCount={props.store.turnCount.value()}
 			lane={props.laneHeaderState()}
 			hostNotifications={props.hostNotifications?.() ?? []}

@@ -1,4 +1,5 @@
 import type {
+  ActorUiPolicy,
   ProjectRuntimeBundle,
   SessionActorDescriptor,
 } from "@yeshwanthyk/runtime-effect/project-bundle.js";
@@ -42,6 +43,7 @@ export interface SessionActorRegistry {
 
 export interface SessionActorRegistryOptions {
   readonly getBundle: (descriptor: SessionActorDescriptor) => Promise<ProjectRuntimeBundle>;
+  readonly getUiPolicy?: (descriptor: SessionActorDescriptor, focused: boolean) => ActorUiPolicy;
   readonly policy?: Partial<ActorLifecyclePolicy>;
   readonly now?: () => number;
   readonly createActor?: (
@@ -89,10 +91,11 @@ export const createSessionActorRegistry = (
     const actor = options.createActor
       ? options.createActor(descriptor, statusChanged)
       : createSessionActor({
-          descriptor,
-          getBundle: options.getBundle,
-          onStatusChange: statusChanged,
-        });
+        descriptor,
+        getBundle: options.getBundle,
+        getUiPolicy: options.getUiPolicy,
+        onStatusChange: statusChanged,
+      });
     actors.set(descriptor.laneId, {
       actor,
       lastViewedAt: timestamp,

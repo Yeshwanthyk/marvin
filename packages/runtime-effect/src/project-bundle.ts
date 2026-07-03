@@ -19,6 +19,8 @@ import {
   HookContextControllerLayer,
   HookContextControllerTag,
   type HookContextController,
+  type HookSessionContext,
+  type HookUIContext,
 } from "./hooks/index.js";
 import { HookEffectsTag, createHookEffects } from "./hooks/effects.js";
 import {
@@ -111,6 +113,9 @@ export interface ActorUiPolicy {
   readonly adapter?: AdapterKind;
   readonly hasUI?: boolean;
   readonly sendRef?: SendRef;
+  readonly hookUIContext?: HookUIContext;
+  readonly hookSessionContext?: HookSessionContext;
+  readonly notify?: (title: string, message: string, variant?: "info" | "warning" | "success" | "error") => void;
 }
 
 export interface ActorRuntimeOptions {
@@ -227,14 +232,18 @@ export const createProjectRuntimeBundle = async (
     },
     validationIssues,
     createActorServices: (descriptor, ui) => {
+      const actorUi = {
+        adapter: ui?.adapter ?? "headless",
+        hasUI: ui?.hasUI ?? hasUI,
+        sendRef: ui?.sendRef ?? sendRef,
+        ...(ui?.hookUIContext !== undefined ? { hookUIContext: ui.hookUIContext } : {}),
+        ...(ui?.hookSessionContext !== undefined ? { hookSessionContext: ui.hookSessionContext } : {}),
+        ...(ui?.notify !== undefined ? { notify: ui.notify } : {}),
+      } satisfies CreateActorServicesOptions["ui"];
       const createOptions = {
         bundle,
         descriptor,
-        ui: {
-          adapter: ui?.adapter ?? "headless",
-          hasUI: ui?.hasUI ?? hasUI,
-          sendRef: ui?.sendRef ?? sendRef,
-        },
+        ui: actorUi,
         instrumentationLayer,
         runtimeOptions: options,
         ...(options.jsonlOwnership !== undefined ? { ownership: options.jsonlOwnership } : {}),
@@ -250,7 +259,7 @@ export const createProjectRuntimeBundle = async (
 interface CreateActorServicesOptions {
   readonly bundle: ProjectRuntimeBundle;
   readonly descriptor: SessionActorDescriptor;
-  readonly ui: Required<ActorUiPolicy>;
+  readonly ui: ActorUiPolicy & { readonly adapter: AdapterKind; readonly hasUI: boolean; readonly sendRef: SendRef };
   readonly instrumentationLayer: Layer.Layer<InstrumentationService, never, never>;
   readonly ownership?: JsonlOwnershipIndex;
   readonly runtimeOptions: ActorRuntimeOptions;
@@ -329,7 +338,7 @@ const buildActorLayer = (
   });
   const hookedTransportLayer = createHookedTransportLayer();
   const agentFactoryLayer = createAgentFactoryLayer();
-  const actorServicesLayer = createSessionActorServicesLayer();
+  const actorServicesLayer = createSessionActorServicesLayer(options);
 
   const baseProviders = Layer.merge(configLayer, options.instrumentationLayer);
   const withSessionManager = Layer.provideMerge(sessionManagerLayer, baseProviders);
@@ -468,7 +477,7 @@ const createAgentFactoryLayer = () =>
     }),
   );
 
-const createSessionActorServicesLayer = () =>
+const createSessionActorServicesLayer = (options: CreateActorServicesOptions) =>
   Layer.effect(
     SessionActorServicesTag,
     Effect.gen(function* () {
@@ -482,6 +491,24 @@ const createSessionActorServicesLayer = () =>
       const hookedTransport = yield* HookedTransportTag;
 
       attachHookErrorLogging(hookRunner, (message) => process.stderr.write(`${message}\n`));
+      const notify = (message: string, variant: "info" | "warning" | "success" | "error" = "warning") =>
+        options.ui.notify?.("Hook needs focus", message, variant);
+      hookRunner.initialize({
+        sendHandler: (text) => notify(`Hook tried to send while lane ${options.descriptor.laneId} was unfocused: ${text.slice(0, 80)}`),
+        sendMessageHandler: (message) => {
+          if (message.display) notify(`Hook message available in ${options.descriptor.cwd}`, "info");
+        },
+        sendUserMessageHandler: async (text) => notify(`Hook tried to enqueue while unfocused: ${text.slice(0, 80)}`),
+        steerHandler: async (text) => notify(`Hook tried to steer while unfocused: ${text.slice(0, 80)}`),
+        followUpHandler: async (text) => notify(`Hook tried to follow up while unfocused: ${text.slice(0, 80)}`),
+        isIdleHandler: () => !agentFactory.bootstrapAgent.state.isStreaming,
+        appendEntryHandler: (customType, data) => sessionManager.appendEntry(customType, data),
+        getSessionId: () => sessionManager.sessionId,
+        getModel: () => agentFactory.bootstrapAgent.state.model ?? null,
+        ...(options.ui.hookUIContext !== undefined ? { uiContext: options.ui.hookUIContext } : {}),
+        ...(options.ui.hookSessionContext !== undefined ? { sessionContext: options.ui.hookSessionContext } : {}),
+        hasUI: options.ui.hasUI,
+      });
       yield* Effect.promise(() => hookRunner.emit({ type: "app.start" }));
 
       return {

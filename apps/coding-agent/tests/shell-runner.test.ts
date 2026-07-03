@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test"
+import { mkdtemp, realpath, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import path from "node:path"
 import { runShellCommand } from "../src/shell-runner.js"
 
 describe("shell-runner", () => {
@@ -18,6 +21,16 @@ describe("shell-runner", () => {
 	test("captures stderr", async () => {
 		const result = await runShellCommand("echo error >&2")
 		expect(result.output.trim()).toBe("error")
+	})
+
+	test("executes in the provided cwd", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "marvin-shell-cwd-"))
+		try {
+			const result = await runShellCommand("pwd", { cwd: dir })
+			expect(await realpath(result.output.trim())).toBe(await realpath(dir))
+		} finally {
+			await rm(dir, { recursive: true, force: true })
+		}
 	})
 
 	test("respects timeout", async () => {

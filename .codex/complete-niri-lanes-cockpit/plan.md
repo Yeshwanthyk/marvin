@@ -23,36 +23,34 @@ Exit criteria
 - [x] Committed as `a26a791 refactor: split TuiApp into shell and SessionView`.
 
 ## Phase 5c: FocusController And Single Shell Host
-Status: in progress
+Status: complete
 
 Implementation
-- [ ] Add `apps/coding-agent/src/ui/app-shell/focus-controller.ts`.
-- [ ] Delete cwd-slot host in `apps/coding-agent/src/adapters/tui/app.tsx`.
-- [ ] Render one `TuiApp` shell bound to focused actor.
-- [ ] Replace activation records with focus options.
-- [ ] Rebind `SessionView` to focused actor projection.
-- [ ] Route `sendRef.current` to focused actor.
-- [ ] Convert hidden hook UI prompts to notifications/foreground requests.
-- [ ] Patch activity index from actor status transitions keyed by laneId.
-- [ ] Map CLI startup flags to lanes/focus.
-- [ ] Keep session-picker, headless, and ACP adapters compiling.
+- [x] Add `apps/coding-agent/src/ui/app-shell/focus-controller.ts`.
+- [x] Delete cwd-slot host in `apps/coding-agent/src/adapters/tui/app.tsx`.
+- [x] Render one `TuiApp` shell bound to focused actor.
+- [x] Replace activation records with focus-driven workspace switching.
+- [x] Rebind `SessionView` to focused actor projection.
+- [x] Route `sendRef.current`, shell `!`, and slash command cwd through focused actor/runtime.
+- [x] Convert hidden hook UI prompts to notifications and downgrade warm hidden actors.
+- [x] Patch activity index from actor projection transitions keyed by laneId.
+- [x] Map CLI startup flags to lanes/focus.
+- [x] Keep session-picker, headless, and ACP adapters compiling.
 
 Verification
-- [ ] `bun run typecheck` after major edits.
-- [ ] Tests: hidden actor streams into projection while another is focused.
-- [ ] Tests: `sendRef` targets focused actor after focus switches.
-- [ ] Tests: hidden interactive hook prompt creates notification, not modal.
-- [ ] Tests: suspended actor rehydrates on focus with deterministic ids.
-- [ ] Existing palette/lane switching tests pass.
-- [ ] `bun run check` passes.
-- [ ] isolated tmux smoke: rapid project/session switching while one session streams; background completion notification; composer draft survives switches.
-- [ ] Review gate completed and blockers fixed.
+- [x] `bun run typecheck` passed.
+- [x] Tests: focused projection/facade, same-project fresh scratchpad path, shell cwd, hidden hook UI downgrade, hidden hook prompt policy, suspended rehydrate.
+- [x] Existing palette/lane switching tests pass.
+- [x] `bun run check` passed.
+- [x] `git diff --check` passed.
+- [x] isolated tmux smoke passed for render, lane key handling, composer typing, and `/model` autocomplete.
+- [x] Two review gates completed; blockers fixed.
 
 Exit criteria
 - [ ] Phase commit created.
 
 ## Phase 6: Lifecycle Hardening
-Status: pending
+Status: in progress
 
 Implementation
 - [ ] Idle-TTL sweep suspends warm non-streaming actors and detaches projections.

@@ -1,4 +1,5 @@
 import type {
+  ActorUiPolicy,
   ProjectRuntimeBundle,
   ScopedSessionActorServices,
   SessionActorDescriptor,
@@ -37,6 +38,7 @@ export interface SessionActor {
   hydrate(reason: SessionActorHydrateReason): Promise<ScopedSessionActorServices>;
   bindView(view: SessionViewBinding): void;
   unbindView(): void;
+  refreshUiPolicy(focused: boolean): void;
   submit(text: string, mode: PromptDeliveryMode): Promise<void>;
   steer(text: string): void;
   suspend(): Promise<void>;
@@ -46,6 +48,7 @@ export interface SessionActor {
 export interface SessionActorOptions {
   readonly descriptor: SessionActorDescriptor;
   readonly getBundle: (descriptor: SessionActorDescriptor) => Promise<ProjectRuntimeBundle>;
+  readonly getUiPolicy?: (descriptor: SessionActorDescriptor, focused: boolean) => ActorUiPolicy;
   readonly onStatusChange?: (actor: SessionActor, status: SessionActorStatus) => void;
 }
 
@@ -72,8 +75,10 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
     setStatus("hydrating");
     try {
       const bundle = await options.getBundle(descriptor);
+      const focused = view?.isFocused() ?? false;
       const nextServices = await bundle.createActorServices(descriptor, {
-        hasUI: view?.isFocused() ?? false,
+        ...(options.getUiPolicy?.(descriptor, focused) ?? {}),
+        hasUI: focused,
       });
       projection.attach(nextServices);
       unsubscribeAgent = nextServices.agent.subscribe((event) => {
@@ -88,6 +93,30 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
       setStatus("errored");
       throw error;
     }
+  };
+
+  const refreshUiPolicy = (focused: boolean) => {
+    const actorServices = services;
+    if (actorServices === null) return;
+    const policy = options.getUiPolicy?.(descriptor, focused);
+    const notify = (message: string, variant: "info" | "warning" | "success" | "error" = "warning") =>
+      policy?.notify?.("Hook needs focus", message, variant);
+    actorServices.hookRunner.initialize({
+      sendHandler: (text) => notify(`Hook tried to send while lane ${descriptor.laneId} was unfocused: ${text.slice(0, 80)}`),
+      sendMessageHandler: (message) => {
+        if (message.display) notify(`Hook message available in ${descriptor.cwd}`, "info");
+      },
+      sendUserMessageHandler: async (text) => notify(`Hook tried to enqueue while unfocused: ${text.slice(0, 80)}`),
+      steerHandler: async (text) => notify(`Hook tried to steer while unfocused: ${text.slice(0, 80)}`),
+      followUpHandler: async (text) => notify(`Hook tried to follow up while unfocused: ${text.slice(0, 80)}`),
+      isIdleHandler: () => !actorServices.agent.state.isStreaming,
+      appendEntryHandler: (customType, data) => actorServices.sessionManager.appendEntry(customType, data),
+      getSessionId: () => actorServices.sessionManager.sessionId,
+      getModel: () => actorServices.agent.state.model ?? null,
+      ...(policy?.hookUIContext !== undefined ? { uiContext: policy.hookUIContext } : {}),
+      ...(policy?.hookSessionContext !== undefined ? { sessionContext: policy.hookSessionContext } : {}),
+      hasUI: focused,
+    });
   };
 
   const suspend = async () => {
@@ -137,7 +166,9 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
     },
     unbindView() {
       view = null;
+      refreshUiPolicy(false);
     },
+    refreshUiPolicy,
     async submit(text, mode) {
       const actorServices = await hydrate("background-prompt");
       await Effect.runPromise(actorServices.sessionOrchestrator.submitPrompt(text, { mode }));

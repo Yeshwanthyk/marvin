@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { getModels } from "@yeshwanthyk/ai";
 import { Effect } from "effect";
 import { createProjectRuntimeBundle } from "../src/project-bundle.js";
+import { createHookUIContext } from "../src/hooks/index.js";
 import { createJsonlOwnershipIndex, JsonlOwnershipConflictError } from "../src/session/jsonl-ownership.js";
 import { SessionManager } from "../src/session-manager.js";
 
@@ -176,6 +177,54 @@ export default function hook(marvin) {
         .rejects.toBeInstanceOf(JsonlOwnershipConflictError);
 
       await first.close();
+      await bundle.close();
+    } finally {
+      await rm(temp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("routes hidden interactive hook prompts through actor UI policy", async () => {
+    const temp = await createTempConfig();
+    const cwd = path.join(temp.dir, "project");
+    try {
+      await mkdir(cwd, { recursive: true });
+      await writeFile(
+        path.join(temp.dir, "hooks", "prompt.ts"),
+        `
+export default function hook(marvin) {
+  marvin.on("app.start", async (_event, ctx) => {
+    await ctx.ui.input("Hidden approval", "decision")
+  })
+}
+`,
+        "utf8",
+      );
+      const prompts: string[] = [];
+      const bundle = await createProjectRuntimeBundle({
+        configDir: temp.dir,
+        configPath: temp.configPath,
+        cwd,
+        instrumentation: { record: () => {} },
+      });
+
+      const services = await bundle.createActorServices(descriptor(cwd, "lane-hidden"), {
+        hasUI: false,
+        hookUIContext: createHookUIContext({
+          setEditorText: () => {},
+          getEditorText: () => "",
+          showSelect: async () => undefined,
+          showInput: async (title) => {
+            prompts.push(title);
+            return undefined;
+          },
+          showConfirm: async () => false,
+          showNotify: () => {},
+        }),
+      });
+
+      expect(prompts).toEqual(["Hidden approval"]);
+
+      await services.close();
       await bundle.close();
     } finally {
       await rm(temp.dir, { recursive: true, force: true });

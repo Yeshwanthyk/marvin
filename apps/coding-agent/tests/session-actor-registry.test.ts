@@ -60,6 +60,7 @@ const createFakeActor = (
     },
     bindView: () => {},
     unbindView: () => {},
+    refreshUiPolicy: () => {},
     submit: async () => {},
     steer: () => {},
     suspend: async () => {
@@ -172,5 +173,19 @@ describe("SessionActorRegistry", () => {
     expect(result.type).toBe("stream-limit-reached");
     expect(streaming.status()).toBe("streaming");
     expect(pending.status()).toBe("cold");
+  });
+
+  it("rehydrates suspended actors when they are focused again", async () => {
+    const registry = createSessionActorRegistry({
+      getBundle: unusedBundle,
+      createActor: (input, onStatusChange) =>
+        createFakeActor(input, onStatusChange, "suspended"),
+    });
+
+    registry.create(descriptor("suspended"));
+    const result = await registry.hydrate("suspended", "focus");
+
+    expect(result.type).toBe("hydrated");
+    expect(registry.get("suspended")?.status()).toBe("warm");
   });
 });

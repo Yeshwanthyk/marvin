@@ -1,5 +1,6 @@
 import { createHookMessage, createHookUIContext, type CompletionResult, type HookMessage, type HookSessionContext } from "@yeshwanthyk/runtime-effect/hooks/index.js"
 import { completeSimple, type Message } from "@yeshwanthyk/ai"
+import { createEffect } from "solid-js"
 import { appendWithCap } from "@domain/messaging/content.js"
 import type { useRuntime } from "../../runtime/context.js"
 import type { createSessionController } from "@runtime/session/session-controller.js"
@@ -35,6 +36,7 @@ export interface UseHookBridgeDeps {
 	steer: (text: string) => Promise<void>
 	followUp: (text: string) => Promise<void>
 	isResponding: () => boolean
+	activeKey?: () => unknown
 }
 
 export const useHookBridge = ({
@@ -59,6 +61,7 @@ export const useHookBridge = ({
 	steer,
 	followUp,
 	isResponding,
+	activeKey,
 }: UseHookBridgeDeps) => {
 	const hookUIContext = createHookUIContext({
 		setEditorText,
@@ -133,18 +136,21 @@ export const useHookBridge = ({
 		}
 	}
 
-	hookRunner.initialize({
-		sendHandler: (text) => void handleSubmit(text),
-		sendMessageHandler,
-		sendUserMessageHandler: (text, options) => sendUserMessage(text, options),
-		steerHandler: (text) => steer(text),
-		followUpHandler: (text) => followUp(text),
-		isIdleHandler: () => !isResponding(),
-		appendEntryHandler: (customType, data) => sessionManager.appendEntry(customType, data),
-		getSessionId: () => sessionManager.sessionId,
-		getModel: () => agent.getModel(),
-		uiContext: hookUIContext,
-		sessionContext: hookSessionContext,
-		hasUI: true,
+	createEffect(() => {
+		activeKey?.()
+		hookRunner.initialize({
+			sendHandler: (text) => void handleSubmit(text),
+			sendMessageHandler,
+			sendUserMessageHandler: (text, options) => sendUserMessage(text, options),
+			steerHandler: (text) => steer(text),
+			followUpHandler: (text) => followUp(text),
+			isIdleHandler: () => !isResponding(),
+			appendEntryHandler: (customType, data) => sessionManager.appendEntry(customType, data),
+			getSessionId: () => sessionManager.sessionId,
+			getModel: () => agent.getModel(),
+			uiContext: hookUIContext,
+			sessionContext: hookSessionContext,
+			hasUI: true,
+		})
 	})
 }

@@ -1,29 +1,22 @@
-import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import type { ScratchpadItem } from "@yeshwanthyk/runtime-effect/scratchpads.js"
 import type { createScratchpadStore } from "@yeshwanthyk/runtime-effect/scratchpads.js"
 import type { useRuntime } from "../../runtime/context.js"
-import type { useWorkspaceSwitch } from "../../runtime/workspace-switch.js"
 import type { useModals } from "../hooks/useModals.js"
 import type { SearchSelectOption } from "../components/modals/search-select-options.js"
 
 type RuntimeContext = ReturnType<typeof useRuntime>
 type ScratchpadStore = ReturnType<typeof createScratchpadStore>
-type WorkspaceSwitch = ReturnType<typeof useWorkspaceSwitch>
 type Modals = ReturnType<typeof useModals>
 type ToastVariant = "info" | "warning" | "success" | "error"
 
 export interface UseScratchpadActionsDeps {
 	scratchpadStore: ScratchpadStore
 	sessionManager: RuntimeContext["sessionManager"]
-	workspaceSwitch: WorkspaceSwitch
 	modals: Modals
 	getEditorText: () => string
 	setEditorText: (text: string) => void
 	showToast: (title: string, message: string, variant?: ToastVariant) => void
-	startFreshSession: (title?: string) => void
-	submitPrompt: (text: string, mode?: PromptDeliveryMode) => Promise<void>
-	markScratchpadTriggered: (id: string | undefined) => void
-	preserveStickyLaneMode: () => boolean
+	switchToFreshWorkspace: (cwd: string, options: { title: string; prompt: string; scratchpadId: string }) => Promise<boolean>
 }
 
 export interface ScratchpadActions {
@@ -53,15 +46,11 @@ const titleFromScratchpadBody = (body: string): string => {
 export const useScratchpadActions = ({
 	scratchpadStore,
 	sessionManager,
-	workspaceSwitch,
 	modals,
 	getEditorText,
 	setEditorText,
 	showToast,
-	startFreshSession,
-	submitPrompt,
-	markScratchpadTriggered,
-	preserveStickyLaneMode,
+	switchToFreshWorkspace,
 }: UseScratchpadActionsDeps): ScratchpadActions => {
 	const scratchpads = (): ScratchpadItem[] => scratchpadStore.list()
 
@@ -138,22 +127,12 @@ export const useScratchpadActions = ({
 			return
 		}
 
-		if (entry.item.cwd === sessionManager.projectCwd) {
-			startFreshSession(entry.item.title)
-			await submitPrompt(entry.body, "followUp")
-			setTimeout(() => markScratchpadTriggered(entry.item.id), 250)
-			return
-		}
-
-		const result = await workspaceSwitch.switchTo({
-			cwd: entry.item.cwd,
-			fresh: true,
-			initialSessionTitle: entry.item.title,
-			initialPrompt: entry.body,
-			initialScratchpadId: entry.item.id,
-			preserveLaneMode: preserveStickyLaneMode(),
+		const switched = await switchToFreshWorkspace(entry.item.cwd, {
+			title: entry.item.title,
+			prompt: entry.body,
+			scratchpadId: entry.item.id,
 		})
-		if (!result.switched) {
+		if (!switched) {
 			showToast("Scratchpad failed", `Could not switch to ${entry.item.cwd}`, "error")
 		}
 	}

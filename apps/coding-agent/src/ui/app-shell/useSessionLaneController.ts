@@ -305,8 +305,11 @@ export const useSessionLaneController = ({
 		const session = getCurrentSessionInfo()
 		if (!session) return null
 		const lanes = workspaceLanes()
+		const selectedLaneId = lanes.selection?.projectId === sessionManager.projectCwd ? lanes.selection.laneId : undefined
+		const selectedLane = selectedLaneId ? lanes.sessionsById[selectedLaneId] : undefined
+		const emptySelectedLaneId = selectedLane?.sessionPath === null ? selectedLane.laneId : undefined
 		const existingLaneId = findSessionLaneId(lanes, sessionManager.projectCwd, session)
-		const laneId = existingLaneId ?? randomUUID()
+		const laneId = existingLaneId ?? emptySelectedLaneId ?? randomUUID()
 		const patches = createSessionLaneSyncPatches({
 			lanes,
 			cwd: sessionManager.projectCwd,
