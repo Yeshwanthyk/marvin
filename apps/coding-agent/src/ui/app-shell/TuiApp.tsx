@@ -1,12 +1,10 @@
 import { ThemeProvider } from "@yeshwanthyk/open-tui"
-import { batch, createEffect, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
-import { Effect, Fiber, Stream } from "effect"
+import { batch, createEffect, onMount, Show } from "solid-js"
 import { useRuntime } from "../../runtime/context.js"
-import type { LoadedSession, SessionTreeNode, SessionNodeEntry, SessionInfo } from "../../session-manager.js"
-import { createSessionController, renderLoadedSessionView } from "@runtime/session/session-controller.js"
-import type { PromptDeliveryMode, PromptQueueItem } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
+import type { LoadedSession, SessionTreeNode, SessionNodeEntry } from "../../session-manager.js"
+import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import { appendWithCap } from "@domain/messaging/content.js"
-import type { UIShellMessage, UIMessage, ToolBlock } from "../../types.js"
+import type { UIShellMessage } from "../../types.js"
 import type { AppMessage } from "@yeshwanthyk/agent-core"
 import { runShellCommand } from "../../shell-runner.js"
 import { MainView } from "../features/main-view/MainView.js"
@@ -18,8 +16,6 @@ import { THINKING_LEVELS, type CommandContext } from "../../commands.js"
 import { slashCommands } from "../../autocomplete-commands.js"
 import { updateAppConfig } from "@yeshwanthyk/runtime-effect/config.js"
 import { handleSlashInput } from "../features/composer/SlashCommandHandler.js"
-import { createHookMessage, createHookUIContext, type HookMessage, type HookSessionContext, type CompletionResult } from "@yeshwanthyk/runtime-effect/hooks/index.js"
-import { completeSimple, type Message } from "@yeshwanthyk/ai"
 import { useModals } from "../hooks/useModals.js"
 import { ModalContainer } from "../components/modals/ModalContainer.js"
 import type { SearchSelectOption } from "../components/modals/search-select-options.js"
@@ -31,40 +27,46 @@ import {
 	findActiveCursor,
 	flushWorkspaceLanes,
 	moveLaneCursor,
-	readWorkspaceLanes,
 	renameSessionLane,
 	restoreSessionLane,
-	scheduleWriteWorkspaceLanes,
 	selectLane,
-	upsertProjectLane,
-	upsertSessionLane,
 	type LaneCursor,
-	type WorkspaceLanes,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
-import { discoverWorkspaceProjects, type WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
-import { createScratchpadStore, type ScratchpadItem } from "@yeshwanthyk/runtime-effect/scratchpads.js"
+import type { WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
+import { createScratchpadStore } from "@yeshwanthyk/runtime-effect/scratchpads.js"
 import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
-import { deriveLaneHeaderState } from "./lane-header-state.js"
 import { createCommandPaletteOptions, parseCommandPaletteValue } from "./command-palette-options.js"
-import { resolveModel, resolveProvider } from "@domain/commands/helpers.js"
+import { useHookBridge } from "./useHookBridge.js"
+import { usePromptSubmission } from "./usePromptSubmission.js"
+import { useSessionLaneController } from "./useSessionLaneController.js"
+import { useScratchpadActions } from "./useScratchpadActions.js"
+import { useWorkspaceProjectDiscovery } from "./useWorkspaceProjectDiscovery.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
 
 const textFromEntry = (entry: SessionNodeEntry): string => {
 	if (entry.type === "custom") return `[custom:${entry.customType}]`
-	const message = entry.message as { role?: string; content?: unknown; name?: string; toolName?: string }
+	const message = entry.message
+	const content = "content" in message ? message.content : undefined
 	const role = message.role ?? "message"
-	if (message.content === undefined) return role
-	const text = typeof message.content === "string"
-		? message.content
-		: Array.isArray(message.content)
-			? message.content
-				.filter((part): part is { type: "text"; text: string } => Boolean(part) && part.type === "text")
-				.map((part) => part.text)
+	if (content === undefined) return role
+	const text = typeof content === "string"
+		? content
+		: Array.isArray(content)
+			? content
+				.map((part) => {
+					if (typeof part !== "object" || part === null) return ""
+					if (Reflect.get(part, "type") !== "text") return ""
+					const value = Reflect.get(part, "text")
+					return typeof value === "string" ? value : ""
+				})
+				.filter((value) => value.length > 0)
 				.join(" ")
 			: ""
 	const compact = text.replace(/\s+/g, " ").trim()
-	return `${role}: ${compact || message.name || message.toolName || entry.id}`
+	const fallbackName = "name" in message && typeof message.name === "string" ? message.name : undefined
+	const fallbackToolName = "toolName" in message && typeof message.toolName === "string" ? message.toolName : undefined
+	return `${role}: ${compact || fallbackName || fallbackToolName || entry.id}`
 }
 
 const flattenTreeOptions = (
@@ -145,11 +147,11 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const toolMetaByName = new Map<string, ToolMeta>()
 	for (const [name, entry] of toolByName.entries()) {
-		const renderCall = entry.renderCall && typeof entry.renderCall === 'function' 
+		const renderCall = entry.renderCall && typeof entry.renderCall === 'function'
 			? (entry.renderCall as ToolMeta["renderCall"])
 			: undefined
 		const renderResult = entry.renderResult && typeof entry.renderResult === 'function'
-			? (entry.renderResult as ToolMeta["renderResult"]) 
+			? (entry.renderResult as ToolMeta["renderResult"])
 			: undefined
 			
 		toolMetaByName.set(name, {
@@ -169,256 +171,82 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		initialProvider: config.provider,
 	})
 
-	let promptQueueItems: ReadonlyArray<PromptQueueItem> = []
-	const promptQueue = {
-		push: (_item: PromptQueueItem) => {},
-		shift: () => {
-			const item = promptQueueItems[0]
-			if (item !== undefined) {
-				promptQueueItems = promptQueueItems.slice(1)
-				store.queueCounts.set({
-					steer: promptQueueItems.filter((entry) => entry.mode === "steer").length,
-					followUp: promptQueueItems.filter((entry) => entry.mode === "followUp").length,
-				})
-				Effect.runFork(runtime.promptQueue.acknowledgeHead(item))
-			}
-			return item
-		},
-		drainToScript: () => Effect.runSync(
-			Effect.catchAll(runtime.sessionOrchestrator.drainToScript, () => Effect.succeed(null)),
-		),
-		clear: () => {
-			Effect.runFork(runtime.promptQueue.clear)
-		},
-		size: () => promptQueueItems.length,
-		peekAll: () => [...promptQueueItems],
-		peek: () => promptQueueItems[0],
-		counts: () => store.queueCounts.value(),
-	}
 	const modals = useModals()
 	const workspaceSwitch = useWorkspaceSwitch()
 	const scratchpadStore = createScratchpadStore(config.configDir)
-	const [workspaceLanes, setWorkspaceLanes] = createSignal<WorkspaceLanes>(readWorkspaceLanes(config.configDir))
-	const [navMode, setNavMode] = createSignal<LaneNavMode>(initialNavMode ?? "off")
-	const laneHeaderState = createMemo(() => deriveLaneHeaderState(workspaceLanes(), navMode()))
-	const configuredProjects = (): WorkspaceProject[] => discoverWorkspaceProjects(config.workspace.projectRoots)
-	const scratchpads = (): ScratchpadItem[] => scratchpadStore.list()
-	const preserveStickyLaneMode = () => navMode() === "sticky"
+	const { projects: configuredProjects } = useWorkspaceProjectDiscovery({
+		projectRoots: () => config.workspace.projectRoots,
+	})
 	const isAppActive = () => active?.() ?? true
+	const showToastRef = { current: (_title: string, _message: string, _variant?: "info" | "warning" | "success" | "error") => {} }
+	let submitPromptImpl = async (_text: string, _mode: PromptDeliveryMode = "followUp") => {}
 
-	const queueFiber = Effect.runFork(
-		Stream.runForEach(runtime.promptQueue.stateStream, (snapshot) =>
-			Effect.sync(() => {
-				promptQueueItems = snapshot.pending
-				store.queueCounts.set(snapshot.counts)
-			}),
-		),
-	)
-	onCleanup(() => {
-		Effect.runFork(Fiber.interrupt(queueFiber))
-		void flushWorkspaceLanes(config.configDir)
-	})
-
-	const visibleSessionForLoaded = (session: LoadedSession, sessionPath?: string): VisibleSession => ({
-		state: "loaded",
-		cwd: session.metadata.cwd || sessionManager.projectCwd,
-		sessionPath: sessionPath || sessionManager.listSessions().find((entry) => entry.id === session.metadata.id)?.path || "",
-		sessionId: session.metadata.id,
-		session,
-	})
-	const initialVisible = initialVisibleSession ?? (initialSession ? visibleSessionForLoaded(initialSession) : { state: "none" })
-	const [visibleSession, setVisibleSession] = createSignal<VisibleSession>(initialVisible)
-	const [activeMessages, setActiveMessagesSignal] = createSignal<UIMessage[]>([])
-	const [activeToolBlocks, setActiveToolBlocksSignal] = createSignal<ToolBlock[]>([])
-	const [activeContextTokens, setActiveContextTokensSignal] = createSignal(0)
-	const [activeDisplayProvider, setActiveDisplayProviderSignal] = createSignal(config.provider)
-	const [activeDisplayModelId, setActiveDisplayModelIdSignal] = createSignal(config.modelId)
-	const [activeDisplayThinking, setActiveDisplayThinkingSignal] = createSignal(config.thinking)
-	const [activeDisplayContextWindow, setActiveDisplayContextWindowSignal] = createSignal(config.model.contextWindow)
-
-	const visibleCwd = () => {
-		const visible = visibleSession()
-		return visible.state === "none" ? sessionManager.projectCwd : visible.cwd
-	}
-
-	const isVisibleActiveSession = (visible: VisibleSession): boolean => {
-		if (visible.state === "none") return sessionManager.sessionPath === null
-		return visible.state === "loaded" &&
-			visible.cwd === sessionManager.projectCwd &&
-			visible.sessionPath === sessionManager.sessionPath &&
-			visible.sessionId === sessionManager.sessionId
-	}
-	const isActiveSessionVisible = (): boolean => isVisibleActiveSession(visibleSession())
-
-	const showActiveSessionView = () => {
-		batch(() => {
-			store.messages.set(() => activeMessages())
-			store.toolBlocks.set(() => activeToolBlocks())
-			store.contextTokens.set(activeContextTokens())
-			store.currentProvider.set(activeDisplayProvider())
-			store.displayModelId.set(activeDisplayModelId())
-			store.displayThinking.set(activeDisplayThinking())
-			store.displayContextWindow.set(activeDisplayContextWindow())
-		})
-	}
-
-	const setActiveMessages = (updater: (prev: UIMessage[]) => UIMessage[]) => {
-		setActiveMessagesSignal((prev) => {
-			const next = updater(prev)
-			if (isActiveSessionVisible()) store.messages.set(() => next)
-			return next
-		})
-	}
-
-	const setActiveToolBlocks = (updater: (prev: ToolBlock[]) => ToolBlock[]) => {
-		setActiveToolBlocksSignal((prev) => {
-			const next = updater(prev)
-			if (isActiveSessionVisible()) store.toolBlocks.set(() => next)
-			return next
-		})
-	}
-
-	const setActiveContextTokens = (value: number) => {
-		setActiveContextTokensSignal(value)
-		if (isActiveSessionVisible()) store.contextTokens.set(value)
-	}
-
-	const setActiveDisplayProvider = (value: typeof config.provider) => {
-		setActiveDisplayProviderSignal(value)
-		if (isActiveSessionVisible()) store.currentProvider.set(value)
-	}
-
-	const setActiveDisplayModelId = (value: string) => {
-		setActiveDisplayModelIdSignal(value)
-		if (isActiveSessionVisible()) store.displayModelId.set(value)
-	}
-
-	const setActiveDisplayThinking = (value: typeof config.thinking) => {
-		setActiveDisplayThinkingSignal(value)
-		if (isActiveSessionVisible()) store.displayThinking.set(value)
-	}
-
-	const setActiveDisplayContextWindow = (value: number) => {
-		setActiveDisplayContextWindowSignal(value)
-		if (isActiveSessionVisible()) store.displayContextWindow.set(value)
-	}
-
-	const sessionController = createSessionController({
-		initialProvider: config.provider,
-		initialModel: config.model,
-		initialModelId: config.modelId,
-		initialThinking: config.thinking,
+	const laneController = useSessionLaneController({
+		initialSession,
+		initialVisibleSession,
+		initialSessionTitle,
+		startNewSession,
+		initialNavMode,
+		config,
 		agent,
 		sessionManager,
 		hookRunner,
-		toolByName: toolMetaByName,
-		setMessages: setActiveMessages,
-		setContextTokens: setActiveContextTokens,
-		setDisplayProvider: setActiveDisplayProvider,
-		setDisplayModelId: setActiveDisplayModelId,
-		setDisplayThinking: setActiveDisplayThinking,
-		setDisplayContextWindow: setActiveDisplayContextWindow,
+		toolMetaByName,
+		store,
 		shellInjectionPrefix: SHELL_INJECTION_PREFIX,
-		submitPrompt: (text, options) => submitPrompt(text, options?.mode ?? "followUp"),
+		submitPrompt: (text, options) => submitPromptImpl(text, options?.mode ?? "followUp"),
 	})
+	const {
+		sessionController,
+		workspaceLanes,
+		refreshWorkspaceLanes,
+		navMode,
+		setNavMode,
+		laneHeaderState,
+		visibleSession,
+		setVisibleSession,
+		visibleSessionForLoaded,
+		visibleCwd,
+		isVisibleActiveSession,
+		isActiveSessionVisible,
+		showActiveSessionView,
+		setActiveMessages,
+		setActiveToolBlocks,
+		setActiveContextTokens,
+		activeDisplayContextWindow,
+		cloneWorkspaceLanes,
+		persistWorkspaceLanes,
+		syncCurrentSessionLane,
+		applyVisibleSession,
+		ensureSession,
+		prepareFreshSession: prepareFreshSessionBase,
+		startFreshSession: startFreshSessionBase,
+		getPendingSessionTitle,
+		clearPendingSessionTitle,
+	} = laneController
+	const preserveStickyLaneMode = () => navMode() === "sticky"
 
-	const cloneWorkspaceLanes = (value: WorkspaceLanes): WorkspaceLanes => JSON.parse(JSON.stringify(value)) as WorkspaceLanes
-
-	const persistWorkspaceLanes = (next: WorkspaceLanes) => {
-		scheduleWriteWorkspaceLanes(config.configDir, next)
-		setWorkspaceLanes(next)
-	}
-
-	const getCurrentSessionInfo = (): SessionInfo | null => {
-		const sessionId = sessionManager.sessionId
-		const sessionPath = sessionManager.sessionPath
-		if (!sessionId || !sessionPath) return null
-		return sessionManager.findSession(sessionPath) ?? {
-			id: sessionId,
-			timestamp: Date.now(),
-			path: sessionPath,
-			provider: sessionController.currentProvider(),
-			modelId: sessionController.currentModelId(),
-			cwd: sessionManager.projectCwd,
-		}
-	}
-
-	const syncCurrentSessionLane = (title?: string, options: { select?: boolean } = {}): LaneCursor | null => {
-		const session = getCurrentSessionInfo()
-		if (!session) return null
-		const next = cloneWorkspaceLanes(workspaceLanes())
-		const project = upsertProjectLane(next, sessionManager.projectCwd)
-		const lane = upsertSessionLane(next, project, session, title)
-		const shouldSelect = options.select ?? isActiveSessionVisible()
-		const selected = shouldSelect ? selectLane(next, { project, session: lane }) : next
-		persistWorkspaceLanes(selected)
-		return { project, session: lane }
-	}
-
-	const seedCurrentProjectLanes = () => {
-		const next = cloneWorkspaceLanes(workspaceLanes())
-		const project = upsertProjectLane(next, sessionManager.projectCwd)
-		for (const session of sessionManager.loadAllSessions()) {
-			if (session.messageCount === 0 || session.firstMessage.startsWith("System context:")) continue
-			const title = session.firstMessage.replace(/\s+/g, " ").trim().slice(0, 80) || session.id.slice(0, 8)
-			upsertSessionLane(next, project, session, title)
-		}
-		persistWorkspaceLanes(next)
-	}
-
-	const applyLoadedSessionDisplay = (session: LoadedSession, contextTokens: number) => {
-		const provider = resolveProvider(session.metadata.provider)
-		const model = provider ? resolveModel(provider, session.metadata.modelId) : null
-		batch(() => {
-			if (provider) store.currentProvider.set(provider)
-			store.displayModelId.set(model?.id ?? session.metadata.modelId)
-			store.displayThinking.set(session.metadata.thinkingLevel)
-			if (model) store.displayContextWindow.set(model.contextWindow)
-			store.contextTokens.set(contextTokens)
-		})
-	}
-
-	const applyVisibleSession = (nextVisible: VisibleSession) => {
-		setVisibleSession(nextVisible)
-		if (isVisibleActiveSession(nextVisible)) {
-			showActiveSessionView()
-			return
-		}
-
-		if (nextVisible.state === "loaded") {
-			const view = renderLoadedSessionView(nextVisible.session.messages as AppMessage[], {
-				toolByName: toolMetaByName,
-				shellInjectionPrefix: SHELL_INJECTION_PREFIX,
-			})
-			batch(() => {
-				store.messages.set(() => view.messages)
-				store.toolBlocks.set([])
-				store.cacheStats.set(null)
-				store.retryStatus.set(null)
-			})
-			applyLoadedSessionDisplay(nextVisible.session, view.contextTokens)
-			return
-		}
-
-		const messages: UIMessage[] = nextVisible.state === "missing"
-			? [{
-				id: `missing-${nextVisible.sessionPath}`,
-				role: "assistant",
-				content: `Session file missing: ${nextVisible.sessionPath}`,
-			}]
-			: []
-		batch(() => {
-			store.messages.set(() => messages)
-			store.toolBlocks.set([])
-			store.contextTokens.set(0)
-			store.cacheStats.set(null)
-			store.retryStatus.set(null)
-			store.currentProvider.set(activeDisplayProvider())
-			store.displayModelId.set(activeDisplayModelId())
-			store.displayThinking.set(activeDisplayThinking())
-			store.displayContextWindow.set(activeDisplayContextWindow())
-		})
-	}
+	const promptSubmission = usePromptSubmission({
+		runtime,
+		hookRunner,
+		sessionManager,
+		store,
+		activateVisibleSessionForSubmit: () => activateVisibleSessionForSubmit(),
+		revealLiveSession: () => revealLiveSession(),
+		syncCurrentSessionLane: (title, options) => syncCurrentSessionLane(title, options),
+		getPendingSessionTitle,
+		clearPendingSessionTitle,
+		showToast: (title, message, variant) => showToastRef.current(title, message, variant),
+	})
+	const {
+		promptQueue,
+		submitPrompt,
+		steerHelper,
+		followUpHelper,
+		sendUserMessageHelper,
+		enqueueWhileResponding,
+	} = promptSubmission
+	submitPromptImpl = submitPrompt
 
 	const markScratchpadTriggered = (id: string | undefined) => {
 		if (!id || !sessionManager.sessionId) return
@@ -428,22 +256,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 			// Scratchpad startup should not block the session itself.
 		}
 	}
-
-	onMount(() => {
-		seedCurrentProjectLanes()
-		if (startNewSession) {
-			prepareFreshSession(initialSessionTitle)
-			ensureSession()
-		} else if (initialSession) {
-			sessionController.restoreSession(initialSession)
-			const nextVisible = initialVisibleSession ?? visibleSessionForLoaded(initialSession)
-			setVisibleSession(nextVisible)
-			showActiveSessionView()
-			syncCurrentSessionLane()
-		} else if (initialVisibleSession) {
-			applyVisibleSession(initialVisibleSession)
-		}
-	})
 
 	// Submit initial prompt after render settles
 	onMount(() => {
@@ -456,44 +268,14 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		}
 	})
 
-	let pendingSessionTitle: string | undefined
 	let composerDraft = ""
-
-	const ensureSession = () => {
-		sessionController.ensureSession()
-		if (sessionManager.sessionPath) {
-			const loaded = sessionManager.loadSession(sessionManager.sessionPath)
-			if (loaded && visibleSession().state === "none") {
-				setVisibleSession(visibleSessionForLoaded(loaded, sessionManager.sessionPath))
-				showActiveSessionView()
-			}
-		}
-		syncCurrentSessionLane(pendingSessionTitle, { select: true })
-		pendingSessionTitle = undefined
-	}
-
-	const prepareFreshSession = (title = "new session") => {
-		pendingSessionTitle = title
+	const prepareFreshSession = (title?: string) => {
 		composerDraft = ""
-		sessionController.clearSession()
-		setVisibleSession({ state: "none" })
-		batch(() => {
-			setActiveMessagesSignal([])
-			setActiveToolBlocksSignal([])
-			setActiveContextTokensSignal(0)
-			store.messages.set([])
-			store.toolBlocks.set([])
-			store.contextTokens.set(0)
-			store.cacheStats.set(null)
-			store.retryStatus.set(null)
-		})
-		agent.reset()
-		void hookRunner.emit({ type: "session.clear", sessionId: null })
+		prepareFreshSessionBase(title)
 	}
-
-	const startFreshSession = (title = "new session") => {
-		prepareFreshSession(title)
-		ensureSession()
+	const startFreshSession = (title?: string) => {
+		composerDraft = ""
+		startFreshSessionBase(title)
 	}
 
 	let cycleIndex = cycleModels.findIndex(
@@ -501,7 +283,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	)
 	if (cycleIndex < 0) cycleIndex = 0
 
-	const streamingMessageIdRef = { current: null as string | null }
+	const streamingMessageIdRef: EventHandlerContext["streamingMessageId"] = { current: null }
 	const retryConfig = { enabled: true, maxRetries: 3, baseDelayMs: 2000 }
 	const retryablePattern =
 		/overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error/i
@@ -550,7 +332,25 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	const setEditorTextRef = { current: (_text: string) => {} }
 	const getEditorTextRef = { current: () => "" }
 	const clearEditorRef = { current: () => {} }
-	const showToastRef = { current: (_title: string, _message: string, _variant?: "info" | "warning" | "success" | "error") => {} }
+	const {
+		scratchpads,
+		saveCurrentScratchpad,
+		openScratchpad,
+		openScratchpadPicker,
+		startScratchpadPicker,
+	} = useScratchpadActions({
+		scratchpadStore,
+		sessionManager,
+		workspaceSwitch,
+		modals,
+		getEditorText: () => getEditorTextRef.current(),
+		setEditorText: (text) => setEditorTextRef.current(text),
+		showToast: (title, message, variant) => showToastRef.current(title, message, variant),
+		startFreshSession,
+		submitPrompt,
+		markScratchpadTriggered,
+		preserveStickyLaneMode,
+	})
 	let wasAppActive = isAppActive()
 
 	createEffect(() => {
@@ -616,73 +416,12 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		return true
 	}
 
-	const submitPrompt = async (text: string, mode: PromptDeliveryMode = "followUp") => {
-		const trimmed = text.trim()
-		if (!trimmed) return
-		if (!activateVisibleSessionForSubmit()) return
-
-		let beforeStartResult: Awaited<ReturnType<typeof hookRunner.emitBeforeAgentStart>> | undefined
-		try {
-			beforeStartResult = await hookRunner.emitBeforeAgentStart(trimmed)
-			const hookMsg = beforeStartResult?.message ? createHookMessage(beforeStartResult.message) : null
-			if (hookMsg?.display) {
-				const uiMsg: UIMessage = {
-					id: crypto.randomUUID(),
-					role: "assistant",
-					content:
-						typeof hookMsg.content === "string"
-							? hookMsg.content
-							: hookMsg.content.map((p) => (p.type === "text" ? p.text : "[image]")).join(""),
-					timestamp: hookMsg.timestamp,
-				}
-				store.messages.set((prev) => appendWithCap(prev, uiMsg))
-			}
-		} catch (err) {
-			store.messages.set((prev) =>
-				appendWithCap(prev, {
-					id: crypto.randomUUID(),
-					role: "assistant",
-					content: `Hook error: ${err instanceof Error ? err.message : String(err)}`,
-					timestamp: Date.now(),
-				}),
-			)
-		}
-
-		batch(() => {
-			store.toolBlocks.set([])
-			store.isResponding.set(true)
-			store.activityState.set("thinking")
-		})
-		try {
-			await Effect.runPromise(
-				runtime.sessionOrchestrator.submitPrompt(trimmed, { mode, beforeStartResult }),
-			)
-			setTimeout(() => {
-				if (!sessionManager.sessionId) return
-				syncCurrentSessionLane(pendingSessionTitle)
-				pendingSessionTitle = undefined
-			}, 100)
-		} catch (err) {
-			batch(() => {
-				store.messages.set((prev) =>
-					appendWithCap(prev, {
-						id: crypto.randomUUID(),
-						role: "assistant",
-						content: `Error: ${err instanceof Error ? err.message : String(err)}`,
-					}),
-				)
-				store.isResponding.set(false)
-				store.activityState.set("idle")
-			})
-		}
-	}
-
 	let lastActivationSeq = activation?.().seq ?? 0
 	createEffect(() => {
 		const next = activation?.()
 		if (!next || next.seq === lastActivationSeq || !isAppActive()) return
 		lastActivationSeq = next.seq
-		setWorkspaceLanes(readWorkspaceLanes(config.configDir))
+		refreshWorkspaceLanes()
 		if (next.initialNavMode) setNavMode(next.initialNavMode)
 		if (next.startNewSession) {
 			if (store.isResponding.value()) {
@@ -715,43 +454,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 			sessionPath: sessionManager.sessionPath,
 		})
 	})
-
-	const steerHelper = async (text: string) => {
-		const trimmed = text.trim()
-		if (!trimmed) return
-		if (store.isResponding.value()) {
-			if (!revealLiveSession()) {
-				showToastRef.current("Session still running", "Switch back to the live session before steering", "warning")
-				return
-			}
-			await Effect.runPromise(runtime.sessionOrchestrator.submitPrompt(trimmed, { mode: "steer" }))
-			return
-		}
-		await submitPrompt(trimmed, "steer")
-	}
-
-	const followUpHelper = async (text: string) => {
-		const trimmed = text.trim()
-		if (!trimmed) return
-		if (store.isResponding.value()) {
-			if (!revealLiveSession()) {
-				showToastRef.current("Session still running", "Switch back to the live session before queueing follow-up", "warning")
-				return
-			}
-			await Effect.runPromise(runtime.sessionOrchestrator.submitPrompt(trimmed, { mode: "followUp" }))
-			return
-		}
-		await submitPrompt(trimmed, "followUp")
-	}
-
-	const sendUserMessageHelper = async (text: string, options?: { deliverAs?: PromptDeliveryMode }) => {
-		const mode: PromptDeliveryMode = options?.deliverAs ?? "followUp"
-		if (mode === "steer") {
-			await steerHelper(text)
-			return
-		}
-		await followUpHelper(text)
-	}
 
 	const cmdCtx: CommandContext = {
 		agent,
@@ -817,18 +519,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	}
 
 	const builtInCommandNames = new Set(slashCommands.map((c) => c.name))
-
-	const enqueueWhileResponding = (text: string, mode: PromptDeliveryMode) => {
-		void sendUserMessageHelper(text, { deliverAs: mode }).catch((err) => {
-			store.messages.set((prev) =>
-				appendWithCap(prev, {
-					id: crypto.randomUUID(),
-					role: "assistant",
-					content: `Error: ${err instanceof Error ? err.message : String(err)}`,
-				}),
-			)
-		})
-	}
 
 	const handleSubmit = async (text: string, editorClearFn?: () => void) => {
 		if (!text.trim()) return
@@ -923,104 +613,29 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		await submitPrompt(text, "followUp")
 	}
 
-	// Initialize hook runner with full context
-	const hookUIContext = createHookUIContext({
-		setEditorText: (text) => {
-			setEditorTextRef.current(text)
-		},
+	useHookBridge({
+		agent,
+		sessionManager,
+		hookRunner,
+		getApiKey,
+		customCommands,
+		builtInCommandNames,
+		cmdCtx,
+		sessionController,
+		setMessages: store.messages.set,
+		setEditorText: (text) => setEditorTextRef.current(text),
 		getEditorText: () => getEditorTextRef.current(),
 		showSelect: modals.showSelect,
 		showInput: modals.showInput,
 		showConfirm: modals.showConfirm,
 		showEditor: modals.showEditor,
-		showNotify: (message, type = "info") => showToastRef.current(type, message, type)
-	})
-
-	const hookSessionContext: HookSessionContext = {
-		summarize: async () => {
-			// Trigger compaction through the /compact command flow
-			await handleSlashInput("/compact", {
-				commandContext: cmdCtx,
-				customCommands,
-				builtInCommandNames,
-				onExpand: async (expanded) => handleSubmit(expanded),
-			})
-		},
-		toast: (title, message, variant = "info") => showToastRef.current(title, message, variant),
-		getTokenUsage: () => hookRunner["tokenUsage"],
-		getContextLimit: () => hookRunner["contextLimit"],
-		newSession: async (_opts) => {
-			startFreshSession()
-			return { cancelled: false, sessionId: sessionManager.sessionId ?? undefined }
-		},
-		getApiKey: async (model) => getApiKey(model.provider),
-		complete: async (systemPrompt, userText) => {
-			const model = agent.state.model
-			const apiKey = getApiKey(model.provider)
-			if (!apiKey) {
-				return { text: "", stopReason: "error" as const }
-			}
-			try {
-				const userMessage: Message = {
-					role: "user",
-					content: [{ type: "text", text: userText }],
-					timestamp: Date.now(),
-				}
-				const result = await completeSimple(model, { systemPrompt, messages: [userMessage] }, { apiKey })
-				const text = result.content
-					.filter((c): c is { type: "text"; text: string } => c.type === "text")
-					.map((c) => c.text)
-					.join("\n")
-				// Map stopReason: stop -> end, length -> max_tokens, toolUse -> tool_use
-				const stopMap: Record<string, CompletionResult["stopReason"]> = {
-					stop: "end", length: "max_tokens", toolUse: "tool_use", error: "error", aborted: "aborted"
-				}
-				return { text, stopReason: stopMap[result.stopReason] ?? "end" }
-			} catch (err) {
-				return { text: err instanceof Error ? err.message : String(err), stopReason: "error" as const }
-			}
-		},
-	}
-
-	const sendMessageHandler = <T = unknown>(
-		message: Pick<HookMessage<T>, "customType" | "content" | "display" | "details">,
-		triggerTurn?: boolean | { triggerTurn?: boolean },
-	) => {
-		const shouldTriggerTurn = typeof triggerTurn === "object" ? triggerTurn.triggerTurn === true : triggerTurn === true
-		const hookMessage = createHookMessage(message)
-		// Add to UI messages if display is true
-		if (hookMessage.display) {
-			const uiMsg: UIMessage = {
-				id: crypto.randomUUID(),
-				role: "assistant", // Render hook messages as assistant for now
-				content: typeof hookMessage.content === "string"
-					? hookMessage.content
-					: hookMessage.content.map(p => p.type === "text" ? p.text : "[image]").join(""),
-				timestamp: hookMessage.timestamp,
-			}
-			store.messages.set((prev) => appendWithCap(prev, uiMsg))
-		}
-		// Persist hook message to session
-		sessionManager.appendMessage(hookMessage)
-		// Optionally trigger a new turn
-		if (shouldTriggerTurn) {
-			void handleSubmit(typeof hookMessage.content === "string" ? hookMessage.content : "")
-		}
-	}
-
-	hookRunner.initialize({
-		sendHandler: (text) => void handleSubmit(text),
-		sendMessageHandler,
-		sendUserMessageHandler: (text, options) => sendUserMessageHelper(text, options),
-		steerHandler: (text) => steerHelper(text),
-		followUpHandler: (text) => followUpHelper(text),
-		isIdleHandler: () => !store.isResponding.value(),
-		appendEntryHandler: (customType, data) => sessionManager.appendEntry(customType, data),
-		getSessionId: () => sessionManager.sessionId,
-		getModel: () => agent.state.model,
-		uiContext: hookUIContext,
-		sessionContext: hookSessionContext,
-		hasUI: true,
+		showToast: (title, message, variant) => showToastRef.current(title, message, variant),
+		startFreshSession,
+		handleSubmit,
+		sendUserMessage: sendUserMessageHelper,
+		steer: steerHelper,
+		followUp: followUpHelper,
+		isResponding: store.isResponding.value,
 	})
 
 	sendRef.current = (text) => void handleSubmit(text)
@@ -1046,7 +661,8 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		if (cycleModels.length <= 1) return
 		if (store.isResponding.value()) return
 		cycleIndex = (cycleIndex + 1) % cycleModels.length
-		const entry = cycleModels[cycleIndex]!
+		const entry = cycleModels[cycleIndex]
+		if (!entry) return
 		sessionController.setCurrentProvider(entry.provider)
 		sessionController.setCurrentModelId(entry.model.id)
 		agent.setModel(entry.model)
@@ -1061,7 +677,8 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const cycleThinking = () => {
 		const current = sessionController.currentThinking()
-		const next = THINKING_LEVELS[(THINKING_LEVELS.indexOf(current) + 1) % THINKING_LEVELS.length]!
+		const next = THINKING_LEVELS[(THINKING_LEVELS.indexOf(current) + 1) % THINKING_LEVELS.length]
+		if (!next) return
 		sessionController.setCurrentThinking(next)
 		agent.setThinkingLevel(next)
 		store.displayThinking.set(next)
@@ -1124,13 +741,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		keywords: `${project.title} ${project.cwd} ${project.root} project workspace folder`,
 	})
 
-	const scratchpadSearchOption = (item: ScratchpadItem): SearchSelectOption => ({
-		value: item.id,
-		label: item.title,
-		description: item.bodyPreview || item.cwd,
-		keywords: `${item.title} ${item.cwd} ${item.bodyPreview} ${item.tags.join(" ")} scratch scratchpad note`,
-	})
-
 	const pickConfiguredProject = async (title: string): Promise<WorkspaceProject | null> => {
 		const projects = configuredProjects()
 		if (projects.length === 0) {
@@ -1139,50 +749,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		}
 		const selected = await modals.showSearchSelect(title, projects.map(projectSearchOption), "project or folder")
 		return selected ? projects.find((project) => project.cwd === selected) ?? null : null
-	}
-
-	const pickScratchpad = async (title: string): Promise<ScratchpadItem | null> => {
-		const items = scratchpads()
-		if (items.length === 0) {
-			showToastRef.current("No scratchpads", "Create one with Open scratchpad first", "warning")
-			return null
-		}
-		const selected = await modals.showSearchSelect(title, items.map(scratchpadSearchOption), "scratchpad or note")
-		return selected ? items.find((item) => item.id === selected) ?? null : null
-	}
-
-	const titleFromScratchpadBody = (body: string): string => {
-		const words = body.replace(/^#+\s*/g, "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean).slice(0, 4)
-		return words.join(" ").slice(0, 80) || "scratchpad note"
-	}
-
-	const saveScratchpadBody = (body: string, options?: { title?: string }) => {
-		const trimmed = body.trim()
-		if (!trimmed) {
-			showToastRef.current("Nothing to save", "Scratchpad is empty", "warning")
-			return null
-		}
-		const item = scratchpadStore.add({
-			cwd: sessionManager.projectCwd,
-			title: options?.title ?? titleFromScratchpadBody(trimmed),
-			body: trimmed,
-			source: { kind: "tui", ...(sessionManager.sessionId ? { sessionId: sessionManager.sessionId } : {}) },
-		})
-		showToastRef.current("Scratchpad saved", item.bodyPath, "success")
-		return item
-	}
-
-	const captureScratchpad = () => {
-		void (async () => {
-			const initialText = getEditorTextRef.current()
-			const body = await modals.showEditor("Scratchpad", initialText)
-			if (body === undefined) return
-			try {
-				saveScratchpadBody(body)
-			} catch (error) {
-				showToastRef.current("Scratchpad failed", error instanceof Error ? error.message : String(error), "error")
-			}
-		})()
 	}
 
 	const switchToProject = async (project: WorkspaceProject, options?: { fresh?: boolean; preserveLaneMode?: boolean }): Promise<boolean> => {
@@ -1208,67 +774,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		})()
 	}
 
-	const saveCurrentScratchpad = () => {
-		void (async () => {
-			const body = getEditorTextRef.current().trim()
-			try {
-				saveScratchpadBody(body)
-			} catch (error) {
-				showToastRef.current("Scratchpad failed", error instanceof Error ? error.message : String(error), "error")
-			}
-		})()
-	}
-
-	const openScratchpad = (id: string) => {
-		try {
-			const { item, body } = scratchpadStore.read(id)
-			setEditorTextRef.current(body)
-			showToastRef.current("Scratchpad loaded", item.title, "success")
-		} catch (error) {
-			showToastRef.current("Scratchpad failed", error instanceof Error ? error.message : String(error), "error")
-		}
-	}
-
-	const openScratchpadPicker = () => {
-		captureScratchpad()
-	}
-
-	const startScratchpad = async (id: string): Promise<void> => {
-		let entry: { item: ScratchpadItem; body: string }
-		try {
-			entry = scratchpadStore.read(id)
-		} catch (error) {
-			showToastRef.current("Scratchpad failed", error instanceof Error ? error.message : String(error), "error")
-			return
-		}
-
-		if (entry.item.cwd === sessionManager.projectCwd) {
-			startFreshSession(entry.item.title)
-			await submitPrompt(entry.body, "followUp")
-			setTimeout(() => markScratchpadTriggered(entry.item.id), 250)
-			return
-		}
-
-		const result = await workspaceSwitch.switchTo({
-			cwd: entry.item.cwd,
-			fresh: true,
-			initialSessionTitle: entry.item.title,
-			initialPrompt: entry.body,
-			initialScratchpadId: entry.item.id,
-			preserveLaneMode: preserveStickyLaneMode(),
-		})
-		if (!result.switched) {
-			showToastRef.current("Scratchpad failed", `Could not switch to ${entry.item.cwd}`, "error")
-		}
-	}
-
-	const startScratchpadPicker = () => {
-		void (async () => {
-			const item = await pickScratchpad("Start scratchpad")
-			if (!item) return
-			await startScratchpad(item.id)
-		})()
-	}
 
 	const renameCurrentSession = () => {
 		void (async () => {
