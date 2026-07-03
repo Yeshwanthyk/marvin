@@ -168,6 +168,7 @@ export class SessionManager implements ReadonlySessionManager {
   private currentSessionPath: string | null = null;
   private currentSessionId: string | null = null;
   private leafId: string | null = null;
+  private currentNodeIds: Set<string> | null = null;
 
   constructor(configDir: string = join(process.env.HOME || "", ".config", "marvin"), cwd: string = process.cwd()) {
     this.cwd = cwd;
@@ -208,19 +209,23 @@ export class SessionManager implements ReadonlySessionManager {
 
     writeFileSync(this.currentSessionPath, `${JSON.stringify(metadata)}\n`, "utf8");
     this.leafId = null;
+    this.currentNodeIds = new Set();
     return id;
   }
 
   continueSession(sessionPath: string, sessionId: string): void {
+    const nodeState = this.readSessionNodeState(sessionPath);
     this.currentSessionPath = sessionPath;
     this.currentSessionId = sessionId;
-    this.leafId = this.findLastNodeId(sessionPath);
+    this.leafId = nodeState.leafId;
+    this.currentNodeIds = nodeState.ids;
   }
 
   clearCurrentSession(): void {
     this.currentSessionPath = null;
     this.currentSessionId = null;
     this.leafId = null;
+    this.currentNodeIds = null;
   }
 
   appendMessage(message: AppMessage): void {
@@ -228,7 +233,7 @@ export class SessionManager implements ReadonlySessionManager {
 
     const entry: SessionMessageEntry = {
       type: "message",
-      id: createEntryId(new Set(this.readSessionEntries(this.currentSessionPath).filter(isNodeEntry).map((e) => e.id))),
+      id: createEntryId(this.getCurrentNodeIds()),
       parentId: this.leafId,
       timestamp: new Date().toISOString(),
       message,
@@ -243,7 +248,7 @@ export class SessionManager implements ReadonlySessionManager {
 
     const entry: SessionCustomEntry<T> = {
       type: "custom",
-      id: createEntryId(new Set(this.readSessionEntries(this.currentSessionPath).filter(isNodeEntry).map((e) => e.id))),
+      id: createEntryId(this.getCurrentNodeIds()),
       parentId: this.leafId,
       timestamp: new Date().toISOString(),
       customType,
@@ -399,6 +404,10 @@ export class SessionManager implements ReadonlySessionManager {
         .filter((entry): entry is SessionMessageEntry => entry.type === "message")
         .map((entry) => entry.message);
       const leafId = branch.at(-1)?.id ?? null;
+      if (this.currentSessionPath === sessionPath) {
+        this.leafId = leafId;
+        this.currentNodeIds = new Set(entries.filter(isNodeEntry).map((entry) => entry.id));
+      }
 
       return { metadata, messages, leafId };
     } catch {
@@ -591,8 +600,23 @@ export class SessionManager implements ReadonlySessionManager {
     return branch;
   }
 
-  private findLastNodeId(sessionPath: string): string | null {
-    return this.findLastNodeIdInEntries(this.readSessionEntries(sessionPath, { migrate: true }));
+  private getCurrentNodeIds(): Set<string> {
+    if (this.currentNodeIds) return this.currentNodeIds;
+    if (!this.currentSessionPath) return new Set();
+    const nodeState = this.readSessionNodeState(this.currentSessionPath);
+    this.currentNodeIds = nodeState.ids;
+    if (this.leafId === null) {
+      this.leafId = nodeState.leafId;
+    }
+    return this.currentNodeIds;
+  }
+
+  private readSessionNodeState(sessionPath: string): { leafId: string | null; ids: Set<string> } {
+    const entries = this.readSessionEntries(sessionPath, { migrate: true });
+    return {
+      leafId: this.findLastNodeIdInEntries(entries),
+      ids: new Set(entries.filter(isNodeEntry).map((entry) => entry.id)),
+    };
   }
 
   private findLastNodeIdInEntries(entries: SessionEntry[]): string | null {
