@@ -498,8 +498,8 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		retryablePattern,
 		retryState,
 		agent: {
-			state: { messages: agent.state.messages },
-			replaceMessages: (messages: unknown[]) => agent.replaceMessages(messages as AppMessage[]),
+			getMessages: () => agent.state.messages,
+			replaceMessages: (messages: AppMessage[]) => agent.replaceMessages(messages),
 			continue: agent.continue.bind(agent),
 		},
 		hookRunner,

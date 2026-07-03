@@ -59,8 +59,8 @@ export interface EventHandlerContext {
 
 	// Agent reference for retry logic
 	agent: {
-		state: { messages: unknown[] }
-		replaceMessages: (messages: unknown[]) => void
+		getMessages: () => AppMessage[]
+		replaceMessages: (messages: AppMessage[]) => void
 		continue: () => Promise<void>
 	}
 
@@ -675,7 +675,8 @@ function handleAgentEnd(
 	})
 
 	// Check for retryable error
-	const lastMsg = ctx.agent.state.messages[ctx.agent.state.messages.length - 1]
+	const currentMessages = ctx.agent.getMessages()
+	const lastMsg = currentMessages[currentMessages.length - 1]
 	const errorMsg = isAssistantMessage(lastMsg) ? lastMsg.errorMessage : undefined
 	const isRetryable = errorMsg && ctx.retryablePattern.test(errorMsg)
 
@@ -706,7 +707,7 @@ function handleAgentEnd(
 				ctx.setRetryStatus(null)
 				ctx.retryState.abortController = null
 				// Remove last error message and retry
-				ctx.agent.replaceMessages(ctx.agent.state.messages.slice(0, -1))
+				ctx.agent.replaceMessages(ctx.agent.getMessages().slice(0, -1))
 				ctx.setActivityState("thinking")
 				void ctx.agent.continue().catch((err) => {
 					ctx.setActivityState("idle")

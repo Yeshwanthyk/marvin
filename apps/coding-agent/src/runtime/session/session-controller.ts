@@ -40,7 +40,7 @@ export interface SessionControllerState {
 	ensureSession: () => void
 	startSession: () => void
 	clearSession: () => void
-	restoreSession: (session: LoadedSession) => void
+	restoreSession: (session: LoadedSession, path?: string) => void
 	switchSession: (path: string) => boolean
 	currentProvider: () => KnownProvider
 	setCurrentProvider: (p: KnownProvider) => void
@@ -185,7 +185,7 @@ export function createSessionController(options: SessionControllerOptions): Sess
 		options.setMessages(() => view.messages)
 	}
 
-	const restoreSession = (session: LoadedSession) => {
+	const restoreSession = (session: LoadedSession, path?: string) => {
 		const { metadata } = session
 		const sessionMessages = session.messages as AppMessage[]
 		const resolvedProvider = resolveProvider(metadata.provider)
@@ -204,7 +204,7 @@ export function createSessionController(options: SessionControllerOptions): Sess
 			}
 		}
 		renderMessages(sessionMessages)
-		const sessionPath = options.sessionManager.listSessions().find((s) => s.id === metadata.id)?.path || ""
+		const sessionPath = path ?? options.sessionManager.listSessions().find((s) => s.id === metadata.id)?.path ?? ""
 		options.sessionManager.continueSession(sessionPath, metadata.id)
 		if (session.leafId) {
 			options.sessionManager.branch(session.leafId)
@@ -231,22 +231,12 @@ export function createSessionController(options: SessionControllerOptions): Sess
 
 	const switchSession = (path: string): boolean => {
 		try {
-			// 1. Call sessionManager.loadSession(path)
 			const loaded = options.sessionManager.loadSession(path)
 			if (!loaded) {
 				return false
 			}
 
-			// 2. Call sessionManager.continueSession(path, metadata.id)
-			options.sessionManager.continueSession(path, loaded.metadata.id)
-
-			// 3. Call restoreSession(loaded)
-			restoreSession(loaded)
-
-			// 4. Set sessionStarted = true
-			sessionStarted = true
-
-			// 5. Return success boolean
+			restoreSession(loaded, path)
 			return true
 		} catch {
 			return false

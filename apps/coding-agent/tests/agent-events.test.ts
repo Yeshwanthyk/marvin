@@ -1,6 +1,6 @@
 import { describe, expect, it, mock, beforeEach } from "bun:test"
 import { createAgentEventHandler, type EventHandlerContext } from "../src/agent-events.js"
-import type { AgentEvent } from "@yeshwanthyk/agent-core"
+import type { AgentEvent, AppMessage } from "@yeshwanthyk/agent-core"
 import type { PromptQueueItem } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 
 // Mock context factory
@@ -68,7 +68,7 @@ function createMockContext(overrides: Partial<EventHandlerContext> = {}): EventH
 		retryState: { attempt: 0, abortController: null },
 
 		agent: {
-			state: { messages: [] },
+			getMessages: mock(() => []),
 			replaceMessages: mock(() => {}),
 			continue: mock(async () => {}),
 		},
@@ -303,6 +303,72 @@ describe("createAgentEventHandler", () => {
 			handler({ type: "agent_end" } as unknown as AgentEvent)
 
 			expect(ctx.retryState.attempt).toBe(0)
+		})
+
+		it("retries using live agent messages", async () => {
+			const firstMessage: AppMessage = {
+				role: "user",
+				content: "before handler creation",
+				timestamp: 1,
+			}
+			const secondMessage: AppMessage = {
+				role: "assistant",
+				content: [{ type: "text", text: "previous response" }],
+				api: "google-generative-ai",
+				provider: "google",
+				model: "test-model",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "stop",
+				timestamp: 2,
+			}
+			const retryableError: AppMessage = {
+				role: "assistant",
+				content: [],
+				api: "google-generative-ai",
+				provider: "google",
+				model: "test-model",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "error",
+				errorMessage: "503 service unavailable",
+				timestamp: 3,
+			}
+			let liveMessages: AppMessage[] = [firstMessage]
+			const replaceMessages = mock((messages: AppMessage[]) => {
+				liveMessages = messages
+			})
+			const continueRun = mock(async () => {})
+			const ctx = createMockContext({
+				retryConfig: { enabled: true, maxRetries: 3, baseDelayMs: 0 },
+				retryablePattern: /service unavailable/i,
+				agent: {
+					getMessages: () => liveMessages,
+					replaceMessages,
+					continue: continueRun,
+				},
+			})
+			const handler = createAgentEventHandler(ctx)
+			liveMessages = [firstMessage, secondMessage, retryableError]
+			const event: AgentEvent = { type: "agent_end", messages: liveMessages }
+
+			handler(event)
+			await new Promise((resolve) => setTimeout(resolve, 10))
+
+			expect(replaceMessages).toHaveBeenCalledWith([firstMessage, secondMessage])
+			expect(continueRun).toHaveBeenCalled()
 		})
 	})
 })
