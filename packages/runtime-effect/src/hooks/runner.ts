@@ -527,10 +527,17 @@ export class HookRunner {
 		const auth: AuthGetEvent["output"] = {}
 		await this.emit({ type: "auth.get", input: { sessionId, provider: modelOutput.model.provider, modelId: modelOutput.model.id }, output: auth })
 
+		const resolvedSessionId = sessionId ?? cfg.sessionId
+		const streamOptions =
+			resolvedSessionId !== undefined && params.streamOptions.sessionId === undefined
+				? { ...params.streamOptions, sessionId: resolvedSessionId }
+				: params.streamOptions
+
 		const nextConfig: AgentRunConfig = {
 			...cfg,
 			systemPrompt: system.systemPrompt,
-			streamOptions: params.streamOptions,
+			...(resolvedSessionId !== undefined ? { sessionId: resolvedSessionId } : {}),
+			streamOptions,
 			model: modelOutput.model,
 		}
 

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
+	CacheControlEphemeral,
 	ContentBlockParam,
 	MessageCreateParamsStreaming,
 	MessageParam,
@@ -8,6 +9,7 @@ import { calculateCost } from "../models.js";
 import { getApiKey } from "../stream.js";
 import type {
 	Api,
+	CacheRetention,
 	AssistantMessage,
 	Context,
 	ImageContent,
@@ -25,6 +27,7 @@ import type {
 import { AssistantMessageEventStream } from "../utils/event-stream.js";
 import { parseStreamingJson } from "../utils/json-parse.js";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+import { applyAnthropicDeltaUsage } from "./usage-accounting.js";
 
 import { transformMessages } from "./transform-messages.js";
 
@@ -113,6 +116,31 @@ export interface AnthropicOptions extends StreamOptions {
 	toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string };
 }
 
+function getAnthropicCompat(model: Model<"anthropic-messages">) {
+	return {
+		supportsLongCacheRetention: model.compat?.supportsLongCacheRetention ?? true,
+		sendSessionAffinityHeaders:
+			model.compat?.sendSessionAffinityHeaders ?? false,
+		supportsCacheControlOnTools:
+			model.compat?.supportsCacheControlOnTools ?? true,
+	};
+}
+
+function resolveCacheControl(
+	model: Model<"anthropic-messages">,
+	cacheRetention: CacheRetention | undefined,
+): CacheControlEphemeral | undefined {
+	const retention = cacheRetention ?? "short";
+	if (retention === "none") return undefined;
+	const compat = getAnthropicCompat(model);
+	const ttl =
+		retention === "long" && compat.supportsLongCacheRetention ? "1h" : undefined;
+	return {
+		type: "ephemeral",
+		...(ttl ? { ttl } : {}),
+	};
+}
+
 export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 	model: Model<"anthropic-messages">,
 	context: Context,
@@ -145,6 +173,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 				model,
 				apiKey,
 				options?.interleavedThinking ?? true,
+				options?.cacheRetention === "none" ? undefined : options?.sessionId,
 			);
 			const params = buildParams(model, context, isOAuthToken, options);
 			const anthropicStream = client.messages.stream(
@@ -301,17 +330,7 @@ export const streamAnthropic: StreamFunction<"anthropic-messages"> = (
 					if (event.delta.stop_reason) {
 						output.stopReason = mapStopReason(event.delta.stop_reason);
 					}
-					output.usage.input = event.usage.input_tokens || 0;
-					output.usage.output = event.usage.output_tokens || 0;
-					output.usage.cacheRead = event.usage.cache_read_input_tokens || 0;
-					output.usage.cacheWrite =
-						event.usage.cache_creation_input_tokens || 0;
-					// Anthropic doesn't provide total_tokens, compute from components
-					output.usage.totalTokens =
-						output.usage.input +
-						output.usage.output +
-						output.usage.cacheRead +
-						output.usage.cacheWrite;
+					applyAnthropicDeltaUsage(output.usage, event.usage);
 					calculateCost(model, output.usage);
 				}
 			}
@@ -343,17 +362,24 @@ function createClient(
 	model: Model<"anthropic-messages">,
 	apiKey: string,
 	interleavedThinking: boolean,
+	sessionId?: string,
 ): { client: Anthropic; isOAuthToken: boolean } {
 	const betaFeatures = ["fine-grained-tool-streaming-2025-05-14"];
 	if (interleavedThinking) {
 		betaFeatures.push("interleaved-thinking-2025-05-14");
 	}
 
+	const sessionAffinityHeaders =
+		sessionId && getAnthropicCompat(model).sendSessionAffinityHeaders
+			? { "x-session-affinity": sessionId }
+			: {};
+
 	if (apiKey.includes("sk-ant-oat")) {
 		const defaultHeaders = {
 			accept: "application/json",
 			"anthropic-dangerous-direct-browser-access": "true",
 			"anthropic-beta": `oauth-2025-04-20,${betaFeatures.join(",")}`,
+			...sessionAffinityHeaders,
 			...(model.headers || {}),
 		};
 
@@ -372,6 +398,7 @@ function createClient(
 			accept: "application/json",
 			"anthropic-dangerous-direct-browser-access": "true",
 			"anthropic-beta": betaFeatures.join(","),
+			...sessionAffinityHeaders,
 			...(model.headers || {}),
 		};
 
@@ -393,9 +420,16 @@ function buildParams(
 	isOAuthToken: boolean,
 	options?: AnthropicOptions,
 ): MessageCreateParamsStreaming {
+	const cacheControl = resolveCacheControl(model, options?.cacheRetention);
+	const compat = getAnthropicCompat(model);
 	const params: MessageCreateParamsStreaming = {
 		model: model.id,
-		messages: convertMessages(context.messages, model, isOAuthToken),
+		messages: convertMessages(
+			context.messages,
+			model,
+			isOAuthToken,
+			cacheControl,
+		),
 		max_tokens: options?.maxTokens || (model.maxTokens / 3) | 0,
 		stream: true,
 	};
@@ -406,18 +440,14 @@ function buildParams(
 			{
 				type: "text",
 				text: "You are Claude Code, Anthropic's official CLI for Claude.",
-				cache_control: {
-					type: "ephemeral",
-				},
+				...(cacheControl ? { cache_control: cacheControl } : {}),
 			},
 		];
 		if (context.systemPrompt) {
 			params.system.push({
 				type: "text",
 				text: sanitizeSurrogates(context.systemPrompt),
-				cache_control: {
-					type: "ephemeral",
-				},
+				...(cacheControl ? { cache_control: cacheControl } : {}),
 			});
 		}
 	} else if (context.systemPrompt) {
@@ -426,9 +456,7 @@ function buildParams(
 			{
 				type: "text",
 				text: sanitizeSurrogates(context.systemPrompt),
-				cache_control: {
-					type: "ephemeral",
-				},
+				...(cacheControl ? { cache_control: cacheControl } : {}),
 			},
 		];
 	}
@@ -438,7 +466,11 @@ function buildParams(
 	}
 
 	if (context.tools) {
-		params.tools = convertTools(context.tools, isOAuthToken);
+		params.tools = convertTools(
+			context.tools,
+			isOAuthToken,
+			compat.supportsCacheControlOnTools ? cacheControl : undefined,
+		);
 	}
 
 	if (options?.thinkingEnabled && model.reasoning) {
@@ -469,6 +501,7 @@ function convertMessages(
 	messages: Message[],
 	model: Model<"anthropic-messages">,
 	isOAuthToken: boolean,
+	cacheControl?: CacheControlEphemeral,
 ): MessageParam[] {
 	const params: MessageParam[] = [];
 
@@ -608,11 +641,9 @@ function convertMessages(
 		}
 	}
 
-	// Add cache_control to the last user message to cache conversation history
-	if (params.length > 0) {
+	if (cacheControl && params.length > 0) {
 		const lastMessage = params[params.length - 1];
 		if (lastMessage.role === "user") {
-			// Add cache control to the last content block
 			if (Array.isArray(lastMessage.content)) {
 				const lastBlock = lastMessage.content[lastMessage.content.length - 1];
 				if (
@@ -621,8 +652,19 @@ function convertMessages(
 						lastBlock.type === "image" ||
 						lastBlock.type === "tool_result")
 				) {
-					(lastBlock as any).cache_control = { type: "ephemeral" };
+					lastMessage.content = [
+						...lastMessage.content.slice(0, -1),
+						{ ...lastBlock, cache_control: cacheControl },
+					];
 				}
+			} else if (typeof lastMessage.content === "string") {
+				lastMessage.content = [
+					{
+						type: "text",
+						text: lastMessage.content,
+						cache_control: cacheControl,
+					},
+				];
 			}
 		}
 	}
@@ -633,10 +675,11 @@ function convertMessages(
 function convertTools(
 	tools: Tool[],
 	isOAuthToken: boolean,
+	cacheControl?: CacheControlEphemeral,
 ): Anthropic.Messages.Tool[] {
 	if (!tools) return [];
 
-	return tools.map((tool) => {
+	return tools.map((tool, index) => {
 		const jsonSchema = tool.parameters as any; // TypeBox already generates JSON Schema
 
 		return {
@@ -647,6 +690,9 @@ function convertTools(
 				properties: jsonSchema.properties || {},
 				required: jsonSchema.required || [],
 			},
+			...(cacheControl && index === tools.length - 1
+				? { cache_control: cacheControl }
+				: {}),
 		};
 	});
 }

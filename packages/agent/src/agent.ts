@@ -83,6 +83,7 @@ export class Agent {
 	private queueMode: "all" | "one-at-a-time";
 	private runningPrompt: Promise<void> | undefined;
 	private resolveRunningPrompt: (() => void) | undefined;
+	private readonly sessionId = crypto.randomUUID();
 
 	constructor(opts: AgentOptions) {
 		this._state = { ...this._state, ...opts.initialState };
@@ -312,6 +313,7 @@ export class Agent {
 			systemPrompt: this._state.systemPrompt,
 			tools: this._state.tools,
 			model,
+			sessionId: this.sessionId,
 			...(reasoning ? { reasoning } : {}),
 			getSteeringMessages: async <T>() => {
 				if (this.steeringQueue.length === 0) {

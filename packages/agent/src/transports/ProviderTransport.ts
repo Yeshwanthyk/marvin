@@ -75,6 +75,9 @@ export class ProviderTransport implements AgentTransport {
 			apiKey,
 		};
 
+		if (cfg.sessionId !== undefined && loopConfig.sessionId === undefined) {
+			loopConfig.sessionId = cfg.sessionId;
+		}
 		if (cfg.reasoning) {
 			loopConfig.reasoning = cfg.reasoning;
 		}

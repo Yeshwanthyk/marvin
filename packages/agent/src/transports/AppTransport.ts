@@ -387,9 +387,13 @@ export class AppTransport implements AgentTransport {
 
 	private buildLoopConfig(cfg: AgentRunConfig): AgentLoopConfig {
 		const loopConfig: AgentLoopConfig = {
+			...(cfg.streamOptions ?? {}),
 			model: cfg.model,
 		};
 
+		if (cfg.sessionId !== undefined && loopConfig.sessionId === undefined) {
+			loopConfig.sessionId = cfg.sessionId;
+		}
 		if (cfg.reasoning) {
 			loopConfig.reasoning = cfg.reasoning;
 		}

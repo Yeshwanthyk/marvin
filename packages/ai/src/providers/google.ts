@@ -25,6 +25,7 @@ import type {
 } from "../types.js";
 import { AssistantMessageEventStream } from "../utils/event-stream.js";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+import { buildGoogleUsage } from "./usage-accounting.js";
 
 import { transformMessages } from "./transform-messages.js";
 
@@ -216,22 +217,7 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 				}
 
 				if (chunk.usageMetadata) {
-					output.usage = {
-						input: chunk.usageMetadata.promptTokenCount || 0,
-						output:
-							(chunk.usageMetadata.candidatesTokenCount || 0) +
-							(chunk.usageMetadata.thoughtsTokenCount || 0),
-						cacheRead: chunk.usageMetadata.cachedContentTokenCount || 0,
-						cacheWrite: 0,
-						totalTokens: chunk.usageMetadata.totalTokenCount || 0,
-						cost: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							total: 0,
-						},
-					};
+					output.usage = buildGoogleUsage(chunk.usageMetadata);
 					calculateCost(model, output.usage);
 				}
 			}

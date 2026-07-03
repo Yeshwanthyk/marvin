@@ -178,6 +178,12 @@ function mapOptionsForApi<TApi extends Api>(
 	if (options?.signal) {
 		base.signal = options.signal;
 	}
+	if (options?.cacheRetention !== undefined) {
+		base.cacheRetention = options.cacheRetention;
+	}
+	if (options?.sessionId !== undefined) {
+		base.sessionId = options.sessionId;
+	}
 
 	// Helper to clamp xhigh to high for providers that don't support it
 	function clampReasoning(

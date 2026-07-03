@@ -28,6 +28,7 @@ import type {
 import { AssistantMessageEventStream } from "../utils/event-stream.js";
 import { parseStreamingJson } from "../utils/json-parse.js";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.js";
 
 import { transformMessages } from "./transform-messages.js";
 
@@ -40,6 +41,13 @@ export interface OpenAIResponsesOptions extends StreamOptions {
 	/** Instructions for Codex API (replaces system prompt in body) */
 	instructions?: string;
 }
+
+type ResponseCreateParamsWithCaching = ResponseCreateParamsStreaming & {
+	prompt_cache_key?: string;
+	prompt_cache_retention?: "24h";
+	store?: boolean;
+	instructions?: string;
+};
 
 /**
  * Generate function for OpenAI Responses API
@@ -78,6 +86,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses"> = (
 				context,
 				options?.apiKey,
 				options?.fetch,
+				options?.cacheRetention === "none" ? undefined : options?.sessionId,
 			);
 			const params = buildParams(model, context, options);
 			const openaiStream = await client.responses.create(params, {
@@ -415,6 +424,7 @@ function createClient(
 	context: Context,
 	apiKey?: string,
 	customFetch?: FetchFunction,
+	sessionId?: string,
 ) {
 	if (!apiKey) {
 		if (!process.env.OPENAI_API_KEY) {
@@ -436,6 +446,13 @@ function createClient(
 		headers["X-Initiator"] = isAgentCall ? "agent" : "user";
 		headers["Openai-Intent"] = "conversation-edits";
 	}
+	if (sessionId) {
+		headers.session_id = sessionId;
+		headers["x-client-request-id"] = sessionId;
+		if (customFetch) {
+			headers["session-id"] = sessionId;
+		}
+	}
 
 	return new OpenAI({
 		apiKey,
@@ -453,19 +470,23 @@ function buildParams(
 ) {
 	const messages = convertMessages(model, context);
 
-	const params: ResponseCreateParamsStreaming & {
-		instructions?: string;
-		store?: boolean;
-	} = {
+	const promptCacheKey =
+		options?.cacheRetention === "none"
+			? undefined
+			: clampOpenAIPromptCacheKey(options?.sessionId);
+	const params: ResponseCreateParamsWithCaching = {
 		model: model.id,
 		input: messages,
 		stream: true,
+		store: false,
+		...(promptCacheKey !== undefined ? { prompt_cache_key: promptCacheKey } : {}),
+		...(options?.cacheRetention === "long"
+			? { prompt_cache_retention: "24h" }
+			: {}),
 	};
 
-	// Codex API requires instructions and store=false
 	if (options?.instructions) {
 		params.instructions = options.instructions;
-		params.store = false;
 	}
 
 	if (options?.maxTokens) {
@@ -564,8 +585,12 @@ function convertMessages(
 				// Do not submit thinking blocks if the completion had an error (i.e. abort)
 				if (block.type === "thinking" && msg.stopReason !== "error") {
 					if (block.thinkingSignature) {
-						const reasoningItem = JSON.parse(block.thinkingSignature);
-						output.push(reasoningItem);
+						const reasoningItem = parseReplayableReasoningItem(
+							block.thinkingSignature,
+						);
+						if (reasoningItem) {
+							output.push(reasoningItem);
+						}
 					}
 				} else if (block.type === "text") {
 					const textBlock = block as TextContent;
@@ -582,7 +607,7 @@ function convertMessages(
 						status: "completed",
 						id:
 							textBlock.textSignature ||
-							"msg_" + Math.random().toString(36).substring(2, 15),
+							deterministicAssistantMessageId(textBlock.text, output.length),
 					} satisfies ResponseOutputMessage);
 					// Do not submit toolcall blocks if the completion had an error (i.e. abort)
 				} else if (block.type === "toolCall" && msg.stopReason !== "error") {
@@ -646,6 +671,35 @@ function convertMessages(
 	}
 
 	return messages;
+}
+
+function parseReplayableReasoningItem(
+	signature: string,
+): ResponseReasoningItem | undefined {
+	const parsed: unknown = JSON.parse(signature);
+	if (!isObjectRecord(parsed)) return undefined;
+	if (parsed.type !== "reasoning") return undefined;
+	if (typeof parsed.id !== "string") return undefined;
+	if (typeof parsed.encrypted_content !== "string") return undefined;
+	return {
+		id: parsed.id,
+		type: "reasoning",
+		summary: [],
+		encrypted_content: parsed.encrypted_content,
+	};
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function deterministicAssistantMessageId(text: string, index: number): string {
+	let hash = 2166136261;
+	for (let i = 0; i < text.length; i++) {
+		hash ^= text.charCodeAt(i);
+		hash = Math.imul(hash, 16777619);
+	}
+	return `msg_${index}_${(hash >>> 0).toString(36)}`;
 }
 
 function convertTools(tools: Tool[]): OpenAITool[] {

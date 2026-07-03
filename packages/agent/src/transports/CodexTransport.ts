@@ -99,12 +99,16 @@ export class CodexTransport implements AgentTransport {
 		const instructions = await this.getInstructions(cfg.model.id);
 
 		const loopConfig: AgentLoopConfig = {
+			...(cfg.streamOptions ?? {}),
 			model,
 			apiKey: "codex-oauth", // Dummy key, real auth via custom fetch
 			fetch: this.customFetch,
 			instructions,
 		};
 
+		if (cfg.sessionId !== undefined && loopConfig.sessionId === undefined) {
+			loopConfig.sessionId = cfg.sessionId;
+		}
 		if (cfg.reasoning) {
 			loopConfig.reasoning = cfg.reasoning;
 		}

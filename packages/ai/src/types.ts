@@ -48,6 +48,7 @@ export type KnownProvider =
 export type Provider = KnownProvider | string;
 
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
+export type CacheRetention = "none" | "short" | "long";
 
 // Base options all providers share
 export interface StreamOptions {
@@ -55,6 +56,8 @@ export interface StreamOptions {
 	maxTokens?: number;
 	signal?: AbortSignal;
 	apiKey?: string;
+	cacheRetention?: CacheRetention;
+	sessionId?: string;
 }
 
 // Unified options with reasoning passed to streamSimple() and completeSimple()
@@ -241,6 +244,21 @@ export interface OpenAICompat {
 	requiresMistralToolIds?: boolean;
 }
 
+export interface AnthropicCompat {
+	/** Whether Anthropic 1h cache TTL is supported. Default: true. */
+	supportsLongCacheRetention?: boolean;
+	/** Whether to send session-affinity headers. Default: false. */
+	sendSessionAffinityHeaders?: boolean;
+	/** Whether tool definitions accept cache_control. Default: true. */
+	supportsCacheControlOnTools?: boolean;
+}
+
+type ModelCompat<TApi extends Api> = TApi extends "openai-completions"
+	? OpenAICompat
+	: TApi extends "anthropic-messages"
+		? AnthropicCompat
+		: never;
+
 // Model interface for the unified model system
 export interface Model<TApi extends Api> {
 	id: string;
@@ -260,5 +278,5 @@ export interface Model<TApi extends Api> {
 	maxTokens: number;
 	headers?: Record<string, string>;
 	/** Compatibility overrides for openai-completions API. If not set, auto-detected from baseUrl. */
-	compat?: TApi extends "openai-completions" ? OpenAICompat : never;
+	compat?: ModelCompat<TApi>;
 }

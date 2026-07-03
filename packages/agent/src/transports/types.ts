@@ -8,6 +8,7 @@ export interface AgentRunConfig {
 	tools: AgentTool[];
 	model: Model<Api>;
 	reasoning?: ReasoningEffort;
+	sessionId?: string;
 	/** Stream options (hook overridable) */
 	streamOptions?: SimpleStreamOptions;
 	/** API key override (from auth hook) */
