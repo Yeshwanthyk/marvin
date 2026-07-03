@@ -8,7 +8,6 @@ import {
 	type SelectItem,
 	SelectList,
 	type SelectListRef,
-	type ThemeMode,
 	ThemeProvider,
 	useTheme,
 	useRenderer,
@@ -16,23 +15,7 @@ import {
 import { createMemo, createSignal, onMount, Show } from "solid-js";
 import { searchSessions, triggerBackgroundIndex } from "./mmem.js";
 import type { SessionManager } from "./session-manager.js";
-
-/** Detect system dark/light mode (macOS only, defaults to dark) */
-function detectThemeMode(): ThemeMode {
-	try {
-		const result = Bun.spawnSync([
-			"defaults",
-			"read",
-			"-g",
-			"AppleInterfaceStyle",
-		]);
-		return result.stdout.toString().trim().toLowerCase() === "dark"
-			? "dark"
-			: "light";
-	} catch {
-		return "dark";
-	}
-}
+import { detectThemeMode } from "./ui/theme-detect.js";
 
 interface SessionForDisplay {
 	path: string;

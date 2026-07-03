@@ -1,10 +1,10 @@
 import { createToolRegistry } from "@yeshwanthyk/base-tools"
-import { loadAppConfig } from "../../config.js"
+import { loadAppConfig } from "@yeshwanthyk/runtime-effect/config.js"
 import { loadCustomCommands } from "@yeshwanthyk/runtime-effect/extensibility/custom-commands.js"
 import type { RuntimeInitArgs } from "@runtime/factory.js"
 import { loadExtensibility } from "@yeshwanthyk/runtime-effect/extensibility/index.js"
 import { formatValidationIssue, hasBlockingIssues } from "@ext/validation.js"
-import type { ValidationIssue } from "@ext/schema.js"
+import type { ValidationIssue } from "@yeshwanthyk/runtime-effect/extensibility/schema.js"
 import type { SendRef } from "@yeshwanthyk/runtime-effect/extensibility/custom-tools/types.js"
 import { SessionManager } from "../../session-manager.js"
 

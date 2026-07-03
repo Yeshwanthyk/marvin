@@ -24,7 +24,7 @@ import { useToastManager } from "../../../hooks/useToastManager.js"
 import { useEditorBridge } from "../../../hooks/useEditorBridge.js"
 import { MessagePane } from "../message-pane/MessagePane.js"
 import { Composer } from "../composer/Composer.js"
-import { createComposerKeyboardHandler } from "../composer/keyboard.js"
+import { createKeyboardHandler } from "../../../keyboard-handler.js"
 import type { ValidationIssue } from "@yeshwanthyk/runtime-effect/extensibility/schema.js"
 import type { LaneHeaderState } from "../../app-shell/lane-header-state.js"
 
@@ -63,7 +63,7 @@ export interface MainViewProps {
 	clearEditorRef: { current: () => void }
 	onComposerChange?: (text: string) => void
 	onBeforeExit?: () => Promise<void>
-	editor?: import("../../../config.js").EditorConfig
+	editor?: import("@yeshwanthyk/runtime-effect/config.js").EditorConfig
 	lsp: LspManager
 }
 
@@ -285,7 +285,7 @@ export function MainView(props: MainViewProps) {
 			return next
 		})
 
-	const handleKeyDown = createComposerKeyboardHandler({
+	const handleKeyDown = createKeyboardHandler({
 		showAutocomplete,
 		autocompleteItems,
 		setAutocompleteIndex,

@@ -1,7 +1,7 @@
 import { createPatch } from "diff"
 import type { CliRenderer } from "@yeshwanthyk/open-tui"
 import { openExternalEditor, openFileInEditor } from "../editor.js"
-import type { EditorConfig } from "../config.js"
+import type { EditorConfig } from "@yeshwanthyk/runtime-effect/config.js"
 
 interface ToastOptions {
 	title: string

@@ -1,16 +1,6 @@
-import { ThemeProvider, type ThemeMode } from "@yeshwanthyk/open-tui"
+import { ThemeProvider } from "@yeshwanthyk/open-tui"
 import { batch, createEffect, createMemo, createSignal, onMount, Show } from "solid-js"
 import { Effect } from "effect"
-
-/** Detect system dark/light mode (macOS only, defaults to dark) */
-function detectThemeMode(): ThemeMode {
-	try {
-		const result = Bun.spawnSync(["defaults", "read", "-g", "AppleInterfaceStyle"])
-		return result.stdout.toString().trim().toLowerCase() === "dark" ? "dark" : "light"
-	} catch {
-		return "dark"
-	}
-}
 import { useRuntime } from "../../runtime/context.js"
 import type { LoadedSession, SessionTreeNode, SessionNodeEntry, SessionInfo } from "../../session-manager.js"
 import { createSessionController, renderLoadedSessionView } from "@runtime/session/session-controller.js"
@@ -21,13 +11,14 @@ import type { AppMessage } from "@yeshwanthyk/agent-core"
 import { runShellCommand } from "../../shell-runner.js"
 import { MainView } from "../features/main-view/MainView.js"
 import { createAppStore } from "../state/app-store.js"
+import { detectThemeMode } from "../theme-detect.js"
 import { useAgentEvents } from "../../hooks/useAgentEvents.js"
 import type { EventHandlerContext, ToolMeta } from "../../agent-events.js"
 import { THINKING_LEVELS, type CommandContext } from "../../commands.js"
 import { slashCommands } from "../../autocomplete-commands.js"
-import { updateAppConfig } from "../../config.js"
+import { updateAppConfig } from "@yeshwanthyk/runtime-effect/config.js"
 import { handleSlashInput } from "../features/composer/SlashCommandHandler.js"
-import { createHookMessage, createHookUIContext, type HookMessage, type HookSessionContext, type CompletionResult } from "../../hooks/index.js"
+import { createHookMessage, createHookUIContext, type HookMessage, type HookSessionContext, type CompletionResult } from "@yeshwanthyk/runtime-effect/hooks/index.js"
 import { completeSimple, type Message } from "@yeshwanthyk/ai"
 import { useModals } from "../hooks/useModals.js"
 import { ModalContainer } from "../components/modals/ModalContainer.js"

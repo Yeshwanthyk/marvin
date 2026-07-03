@@ -1,5 +1,5 @@
 import { getModels, getProviders } from "@yeshwanthyk/ai"
-import { updateAppConfig } from "../../../config.js"
+import { updateAppConfig } from "@yeshwanthyk/runtime-effect/config.js"
 import type { CommandDefinition } from "../types.js"
 import { addSystemMessage, resolveModel, resolveProvider } from "../helpers.js"
 

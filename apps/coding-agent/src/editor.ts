@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import * as path from "node:path"
 import { spawn } from "node:child_process"
 import type { CliRenderer } from "@yeshwanthyk/open-tui"
-import type { EditorConfig } from "./config.js"
+import type { EditorConfig } from "@yeshwanthyk/runtime-effect/config.js"
 
 const CWD_PLACEHOLDER = "{cwd}"
 const LINE_JUMP_EDITORS = new Set([
