@@ -5,7 +5,7 @@ import {
 	type WorkspaceLanesV2,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 
-export type LaneHeaderMode = "off" | "sticky" | "oneshot"
+export type LaneHeaderMode = "off" | "sticky" | "oneshot" | "prefix"
 
 export interface LaneHeaderCurrent {
 	projectTitle: string
@@ -23,7 +23,7 @@ export interface LaneHeaderState {
 
 export interface LaneHeaderDisplay {
 	active: boolean
-	badge: "" | "lane" | "next"
+	badge: "" | "lane" | "next" | "prefix"
 	summary: string
 	hint: string
 }
@@ -52,8 +52,14 @@ export const deriveLaneHeaderState = (lanes: WorkspaceLanesV2, mode: LaneHeaderM
 
 export const laneHeaderDisplay = (state: LaneHeaderState): LaneHeaderDisplay => {
 	const active = state.mode !== "off"
-	const badge = state.mode === "oneshot" ? "next" : state.mode === "sticky" ? "lane" : ""
-	const hint = state.mode === "oneshot" ? "next move" : state.mode === "sticky" ? "enter exits" : ""
+	const badge = state.mode === "oneshot" ? "next" : state.mode === "sticky" ? "lane" : state.mode === "prefix" ? "prefix" : ""
+	const hint = state.mode === "oneshot"
+		? "next move"
+		: state.mode === "sticky"
+			? "enter exits"
+			: state.mode === "prefix"
+				? "arrows focus · shift move · n new · $ rename · o overview"
+				: ""
 	const current = state.current
 	if (!current) {
 		return {

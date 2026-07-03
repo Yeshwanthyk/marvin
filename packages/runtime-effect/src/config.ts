@@ -87,13 +87,30 @@ export interface LaneKeyBindingsConfig {
   sessionNext: KeyChord[];
   projectPrev: KeyChord[];
   projectNext: KeyChord[];
+  moveSessionPrev: KeyChord[];
+  moveSessionNext: KeyChord[];
+  moveProjectPrev: KeyChord[];
+  moveProjectNext: KeyChord[];
+  overview: KeyChord[];
+  newSession: KeyChord[];
+  rename: KeyChord[];
   jump: KeyChord[];
+  jumpProject1: KeyChord[];
+  jumpProject2: KeyChord[];
+  jumpProject3: KeyChord[];
+  jumpProject4: KeyChord[];
+  jumpProject5: KeyChord[];
+  jumpProject6: KeyChord[];
+  jumpProject7: KeyChord[];
+  jumpProject8: KeyChord[];
+  jumpProject9: KeyChord[];
   archive: KeyChord[];
   restore: KeyChord[];
 }
 
 export interface LaneKeymapConfig {
   activation: LaneNavActivationConfig;
+  prefixKey: KeyChord[];
   bindings: LaneKeyBindingsConfig;
 }
 
@@ -274,14 +291,32 @@ const readKeyChords = (raw: unknown): KeyChord[] | undefined => {
 };
 
 const DEFAULT_LANE_BINDINGS: LaneKeyBindingsConfig = {
-  sessionPrev: ["left"],
-  sessionNext: ["right"],
-  projectPrev: ["up"],
-  projectNext: ["down"],
+  sessionPrev: ["shift+left"],
+  sessionNext: ["shift+right"],
+  projectPrev: ["shift+up"],
+  projectNext: ["shift+down"],
+  moveSessionPrev: ["shift+left", "shift+h"],
+  moveSessionNext: ["shift+right", "shift+l"],
+  moveProjectPrev: ["shift+up", "shift+k"],
+  moveProjectNext: ["shift+down", "shift+j"],
+  overview: ["o"],
+  newSession: ["n"],
+  rename: ["$"],
   jump: ["mod+k", "super+k", "meta+k"],
+  jumpProject1: ["1"],
+  jumpProject2: ["2"],
+  jumpProject3: ["3"],
+  jumpProject4: ["4"],
+  jumpProject5: ["5"],
+  jumpProject6: ["6"],
+  jumpProject7: ["7"],
+  jumpProject8: ["8"],
+  jumpProject9: ["9"],
   archive: ["mod+shift+a", "super+shift+a", "ctrl+shift+a"],
   restore: ["mod+shift+r", "super+shift+r", "ctrl+shift+r"],
 };
+
+const DEFAULT_LANE_PREFIX_KEY: KeyChord[] = ["ctrl+b"];
 
 const defaultLaneActivation = (): Extract<LaneNavActivationConfig, { behavior: "sticky" }> => ({
   behavior: "sticky",
@@ -294,7 +329,23 @@ const cloneLaneBindings = (bindings: LaneKeyBindingsConfig): LaneKeyBindingsConf
   sessionNext: [...bindings.sessionNext],
   projectPrev: [...bindings.projectPrev],
   projectNext: [...bindings.projectNext],
+  moveSessionPrev: [...bindings.moveSessionPrev],
+  moveSessionNext: [...bindings.moveSessionNext],
+  moveProjectPrev: [...bindings.moveProjectPrev],
+  moveProjectNext: [...bindings.moveProjectNext],
+  overview: [...bindings.overview],
+  newSession: [...bindings.newSession],
+  rename: [...bindings.rename],
   jump: [...bindings.jump],
+  jumpProject1: [...bindings.jumpProject1],
+  jumpProject2: [...bindings.jumpProject2],
+  jumpProject3: [...bindings.jumpProject3],
+  jumpProject4: [...bindings.jumpProject4],
+  jumpProject5: [...bindings.jumpProject5],
+  jumpProject6: [...bindings.jumpProject6],
+  jumpProject7: [...bindings.jumpProject7],
+  jumpProject8: [...bindings.jumpProject8],
+  jumpProject9: [...bindings.jumpProject9],
   archive: [...bindings.archive],
   restore: [...bindings.restore],
 });
@@ -302,6 +353,7 @@ const cloneLaneBindings = (bindings: LaneKeyBindingsConfig): LaneKeyBindingsConf
 export const DEFAULT_KEYMAP_CONFIG: KeymapConfig = {
   lanes: {
     activation: defaultLaneActivation(),
+    prefixKey: [...DEFAULT_LANE_PREFIX_KEY],
     bindings: cloneLaneBindings(DEFAULT_LANE_BINDINGS),
   },
 };
@@ -340,7 +392,23 @@ const resolveLaneBindingsConfig = (raw: unknown): LaneKeyBindingsConfig => {
     sessionNext: readKeyChords(obj.sessionNext) ?? [...DEFAULT_LANE_BINDINGS.sessionNext],
     projectPrev: readKeyChords(obj.projectPrev) ?? [...DEFAULT_LANE_BINDINGS.projectPrev],
     projectNext: readKeyChords(obj.projectNext) ?? [...DEFAULT_LANE_BINDINGS.projectNext],
+    moveSessionPrev: readKeyChords(obj.moveSessionPrev) ?? [...DEFAULT_LANE_BINDINGS.moveSessionPrev],
+    moveSessionNext: readKeyChords(obj.moveSessionNext) ?? [...DEFAULT_LANE_BINDINGS.moveSessionNext],
+    moveProjectPrev: readKeyChords(obj.moveProjectPrev) ?? [...DEFAULT_LANE_BINDINGS.moveProjectPrev],
+    moveProjectNext: readKeyChords(obj.moveProjectNext) ?? [...DEFAULT_LANE_BINDINGS.moveProjectNext],
+    overview: readKeyChords(obj.overview) ?? [...DEFAULT_LANE_BINDINGS.overview],
+    newSession: readKeyChords(obj.newSession) ?? [...DEFAULT_LANE_BINDINGS.newSession],
+    rename: readKeyChords(obj.rename) ?? [...DEFAULT_LANE_BINDINGS.rename],
     jump: readKeyChords(obj.jump) ?? [...DEFAULT_LANE_BINDINGS.jump],
+    jumpProject1: readKeyChords(obj.jumpProject1) ?? [...DEFAULT_LANE_BINDINGS.jumpProject1],
+    jumpProject2: readKeyChords(obj.jumpProject2) ?? [...DEFAULT_LANE_BINDINGS.jumpProject2],
+    jumpProject3: readKeyChords(obj.jumpProject3) ?? [...DEFAULT_LANE_BINDINGS.jumpProject3],
+    jumpProject4: readKeyChords(obj.jumpProject4) ?? [...DEFAULT_LANE_BINDINGS.jumpProject4],
+    jumpProject5: readKeyChords(obj.jumpProject5) ?? [...DEFAULT_LANE_BINDINGS.jumpProject5],
+    jumpProject6: readKeyChords(obj.jumpProject6) ?? [...DEFAULT_LANE_BINDINGS.jumpProject6],
+    jumpProject7: readKeyChords(obj.jumpProject7) ?? [...DEFAULT_LANE_BINDINGS.jumpProject7],
+    jumpProject8: readKeyChords(obj.jumpProject8) ?? [...DEFAULT_LANE_BINDINGS.jumpProject8],
+    jumpProject9: readKeyChords(obj.jumpProject9) ?? [...DEFAULT_LANE_BINDINGS.jumpProject9],
     archive: readKeyChords(obj.archive) ?? [...DEFAULT_LANE_BINDINGS.archive],
     restore: readKeyChords(obj.restore) ?? [...DEFAULT_LANE_BINDINGS.restore],
   };
@@ -352,6 +420,7 @@ const resolveKeymapConfig = (raw: unknown): KeymapConfig => {
   return {
     lanes: {
       activation: resolveLaneActivationConfig(rawLanes.activation),
+      prefixKey: readKeyChords(rawLanes.prefixKey) ?? [...DEFAULT_LANE_PREFIX_KEY],
       bindings: resolveLaneBindingsConfig(rawLanes.bindings),
     },
   };

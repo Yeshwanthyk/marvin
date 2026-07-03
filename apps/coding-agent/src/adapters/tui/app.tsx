@@ -302,6 +302,15 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 		actorSubscriptions.set(actor.laneId, unsubscribe)
 	}
 
+	const removeLaneActor = async (laneId: LaneId): Promise<void> => {
+		const unsubscribe = actorSubscriptions.get(laneId)
+		if (unsubscribe) {
+			unsubscribe()
+			actorSubscriptions.delete(laneId)
+		}
+		await registry.remove(laneId)
+	}
+
 	const ensureInitialFocus = async () => {
 		const initialPath = props.initialSession ? sessionPathForLoaded(props.initialRuntime.sessionManager, props.initialSession) : null
 		const laneId = ensureLaneForSession(
@@ -401,6 +410,7 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 								? { ok: true }
 								: { ok: false, maxStreaming: admission.maxStreaming }
 						}}
+						removeLaneActor={removeLaneActor}
 						active={() => true}
 						onExit={closeHost}
 					/>

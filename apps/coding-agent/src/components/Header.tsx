@@ -122,6 +122,7 @@ export function Header(props: HeaderProps) {
   const laneColor = createMemo(() => {
     if (props.lane.mode === "oneshot") return theme.warning
     if (props.lane.mode === "sticky") return theme.secondary
+    if (props.lane.mode === "prefix") return theme.accent
     return theme.textMuted
   })
   const laneBadge = createMemo(() => laneDisplay().badge)

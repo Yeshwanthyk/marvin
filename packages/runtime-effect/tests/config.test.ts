@@ -147,7 +147,12 @@ describe("loadAppConfig", () => {
         enter: ["escape", "ctrl+["],
         exit: ["return"],
       });
-      expect(config.keymap.lanes.bindings.sessionPrev).toEqual(["left"]);
+      expect(config.keymap.lanes.prefixKey).toEqual(["ctrl+b"]);
+      expect(config.keymap.lanes.bindings.sessionPrev).toEqual(["shift+left"]);
+      expect(config.keymap.lanes.bindings.projectNext).toEqual(["shift+down"]);
+      expect(config.keymap.lanes.bindings.moveSessionPrev).toEqual(["shift+left", "shift+h"]);
+      expect(config.keymap.lanes.bindings.newSession).toEqual(["n"]);
+      expect(config.keymap.lanes.bindings.jumpProject9).toEqual(["9"]);
       expect(config.keymap.lanes.bindings.restore).toEqual(["mod+shift+r", "super+shift+r", "ctrl+shift+r"]);
     } finally {
       await rm(configDir, { recursive: true, force: true });
@@ -211,6 +216,7 @@ describe("loadAppConfig", () => {
             model: model.id,
             keymap: {
               lanes: {
+                prefixKey: "Ctrl+G",
                 activation: {
                   behavior: "oneshot",
                   prefix: ["Ctrl+["],
@@ -221,7 +227,15 @@ describe("loadAppConfig", () => {
                   sessionNext: ["l"],
                   projectPrev: ["k"],
                   projectNext: ["j"],
+                  moveSessionPrev: ["Shift+H"],
+                  moveSessionNext: ["Shift+L"],
+                  moveProjectPrev: ["Shift+K"],
+                  moveProjectNext: ["Shift+J"],
+                  overview: "O",
+                  newSession: "N",
+                  rename: "$",
                   jump: ["Cmd+K"],
+                  jumpProject3: "3",
                   archive: ["Cmd+Shift+A"],
                   restore: ["Cmd+Shift+R"],
                 },
@@ -245,12 +259,29 @@ describe("loadAppConfig", () => {
         prefix: ["ctrl+[", "escape"],
         cancel: ["return"],
       });
+      expect(config.keymap.lanes.prefixKey).toEqual(["ctrl+g"]);
       expect(config.keymap.lanes.bindings).toEqual({
         sessionPrev: ["h"],
         sessionNext: ["l"],
         projectPrev: ["k"],
         projectNext: ["j"],
+        moveSessionPrev: ["shift+h"],
+        moveSessionNext: ["shift+l"],
+        moveProjectPrev: ["shift+k"],
+        moveProjectNext: ["shift+j"],
+        overview: ["o"],
+        newSession: ["n"],
+        rename: ["$"],
         jump: ["mod+k"],
+        jumpProject1: ["1"],
+        jumpProject2: ["2"],
+        jumpProject3: ["3"],
+        jumpProject4: ["4"],
+        jumpProject5: ["5"],
+        jumpProject6: ["6"],
+        jumpProject7: ["7"],
+        jumpProject8: ["8"],
+        jumpProject9: ["9"],
         archive: ["mod+shift+a"],
         restore: ["mod+shift+r"],
       });

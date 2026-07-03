@@ -6,7 +6,8 @@ import { registerModBindings } from "@opentui/keymap/addons"
 import type { LaneKeymapConfig } from "@yeshwanthyk/runtime-effect/config.js"
 
 export type LaneKeymapDirection = "left" | "right" | "up" | "down"
-export type LaneNavMode = "off" | "sticky" | "oneshot"
+export type LaneMoveDirection = "left" | "right" | "up" | "down"
+export type LaneNavMode = "off" | "sticky" | "oneshot" | "prefix"
 
 const COMMAND_K_RAW_SEQUENCES = new Set([
 	"\x1bk",
@@ -41,7 +42,13 @@ export interface TuiLaneKeyBindingsProps {
 	keymap: LaneKeymapConfig
 	modalOpen: () => boolean
 	isResponding: () => boolean
+	shouldOwnShiftArrows: () => boolean
 	onNavigate: (direction: LaneKeymapDirection) => void
+	onMove: (direction: LaneMoveDirection) => void
+	onOverview: () => void
+	onNewSession: () => void
+	onRename: () => void
+	onJumpProject: (index: number) => void
 	onJump: () => void
 	onArchive: () => void
 	onRestore: () => void
@@ -65,14 +72,84 @@ const bindingsForDirection = (config: LaneKeymapConfig, direction: LaneKeymapDir
 	}
 }
 
+const legacyBindingsForDirection = (direction: LaneKeymapDirection): readonly string[] => {
+	switch (direction) {
+		case "left":
+			return ["left", "h"]
+		case "right":
+			return ["right", "l"]
+		case "up":
+			return ["up", "k"]
+		case "down":
+			return ["down", "j"]
+	}
+}
+
+const moveBindingsForDirection = (config: LaneKeymapConfig, direction: LaneMoveDirection): readonly string[] => {
+	switch (direction) {
+		case "left":
+			return config.bindings.moveSessionPrev
+		case "right":
+			return config.bindings.moveSessionNext
+		case "up":
+			return config.bindings.moveProjectPrev
+		case "down":
+			return config.bindings.moveProjectNext
+	}
+}
+
+const jumpProjectBindings = (config: LaneKeymapConfig): Array<{ index: number; keys: readonly string[] }> => [
+	{ index: 0, keys: config.bindings.jumpProject1 },
+	{ index: 1, keys: config.bindings.jumpProject2 },
+	{ index: 2, keys: config.bindings.jumpProject3 },
+	{ index: 3, keys: config.bindings.jumpProject4 },
+	{ index: 4, keys: config.bindings.jumpProject5 },
+	{ index: 5, keys: config.bindings.jumpProject6 },
+	{ index: 6, keys: config.bindings.jumpProject7 },
+	{ index: 7, keys: config.bindings.jumpProject8 },
+	{ index: 8, keys: config.bindings.jumpProject9 },
+]
+
+const shiftArrowDirection = (event: { name: string; shift: boolean; ctrl: boolean; meta: boolean; super?: boolean }): LaneKeymapDirection | null => {
+	if (!event.shift || event.ctrl || event.meta || event.super === true) return null
+	if (event.name === "left" || event.name === "right" || event.name === "up" || event.name === "down") return event.name
+	return null
+}
+
+const isShiftArrowBinding = (key: string, direction: LaneKeymapDirection): boolean => key === `shift+${direction}`
+
 export function TuiLaneKeyBindings(props: TuiLaneKeyBindingsProps): JSX.Element {
 	const keymap = useKeymap()
 	const navInactive = () => props.navMode() === "off"
-	const navActive = () => props.navMode() !== "off" && !props.modalOpen()
+	const navActive = () => (props.navMode() === "sticky" || props.navMode() === "oneshot") && !props.modalOpen()
+	const prefixActive = () => props.navMode() === "prefix" && !props.modalOpen()
 	const canStartNav = () => !props.modalOpen() && navInactive()
 	const canToggleNav = () => !props.modalOpen()
 	const canOpenCommand = () => !props.modalOpen()
 	const shouldStartFromActivationKey = (key: string): boolean => !(props.isResponding() && key === "escape")
+
+	const disposeShiftArrowInput = keymap.intercept(
+		"key",
+		(ctx) => {
+			if (props.modalOpen()) return
+			const direction = shiftArrowDirection(ctx.event)
+			if (!direction) return
+			if (!props.shouldOwnShiftArrows()) return
+			const chord = `shift+${direction}`
+			if (prefixActive() && moveBindingsForDirection(props.keymap, direction).includes(chord)) {
+				ctx.consume()
+				props.onMove(direction)
+				props.setNavMode("off")
+				return
+			}
+			if (navInactive() && bindingsForDirection(props.keymap, direction).includes(chord)) {
+				ctx.consume()
+				props.onNavigate(direction)
+			}
+		},
+		{ priority: 2000 },
+	)
+	onCleanup(disposeShiftArrowInput)
 
 	const disposeCommandKRawInput = keymap.intercept(
 		"raw",
@@ -109,6 +186,18 @@ export function TuiLaneKeyBindings(props: TuiLaneKeyBindingsProps): JSX.Element 
 				return true
 			},
 		}],
+	}))
+
+	useBindings(() => ({
+		priority: 1000,
+		enabled: reactiveMatcherFromSignal(canStartNav),
+		bindings: props.keymap.prefixKey.map((key) => ({
+			key,
+			cmd: () => {
+				props.setNavMode("prefix")
+				return true
+			},
+		})),
 	}))
 
 	useBindings(() => ({
@@ -170,7 +259,7 @@ export function TuiLaneKeyBindings(props: TuiLaneKeyBindingsProps): JSX.Element 
 		priority: 1000,
 		enabled: reactiveMatcherFromSignal(navActive),
 		bindings: (["left", "right", "up", "down"] as const).flatMap((direction) =>
-			bindingsForDirection(props.keymap, direction).map((key) => ({
+			[...new Set([...bindingsForDirection(props.keymap, direction), ...legacyBindingsForDirection(direction)])].map((key) => ({
 				key,
 				cmd: () => {
 					const wasOneShot = props.navMode() === "oneshot"
@@ -180,6 +269,89 @@ export function TuiLaneKeyBindings(props: TuiLaneKeyBindingsProps): JSX.Element 
 				},
 			})),
 		),
+	}))
+
+	useBindings(() => ({
+		priority: 1000,
+		enabled: reactiveMatcherFromSignal(() => canOpenCommand() && navInactive()),
+		bindings: (["left", "right", "up", "down"] as const).flatMap((direction) =>
+			bindingsForDirection(props.keymap, direction).filter((key) => isShiftArrowBinding(key, direction)).map((key) => ({
+				key,
+				cmd: () => {
+					if (!props.shouldOwnShiftArrows()) return false
+					props.onNavigate(direction)
+					return true
+				},
+			})),
+		),
+	}))
+
+	useBindings(() => ({
+		priority: 1000,
+		enabled: reactiveMatcherFromSignal(prefixActive),
+		bindings: [
+			{
+				key: "escape",
+				cmd: () => {
+					props.setNavMode("off")
+					return true
+				},
+			},
+			...(["left", "right", "up", "down"] as const).flatMap((direction) =>
+				legacyBindingsForDirection(direction).map((key) => ({
+					key,
+					cmd: () => {
+						props.onNavigate(direction)
+						props.setNavMode("off")
+						return true
+					},
+				})),
+			),
+			...(["left", "right", "up", "down"] as const).flatMap((direction) =>
+				moveBindingsForDirection(props.keymap, direction).map((key) => ({
+					key,
+					cmd: () => {
+						props.onMove(direction)
+						props.setNavMode("off")
+						return true
+					},
+				})),
+			),
+			...props.keymap.bindings.overview.map((key) => ({
+				key,
+				cmd: () => {
+					props.onOverview()
+					props.setNavMode("off")
+					return true
+				},
+			})),
+			...props.keymap.bindings.newSession.map((key) => ({
+				key,
+				cmd: () => {
+					props.onNewSession()
+					props.setNavMode("off")
+					return true
+				},
+			})),
+			...props.keymap.bindings.rename.map((key) => ({
+				key,
+				cmd: () => {
+					props.onRename()
+					props.setNavMode("off")
+					return true
+				},
+			})),
+			...jumpProjectBindings(props.keymap).flatMap(({ index, keys }) =>
+				keys.map((key) => ({
+					key,
+					cmd: () => {
+						props.onJumpProject(index)
+						props.setNavMode("off")
+						return true
+					},
+				})),
+			),
+		],
 	}))
 
 	useBindings(() => ({

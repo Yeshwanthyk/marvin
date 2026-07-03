@@ -62,6 +62,7 @@ export interface MainViewProps {
 	getEditorTextRef: { current: () => string }
 	showToastRef: { current: (title: string, message: string, variant?: "info" | "warning" | "success" | "error") => void }
 	clearEditorRef: { current: () => void }
+	composerSelectionActiveRef: { current: () => boolean }
 	onComposerChange?: (text: string) => void
 	onBeforeExit?: () => Promise<void>
 	editor?: import("@yeshwanthyk/runtime-effect/config.js").EditorConfig
@@ -211,6 +212,7 @@ export function MainView(props: MainViewProps) {
 		textareaRef?.clear()
 		setIsBashMode(false)
 	}
+	props.composerSelectionActiveRef.current = () => textareaRef?.hasSelection() ?? false
 	props.showToastRef.current = (title, message, variant = "info") => {
 		pushToast({ title, message, variant }, 3000)
 	}

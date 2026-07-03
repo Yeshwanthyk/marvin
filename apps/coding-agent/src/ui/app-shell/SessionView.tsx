@@ -46,6 +46,7 @@ export interface SessionViewProps {
 	getEditorTextRef: { current: () => string }
 	showToastRef: { current: (title: string, message: string, variant?: "info" | "warning" | "success" | "error") => void }
 	clearEditorRef: { current: () => void }
+	composerSelectionActiveRef: { current: () => boolean }
 	onComposerChange: (text: string) => void
 	onBeforeExit: () => Promise<void>
 }
@@ -182,6 +183,7 @@ export function SessionView(props: SessionViewProps) {
 			getEditorTextRef={props.getEditorTextRef}
 			showToastRef={props.showToastRef}
 			clearEditorRef={props.clearEditorRef}
+			composerSelectionActiveRef={props.composerSelectionActiveRef}
 			onComposerChange={props.onComposerChange}
 			onBeforeExit={props.onBeforeExit}
 			editor={props.config.editor}

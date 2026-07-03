@@ -30,8 +30,9 @@ import {
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
 import { createScratchpadStore } from "@yeshwanthyk/runtime-effect/scratchpads.js"
-import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
+import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneMoveDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
 import { createCommandPaletteOptions, parseCommandPaletteValue } from "./command-palette-options.js"
+import { canMoveFocusedSessionAcrossProject } from "./lane-actions.js"
 import { useHookBridge } from "./useHookBridge.js"
 import { usePromptSubmission } from "./usePromptSubmission.js"
 import { useSessionLaneController } from "./useSessionLaneController.js"
@@ -44,6 +45,9 @@ const SHELL_INJECTION_PREFIX = "[Shell output]" as const
 
 const activeSessionLanesV2 = (lanes: WorkspaceLanesV2): SessionLaneV2[] =>
 	lanes.projectOrder.flatMap((projectId) => activeSessionsForProject(lanes, projectId))
+
+const activeProjectIdsV2 = (lanes: WorkspaceLanesV2): string[] =>
+	lanes.projectOrder.filter((projectId) => lanes.projectsById[projectId]?.archivedAt === undefined)
 
 const textFromEntry = (entry: SessionNodeEntry): string => {
 	if (entry.type === "custom") return `[custom:${entry.customType}]`
@@ -112,6 +116,7 @@ export interface TuiAppProps {
 	acknowledgeHostNotification?: (id: string) => void
 	focusedActor?: Accessor<SessionActor | null>
 	canStartPrompt?: () => { ok: true } | { ok: false; maxStreaming: number }
+	removeLaneActor?: (laneId: string) => Promise<void>
 	active?: () => boolean
 	onActivityChange?: (activity: TuiAppActivity) => void
 	onExit?: () => void
@@ -127,7 +132,7 @@ export interface TuiAppActivity {
 	lastObservedAt: number
 }
 
-export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, hostNotifications, acknowledgeHostNotification, focusedActor, canStartPrompt, active, onActivityChange, onExit }: TuiAppProps) => {
+export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, hostNotifications, acknowledgeHostNotification, focusedActor, canStartPrompt, removeLaneActor, active, onActivityChange, onExit }: TuiAppProps) => {
 	const runtime = useRuntime()
 	const {
 		agent,
@@ -309,6 +314,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	const setEditorTextRef = { current: (_text: string) => {} }
 	const getEditorTextRef = { current: () => "" }
 	const clearEditorRef = { current: () => {} }
+	const composerSelectionActiveRef = { current: () => false }
 	const {
 		scratchpads,
 		saveCurrentScratchpad,
@@ -654,6 +660,67 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		})()
 	}
 
+	const moveFocusedLane = (direction: LaneMoveDirection) => {
+		void (async () => {
+			const current = syncCurrentSessionLane()
+			if (!current) return
+			if ((direction === "up" || direction === "down") && !canMoveFocusedSessionAcrossProject(focusedActor?.()?.status(), store.isResponding.value())) {
+				showToastRef.current("Session still running", "Wait for the stream before moving it to another project", "warning")
+				return
+			}
+			const patch = direction === "left" || direction === "right"
+				? { type: "reorderSession" as const, laneId: current.session.laneId, direction }
+				: { type: "moveSessionToProject" as const, laneId: current.session.laneId, direction }
+			const next = laneStore.dispatch(patch)
+			if (direction === "up" || direction === "down") await removeLaneActor?.(current.session.laneId)
+			const cursor = findActiveCursorV2(next, next.selection)
+			if (!cursor) return
+			await switchToLane(cursor)
+		})()
+	}
+
+	const startSessionNextToFocus = () => {
+		void (async () => {
+			const previous = syncCurrentSessionLane()
+			startFreshSession("new session")
+			const current = syncCurrentSessionLane(undefined, { select: true })
+			if (!previous || !current || previous.session.laneId === current.session.laneId) return
+			laneStore.transact([
+				{ type: "upsertSession", session: current.session, insert: { type: "after", laneId: previous.session.laneId } },
+				{ type: "select", projectId: current.project.id, laneId: current.session.laneId },
+			])
+		})()
+	}
+
+	const jumpToProjectIndex = (index: number) => {
+		void (async () => {
+			syncCurrentSessionLane()
+			const lanes = workspaceLanes()
+			const projectId = activeProjectIdsV2(lanes)[index]
+			const project = projectId ? lanes.projectsById[projectId] : undefined
+			if (!project) return
+			const activeSessions = activeSessionsForProject(lanes, project.id)
+			if (activeSessions.length === 0) {
+				await switchToProject({ cwd: project.cwd, title: project.title, root: project.cwd }, { fresh: true })
+				return
+			}
+			const remembered = lanes.focusByProject[project.id]
+			const rememberedLaneId = remembered?.focusedLaneId && activeSessions.some((session) => session.laneId === remembered.focusedLaneId)
+				? remembered.focusedLaneId
+				: activeSessions[Math.min(Math.max(remembered?.focusedColumn ?? 0, 0), activeSessions.length - 1)]?.laneId
+			const laneId = rememberedLaneId ?? activeSessions[0]?.laneId
+			if (!laneId) return
+			const selected = laneStore.dispatch({ type: "select", projectId: project.id, laneId })
+			const cursor = findActiveCursorV2(selected, { projectId: project.id, laneId })
+			if (!cursor) return
+			await switchToLane(cursor, { preserveLaneMode: preserveStickyLaneMode() })
+		})()
+	}
+
+	const showOverviewPlaceholder = () => {
+		showToastRef.current("Overview pending", "Prefix o will open overview mode after Phase 8", "info")
+	}
+
 	const projectTitleFor = (projectId: string): string =>
 		workspaceLanes().projectsById[projectId]?.title ?? projectId
 
@@ -868,6 +935,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				getEditorTextRef={getEditorTextRef}
 				showToastRef={showToastRef}
 				clearEditorRef={clearEditorRef}
+				composerSelectionActiveRef={composerSelectionActiveRef}
 				onComposerChange={(text) => { composerDraft = text }}
 				onBeforeExit={handleBeforeExit}
 			/>
@@ -878,7 +946,13 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				keymap={config.keymap.lanes}
 				modalOpen={() => modals.modalState() !== null}
 				isResponding={store.isResponding.value}
+				shouldOwnShiftArrows={() => !composerSelectionActiveRef.current()}
 				onNavigate={navigateLane}
+				onMove={moveFocusedLane}
+				onOverview={showOverviewPlaceholder}
+				onNewSession={startSessionNextToFocus}
+				onRename={renameCurrentSession}
+				onJumpProject={jumpToProjectIndex}
 				onJump={openCommandPalette}
 				onArchive={archiveCurrentSession}
 				onRestore={restoreArchivedSession}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import type { TestRendererOptions } from "@opentui/core/testing"
 import type { LaneKeymapConfig } from "@yeshwanthyk/runtime-effect/config.js"
-import type { LaneKeymapDirection, LaneNavMode } from "../src/ui/app-shell/TuiLaneKeymap.js"
+import type { LaneKeymapDirection, LaneMoveDirection, LaneNavMode } from "../src/ui/app-shell/TuiLaneKeymap.js"
 import type { HumanTuiHarness } from "./helpers/tui-harness.js"
 
 interface LaneKeymapHarness extends HumanTuiHarness {
@@ -10,6 +10,11 @@ interface LaneKeymapHarness extends HumanTuiHarness {
 	restores: () => number
 	detaches: () => number
 	directions: () => LaneKeymapDirection[]
+	moves: () => LaneMoveDirection[]
+	overviews: () => number
+	newSessions: () => number
+	renames: () => number
+	projectJumps: () => number[]
 	navMode: () => LaneNavMode
 }
 
@@ -19,12 +24,29 @@ const cloneDefaultLaneKeymap = (): LaneKeymapConfig => ({
 		enter: ["escape", "ctrl+["],
 		exit: ["return"],
 	},
+	prefixKey: ["ctrl+b"],
 	bindings: {
-		sessionPrev: ["left"],
-		sessionNext: ["right"],
-		projectPrev: ["up"],
-		projectNext: ["down"],
+		sessionPrev: ["shift+left"],
+		sessionNext: ["shift+right"],
+		projectPrev: ["shift+up"],
+		projectNext: ["shift+down"],
+		moveSessionPrev: ["shift+left", "shift+h"],
+		moveSessionNext: ["shift+right", "shift+l"],
+		moveProjectPrev: ["shift+up", "shift+k"],
+		moveProjectNext: ["shift+down", "shift+j"],
+		overview: ["o"],
+		newSession: ["n"],
+		rename: ["$"],
 		jump: ["mod+k", "super+k", "meta+k"],
+		jumpProject1: ["1"],
+		jumpProject2: ["2"],
+		jumpProject3: ["3"],
+		jumpProject4: ["4"],
+		jumpProject5: ["5"],
+		jumpProject6: ["6"],
+		jumpProject7: ["7"],
+		jumpProject8: ["8"],
+		jumpProject9: ["9"],
 		archive: ["mod+shift+a", "super+shift+a", "ctrl+shift+a"],
 		restore: ["mod+shift+r", "super+shift+r", "ctrl+shift+r"],
 	},
@@ -41,7 +63,7 @@ async function loadTuiModules() {
 async function renderLaneKeymap(
 	options: TestRendererOptions = {},
 	keymap: LaneKeymapConfig = cloneDefaultLaneKeymap(),
-	state: { isResponding?: boolean } = {},
+	state: { isResponding?: boolean; shouldOwnShiftArrows?: boolean } = {},
 ): Promise<LaneKeymapHarness> {
 	const { createComponent, createSignal, TuiLaneKeyBindings, TuiLaneKeymapRoot, renderHumanTui } = await loadTuiModules()
 	let jumps = 0
@@ -49,6 +71,11 @@ async function renderLaneKeymap(
 	let restores = 0
 	let detaches = 0
 	const directions: LaneKeymapDirection[] = []
+	const moves: LaneMoveDirection[] = []
+	let overviews = 0
+	let newSessions = 0
+	let renames = 0
+	const projectJumps: number[] = []
 	const [navMode, setNavMode] = createSignal<LaneNavMode>("off")
 
 	const harness = await renderHumanTui(() => {
@@ -60,8 +87,24 @@ async function renderLaneKeymap(
 					keymap,
 					modalOpen: () => false,
 					isResponding: () => state.isResponding ?? false,
+					shouldOwnShiftArrows: () => state.shouldOwnShiftArrows ?? true,
 					onNavigate: (direction) => {
 						directions.push(direction)
+					},
+					onMove: (direction) => {
+						moves.push(direction)
+					},
+					onOverview: () => {
+						overviews += 1
+					},
+					onNewSession: () => {
+						newSessions += 1
+					},
+					onRename: () => {
+						renames += 1
+					},
+					onJumpProject: (index) => {
+						projectJumps.push(index)
 					},
 					onJump: () => {
 						jumps += 1
@@ -87,11 +130,24 @@ async function renderLaneKeymap(
 		restores: () => restores,
 		detaches: () => detaches,
 		directions: () => [...directions],
+		moves: () => [...moves],
+		overviews: () => overviews,
+		newSessions: () => newSessions,
+		renames: () => renames,
+		projectJumps: () => [...projectJumps],
 		navMode,
 	}
 }
 
 describe("TuiLaneKeyBindings", () => {
+	it("refuses cross-project moves while the focused session is streaming", async () => {
+		const { canMoveFocusedSessionAcrossProject } = await import("../src/ui/app-shell/lane-actions.js")
+
+		expect(canMoveFocusedSessionAcrossProject("streaming", false)).toBe(false)
+		expect(canMoveFocusedSessionAcrossProject("warm", true)).toBe(false)
+		expect(canMoveFocusedSessionAcrossProject("warm", false)).toBe(true)
+	})
+
 	it("opens jump for terminal Command-K protocols", async () => {
 		const scenarios: Array<{
 			options: TestRendererOptions
@@ -155,6 +211,49 @@ describe("TuiLaneKeyBindings", () => {
 		}
 	})
 
+	it("uses Shift-arrows for global lane focus", async () => {
+		const harness = await renderLaneKeymap({ kittyKeyboard: true })
+		try {
+			harness.keys.pressArrow("right", { shift: true })
+			await harness.flush()
+			harness.keys.pressArrow("down", { shift: true })
+			await harness.flush()
+			expect(harness.directions()).toEqual(["right", "down"])
+			expect(harness.navMode()).toBe("off")
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
+	it("leaves Shift-arrows to the composer while text selection is active", async () => {
+		const harness = await renderLaneKeymap({ kittyKeyboard: true }, cloneDefaultLaneKeymap(), { shouldOwnShiftArrows: false })
+		try {
+			harness.keys.pressArrow("right", { shift: true })
+			await harness.flush()
+			expect(harness.directions()).toEqual([])
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
+	it("does not treat legacy plain arrow bindings as global no-prefix navigation", async () => {
+		const keymap = cloneDefaultLaneKeymap()
+		keymap.bindings.sessionNext = ["right"]
+		const harness = await renderLaneKeymap({ kittyKeyboard: true }, keymap)
+		try {
+			harness.keys.pressArrow("right")
+			await harness.flush()
+			expect(harness.directions()).toEqual([])
+
+			await harness.pressShortcut("[", { ctrl: true })
+			harness.keys.pressArrow("right")
+			await harness.flush()
+			expect(harness.directions()).toEqual(["right"])
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
 	it("starts sticky lane mode while a stream is responding", async () => {
 		const keymap = cloneDefaultLaneKeymap()
 		keymap.activation = { behavior: "sticky", enter: ["ctrl+[", "escape"], exit: ["return"] }
@@ -212,6 +311,52 @@ describe("TuiLaneKeyBindings", () => {
 			harness.keys.pressArrow("right")
 			await harness.flush()
 			expect(harness.directions()).toEqual(["left"])
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
+	it("dispatches Ctrl-B prefix focus, move, command, and project-jump chords", async () => {
+		const harness = await renderLaneKeymap({ kittyKeyboard: true })
+		try {
+			await harness.pressShortcut("b", { ctrl: true })
+			expect(harness.navMode()).toBe("prefix")
+			harness.keys.pressArrow("right")
+			await harness.flush()
+			expect(harness.directions()).toEqual(["right"])
+			expect(harness.navMode()).toBe("off")
+
+			await harness.pressShortcut("b", { ctrl: true })
+			harness.keys.pressArrow("left", { shift: true })
+			await harness.flush()
+			expect(harness.moves()).toEqual(["left"])
+
+			await harness.pressShortcut("b", { ctrl: true })
+			await harness.pressShortcut("n", {})
+			await harness.pressShortcut("b", { ctrl: true })
+			await harness.pressShortcut("$", {})
+			await harness.pressShortcut("b", { ctrl: true })
+			await harness.pressShortcut("o", {})
+			await harness.pressShortcut("b", { ctrl: true })
+			await harness.pressShortcut("3", {})
+			expect(harness.newSessions()).toBe(1)
+			expect(harness.renames()).toBe(1)
+			expect(harness.overviews()).toBe(1)
+			expect(harness.projectJumps()).toEqual([2])
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
+	it("cancels Ctrl-B prefix mode with Escape", async () => {
+		const harness = await renderLaneKeymap({ kittyKeyboard: true })
+		try {
+			await harness.pressShortcut("b", { ctrl: true })
+			expect(harness.navMode()).toBe("prefix")
+
+			harness.keys.pressEscape()
+			await harness.flush()
+			expect(harness.navMode()).toBe("off")
 		} finally {
 			harness.renderer.destroy()
 		}

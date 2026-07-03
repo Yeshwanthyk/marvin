@@ -71,28 +71,32 @@ Verification
 - [x] Review gate attempted; reviewer timed out and was closed, local blocker pass found no blockers.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `c652ccb fix: harden session actor lifecycle`.
 
 ## Phase 7: Keymap Shift-Arrows And Prefix Table
-Status: in progress
+Status: complete
 
 Implementation
-- [ ] Add configurable Shift+arrow focus defaults.
-- [ ] Add Ctrl+B prefix table.
-- [ ] Add move/focus/overview/new/rename/jump actions.
-- [ ] Add config parser/defaults.
-- [ ] Add footer/which-key style hint while prefix pending.
-- [ ] Refuse moving streaming sessions across projects with warning toast.
+- [x] Add configurable Shift+arrow focus defaults.
+- [x] Add Ctrl+B prefix table.
+- [x] Add move/focus/overview/new/rename/jump actions.
+- [x] Add config parser/defaults.
+- [x] Add header which-key style hint while prefix pending.
+- [x] Refuse moving streaming sessions across projects with warning toast.
+- [x] Preserve composer Shift+arrow selection ownership while selection is active.
+- [x] Retire non-streaming moved actors before rehydrating them under a destination project descriptor.
 
 Verification
-- [ ] Tests: config defaults and overrides.
-- [ ] Tests: prefix chord dispatch.
-- [ ] Tests: move preserves laneId.
-- [ ] Tests: project jump 1..9.
-- [ ] Tests: streaming-move refusal.
-- [ ] `bun run check` passes.
-- [ ] isolated tmux smoke: Shift+arrows and prefix table drive real switches.
-- [ ] Review gate completed and blockers fixed.
+- [x] Tests: config defaults and overrides.
+- [x] Tests: prefix chord dispatch.
+- [x] Tests: move preserves laneId.
+- [x] Tests: project jump 1..9.
+- [x] Tests: streaming-move refusal.
+- [x] Tests: composer Shift+arrow ownership and legacy plain-arrow non-global compatibility.
+- [x] `bun run check` passes.
+- [x] `git diff --check` passes.
+- [x] isolated tmux smoke: Shift+arrows and prefix table drive real switches; prefix hint renders.
+- [x] Review gate completed; two blockers fixed.
 
 Exit criteria
 - [ ] Phase commit created.
