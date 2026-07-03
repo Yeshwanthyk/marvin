@@ -29,14 +29,15 @@ import {
 	activeSessionLanes,
 	archiveSessionLane,
 	findActiveCursor,
+	flushWorkspaceLanes,
 	moveLaneCursor,
 	readWorkspaceLanes,
 	renameSessionLane,
 	restoreSessionLane,
+	scheduleWriteWorkspaceLanes,
 	selectLane,
 	upsertProjectLane,
 	upsertSessionLane,
-	writeWorkspaceLanes,
 	type LaneCursor,
 	type WorkspaceLanes,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
@@ -215,6 +216,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	)
 	onCleanup(() => {
 		Effect.runFork(Fiber.interrupt(queueFiber))
+		void flushWorkspaceLanes(config.configDir)
 	})
 
 	const visibleSessionForLoaded = (session: LoadedSession, sessionPath?: string): VisibleSession => ({
@@ -323,7 +325,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	const cloneWorkspaceLanes = (value: WorkspaceLanes): WorkspaceLanes => JSON.parse(JSON.stringify(value)) as WorkspaceLanes
 
 	const persistWorkspaceLanes = (next: WorkspaceLanes) => {
-		writeWorkspaceLanes(config.configDir, next)
+		scheduleWriteWorkspaceLanes(config.configDir, next)
 		setWorkspaceLanes(next)
 	}
 
@@ -542,7 +544,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		void updateAppConfig({ configDir: config.configDir, configPath: config.configPath }, { theme: name })
 	}
 
-	const exitHandlerRef = { current: () => process.exit(0) }
+	const exitHandlerRef = { current: () => { void flushWorkspaceLanes(config.configDir).finally(() => process.exit(0)) } }
 	const editorOpenRef = { current: async () => {} }
 	const editFileRef = { current: async (_filePath: string, _line?: number) => {} }
 	const setEditorTextRef = { current: (_text: string) => {} }
