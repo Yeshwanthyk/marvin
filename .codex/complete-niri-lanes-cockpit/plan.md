@@ -135,24 +135,26 @@ Verification
 - [x] Review gate completed locally; no blockers found.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `183e2eb feat: add lane overview mode`.
 
 ## Phase 9: Cleanup, Bench, Dist, Version
-Status: pending
+Status: complete
 
 Implementation
-- [ ] Remove dead compatibility code.
-- [ ] Run and compare benches.
-- [ ] Rebuild packages and coding-agent dist.
-- [ ] Version bump for npm publish readiness.
+- [x] Remove dead compatibility code.
+- [x] Run and compare benches.
+- [x] Rebuild packages and coding-agent dist.
+- [x] Version bump for npm publish readiness.
 
 Verification
-- [ ] `bun scripts/bench/bench-content-items.ts`.
-- [ ] `bun scripts/bench/bench-agent-events.ts`.
-- [ ] `npm run build:packages && cd apps/coding-agent && bun run build`.
-- [ ] `bun run check` passes.
-- [ ] Final isolated tmux smoke passes.
-- [ ] Review gate completed and blockers fixed.
+- [x] `bun scripts/bench/bench-content-items.ts` passed: 5k avg 0.6077ms, streaming avg 0.0147ms.
+- [x] `bun scripts/bench/bench-agent-events.ts` passed: 300 updates avg 0.0004ms.
+- [x] `npm run build:packages && cd apps/coding-agent && bun run build` passed.
+- [x] `cd apps/coding-agent && bun run build` passed after version bump.
+- [x] `bun run check` passes.
+- [x] `git diff --check` passes.
+- [x] Final isolated tmux smoke passes.
+- [x] Review gate completed locally; no blockers found.
 
 Exit criteria
 - [ ] Phase commit created.
