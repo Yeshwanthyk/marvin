@@ -11,6 +11,7 @@ import {
 	extractText,
 	getEditDiffText,
 	getToolText,
+	appendWithCap,
 	orderedBlocksToUiContentBlocks,
 } from "./content.js"
 
@@ -121,7 +122,7 @@ export const sessionMessagesToView = (
 	options: SessionMessagesToViewOptions,
 ): SessionMessagesView => {
 	const toolResults = toolResultsById(sessionMessages)
-	const messages: UIMessage[] = []
+	let messages: UIMessage[] = []
 
 	for (let i = 0; i < sessionMessages.length; i++) {
 		const message = sessionMessages[i]
@@ -131,16 +132,16 @@ export const sessionMessagesToView = (
 		if (message.role === "user") {
 			const content = textFromUserMessage(message)
 			if (content.startsWith(options.shellInjectionPrefix)) continue
-			messages.push({ id, role: "user", content })
+			messages = appendWithCap(messages, { id, role: "user", content })
 		} else if (message.role === "assistant") {
-			messages.push(appMessageToUiAssistant(message, {
+			messages = appendWithCap(messages, appMessageToUiAssistant(message, {
 				id,
 				toolByName: options.toolByName,
 				toolResults,
 				isStreaming: false,
 			}))
 		} else if (message.role === "shell") {
-			messages.push({
+			messages = appendWithCap(messages, {
 				id,
 				role: "shell",
 				command: message.command,
