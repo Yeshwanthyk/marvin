@@ -30,6 +30,13 @@ import {
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
 import { createScratchpadStore } from "@yeshwanthyk/runtime-effect/scratchpads.js"
+import { loadCockpitSessionIndex, saveCockpitTitleOverlay } from "../../runtime/cockpit-ingest.js"
+import {
+	cockpitJumpCommand,
+	cockpitTranscriptPreview,
+	isExternalLaneId,
+	writePiRenameRpc,
+} from "../../runtime/cockpit-actions.js"
 import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneMoveDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
 import { createCommandPaletteOptions, parseCommandPaletteValue } from "./command-palette-options.js"
 import { canMoveFocusedSessionAcrossProject } from "./lane-actions.js"
@@ -795,6 +802,41 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		})()
 	}
 
+	const cockpitMetaForLane = (laneId: string) => loadCockpitSessionIndex(config.configDir)[laneId]
+
+	const jumpToExternalAgent = () => {
+		void (async () => {
+			const current = syncCurrentSessionLane()
+			if (!current || !isExternalLaneId(current.session.laneId)) return
+			const command = cockpitJumpCommand(cockpitMetaForLane(current.session.laneId))
+			if (!command.ok) {
+				showToastRef.current("Cannot jump to external agent", command.reason, "warning")
+				return
+			}
+			const proc = Bun.spawn([...command.value], { stdout: "ignore", stderr: "pipe" })
+			const code = await proc.exited
+			if (code === 0) {
+				showToastRef.current("Focused external agent", current.session.title || current.session.laneId, "success")
+				return
+			}
+			const stderr = new TextDecoder().decode(await new Response(proc.stderr).arrayBuffer()).trim()
+			showToastRef.current("External agent jump failed", stderr || `tmux exited ${code}`, "error")
+		})()
+	}
+
+	const previewExternalTranscript = () => {
+		void (async () => {
+			const current = syncCurrentSessionLane()
+			if (!current || !isExternalLaneId(current.session.laneId)) return
+			const preview = cockpitTranscriptPreview(cockpitMetaForLane(current.session.laneId))
+			if (!preview.ok) {
+				showToastRef.current("No transcript preview", preview.reason, "warning")
+				return
+			}
+			await modals.showEditor(`Transcript / ${current.session.title || current.session.laneId}`, preview.value)
+		})()
+	}
+
 
 	const renameCurrentSession = () => {
 		void (async () => {
@@ -806,6 +848,16 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				{ type: "renameSession", laneId: current.session.laneId, title: nextTitle },
 				{ type: "select", projectId: current.project.id, laneId: current.session.laneId },
 			])
+			if (isExternalLaneId(current.session.laneId)) {
+				saveCockpitTitleOverlay(config.configDir, current.session.laneId, nextTitle)
+				const meta = cockpitMetaForLane(current.session.laneId)
+				if (meta?.cli === "pi") {
+					const rpc = writePiRenameRpc(config.configDir, meta, nextTitle)
+					if (!rpc.ok) {
+						showToastRef.current("Pi rename RPC skipped", rpc.reason, "warning")
+					}
+				}
+			}
 			showToastRef.current("Session renamed", nextTitle, "success")
 		})()
 	}
@@ -871,6 +923,12 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 					return
 				case "restore":
 					restoreArchivedSession()
+					return
+				case "jumpExternal":
+					jumpToExternalAgent()
+					return
+				case "previewExternal":
+					previewExternalTranscript()
 					return
 			}
 		})()

@@ -6,6 +6,7 @@ import {
 	type WorkspaceLanesV2,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { SessionActivity } from "./activity-index.js"
+import { isExternalLaneId } from "../../runtime/cockpit-actions.js"
 
 export interface OverviewSelection {
 	type: "session"
@@ -89,13 +90,15 @@ export const createOverviewOptions = (
 			const shortId = (session.sessionId ?? session.laneId).slice(0, 8)
 			const title = session.title || shortId
 			const model = `${session.provider}/${session.modelId}`
+			const external = isExternalLaneId(session.laneId)
 			const position = `${projectIndex}/${projectCount} ${sessionIndex}/${sessionCount}`
 			const status = activityLabel(activity)
+			const keywords = `${projectTitle} ${title} ${position} ${status} ${session.sessionId} ${session.sessionPath} ${model} overview lane project session ${external ? "external cockpit agent" : ""}`.trim()
 			return {
 				value: overviewSessionValue(session.laneId),
-				label: `${activityGlyph(activity)} ${projectTitle} ${position}  ${title}`.trimStart(),
-				description: `${status} | ${model} | ${shortId}`,
-				keywords: `${projectTitle} ${title} ${position} ${status} ${session.sessionId} ${session.sessionPath} ${model} overview lane project session`,
+				label: `${activityGlyph(activity)} ${external ? "ext " : ""}${projectTitle} ${position}  ${title}`.trimStart(),
+				description: `${status} | ${external ? "external " : ""}${model} | ${shortId}`,
+				keywords,
 			}
 		})
 }

@@ -6,6 +6,7 @@ import {
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
 import type { ScratchpadItem } from "@yeshwanthyk/runtime-effect/scratchpads.js"
+import { isExternalLaneId } from "../../runtime/cockpit-actions.js"
 
 export type CommandPaletteAction =
 	| "settings"
@@ -17,6 +18,8 @@ export type CommandPaletteAction =
 	| "detach"
 	| "archive"
 	| "restore"
+	| "jumpExternal"
+	| "previewExternal"
 
 export type CommandPaletteSelection =
 	| { type: "action"; action: CommandPaletteAction }
@@ -38,6 +41,8 @@ const ACTIONS: CommandPaletteAction[] = [
 	"detach",
 	"archive",
 	"restore",
+	"jumpExternal",
+	"previewExternal",
 ]
 
 const isCommandPaletteAction = (value: string): value is CommandPaletteAction =>
@@ -107,6 +112,8 @@ export const createCommandPaletteOptions = (
 ): SearchSelectOption[] => {
 	const archivedCount = Object.values(lanes.sessionsById).filter((session) => session.archivedAt !== undefined).length
 	const activeSessions = lanes.projectOrder.flatMap((projectId) => activeSessionsForProject(lanes, projectId))
+	const currentLaneId = lanes.selection?.laneId
+	const externalSelected = currentLaneId ? isExternalLaneId(currentLaneId) : false
 	return [
 		{
 			value: commandActionValue("settings"),
@@ -162,6 +169,20 @@ export const createCommandPaletteOptions = (
 			description: archivedCount === 0 ? "No archived sessions" : `${archivedCount} archived`,
 			keywords: "unarchive archived session restore recover",
 		},
+		...(externalSelected ? [
+			{
+				value: commandActionValue("jumpExternal"),
+				label: "Jump to external agent",
+				description: "Focus reported tmux pane",
+				keywords: "external cockpit tmux jump agent pane",
+			},
+			{
+				value: commandActionValue("previewExternal"),
+				label: "Preview external transcript",
+				description: "Open read-only transcript tail",
+				keywords: "external cockpit transcript preview jsonl tail",
+			},
+		] satisfies SearchSelectOption[] : []),
 		...activeSessions.map((session) => commandPaletteSessionOption(lanes, session)),
 		...scratchpads.map(commandPaletteScratchpadOption),
 		...projects.map(commandPaletteProjectOption),

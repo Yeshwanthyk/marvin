@@ -8,11 +8,16 @@ import { createActivityIndex, createNotificationService } from "../src/ui/app-sh
 import { createOverviewOptions } from "../src/ui/app-shell/overview-options.js"
 import {
 	applyExternalAgentEvent,
+	cockpitIngestPaths,
 	emptyCockpitIngestState,
 	ingestCockpitSpool,
+	loadCockpitIngestState,
+	loadCockpitSessionIndex,
 	parseExternalAgentEventLine,
 	readCockpitEventsFromOffset,
 	rotateCockpitSpoolIfIdle,
+	saveCockpitIngestState,
+	saveCockpitTitleOverlay,
 	type ExternalAgentEvent,
 } from "../src/runtime/cockpit-ingest.js"
 
@@ -95,6 +100,15 @@ describe("cockpit ingest", () => {
 			unread: true,
 		})
 		expect(state.titleOverlay).toEqual({})
+		expect(state.sessions["external:claude:session-a"]).toEqual({
+			laneId: "external:claude:session-a",
+			cli: "claude",
+			sessionId: "session-a",
+			cwd: "/work/nora",
+			transcriptPath: "/tmp/claude.jsonl",
+			title: "review migration",
+			lastEventAt: "2026-07-03T12:00:00.000Z",
+		})
 	})
 
 	it("emits warning notifications for needs_input and stores title overlays", async () => {
@@ -126,6 +140,37 @@ describe("cockpit ingest", () => {
 		])
 	})
 
+	it("persists metadata and local rename overlays for later events", async () => {
+		const { configDir, laneStore, activityIndex, notifications } = await createTempStore()
+		const paths = cockpitIngestPaths(configDir)
+		const state = applyExternalAgentEvent(
+			event({ cli: "pi", kind: "busy", title: "old title", tmuxPane: "%4", pid: 123 }),
+			emptyCockpitIngestState(),
+			{ laneStore, activityIndex, notifications },
+		)
+		saveCockpitIngestState(paths.statePath, state)
+
+		saveCockpitTitleOverlay(configDir, "external:pi:session-a", "local title")
+
+		expect(loadCockpitSessionIndex(configDir)["external:pi:session-a"]).toEqual({
+			laneId: "external:pi:session-a",
+			cli: "pi",
+			sessionId: "session-a",
+			cwd: "/work/nora",
+			title: "local title",
+			tmuxPane: "%4",
+			pid: 123,
+			lastEventAt: "2026-07-03T12:00:00.000Z",
+		})
+		const next = applyExternalAgentEvent(
+			event({ cli: "pi", kind: "needs_input" }),
+			loadCockpitIngestState(paths.statePath),
+			{ laneStore, activityIndex, notifications },
+		)
+		expect(next.titleOverlay["pi:session-a"]).toBe("local title")
+		expect(laneStore.lanes().sessionsById["external:pi:session-a"]?.title).toBe("local title")
+	})
+
 	it("ingests through state files and rotates fully consumed large spools", async () => {
 		const { configDir, laneStore, activityIndex, notifications } = await createTempStore()
 		const cockpitDir = path.join(configDir, "cockpit")
@@ -154,6 +199,7 @@ describe("cockpit ingest", () => {
 		expect(ingestCockpitSpool(paths, { laneStore, activityIndex, notifications })).toEqual({
 			offset: 0,
 			titleOverlay: {},
+			sessions: {},
 		})
 		expect(existsSync(paths.statePath)).toBe(false)
 	})
@@ -169,8 +215,8 @@ describe("cockpit ingest", () => {
 		expect(createOverviewOptions(laneStore.lanes(), activityIndex.entries())).toEqual([
 			expect.objectContaining({
 				value: "overview:session:external:pi:session-a",
-				label: "• nora 1/1 1/1  pi lane",
-				description: "done unread | pi/external | session-",
+				label: "• ext nora 1/1 1/1  pi lane",
+				description: "done unread | external pi/external | session-",
 			}),
 		])
 	})

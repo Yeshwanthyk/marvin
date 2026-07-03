@@ -94,6 +94,38 @@ describe("overview options", () => {
 		])
 	})
 
+	it("labels external sessions in overview rows", () => {
+		const lanes = lanesFixture()
+		const external: WorkspaceLanesV2 = {
+			...lanes,
+			sessionsById: {
+				...lanes.sessionsById,
+				"external:pi:session-a": {
+					laneId: "external:pi:session-a",
+					projectId: "/work/nora",
+					sessionId: "session-a",
+					sessionPath: "/tmp/pi.jsonl",
+					title: "pi task",
+					provider: "pi",
+					modelId: "external",
+					createdAt: "2026-06-03T12:00:00.000Z",
+					updatedAt: "2026-06-03T12:02:00.000Z",
+				},
+			},
+			sessionOrderByProject: {
+				...lanes.sessionOrderByProject,
+				"/work/nora": ["external:pi:session-a"],
+			},
+		}
+
+		const option = createOverviewOptions(external).find((entry) => entry.value === "overview:session:external:pi:session-a")
+		expect(option).toEqual(expect.objectContaining({
+			value: "overview:session:external:pi:session-a",
+			label: "ext nora 2/2 1/1  pi task",
+			description: "warm | external pi/external | session-",
+		}))
+	})
+
 	it("parses overview selections", () => {
 		expect(parseOverviewValue("overview:session:nora-a")).toEqual({ type: "session", laneId: "nora-a" })
 		expect(parseOverviewValue("overview:session:")).toBeNull()

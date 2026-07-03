@@ -5,6 +5,7 @@ import {
 	type WorkspaceLanesV2,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { SessionActivity } from "./activity-index.js"
+import { isExternalLaneId } from "../../runtime/cockpit-actions.js"
 
 export type LaneHeaderMode = "off" | "sticky" | "oneshot" | "prefix"
 
@@ -20,6 +21,7 @@ export interface LaneHeaderCurrent {
 	nextSessionTitle?: string
 	previousProjectTitle?: string
 	nextProjectTitle?: string
+	external: boolean
 }
 
 export interface LaneHeaderState {
@@ -70,6 +72,7 @@ const toHeaderCurrent = (lanes: WorkspaceLanesV2, cursor: LaneCursorV2): LaneHea
 		...(nextSession ? { nextSessionTitle: nextSession.title || (nextSession.sessionId ?? nextSession.laneId).slice(0, 8) } : {}),
 		...(previousProjectId ? { previousProjectTitle: lanes.projectsById[previousProjectId]?.title ?? previousProjectId } : {}),
 		...(nextProjectId ? { nextProjectTitle: lanes.projectsById[nextProjectId]?.title ?? nextProjectId } : {}),
+		external: isExternalLaneId(cursor.session.laneId),
 	}
 }
 
@@ -161,7 +164,8 @@ export const laneHeaderDisplay = (state: LaneHeaderState): LaneHeaderDisplay => 
 			hint,
 		}
 	}
-	const position = `${current.projectTitle} ${current.projectIndex}/${current.projectCount} · ${current.sessionIndex}/${current.sessionCount}`
+	const projectTitle = current.external ? `ext ${current.projectTitle}` : current.projectTitle
+	const position = `${projectTitle} ${current.projectIndex}/${current.projectCount} · ${current.sessionIndex}/${current.sessionCount}`
 	const adjacentParts = [
 		current.previousSessionTitle ? `←${current.previousSessionTitle}` : "",
 		current.nextSessionTitle ? `→${current.nextSessionTitle}` : "",

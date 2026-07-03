@@ -204,24 +204,26 @@ Verification
 - [x] Review gate completed locally; idempotency, shell quoting, and exact rollback blockers fixed.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `198cf3e feat: add cockpit installers`.
 
 ## Phase C3: Cockpit Overview/Header, Jump, Rename, Preview
-Status: pending
+Status: complete
 
 Implementation
-- [ ] Integrate external lanes into overview/header.
-- [ ] Add tmux jump-to-agent.
-- [ ] Add rename overlay and pi RPC rename.
-- [ ] Add read-only transcript preview per CLI.
+- [x] Integrate external lanes into overview/header.
+- [x] Add tmux jump-to-agent.
+- [x] Add rename overlay and pi RPC rename.
+- [x] Add read-only transcript preview per CLI.
 
 Verification
-- [ ] Tests for jump command construction/failure.
-- [ ] Tests for rename overlay and pi RPC payload.
-- [ ] Tests for transcript preview parsing.
-- [ ] `bun run check` passes.
-- [ ] isolated tmux smoke where feasible.
-- [ ] Review gate completed and blockers fixed.
+- [x] Tests for jump command construction/failure.
+- [x] Tests for rename overlay and pi RPC payload.
+- [x] Tests for transcript preview parsing.
+- [x] Tests for overview/header external labels.
+- [x] `bun run check` passes.
+- [x] `git diff --check` passes.
+- [x] isolated tmux feasibility checked with `tmux -V`.
+- [x] Review gate completed locally; overlay persistence test gap fixed.
 
 Exit criteria
 - [ ] Phase commit created.

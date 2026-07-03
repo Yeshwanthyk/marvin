@@ -135,6 +135,7 @@ describe("deriveLaneHeaderState", () => {
 			previousSessionTitle: "second task",
 			previousProjectTitle: "kiri",
 			nextProjectTitle: "marvin",
+			external: false,
 		})
 	})
 
@@ -210,5 +211,38 @@ describe("deriveLaneHeaderState", () => {
 			activityBadges: "",
 			hint: "enter exits",
 		})
+	})
+
+	it("labels external lanes in the displayed spatial context", () => {
+		const lanes: WorkspaceLanesV2 = {
+			...lanesFixture(),
+			sessionsById: {
+				...lanesFixture().sessionsById,
+				"external:pi:session-a": {
+					laneId: "external:pi:session-a",
+					projectId: "/work/nora",
+					sessionId: "session-a",
+					sessionPath: "/tmp/pi.jsonl",
+					title: "pi task",
+					provider: "pi",
+					modelId: "external",
+					createdAt: "2026-06-03T12:00:00.000Z",
+					updatedAt: "2026-06-03T12:02:00.000Z",
+				},
+			},
+			sessionOrderByProject: {
+				...lanesFixture().sessionOrderByProject,
+				"/work/nora": ["external:pi:session-a"],
+			},
+			focusByProject: {
+				...lanesFixture().focusByProject,
+				"/work/nora": { focusedLaneId: "external:pi:session-a", focusedColumn: 0 },
+			},
+			selection: { projectId: "/work/nora", laneId: "external:pi:session-a" },
+		}
+
+		const state = deriveLaneHeaderState(lanes, "off")
+		expect(state.current?.external).toBe(true)
+		expect(laneHeaderDisplay(state).summary).toBe("ext nora 2/3 · 1/1 · pi task")
 	})
 })

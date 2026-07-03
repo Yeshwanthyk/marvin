@@ -133,4 +133,34 @@ describe("command palette options", () => {
 		expect(parseCommandPaletteValue("action:unknown")).toBeNull()
 		expect(parseCommandPaletteValue("session:")).toBeNull()
 	})
+
+	it("adds external lane actions only when the selected lane is external", () => {
+		const lanes = lanesFixture()
+		const external: WorkspaceLanesV2 = {
+			...lanes,
+			sessionsById: {
+				...lanes.sessionsById,
+				"external:codex:session-a": {
+					laneId: "external:codex:session-a",
+					projectId: "/work/nora",
+					sessionId: "session-a",
+					sessionPath: "/tmp/codex.jsonl",
+					title: "codex lane",
+					provider: "codex",
+					modelId: "external",
+					createdAt: "2026-06-03T12:00:00.000Z",
+					updatedAt: "2026-06-03T12:02:00.000Z",
+				},
+			},
+			sessionOrderByProject: { "/work/nora": ["external:codex:session-a"] },
+			selection: { projectId: "/work/nora", laneId: "external:codex:session-a" },
+		}
+
+		expect(createCommandPaletteOptions(lanes).map((option) => option.value)).not.toContain(commandActionValue("jumpExternal"))
+		expect(createCommandPaletteOptions(external).map((option) => option.value)).toContain(commandActionValue("jumpExternal"))
+		expect(parseCommandPaletteValue(commandActionValue("previewExternal"))).toEqual({
+			type: "action",
+			action: "previewExternal",
+		})
+	})
 })

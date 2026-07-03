@@ -39,11 +39,24 @@ export interface ExternalAgentEvent {
 export interface CockpitIngestState {
 	readonly offset: number
 	readonly titleOverlay: Record<string, string>
+	readonly sessions: Record<string, CockpitSessionMeta>
 }
 
 export interface CockpitIngestPaths {
 	readonly spoolPath: string
 	readonly statePath: string
+}
+
+export interface CockpitSessionMeta {
+	readonly laneId: LaneId
+	readonly cli: ExternalAgentCli
+	readonly sessionId: string
+	readonly cwd: string
+	readonly transcriptPath?: string
+	readonly title?: string
+	readonly tmuxPane?: string
+	readonly pid?: number
+	readonly lastEventAt: string
 }
 
 export interface CockpitIngestServices {
@@ -119,7 +132,27 @@ export const cockpitIngestPaths = (configDir: string): CockpitIngestPaths => ({
 	statePath: join(configDir, COCKPIT_DIR, STATE_FILE),
 })
 
-export const emptyCockpitIngestState = (): CockpitIngestState => ({ offset: 0, titleOverlay: {} })
+export const emptyCockpitIngestState = (): CockpitIngestState => ({ offset: 0, titleOverlay: {}, sessions: {} })
+
+const parseSessionMeta = (laneId: string, value: unknown): CockpitSessionMeta | null => {
+	if (!isRecord(value)) return null
+	const cli = readString(value, "cli")
+	const sessionId = readString(value, "sessionId")
+	const cwd = readString(value, "cwd")
+	const lastEventAt = normalizeIso(readString(value, "lastEventAt"))
+	if (!isCli(cli) || !sessionId || !cwd || !lastEventAt) return null
+	return {
+		laneId,
+		cli,
+		sessionId,
+		cwd,
+		lastEventAt,
+		...(readString(value, "transcriptPath") ? { transcriptPath: readString(value, "transcriptPath") } : {}),
+		...(readString(value, "title") ? { title: readString(value, "title") } : {}),
+		...(readString(value, "tmuxPane") ? { tmuxPane: readString(value, "tmuxPane") } : {}),
+		...(readPid(value) !== undefined ? { pid: readPid(value) } : {}),
+	}
+}
 
 export const loadCockpitIngestState = (statePath: string): CockpitIngestState => {
 	if (!existsSync(statePath)) return emptyCockpitIngestState()
@@ -128,11 +161,19 @@ export const loadCockpitIngestState = (statePath: string): CockpitIngestState =>
 		if (!isRecord(parsed)) return emptyCockpitIngestState()
 		const offsetRaw = parsed["offset"]
 		const overlayRaw = parsed["titleOverlay"]
+		const sessionsRaw = parsed["sessions"]
 		const offset = typeof offsetRaw === "number" && Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0
 		const titleOverlay = isRecord(overlayRaw)
 			? Object.fromEntries(Object.entries(overlayRaw).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
 			: {}
-		return { offset, titleOverlay }
+		const sessions = isRecord(sessionsRaw)
+			? Object.fromEntries(
+				Object.entries(sessionsRaw)
+					.map(([laneId, value]) => [laneId, parseSessionMeta(laneId, value)] as const)
+					.filter((entry): entry is readonly [string, CockpitSessionMeta] => entry[1] !== null),
+			)
+			: {}
+		return { offset, titleOverlay, sessions }
 	} catch {
 		return emptyCockpitIngestState()
 	}
@@ -141,6 +182,24 @@ export const loadCockpitIngestState = (statePath: string): CockpitIngestState =>
 export const saveCockpitIngestState = (statePath: string, state: CockpitIngestState): void => {
 	mkdirSync(dirname(statePath), { recursive: true })
 	writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`)
+}
+
+export const loadCockpitSessionIndex = (configDir: string): Record<string, CockpitSessionMeta> =>
+	loadCockpitIngestState(cockpitIngestPaths(configDir).statePath).sessions
+
+export const saveCockpitTitleOverlay = (configDir: string, laneId: LaneId, title: string): void => {
+	const paths = cockpitIngestPaths(configDir)
+	const state = loadCockpitIngestState(paths.statePath)
+	const meta = state.sessions[laneId]
+	if (!meta) return
+	saveCockpitIngestState(paths.statePath, {
+		...state,
+		titleOverlay: { ...state.titleOverlay, [overlayKey(meta.cli, meta.sessionId)]: title },
+		sessions: {
+			...state.sessions,
+			[laneId]: { ...meta, title },
+		},
+	})
 }
 
 export const parseExternalAgentEvent = (value: unknown): ExternalAgentEvent | null => {
@@ -217,6 +276,21 @@ export const applyExternalAgentEvent = (
 		nextOverlay[overlayKey(event.cli, event.sessionId)] = event.title.trim()
 	}
 	const title = titleFallback(event, nextOverlay[overlayKey(event.cli, event.sessionId)], existing?.title)
+	const nextSessions = {
+		...state.sessions,
+		[laneId]: {
+			...(state.sessions[laneId] ?? {}),
+			laneId,
+			cli: event.cli,
+			sessionId: event.sessionId,
+			cwd: event.cwd,
+			lastEventAt: event.at,
+			...(event.transcriptPath ? { transcriptPath: event.transcriptPath } : {}),
+			...(title ? { title } : {}),
+			...(event.tmuxPane ? { tmuxPane: event.tmuxPane } : {}),
+			...(event.pid !== undefined ? { pid: event.pid } : {}),
+		},
+	} satisfies Record<string, CockpitSessionMeta>
 	const patches: WorkspaceLanePatch[] = [
 		{
 			type: "upsertProject",
@@ -278,7 +352,7 @@ export const applyExternalAgentEvent = (
 		services.activityIndex.patch(laneId, { lastActivityAt: Date.parse(now) })
 	}
 
-	return { ...state, titleOverlay: nextOverlay }
+	return { ...state, titleOverlay: nextOverlay, sessions: nextSessions }
 }
 
 export const ingestCockpitSpool = (
