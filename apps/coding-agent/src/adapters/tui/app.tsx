@@ -217,6 +217,9 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 	})
 
 	const focusedRuntime = createFocusedRuntimeFacade(() => focusedBinding(), sendRef)
+	const idleSweepTimer = setInterval(() => {
+		void registry.sweepIdle()
+	}, 60_000)
 
 	const loadForRequest = async (request: WorkspaceSwitchRequest): Promise<{ loaded: LoadedSession | null; sessionPath: string | null }> => {
 		const bundle = await createProjectRuntimeBundle({
@@ -325,6 +328,7 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 		void laneStore.flush().finally(() => {
 			void Promise.all([
 				props.initialRuntime.close(),
+				Promise.resolve(clearInterval(idleSweepTimer)),
 				...Array.from(actorSubscriptions.values()).map((unsubscribe) => {
 					unsubscribe()
 					return Promise.resolve()
@@ -367,6 +371,7 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 
 	onCleanup(() => {
 		void laneStore.flush()
+		clearInterval(idleSweepTimer)
 		void props.initialRuntime.close()
 		for (const unsubscribe of actorSubscriptions.values()) unsubscribe()
 		for (const actor of registry.list()) void actor.close()
@@ -388,6 +393,14 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 						hostNotifications={notificationService.notifications}
 						acknowledgeHostNotification={(id) => notificationService.acknowledge(id)}
 						focusedActor={focusController.focusedActor}
+						canStartPrompt={() => {
+							const laneId = focusController.focusedLaneId()
+							if (laneId === null) return { ok: true }
+							const admission = registry.canStartStream(laneId)
+							return admission.type === "accepted"
+								? { ok: true }
+								: { ok: false, maxStreaming: admission.maxStreaming }
+						}}
 						active={() => true}
 						onExit={closeHost}
 					/>

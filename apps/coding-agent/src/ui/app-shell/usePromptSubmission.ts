@@ -44,6 +44,7 @@ export interface UsePromptSubmissionDeps {
 	clearPendingSessionTitle: () => void
 	showToast: (title: string, message: string, variant?: "info" | "warning" | "success" | "error") => void
 	activeKey?: () => unknown
+	canStartPrompt?: () => { ok: true } | { ok: false; maxStreaming: number }
 }
 
 export interface PromptSubmissionController {
@@ -67,6 +68,7 @@ export const usePromptSubmission = ({
 	clearPendingSessionTitle,
 	showToast,
 	activeKey,
+	canStartPrompt,
 }: UsePromptSubmissionDeps): PromptSubmissionController => {
 	let promptQueueItems: ReadonlyArray<PromptQueueItem> = []
 	let queueFiber: ReturnType<typeof Effect.runFork> | null = null
@@ -119,6 +121,15 @@ export const usePromptSubmission = ({
 	const submitPrompt = async (text: string, mode: PromptDeliveryMode = "followUp") => {
 		const trimmed = text.trim()
 		if (!trimmed) return
+		const admission = canStartPrompt?.()
+		if (admission?.ok === false) {
+			showToast(
+				"Streaming limit reached",
+				`${admission.maxStreaming} sessions are already streaming. Queue this after one finishes.`,
+				"warning",
+			)
+			return
+		}
 		if (!activateVisibleSessionForSubmit()) return
 
 		let beforeStartResult: Awaited<ReturnType<typeof hookRunner.emitBeforeAgentStart>> | undefined

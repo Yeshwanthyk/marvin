@@ -8,6 +8,7 @@ import {
   type AgentEventHandler,
   type EventHandlerContext,
 } from "../agent-events.js";
+import { sessionMessagesToView, type ToolProjectionMeta } from "../domain/messaging/projection.js";
 import type { ActivityState, ToolBlock, UIMessage } from "../types.js";
 import { createAppStore } from "../ui/state/app-store.js";
 
@@ -24,6 +25,7 @@ export interface SessionActorProjectionStore {
   readonly unread: Accessor<boolean>;
   subscribe(handler: (event: AgentEvent) => void): () => void;
   applyEvent(event: AgentEvent): void;
+  restoreLoadedSession(sessionId: string, messages: AppMessage[], toolByName: Map<string, ToolProjectionMeta>): void;
   clearUnread(): void;
 }
 
@@ -116,6 +118,20 @@ export const createActorProjectionStore = (
       for (const listener of listeners) {
         listener(event);
       }
+    },
+    restoreLoadedSession(sessionId, messages, toolByName) {
+      const view = sessionMessagesToView(messages, {
+        sessionId,
+        toolByName,
+        shellInjectionPrefix: "[Shell output]",
+      });
+      store.messages.set(() => view.messages);
+      store.toolBlocks.set(() => []);
+      store.contextTokens.set(view.contextTokens);
+      store.cacheStats.set(null);
+      store.retryStatus.set(null);
+      store.isResponding.set(false);
+      store.activityState.set("idle");
     },
     clearUnread() {
       setUnread(false);

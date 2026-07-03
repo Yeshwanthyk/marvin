@@ -111,6 +111,7 @@ export interface TuiAppProps {
 	hostNotifications?: Accessor<readonly HostNotification[]>
 	acknowledgeHostNotification?: (id: string) => void
 	focusedActor?: Accessor<SessionActor | null>
+	canStartPrompt?: () => { ok: true } | { ok: false; maxStreaming: number }
 	active?: () => boolean
 	onActivityChange?: (activity: TuiAppActivity) => void
 	onExit?: () => void
@@ -126,7 +127,7 @@ export interface TuiAppActivity {
 	lastObservedAt: number
 }
 
-export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, hostNotifications, acknowledgeHostNotification, focusedActor, active, onActivityChange, onExit }: TuiAppProps) => {
+export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, hostNotifications, acknowledgeHostNotification, focusedActor, canStartPrompt, active, onActivityChange, onExit }: TuiAppProps) => {
 	const runtime = useRuntime()
 	const {
 		agent,
@@ -255,6 +256,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		clearPendingSessionTitle,
 		showToast: (title, message, variant) => showToastRef.current(title, message, variant),
 		activeKey: () => focusedActor?.()?.laneId ?? sessionManager.projectCwd,
+		canStartPrompt,
 	})
 	const {
 		promptQueue,

@@ -50,6 +50,7 @@ const createFakeActor = (
       retryStatus: () => null,
       subscribe: (_handler: (event: AgentEvent) => void) => () => {},
       applyEvent: (_event: AgentEvent) => {},
+      restoreLoadedSession: () => {},
       lastEventAt: () => 0,
       unread: () => false,
       clearUnread: () => {},
@@ -133,7 +134,7 @@ describe("SessionActorRegistry", () => {
     const registry = createSessionActorRegistry({
       getBundle: unusedBundle,
       now: () => clock,
-      policy: { maxWarm: 2, idleTtlMs: 0 },
+      policy: { maxWarm: 2, idleTtlMs: 60_000 },
       createActor: (input, onStatusChange) => createFakeActor(input, onStatusChange),
     });
 
@@ -152,6 +153,23 @@ describe("SessionActorRegistry", () => {
     expect(first.status()).toBe("suspended");
     expect(second.status()).toBe("warm");
     expect(third.status()).toBe("warm");
+  });
+
+  it("suspends idle warm actors on an explicit TTL sweep", async () => {
+    let clock = 0;
+    const registry = createSessionActorRegistry({
+      getBundle: unusedBundle,
+      now: () => clock,
+      policy: { maxWarm: 8, idleTtlMs: 10 },
+      createActor: (input, onStatusChange) => createFakeActor(input, onStatusChange),
+    });
+
+    const actor = registry.create(descriptor("idle"));
+    await actor.hydrate("focus");
+    clock = 11;
+    await registry.sweepIdle();
+
+    expect(actor.status()).toBe("suspended");
   });
 
   it("never suspends streaming actors and rejects new background streams over maxStreaming", async () => {
@@ -173,6 +191,25 @@ describe("SessionActorRegistry", () => {
     expect(result.type).toBe("stream-limit-reached");
     expect(streaming.status()).toBe("streaming");
     expect(pending.status()).toBe("cold");
+  });
+
+  it("reports stream admission before starting another prompt over maxStreaming", () => {
+    const registry = createSessionActorRegistry({
+      getBundle: unusedBundle,
+      policy: { maxStreaming: 1 },
+      createActor: (input, onStatusChange) =>
+        createFakeActor(
+          input,
+          onStatusChange,
+          input.laneId === "streaming" ? "streaming" : "warm",
+        ),
+    });
+
+    registry.create(descriptor("streaming"));
+    registry.create(descriptor("pending"));
+
+    expect(registry.canStartStream("streaming")).toEqual({ type: "accepted" });
+    expect(registry.canStartStream("pending")).toEqual({ type: "stream-limit-reached", maxStreaming: 1 });
   });
 
   it("rehydrates suspended actors when they are focused again", async () => {

@@ -5,6 +5,7 @@ import type {
   SessionActorDescriptor,
 } from "@yeshwanthyk/runtime-effect/project-bundle.js";
 import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js";
+import type { ToolProjectionMeta } from "../domain/messaging/projection.js";
 import { Effect } from "effect";
 import {
   createActorProjectionStore,
@@ -67,6 +68,18 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
     options.onStatusChange?.(actor, next);
   };
 
+  const projectionToolMeta = (bundle: ProjectRuntimeBundle): Map<string, ToolProjectionMeta> => {
+    const result = new Map<string, ToolProjectionMeta>();
+    for (const [name, entry] of bundle.toolByName.entries()) {
+      result.set(name, {
+        label: entry.label,
+        source: entry.source,
+        ...(entry.sourcePath !== undefined ? { sourcePath: entry.sourcePath } : {}),
+      });
+    }
+    return result;
+  };
+
   const hydrate = async (_reason: SessionActorHydrateReason): Promise<ScopedSessionActorServices> => {
     if (services !== null) return services;
     if (status === "hydrating") {
@@ -81,6 +94,13 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
         hasUI: focused,
       });
       projection.attach(nextServices);
+      if (descriptor.sessionPath !== null) {
+        const loaded = nextServices.sessionManager.loadSession(descriptor.sessionPath);
+        if (loaded !== null) {
+          nextServices.agent.replaceMessages(loaded.messages);
+          projection.restoreLoadedSession(loaded.metadata.id, loaded.messages, projectionToolMeta(bundle));
+        }
+      }
       unsubscribeAgent = nextServices.agent.subscribe((event) => {
         projection.applyEvent(event);
         if (event.type === "agent_start") setStatus("streaming");

@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { Agent, type AgentTransport } from "@yeshwanthyk/agent-core"
+import type { AppMessage } from "@yeshwanthyk/agent-core"
 import {
 	createHookUIContext,
 	HookedTransport,
@@ -172,6 +173,70 @@ export default function hook(marvin) {
 
 			expect(livePrompts).toEqual([])
 			expect(hiddenPrompts).toEqual(["Need input"])
+		} finally {
+			await rm(dir, { recursive: true, force: true })
+		}
+	})
+
+	it("restores JSONL messages into agent and projection when hydrating a suspended actor", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "session-actor-rehydrate-"))
+		try {
+			const seed = new SessionManager(dir, descriptor.cwd)
+			const sessionId = seed.startSession("anthropic", "claude", "off")
+			const sessionPath = seed.sessionPath
+			if (sessionPath === null) throw new Error("session fixture missing path")
+			const message: AppMessage = {
+				role: "user",
+				content: [{ type: "text", text: "restore me" }],
+				timestamp: Date.now(),
+			}
+			seed.appendMessage(message)
+			const actorDescriptor: SessionActorDescriptor = {
+				...descriptor,
+				sessionId,
+				sessionPath,
+			}
+			const servicesManager = new SessionManager(dir, descriptor.cwd)
+			const hookRunner = new HookRunner([], descriptor.cwd, dir, servicesManager)
+			const services = createServices(hookRunner, servicesManager)
+			const bundle: ProjectRuntimeBundle = {
+				projectId: descriptor.projectId,
+				cwd: descriptor.cwd,
+				config: {
+					configDir: dir,
+					configPath: path.join(dir, "config.json"),
+					theme: "marvin",
+					provider: "anthropic",
+					modelId: "claude",
+					model: { id: "claude", name: "claude", contextWindow: 100 },
+					thinking: "off",
+					keymap: { lanes: {} },
+				},
+				cycleModels: [],
+				getApiKey: () => undefined,
+				transports: { router: fakeTransport, provider: fakeTransport, codex: fakeTransport },
+				customCommands: new Map(),
+				customTools: [],
+				toolRegistry: {},
+				toolByName: new Map(),
+				hookDefinitions: { paths: [], issues: [] },
+				validationIssues: [],
+				createActorServices: async () => {
+					servicesManager.continueSession(sessionPath, sessionId)
+					return services
+				},
+				close: async () => {},
+			} as ProjectRuntimeBundle
+			const actor = createSessionActor({
+				descriptor: actorDescriptor,
+				getBundle: async () => bundle,
+			})
+
+			await actor.hydrate("focus")
+
+			expect(services.agent.state.messages).toEqual([message])
+			expect(actor.projection.messages()).toHaveLength(1)
+			expect(actor.projection.messages()[0]?.content).toBe("restore me")
 		} finally {
 			await rm(dir, { recursive: true, force: true })
 		}

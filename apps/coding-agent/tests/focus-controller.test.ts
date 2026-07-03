@@ -36,6 +36,7 @@ const fakeActor = (laneId: string): SessionActor => ({
 		unread: () => false,
 		subscribe: () => () => {},
 		applyEvent: () => {},
+		restoreLoadedSession: () => {},
 		clearUnread: () => {},
 	},
 	hydrate: async () => { throw new Error("registry handles hydrate") },
@@ -93,6 +94,7 @@ describe("FocusController", () => {
 		const hydrated: string[] = []
 		const registry: SessionActorRegistry = {
 			get: () => actor,
+			canStartStream: () => ({ type: "accepted" }),
 			create: () => actor,
 			getOrCreate: () => actor,
 			hydrate: async (nextLaneId) => {
@@ -100,6 +102,7 @@ describe("FocusController", () => {
 				isFocusedDuringHydrate = boundFocus?.() ?? false
 				return { type: "hydrated", actor }
 			},
+			sweepIdle: async () => {},
 			list: () => [actor],
 			remove: async () => {},
 		}
@@ -178,9 +181,11 @@ describe("FocusController", () => {
 		])
 		const registry: SessionActorRegistry = {
 			get: (laneId) => actors.get(laneId) ?? null,
+			canStartStream: () => ({ type: "accepted" }),
 			create: (descriptor) => actors.get(descriptor.laneId) ?? actorB,
 			getOrCreate: (descriptor) => actors.get(descriptor.laneId) ?? actorB,
 			hydrate: async (laneId) => ({ type: "hydrated", actor: actors.get(laneId) ?? actorB }),
+			sweepIdle: async () => {},
 			list: () => [...actors.values()],
 			remove: async () => {},
 		}

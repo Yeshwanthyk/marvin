@@ -599,7 +599,8 @@ export class SessionManager implements ReadonlySessionManager {
       }
 
       return entries;
-    } catch {
+    } catch (error) {
+      if (error instanceof JsonlOwnershipConflictError) throw error;
       return [];
     }
   }

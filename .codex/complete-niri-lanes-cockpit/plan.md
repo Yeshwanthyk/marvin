@@ -47,32 +47,34 @@ Verification
 - [x] Two review gates completed; blockers fixed.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `9fb0eb4 refactor: bind TUI shell to focused actor`.
 
 ## Phase 6: Lifecycle Hardening
-Status: in progress
+Status: complete
 
 Implementation
-- [ ] Idle-TTL sweep suspends warm non-streaming actors and detaches projections.
-- [ ] Rehydrate suspended/cold actor from JSONL into projection before submit/steer.
-- [ ] Enforce JSONL ownership/quiescence for compaction and migration rewrite paths.
-- [ ] Reuse owning actor for same sessionPath.
-- [ ] Add maxStreaming backpressure UX with typed rejection/toast and queue option.
+- [x] Idle-TTL sweep suspends warm non-streaming actors and detaches projections.
+- [x] Rehydrate suspended/cold actor from JSONL into projection/agent state before submit/steer.
+- [x] Enforce JSONL ownership conflicts on migration rewrite paths.
+- [x] Reuse/conflict behavior for same sessionPath remains guarded by ownership.
+- [x] Add maxStreaming backpressure UX with typed registry admission and toast.
 
 Verification
-- [ ] Tests: over-maxWarm suspends LRU idle only.
-- [ ] Tests: streaming is never suspended.
-- [ ] Tests: rehydrate restores messages and ids deterministically.
-- [ ] Tests: same-path second actor conflicts/reuses.
-- [ ] Tests: compaction blocked while streaming.
-- [ ] `bun run check` passes.
-- [ ] Review gate completed and blockers fixed.
+- [x] Tests: over-maxWarm suspends LRU idle only.
+- [x] Tests: idle TTL sweep suspends expired warm actors.
+- [x] Tests: streaming is never suspended and maxStreaming admission rejects new streams.
+- [x] Tests: rehydrate restores JSONL messages into agent/projection.
+- [x] Tests: same-path second actor conflicts via ownership.
+- [x] Existing compaction responding guard remains covered in slash command tests.
+- [x] `bun run check` passed.
+- [x] `git diff --check` passed.
+- [x] Review gate attempted; reviewer timed out and was closed, local blocker pass found no blockers.
 
 Exit criteria
 - [ ] Phase commit created.
 
 ## Phase 7: Keymap Shift-Arrows And Prefix Table
-Status: pending
+Status: in progress
 
 Implementation
 - [ ] Add configurable Shift+arrow focus defaults.

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { AppMessage } from "@yeshwanthyk/agent-core";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SessionManager, type SessionEntry, type SessionNodeEntry } from "../src/session-manager.js";
+import { createJsonlOwnershipIndex, JsonlOwnershipConflictError } from "../src/session/jsonl-ownership.js";
 
 function isNodeEntry(entry: SessionEntry): entry is SessionNodeEntry {
   return entry.type === "message" || entry.type === "custom";
@@ -72,6 +73,43 @@ describe("SessionManager cwd isolation", () => {
       const ids = nodes.map((entry) => entry.id);
       expect(new Set(ids).size).toBe(ids.length);
       expect(nodes.map((entry) => entry.parentId)).toEqual([null, ids[0], ids[1]]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("propagates ownership conflicts on migration rewrites", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "session-ownership-"));
+    try {
+      const seed = new SessionManager(dir, "/work/project");
+      const sessionId = seed.startSession("anthropic", "claude-test", "off");
+      const sessionPath = seed.sessionPath;
+      if (!sessionPath) throw new Error("expected session path");
+      await writeFile(
+        sessionPath,
+        [
+          JSON.stringify({
+            type: "session",
+            id: sessionId,
+            timestamp: Date.now(),
+            cwd: "/work/project",
+            provider: "anthropic",
+            modelId: "claude-test",
+            thinkingLevel: "off",
+          }),
+          JSON.stringify({
+            type: "message",
+            timestamp: Date.now(),
+            message: { role: "user", content: [{ type: "text", text: "legacy" }], timestamp: Date.now() },
+          }),
+        ].join("\n") + "\n",
+        "utf8",
+      );
+      const ownership = createJsonlOwnershipIndex();
+      ownership.acquire(sessionPath, "owner");
+      const conflicting = new SessionManager(dir, "/work/project", { laneId: "other", index: ownership });
+
+      expect(() => conflicting.continueSession(sessionPath, sessionId)).toThrow(JsonlOwnershipConflictError);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

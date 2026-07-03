@@ -32,11 +32,17 @@ export type RegistryHydrateResult =
       readonly maxStreaming: number;
     };
 
+export type RegistryStreamAdmission =
+  | { readonly type: "accepted" }
+  | { readonly type: "stream-limit-reached"; readonly maxStreaming: number };
+
 export interface SessionActorRegistry {
   get(laneId: string): SessionActor | null;
+  canStartStream(laneId: string): RegistryStreamAdmission;
   create(descriptor: SessionActorDescriptor): SessionActor;
   getOrCreate(descriptor: SessionActorDescriptor): SessionActor;
   hydrate(laneId: string, reason: SessionActorHydrateReason): Promise<RegistryHydrateResult>;
+  sweepIdle(): Promise<void>;
   list(): ReadonlyArray<SessionActor>;
   remove(laneId: string): Promise<void>;
 }
@@ -108,13 +114,24 @@ export const createSessionActorRegistry = (
   const streamingCount = (): number =>
     Array.from(actors.values()).filter((meta) => meta.actor.status() === "streaming").length;
 
+  const canStartStream = (laneId: string): RegistryStreamAdmission => {
+    const actor = actors.get(laneId)?.actor;
+    if (actor?.status() === "streaming") return { type: "accepted" };
+    if (streamingCount() >= policy.maxStreaming) {
+      return { type: "stream-limit-reached", maxStreaming: policy.maxStreaming };
+    }
+    return { type: "accepted" };
+  };
+
+  const isIdleExpired = (meta: ActorMeta): boolean =>
+    now() - meta.lastViewedAt >= policy.idleTtlMs;
+
   const warmCandidates = (): ActorMeta[] =>
     Array.from(actors.values())
       .filter((meta) => {
         const status = meta.actor.status();
         if (status !== "warm") return false;
-        if (policy.neverEvictStreaming && meta.actor.status() === "streaming") return false;
-        return now() - meta.lastViewedAt >= policy.idleTtlMs || warmCount() > policy.maxWarm;
+        return isIdleExpired(meta) || warmCount() > policy.maxWarm;
       })
       .sort((left, right) => {
         const viewedDelta = left.lastViewedAt - right.lastViewedAt;
@@ -130,7 +147,7 @@ export const createSessionActorRegistry = (
 
   const enforceWarmLimit = async () => {
     for (const meta of warmCandidates()) {
-      if (warmCount() <= policy.maxWarm) return;
+      if (!isIdleExpired(meta) && warmCount() <= policy.maxWarm) return;
       await meta.actor.suspend();
     }
   };
@@ -139,6 +156,7 @@ export const createSessionActorRegistry = (
     get(laneId) {
       return actors.get(laneId)?.actor ?? null;
     },
+    canStartStream,
     create,
     getOrCreate(descriptor) {
       return actors.get(descriptor.laneId)?.actor ?? create(descriptor);
@@ -150,16 +168,20 @@ export const createSessionActorRegistry = (
       }
       meta.lastViewedAt = now();
       const actor = meta.actor;
-      if (reason === "background-prompt" && actor.status() !== "streaming" && streamingCount() >= policy.maxStreaming) {
+      const admission = canStartStream(laneId);
+      if (reason === "background-prompt" && admission.type === "stream-limit-reached") {
         return {
           type: "stream-limit-reached",
           actor,
-          maxStreaming: policy.maxStreaming,
+          maxStreaming: admission.maxStreaming,
         };
       }
       await actor.hydrate(reason);
       await enforceWarmLimit();
       return { type: "hydrated", actor };
+    },
+    async sweepIdle() {
+      await enforceWarmLimit();
     },
     list() {
       return Array.from(actors.values()).map((meta) => meta.actor);
