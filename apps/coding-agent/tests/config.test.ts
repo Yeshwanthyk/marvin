@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { loadAppConfig } from '../src/config';
+import { loadAppConfig } from '@yeshwanthyk/runtime-effect/config.js';
 
 describe('coding-agent config overrides', () => {
   it('allows running without config file when provider+model are provided', async () => {

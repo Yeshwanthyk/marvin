@@ -12,13 +12,12 @@ import type { SessionManager } from "./session-manager.js"
 import type { UIMessage, UIAssistantMessage, ToolBlock, ActivityState, UIContentBlock } from "./types.js"
 import {
 	appendWithCap,
-	buildThinkingSummary,
-	extractOrderedBlocks,
-	extractThinking,
+	extractStreamingSnapshot,
 	extractText,
 	getEditDiffText,
 	getToolText,
 } from "@domain/messaging/content.js"
+import { appMessageToUiAssistant } from "@domain/messaging/projection.js"
 import type { PromptQueue } from "./hooks/usePromptQueue.js"
 import type { HookRunner } from "./hooks/index.js"
 import type { RenderResultOptions } from "@yeshwanthyk/runtime-effect/extensibility/custom-tools/types.js"
@@ -136,14 +135,7 @@ function hasContentArray(message: unknown): message is { content: unknown[] } {
 		Array.isArray((message as any).content)
 }
 
-interface ExtractionCache {
-	// Total streaming text length (full content, even if view is tailed)
-	textLength: number
-	// Tail of streaming text for display
-	textTail: string
-	thinking: { summary: string; preview: string; full: string } | null
-	contentBlocks: UIContentBlock[]
-}
+type ExtractionCache = ReturnType<typeof extractStreamingSnapshot>
 
 function createExtractionCache(): ExtractionCache {
 	return {
@@ -152,71 +144,6 @@ function createExtractionCache(): ExtractionCache {
 		thinking: null,
 		contentBlocks: [],
 	}
-}
-
-function appendStreamingTail(current: string, next: string): string {
-	if (next.length >= STREAMING_TAIL_CHARS) return next.slice(-STREAMING_TAIL_CHARS)
-	if (current.length + next.length <= STREAMING_TAIL_CHARS) return current + next
-	return (current + next).slice(-STREAMING_TAIL_CHARS)
-}
-
-const hasRenderableThinking = (text: string): boolean => text.trim().length > 0
-
-function appendTextContentBlock(blocks: UIContentBlock[], text: string): void {
-	if (text.length === 0) return
-	const lastBlock = blocks[blocks.length - 1]
-	if (lastBlock?.type === "text") {
-		lastBlock.text = appendStreamingTail(lastBlock.text, text)
-		return
-	}
-	blocks.push({ type: "text", text: appendStreamingTail("", text) })
-}
-
-function appendThinkingContentBlock(blocks: UIContentBlock[], id: string, full: string): { summary: string; preview: string; full: string } | null {
-	if (!hasRenderableThinking(full)) return null
-	const lastBlock = blocks[blocks.length - 1]
-	const mergedFull = lastBlock?.type === "thinking"
-		? `${lastBlock.full}\n\n${full}`.trim()
-		: full
-	const { summary, preview } = buildThinkingSummary(mergedFull)
-	if (!summary && !preview) return null
-	const next = { type: "thinking" as const, id: lastBlock?.type === "thinking" ? lastBlock.id : id, summary, preview, full: mergedFull }
-	if (lastBlock?.type === "thinking") {
-		blocks[blocks.length - 1] = next
-	} else {
-		blocks.push(next)
-	}
-	return { summary, preview, full: mergedFull }
-}
-
-function extractSnapshot(content: unknown[]): ExtractionCache {
-	let textLength = 0
-	let textTail = ""
-	let thinking: { summary: string; preview: string; full: string } | null = null
-	const contentBlocks: UIContentBlock[] = []
-
-	for (let i = 0; i < content.length; i++) {
-		const block = content[i]
-		if (typeof block !== "object" || block === null) continue
-		const b = block as Record<string, unknown>
-
-		if (b.type === "text" && typeof b.text === "string") {
-			textLength += b.text.length
-			const visibleText = appendStreamingTail("", b.text)
-			textTail = appendStreamingTail(textTail, b.text)
-			appendTextContentBlock(contentBlocks, visibleText)
-		} else if (b.type === "thinking" && typeof b.thinking === "string") {
-			const nextThinking = appendThinkingContentBlock(contentBlocks, `thinking-${i}`, b.thinking)
-			if (nextThinking) thinking = nextThinking
-		} else if (b.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string") {
-			contentBlocks.push({
-				type: "tool",
-				tool: { id: b.id, name: b.name, args: b.arguments ?? {}, isError: false, isComplete: false },
-			})
-		}
-	}
-
-	return { textLength, textTail, thinking, contentBlocks }
 }
 
 export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHandler {
@@ -251,7 +178,7 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 
 			// Rebuild the small block snapshot. Providers mutate the current content
 			// block in place, so block count alone cannot tell us whether text changed.
-			extractionCache = extractSnapshot(content)
+			extractionCache = extractStreamingSnapshot(content, STREAMING_TAIL_CHARS)
 			const { textLength, textTail, thinking, contentBlocks } = extractionCache
 			updateThrottleMs = computeUpdateThrottleMs(textLength)
 
@@ -479,30 +406,17 @@ function handleMessageEnd(
 	ctx: EventHandlerContext
 ): void {
 	if (!hasContentArray(event.message)) return
+	if (event.message.role !== "assistant") return
 	
-	const content = event.message.content
-	const text = extractText(content)
-	const thinking = extractThinking(content)
-	const orderedBlocks = extractOrderedBlocks(content)
-
-	// Convert ordered blocks to UIContentBlocks, preserving order
-	const contentBlocks: UIContentBlock[] = orderedBlocks.map((block) => {
-		if (block.type === "thinking") {
-			return { type: "thinking" as const, id: block.id, summary: block.summary, preview: block.preview, full: block.full }
-		} else if (block.type === "text") {
-			return { type: "text" as const, text: block.text }
-		} else {
-			// toolCall - create a stub tool block (will be updated by handleToolEnd)
-			return {
-				type: "tool" as const,
-				tool: { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
-			}
-		}
+	const projected = appMessageToUiAssistant(event.message, {
+		id: ctx.streamingMessageId.current ?? crypto.randomUUID(),
+		toolByName: ctx.toolByName,
+		isStreaming: false,
 	})
 
 	updateStreamingMessage(ctx, (msg) => {
-		const nextThinking = thinking || msg.thinking
-		return { ...msg, content: text, thinking: nextThinking, contentBlocks, isStreaming: false }
+		const nextThinking = projected.thinking || msg.thinking
+		return { ...msg, ...projected, id: msg.id, thinking: nextThinking, isStreaming: false }
 	})
 
 	ctx.streamingMessageId.current = null

@@ -1,3 +1,5 @@
+import type { UIContentBlock } from "../../types.js"
+
 export const MESSAGE_CAP = 75
 
 export const appendWithCap = <T,>(arr: T[], item: T, cap = MESSAGE_CAP): T[] => {
@@ -136,4 +138,65 @@ export const extractOrderedBlocks = (content: unknown[]): OrderedBlock[] => {
 	}
 
 	return blocks
+}
+
+export interface StreamingSnapshot {
+	// Total streaming text length, even when the UI text is tailed.
+	textLength: number
+	textTail: string
+	thinking: { summary: string; preview: string; full: string } | null
+	contentBlocks: UIContentBlock[]
+}
+
+const appendTailedText = (current: string, next: string, tailChars: number): string => {
+	if (next.length >= tailChars) return next.slice(-tailChars)
+	if (current.length + next.length <= tailChars) return current + next
+	return (current + next).slice(-tailChars)
+}
+
+const appendTailedTextBlock = (blocks: UIContentBlock[], text: string, tailChars: number): void => {
+	if (!text) return
+	const last = blocks[blocks.length - 1]
+	const nextText = appendTailedText("", text, tailChars)
+	if (last?.type === "text") {
+		blocks[blocks.length - 1] = { type: "text", text: appendTailedText(last.text, nextText, tailChars) }
+		return
+	}
+	blocks.push({ type: "text", text: nextText })
+}
+
+export const orderedBlocksToUiContentBlocks = (
+	orderedBlocks: OrderedBlock[],
+	options?: { tailTextChars?: number },
+): UIContentBlock[] => {
+	const blocks: UIContentBlock[] = []
+	for (const block of orderedBlocks) {
+		if (block.type === "thinking") {
+			blocks.push({ type: "thinking", id: block.id, summary: block.summary, preview: block.preview, full: block.full })
+		} else if (block.type === "text") {
+			if (options?.tailTextChars === undefined) {
+				blocks.push({ type: "text", text: block.text })
+			} else {
+				appendTailedTextBlock(blocks, block.text, options.tailTextChars)
+			}
+		} else {
+			blocks.push({
+				type: "tool",
+				tool: { id: block.id, name: block.name, args: block.args, isError: false, isComplete: false },
+			})
+		}
+	}
+	return blocks
+}
+
+export const extractStreamingSnapshot = (content: unknown[], tailChars: number): StreamingSnapshot => {
+	const text = extractText(content)
+	const orderedBlocks = extractOrderedBlocks(content)
+	const contentBlocks = orderedBlocksToUiContentBlocks(orderedBlocks, { tailTextChars: tailChars })
+	return {
+		textLength: text.length,
+		textTail: appendTailedText("", text, tailChars),
+		thinking: extractThinking(content),
+		contentBlocks,
+	}
 }

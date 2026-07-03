@@ -6,7 +6,7 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test"
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { loadHooks, HookRunner, wrapToolWithHooks } from "../src/hooks/index.js"
+import { loadHooks, HookRunner, wrapToolWithHooks } from "@yeshwanthyk/runtime-effect/hooks/index.js"
 import type { AgentTool, AgentToolResult } from "@yeshwanthyk/ai"
 import { SessionManager } from "../src/session-manager.js"
 
