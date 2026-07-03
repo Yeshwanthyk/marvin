@@ -89,6 +89,9 @@ export const useHookBridge = ({
 		getApiKey: async (model) => getApiKey(model.provider),
 		complete: async (systemPrompt, userText) => {
 			const model = agent.state.model
+			if (!model) {
+				return { text: "No model configured", stopReason: "error" as const }
+			}
 			const apiKey = getApiKey(model.provider)
 			if (!apiKey) {
 				return { text: "", stopReason: "error" as const }

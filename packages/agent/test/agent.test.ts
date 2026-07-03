@@ -52,7 +52,7 @@ describe("Agent", () => {
 
 		expect(agent.state).toBeDefined();
 		expect(agent.state.systemPrompt).toBe("");
-		expect(agent.state.model).toBeDefined();
+		expect(agent.state.model).toBeNull();
 		expect(agent.state.thinkingLevel).toBe("off");
 		expect(agent.state.tools).toEqual([]);
 		expect(agent.state.messages).toEqual([]);

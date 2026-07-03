@@ -1,4 +1,5 @@
 import type {
+	Api,
 	AgentTool,
 	AgentToolResult,
 	AssistantMessage,
@@ -69,7 +70,7 @@ export type AppMessage =
  */
 export interface AgentState {
 	systemPrompt: string;
-	model: Model<any>;
+	model: Model<Api> | null;
 	thinkingLevel: ThinkingLevel;
 	tools: AgentTool<any>[];
 	messages: AppMessage[]; // Can include attachments + custom message types

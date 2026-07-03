@@ -1,5 +1,4 @@
 import type { ImageContent, Message, QueuedMessage, ReasoningEffort, TextContent } from "@yeshwanthyk/ai";
-import { getModel } from "@yeshwanthyk/ai";
 import type { AgentRunConfig, AgentTransport } from "./transports/types.js";
 import type { AgentEvent, AgentState, AppMessage, Attachment, ThinkingLevel } from "./types.js";
 
@@ -65,7 +64,7 @@ type DeliveryQueuedMessage<T = AppMessage> = QueuedMessage<T> & { mode?: Deliver
 export class Agent {
 	private _state: AgentState = {
 		systemPrompt: "",
-		model: getModel("google", "gemini-2.5-flash-lite-preview-06-17"),
+		model: null,
 		thinkingLevel: "off",
 		tools: [],
 		messages: [],

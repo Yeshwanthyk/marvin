@@ -7,6 +7,10 @@ export const statusCommand: CommandDefinition = {
 	name: "status",
 	execute: (_args, ctx) => {
 		const model = ctx.agent.state.model
+		if (!model) {
+			addSystemMessage(ctx, `${ctx.currentModelId} (${ctx.currentProvider}) | no model configured`)
+			return true
+		}
 		const messages = ctx.agent.state.messages
 		let usage: { totalTokens?: number; cacheRead?: number } | undefined
 		for (let i = messages.length - 1; i >= 0; i--) {
