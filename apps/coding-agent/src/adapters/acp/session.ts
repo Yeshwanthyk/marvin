@@ -8,6 +8,7 @@ import type { ContentBlock, SlashCommand, ModelOption, StopReason } from "./prot
 import { textChunk, thoughtChunk, toolCall, toolCallUpdate, toolNameToKind } from "./updates.js"
 import type { SessionOrchestratorService } from "@yeshwanthyk/runtime-effect/session/orchestrator.js"
 import { Effect } from "effect"
+import { extractStreamingSnapshot } from "@domain/messaging/content.js"
 
 export interface AcpSessionConfig {
 	sessionId: string
@@ -41,6 +42,38 @@ const AVAILABLE_COMMANDS: SlashCommand[] = [
 	{ name: "clear", description: "Clear conversation" },
 ]
 
+interface AcpStreamingState {
+	textLength: number
+	thinkingLength: number
+}
+
+interface AcpStreamingDelta {
+	text: string
+	thinking: string
+	next: AcpStreamingState
+}
+
+const ACP_FULL_TEXT_TAIL_CHARS = Number.MAX_SAFE_INTEGER
+
+const emptyAcpStreamingState = (): AcpStreamingState => ({
+	textLength: 0,
+	thinkingLength: 0,
+})
+
+export function projectAcpStreamingDelta(content: unknown[], previous: AcpStreamingState): AcpStreamingDelta {
+	const snapshot = extractStreamingSnapshot(content, ACP_FULL_TEXT_TAIL_CHARS)
+	const fullText = snapshot.textTail
+	const fullThinking = snapshot.thinking?.full ?? ""
+	const next: AcpStreamingState = { ...previous }
+	const text = snapshot.textLength > previous.textLength ? fullText.slice(previous.textLength) : ""
+	const thinking = fullThinking.length > previous.thinkingLength ? fullThinking.slice(previous.thinkingLength) : ""
+
+	if (text) next.textLength = snapshot.textLength
+	if (thinking) next.thinkingLength = fullThinking.length
+
+	return { text, thinking, next }
+}
+
 export function createAcpSession(config: AcpSessionConfig): AcpSession {
 	const { sessionId, cwd, agent, emitter, models, contextWindow, sessionOrchestrator } = config
 	let currentModelId = config.currentModelId
@@ -53,13 +86,11 @@ export function createAcpSession(config: AcpSessionConfig): AcpSession {
 	let lastUsage: { totalTokens: number; cacheRead?: number; cacheWrite?: number } | null = null
 
 	// Track emitted content to avoid duplicate chunks
-	let lastEmittedTextLen = 0
-	let lastEmittedThinkingLen = 0
+	let streamingState = emptyAcpStreamingState()
 
 	// Subscribe to agent events and emit ACP updates
 	function subscribeToEvents(): () => void {
-		lastEmittedTextLen = 0
-		lastEmittedThinkingLen = 0
+		streamingState = emptyAcpStreamingState()
 
 		return agent.subscribe((event: AgentEvent) => {
 			if (cancelled) return
@@ -67,32 +98,11 @@ export function createAcpSession(config: AcpSessionConfig): AcpSession {
 			switch (event.type) {
 				case "message_update":
 					if (event.message.role === "assistant") {
-						// Extract text and thinking from content
-						const content = event.message.content as unknown[]
-						let totalText = ""
-						let totalThinking = ""
-
-						for (const block of content) {
-							if (typeof block !== "object" || block === null) continue
-							const b = block as Record<string, unknown>
-							if (b.type === "text" && typeof b.text === "string") {
-								totalText += b.text
-							} else if (b.type === "thinking" && typeof b.thinking === "string") {
-								totalThinking += b.thinking
-							}
-						}
-
-						// Emit only new content (delta)
-						if (totalText.length > lastEmittedTextLen) {
-							const delta = totalText.slice(lastEmittedTextLen)
-							lastEmittedTextLen = totalText.length
-							emitter.emit(textChunk(delta))
-						}
-						if (totalThinking.length > lastEmittedThinkingLen) {
-							const delta = totalThinking.slice(lastEmittedThinkingLen)
-							lastEmittedThinkingLen = totalThinking.length
-							emitter.emit(thoughtChunk(delta))
-						}
+						const content = Array.isArray(event.message.content) ? event.message.content : []
+						const delta = projectAcpStreamingDelta(content, streamingState)
+						streamingState = delta.next
+						if (delta.text) emitter.emit(textChunk(delta.text))
+						if (delta.thinking) emitter.emit(thoughtChunk(delta.thinking))
 					}
 					break
 
