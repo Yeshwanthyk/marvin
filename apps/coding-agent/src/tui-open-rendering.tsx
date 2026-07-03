@@ -3,7 +3,7 @@
  */
 
 import { CodeBlock, Diff, Image, TextAttributes, useTheme, parseColor, type MouseEvent, type Theme } from "@yeshwanthyk/open-tui"
-import { createMemo, Show, type JSX } from "solid-js"
+import { createMemo, Show, type Accessor, type JSX } from "solid-js"
 import { getLanguageFromPath, replaceTabs } from "./syntax-highlighting.js"
 import { getToolText, getEditDiffText } from "@domain/messaging/content.js"
 import { getAgentDelegationArgs, getAgentDelegationUi, type AgentDelegationArgs, type AgentDelegationUi, type DelegationStatus } from "./tool-ui-contracts.js"
@@ -55,20 +55,20 @@ const diffHunkColor = parseColor("#61afef")
 function DiffPreview(props: { text: string }): JSX.Element {
 	const { theme } = useTheme()
 
-		const coloredLines = () => props.text.split("\n").map((line) => {
-			let fg = theme.text
-			if (line.startsWith("+") && !line.startsWith("+++")) fg = diffAddedColor
-			else if (line.startsWith("-") && !line.startsWith("---")) fg = diffRemovedColor
-			else if (line.startsWith("@@")) fg = diffHunkColor
-			return { line, fg }
-		})
+	const coloredLines = createMemo(() => props.text.split("\n").map((line) => {
+		let fg = theme.text
+		if (line.startsWith("+") && !line.startsWith("+++")) fg = diffAddedColor
+		else if (line.startsWith("-") && !line.startsWith("---")) fg = diffRemovedColor
+		else if (line.startsWith("@@")) fg = diffHunkColor
+		return { line, fg }
+	}))
 
 	return (
-			<box flexDirection="column" backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
-				{coloredLines().map(({ line, fg }) => (
-					<text fg={fg}>{line}</text>
-				))}
-			</box>
+		<box flexDirection="column" backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+			{coloredLines().map(({ line, fg }) => (
+				<text fg={fg}>{line}</text>
+			))}
+		</box>
 	)
 }
 
@@ -299,6 +299,24 @@ export interface ToolBlockProps {
 
 type ToolRenderMode = "inline" | "block"
 
+interface EditDiffRenderModel {
+	stats: { added: number; removed: number } | null
+	startLine: number | undefined
+	lineCount: number
+	largePreviewText: string | null
+}
+
+interface ToolRenderCache {
+	outputText: Accessor<string>
+	outputCollapsed20: Accessor<string>
+	writeContent: Accessor<string>
+	writeContentText: Accessor<string>
+	writeContentCollapsed40: Accessor<string>
+	defaultOutputText: Accessor<string>
+	defaultOutputCollapsed20: Accessor<string>
+	editDiff: Accessor<EditDiffRenderModel>
+}
+
 interface ToolRenderContext {
 	name: string
 	args: ToolArgs
@@ -310,6 +328,7 @@ interface ToolRenderContext {
 	expanded: boolean
 	diffWrapMode: "word" | "none"
 	onEditFile?: (path: string, line?: number) => void
+	cache: ToolRenderCache
 }
 
 interface ToolRenderer {
@@ -406,7 +425,7 @@ const registry: Record<string, ToolRenderer> = {
 			// Only show body when expanded
 			if (!ctx.expanded) return null
 			if (!ctx.output) return <text fg={theme.textMuted}>no output</text>
-			return <CodeBlock content={replaceTabs(ctx.output)} filetype="text" showLineNumbers={false} wrapMode="none" />
+			return <CodeBlock content={ctx.cache.outputText()} filetype="text" showLineNumbers={false} wrapMode="none" />
 		},
 	},
 	read: {
@@ -422,7 +441,7 @@ const registry: Record<string, ToolRenderer> = {
 			const imageBlocks = imageBlocksForResult(ctx.result)
 
 			if (!ctx.output && imageBlocks.length === 0) return <text fg={theme.textMuted}>reading…</text>
-			const rendered = ctx.output ? (ctx.expanded ? replaceTabs(ctx.output) : truncateLines(ctx.output, 20).text) : ""
+			const rendered = ctx.output ? (ctx.expanded ? ctx.cache.outputText() : ctx.cache.outputCollapsed20()) : ""
 			const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
 			const preview = rendered ? <CodeBlock content={rendered} filetype={filetype} title="preview" /> : null
 			if (imageBlocks.length === 0) return preview ?? <text fg={theme.textMuted}>no preview</text>
@@ -446,12 +465,12 @@ const registry: Record<string, ToolRenderer> = {
 		},
 		renderBody: (ctx) => {
 			const { theme } = useTheme()
-			const content = String(ctx.args?.content || "")
+			const content = ctx.cache.writeContent()
 			if (!content && !ctx.isComplete) return <text fg={theme.textMuted}>writing…</text>
 			if (!content) return <text fg={theme.textMuted}>no content</text>
 
 			const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
-			const rendered = ctx.expanded ? replaceTabs(content) : truncateLines(content, 40).text
+			const rendered = ctx.expanded ? ctx.cache.writeContentText() : ctx.cache.writeContentCollapsed40()
 			return <CodeBlock content={rendered} filetype={filetype} title="write" />
 		},
 	},
@@ -461,8 +480,8 @@ const registry: Record<string, ToolRenderer> = {
 			const { theme } = useTheme()
 			const path = shortenPath(String(ctx.args?.path || ctx.args?.file_path || "…"))
 			const fullPath = String(ctx.args?.path || ctx.args?.file_path || "")
-			const diffStats = ctx.editDiff ? getDiffStats(ctx.editDiff) : null
-			const startLine = ctx.editDiff ? getDiffStartLine(ctx.editDiff) : undefined
+			const diffModel = ctx.cache.editDiff()
+			const diffStats = diffModel.stats
 			const suffix = ctx.isComplete && !ctx.isError && diffStats ? `+${diffStats.added}/-${diffStats.removed}` : undefined
 			const showEditButton = ctx.isComplete && !ctx.isError && ctx.onEditFile && fullPath
 			return (
@@ -473,7 +492,7 @@ const registry: Record<string, ToolRenderer> = {
 							fg={theme.textMuted}
 							onMouseUp={(e: { stopPropagation?: () => void }) => {
 								e.stopPropagation?.()
-								ctx.onEditFile?.(fullPath, startLine)
+								ctx.onEditFile?.(fullPath, diffModel.startLine)
 							}}
 						>
 							{" [e]"}
@@ -488,10 +507,9 @@ const registry: Record<string, ToolRenderer> = {
 			if (!ctx.expanded) return null
 			if (ctx.editDiff) {
 				const filetype = getLanguageFromPath(String(ctx.args?.path || ctx.args?.file_path || ""))
-				const diffLines = ctx.editDiff.split("\n").length
-				if (diffLines > 150) {
-					const truncated = truncateHeadTail(ctx.editDiff, 60, 40)
-					return <DiffPreview text={truncated.text} />
+				const diffModel = ctx.cache.editDiff()
+				if (diffModel.lineCount > 150 && diffModel.largePreviewText) {
+					return <DiffPreview text={diffModel.largePreviewText} />
 				}
 				return <Diff diffText={ctx.editDiff} filetype={filetype} wrapMode={ctx.diffWrapMode} />
 			}
@@ -503,6 +521,48 @@ const registry: Record<string, ToolRenderer> = {
 
 export function ToolBlock(props: ToolBlockProps): JSX.Element {
 	const { theme } = useTheme()
+	const outputText = createMemo(() => props.output ? replaceTabs(props.output) : "")
+	const outputCollapsed20 = createMemo(() => props.output ? truncateLines(props.output, 20).text : "")
+	const writeContent = createMemo(() => String(props.args?.content || ""))
+	const writeContentText = createMemo(() => {
+		const content = writeContent()
+		return content ? replaceTabs(content) : ""
+	})
+	const writeContentCollapsed40 = createMemo(() => {
+		const content = writeContent()
+		return content ? truncateLines(content, 40).text : ""
+	})
+	const defaultOutput = createMemo(() => props.output ? props.output : JSON.stringify(props.args ?? {}, null, 2))
+	const defaultOutputText = createMemo(() => replaceTabs(defaultOutput()))
+	const defaultOutputCollapsed20 = createMemo(() => truncateLines(defaultOutput(), 20).text)
+	const editDiff = createMemo<EditDiffRenderModel>(() => {
+		if (!props.editDiff) {
+			return {
+				stats: null,
+				startLine: undefined,
+				lineCount: 0,
+				largePreviewText: null,
+			}
+		}
+
+		const lineCount = props.editDiff.split("\n").length
+		return {
+			stats: getDiffStats(props.editDiff),
+			startLine: getDiffStartLine(props.editDiff),
+			lineCount,
+			largePreviewText: lineCount > 150 ? truncateHeadTail(props.editDiff, 60, 40).text : null,
+		}
+	})
+	const cache: ToolRenderCache = {
+		outputText,
+		outputCollapsed20,
+		writeContent,
+		writeContentText,
+		writeContentCollapsed40,
+		defaultOutputText,
+		defaultOutputCollapsed20,
+		editDiff,
+	}
 
 	// Use a getter for expanded to maintain reactivity
 	const ctx: ToolRenderContext = {
@@ -516,6 +576,7 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 		get expanded() { return props.expanded ?? false },
 		get diffWrapMode() { return props.diffWrapMode ?? "word" },
 		onEditFile: props.onEditFile,
+		cache,
 	}
 
 	const renderer = registry[props.name] ?? {
@@ -528,8 +589,7 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 				return <AgentDelegationView args={delegationArgs} ui={delegationUi} expanded={innerCtx.expanded} />
 			}
 
-			const out = innerCtx.output ? innerCtx.output : JSON.stringify(innerCtx.args ?? {}, null, 2)
-			const rendered = innerCtx.expanded ? replaceTabs(out) : truncateLines(out, 20).text
+			const rendered = innerCtx.expanded ? innerCtx.cache.defaultOutputText() : innerCtx.cache.defaultOutputCollapsed20()
 			return <CodeBlock content={rendered} filetype="text" title="output" showLineNumbers={false} />
 		},
 	}
@@ -570,18 +630,20 @@ export function ToolBlock(props: ToolBlockProps): JSX.Element {
 			>
 				{header()}
 				<Show when={body()}>
-					<box
-						paddingLeft={1}
-						marginLeft={1}
-						paddingTop={1}
-						border={["left"]}
-						borderColor={ctx.isError ? theme.error : theme.borderSubtle}
-					>
-						{body()}
-					</box>
+					{(renderedBody) => (
+						<box
+							paddingLeft={1}
+							marginLeft={1}
+							paddingTop={1}
+							border={["left"]}
+							borderColor={ctx.isError ? theme.error : theme.borderSubtle}
+						>
+							{renderedBody()}
+						</box>
+					)}
 				</Show>
 			</box>
-		}>
+			}>
 			{/* Inline layout - clickable to expand */}
 			<box
 				flexDirection="row"

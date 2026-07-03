@@ -2,7 +2,7 @@
  * Markdown renderer using @opentui/core's tree-sitter based <code> component
  */
 
-import { For, Match, Switch, type JSX } from "solid-js"
+import { createMemo, For, Match, Switch, type JSX } from "solid-js"
 import { TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme.js"
 
@@ -91,25 +91,29 @@ export function parseStreamingMarkdownLines(text: string, conceal = true): Strea
 
 function StreamingMarkdown(props: { text: string; conceal?: boolean | undefined; dim?: boolean | undefined }): JSX.Element {
 	const { theme } = useTheme()
-	const lines = () => parseStreamingMarkdownLines(props.text, props.conceal ?? true)
+	const rows = createMemo(() => {
+		const parsed = parseStreamingMarkdownLines(props.text, props.conceal ?? true)
+		const lastIndex = parsed.length - 1
+		return parsed.map((line, index) => ({ line, isLast: index === lastIndex }))
+	})
 	const textColor = () => props.dim ? theme.textMuted : theme.markdownText
 
 	return (
 		<box flexDirection="column">
-			<For each={lines()}>
-				{(line, index) => (
+			<For each={rows()}>
+				{(row) => (
 					<Switch>
-						<Match when={line.kind === "blank"}>
-							<box height={index() === lines().length - 1 ? 0 : 1} />
+						<Match when={row.line.kind === "blank"}>
+							<box height={row.isLast ? 0 : 1} />
 						</Match>
-						<Match when={line.kind === "heading" && line}>
+						<Match when={row.line.kind === "heading" && row.line}>
 							{(heading) => (
 								<text fg={props.dim ? theme.textMuted : theme.markdownHeading} attributes={TextAttributes.BOLD}>
 									{heading().text}
 								</text>
 							)}
 						</Match>
-						<Match when={line.kind === "list" && line}>
+						<Match when={row.line.kind === "list" && row.line}>
 							{(list) => (
 								<text>
 									<span style={{ fg: theme.markdownListBullet }}>{list().marker}</span>
@@ -118,26 +122,26 @@ function StreamingMarkdown(props: { text: string; conceal?: boolean | undefined;
 								</text>
 							)}
 						</Match>
-						<Match when={line.kind === "quote" && line}>
+						<Match when={row.line.kind === "quote" && row.line}>
 							{(quote) => (
 								<text fg={theme.markdownBlockQuote} attributes={TextAttributes.ITALIC}>
 									│ {quote().text}
 								</text>
 							)}
 						</Match>
-						<Match when={line.kind === "codeFence" && line}>
+						<Match when={row.line.kind === "codeFence" && row.line}>
 							{(fence) => (
 								<text fg={theme.textMuted}>{fence().text}</text>
 							)}
 						</Match>
-						<Match when={line.kind === "code" && line}>
+						<Match when={row.line.kind === "code" && row.line}>
 							{(code) => (
 								<box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
 									<text fg={theme.markdownCodeBlock}>{code().text || " "}</text>
 								</box>
 							)}
 						</Match>
-						<Match when={line.kind === "paragraph" && line}>
+						<Match when={row.line.kind === "paragraph" && row.line}>
 							{(paragraph) => <text fg={textColor()}>{paragraph().text}</text>}
 						</Match>
 					</Switch>
