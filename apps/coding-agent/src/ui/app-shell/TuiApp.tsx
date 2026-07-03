@@ -1,5 +1,5 @@
 import { ThemeProvider } from "@yeshwanthyk/open-tui"
-import { batch, createEffect, createSignal, onMount, Show } from "solid-js"
+import { createEffect, createSignal, onMount, Show } from "solid-js"
 import type { Accessor } from "solid-js"
 import { useRuntime } from "../../runtime/context.js"
 import type { LoadedSession, SessionTreeNode, SessionNodeEntry } from "../../session-manager.js"
@@ -8,12 +8,10 @@ import { appendWithCap } from "@domain/messaging/content.js"
 import type { UIShellMessage } from "../../types.js"
 import type { AppMessage } from "@yeshwanthyk/agent-core"
 import { runShellCommand } from "../../shell-runner.js"
-import { MainView } from "../features/main-view/MainView.js"
 import { createAppStore } from "../state/app-store.js"
 import { detectThemeMode } from "../theme-detect.js"
-import { useAgentEvents } from "../../hooks/useAgentEvents.js"
-import type { EventHandlerContext, ToolMeta } from "../../agent-events.js"
-import { THINKING_LEVELS, type CommandContext } from "../../commands.js"
+import type { ToolMeta } from "../../agent-events.js"
+import type { CommandContext } from "../../commands.js"
 import { slashCommands } from "../../autocomplete-commands.js"
 import { updateAppConfig } from "@yeshwanthyk/runtime-effect/config.js"
 import { handleSlashInput } from "../features/composer/SlashCommandHandler.js"
@@ -39,6 +37,7 @@ import { useSessionLaneController } from "./useSessionLaneController.js"
 import { useScratchpadActions } from "./useScratchpadActions.js"
 import { useWorkspaceProjectDiscovery } from "./useWorkspaceProjectDiscovery.js"
 import type { HostNotification } from "./activity-index.js"
+import { SessionView } from "./SessionView.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
 
@@ -284,48 +283,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		composerDraft = ""
 		startFreshSessionBase(title)
 	}
-
-	let cycleIndex = cycleModels.findIndex(
-		(entry) => entry.model.id === config.modelId && entry.provider === config.provider,
-	)
-	if (cycleIndex < 0) cycleIndex = 0
-
-	const streamingMessageIdRef: EventHandlerContext["streamingMessageId"] = { current: null }
-	const retryConfig = { enabled: true, maxRetries: 3, baseDelayMs: 2000 }
-	const retryablePattern =
-		/overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server error|internal error/i
-	const retryState: { attempt: number; abortController: AbortController | null } = { 
-		attempt: 0, 
-		abortController: null 
-	}
-
-	const eventCtx: EventHandlerContext = {
-		setMessages: setActiveMessages,
-		setToolBlocks: setActiveToolBlocks,
-		setActivityState: store.activityState.set,
-		setIsResponding: store.isResponding.set,
-		setContextTokens: setActiveContextTokens,
-		setCacheStats: store.cacheStats.set,
-		setRetryStatus: store.retryStatus.set,
-		setTurnCount: store.turnCount.set,
-		setLastError,
-		promptQueue,
-		sessionManager,
-		streamingMessageId: streamingMessageIdRef,
-		retryConfig,
-		retryablePattern,
-		retryState,
-		agent: {
-			getMessages: () => agent.state.messages,
-			replaceMessages: (messages: AppMessage[]) => agent.replaceMessages(messages),
-			continue: agent.continue.bind(agent),
-		},
-		hookRunner,
-		toolByName: toolMetaByName,
-		getContextWindow: () => activeDisplayContextWindow(),
-	}
-
-	useAgentEvents({ agent, context: eventCtx })
 
 	const handleThemeChange = (name: string) => {
 		store.theme.set(name)
@@ -655,50 +612,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	sendRef.current = (text) => void handleSubmit(text)
 
-	const handleAbort = (): string | null => {
-		if (retryState.abortController) {
-			retryState.abortController.abort()
-			retryState.abortController = null
-			retryState.attempt = 0
-			store.retryStatus.set(null)
-		}
-		agent.abort()
-		agent.clearMessageQueue()
-		const restore = promptQueue.drainToScript()
-		batch(() => {
-			store.isResponding.set(false)
-			store.activityState.set("idle")
-		})
-		return restore
-	}
-
-	const cycleModel = () => {
-		if (cycleModels.length <= 1) return
-		if (store.isResponding.value()) return
-		cycleIndex = (cycleIndex + 1) % cycleModels.length
-		const entry = cycleModels[cycleIndex]
-		if (!entry) return
-		sessionController.setCurrentProvider(entry.provider)
-		sessionController.setCurrentModelId(entry.model.id)
-		agent.setModel(entry.model)
-		store.displayModelId.set(entry.model.id)
-		store.displayContextWindow.set(entry.model.contextWindow)
-		if (entry.thinking !== undefined) {
-			sessionController.setCurrentThinking(entry.thinking)
-			agent.setThinkingLevel(entry.thinking)
-			store.displayThinking.set(entry.thinking)
-		}
-	}
-
-	const cycleThinking = () => {
-		const current = sessionController.currentThinking()
-		const next = THINKING_LEVELS[(THINKING_LEVELS.indexOf(current) + 1) % THINKING_LEVELS.length]
-		if (!next) return
-		sessionController.setCurrentThinking(next)
-		agent.setThinkingLevel(next)
-		store.displayThinking.set(next)
-	}
-
 	const switchToLane = async (cursor: LaneCursorV2, options?: { preserveLaneMode?: boolean }): Promise<boolean> => {
 		const sessionPath = cursor.session.sessionPath
 		if (sessionPath === null) {
@@ -921,8 +834,42 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	const themeMode = detectThemeMode()
 
 	return (
-		<Show when={isAppActive()}>
 		<TuiLaneKeymapRoot>
+			<ThemeProvider mode={themeMode} themeName={store.theme.value()} onThemeChange={handleThemeChange}>
+			<SessionView
+				store={store}
+				agent={agent}
+				sessionManager={sessionManager}
+				hookRunner={hookRunner}
+				customCommands={customCommands}
+				config={config}
+				cycleModels={cycleModels}
+				validationIssues={validationIssues}
+				toolMetaByName={toolMetaByName}
+				sessionController={sessionController}
+				setActiveMessages={setActiveMessages}
+				setActiveToolBlocks={setActiveToolBlocks}
+				setActiveContextTokens={setActiveContextTokens}
+				activeDisplayContextWindow={activeDisplayContextWindow}
+				promptQueue={promptQueue}
+				setLastError={setLastError}
+				laneHeaderState={laneHeaderState}
+				visibleCwd={visibleCwd}
+				active={isAppActive}
+				onSubmit={handleSubmit}
+				hostNotifications={hostNotifications}
+				acknowledgeHostNotification={acknowledgeHostNotification}
+				exitHandlerRef={exitHandlerRef}
+				editorOpenRef={editorOpenRef}
+				editFileRef={editFileRef}
+				setEditorTextRef={setEditorTextRef}
+				getEditorTextRef={getEditorTextRef}
+				showToastRef={showToastRef}
+				clearEditorRef={clearEditorRef}
+				onComposerChange={(text) => { composerDraft = text }}
+				onBeforeExit={handleBeforeExit}
+			/>
+			<Show when={isAppActive()}>
 			<TuiLaneKeyBindings
 				navMode={navMode}
 				setNavMode={setNavMode}
@@ -935,48 +882,9 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				onRestore={restoreArchivedSession}
 				onDetach={() => exitHandlerRef.current()}
 			/>
-			<ThemeProvider mode={themeMode} themeName={store.theme.value()} onThemeChange={handleThemeChange}>
-			<MainView
-				validationIssues={validationIssues}
-				messages={store.messages.value()}
-				toolBlocks={store.toolBlocks.value()}
-				isResponding={store.isResponding.value()}
-				activityState={store.activityState.value()}
-				thinkingVisible={store.thinkingVisible.value()}
-				modelId={store.displayModelId.value()}
-				thinking={store.displayThinking.value()}
-				provider={store.currentProvider.value()}
-				contextTokens={store.contextTokens.value()}
-				contextWindow={store.displayContextWindow.value()}
-				queueCounts={store.queueCounts.value()}
-				retryStatus={store.retryStatus.value()}
-				turnCount={store.turnCount.value()}
-				lane={laneHeaderState()}
-				hostNotifications={hostNotifications?.() ?? []}
-				onAcknowledgeHostNotification={acknowledgeHostNotification}
-				diffWrapMode={store.diffWrapMode.value()}
-				concealMarkdown={store.concealMarkdown.value()}
-				customCommands={customCommands}
-				cwd={visibleCwd()}
-				onSubmit={handleSubmit}
-				onAbort={handleAbort}
-				onToggleThinking={() => store.thinkingVisible.set((v) => !v)}
-				onCycleModel={cycleModel}
-				onCycleThinking={cycleThinking}
-				exitHandlerRef={exitHandlerRef}
-				editorOpenRef={editorOpenRef}
-				editFileRef={editFileRef}
-				setEditorTextRef={setEditorTextRef}
-				getEditorTextRef={getEditorTextRef}
-				showToastRef={showToastRef}
-				clearEditorRef={clearEditorRef}
-				onComposerChange={(text) => { composerDraft = text }}
-				onBeforeExit={handleBeforeExit}
-				editor={config.editor}
-			/>
 			<ModalContainer modalState={modals.modalState()} onClose={modals.closeModal} />
+			</Show>
 			</ThemeProvider>
 		</TuiLaneKeymapRoot>
-		</Show>
 	)
 }
