@@ -4,30 +4,28 @@ This document explains the system design, data flow, and component interactions 
 
 ## High-Level Overview
 
-Marvin supports multiple UI surfaces that share the same core agent infrastructure, plus a headless SDK built on the Effect runtime:
+Marvin supports a terminal UI and a headless SDK built on the same core agent infrastructure and Effect runtime:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                            UI Layer (Surface)                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   ┌─────────────────────────┐         ┌─────────────────────────────────┐   │
-│   │    Terminal TUI         │         │      Desktop (Tauri)            │   │
-│   │   (apps/coding-agent)   │         │      (apps/desktop)             │   │
-│   │                         │         │                                 │   │
-│   │  ┌───────────────────┐  │         │  ┌───────────┐  ┌───────────┐  │   │
-│   │  │    open-tui       │  │         │  │  Webview  │  │  Sidecar  │  │   │
-│   │  │   components      │  │         │  │ (SolidJS) │◄─┤   (Bun)   │  │   │
-│   │  │   (terminal)      │  │         │  │           │  │           │  │   │
-│   │  └───────────────────┘  │         │  └───────────┘  └───────────┘  │   │
-│   │           │             │         │        │              │        │   │
-│   │           ▼             │         │        └──────┬───────┘        │   │
-│   │  ┌───────────────────┐  │         │          IPC  │ (stdio)        │   │
-│   │  │  Agent (in-proc)  │  │         │               ▼                │   │
-│   │  └───────────────────┘  │         │  ┌───────────────────────────┐ │   │
-│   │                         │         │  │   Agent (sidecar proc)    │ │   │
-│   └─────────────────────────┘         │  └───────────────────────────┘ │   │
-│                                       └─────────────────────────────────┘   │
+│                         ┌─────────────────────────┐                         │
+│                         │    Terminal TUI         │                         │
+│                         │   (apps/coding-agent)   │                         │
+│                         │                         │                         │
+│                         │  ┌───────────────────┐  │                         │
+│                         │  │    open-tui       │  │                         │
+│                         │  │   components      │  │                         │
+│                         │  │   (terminal)      │  │                         │
+│                         │  └───────────────────┘  │                         │
+│                         │           │             │                         │
+│                         │           ▼             │                         │
+│                         │  ┌───────────────────┐  │                         │
+│                         │  │  Agent (in-proc)  │  │                         │
+│                         │  └───────────────────┘  │                         │
+│                         └─────────────────────────┘                         │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -74,10 +72,9 @@ Marvin supports multiple UI surfaces that share the same core agent infrastructu
 | Surface | Agent Location | Tools Run | UI Framework | Communication |
 |---------|---------------|-----------|--------------|---------------|
 | **TUI** | In-process | Local | open-tui (terminal) | Direct function calls |
-| **Desktop** | Sidecar process | Local | SolidJS (webview) | JSON-RPC over stdio |
 | **Headless** | In-process | Local | None (stdout) | Runtime-effect / SDK |
 
-All variants have **full local filesystem access** via the base tools. The desktop app is NOT a client-server architecture—the sidecar runs locally with the same capabilities as the TUI.
+Both variants have **full local filesystem access** via the base tools.
 
 ## Package Structure
 
@@ -92,8 +89,7 @@ packages/
 └── sdk/           @yeshwanthyk/sdk - Headless SDK on runtime-effect
 
 apps/
-├── coding-agent/  @yeshwanthyk/coding-agent - Terminal CLI/TUI
-└── desktop/       @yeshwanthyk/desktop - Tauri desktop application
+└── coding-agent/  @yeshwanthyk/coding-agent - Terminal CLI/TUI
 ```
 
 ### Package Dependency Graph
@@ -111,12 +107,12 @@ apps/
                   @yeshwanthyk/
                    runtime-effect
                            │
-              ┌────────────┼────────────┐
-              ▼            ▼            ▼
-   apps/coding-agent  apps/desktop   @yeshwanthyk/sdk
-         │                 │               │
-         ▼                 ▼               ▼
-   open-tui (terminal)  desktop-ui (web)  headless SDK
+              ┌────────────┴────────────┐
+              ▼                         ▼
+       apps/coding-agent          @yeshwanthyk/sdk
+              │                         │
+              ▼                         ▼
+      open-tui (terminal)        headless SDK
 ```
 
 ## Request Flow
@@ -637,253 +633,9 @@ AppMessage (from agent)
                 └─ edit → Diff (word-level)
 ```
 
-## Desktop Architecture (Tauri)
-
-The desktop app uses a sidecar architecture where the agent runs in a separate Bun process, communicating with the webview via JSON-RPC over stdio.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Tauri Desktop App                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                    Webview (SolidJS + desktop-ui)                     │  │
-│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
-│  │  │  Header: model selector, thinking level, context tokens         │  │  │
-│  │  ├─────────────────────────────────────────────────────────────────┤  │  │
-│  │  │  MessageList: Markdown, CodeBlock, Diff, ToolBlock components   │  │  │
-│  │  ├─────────────────────────────────────────────────────────────────┤  │  │
-│  │  │  InputArea: multiline editor, submit/abort controls             │  │  │
-│  │  └─────────────────────────────────────────────────────────────────┘  │  │
-│  └────────────────────────────────────┬──────────────────────────────────┘  │
-│                                       │                                     │
-│                              IPC (JSON-RPC over stdio)                      │
-│                                       │                                     │
-│  ┌────────────────────────────────────▼──────────────────────────────────┐  │
-│  │                         Bun Sidecar Process                           │  │
-│  │  ┌─────────────────────────────────────────────────────────────────┐  │  │
-│  │  │  Agent + ProviderTransport + RouterTransport + CodexTransport   │  │  │
-│  │  │  Built-in tools (read, write, edit, bash) + Custom Tools        │  │  │
-│  │  │  HookRunner + LSP Manager + SessionManager + Config             │  │  │
-│  │  └─────────────────────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Why Sidecar Architecture?
-
-The desktop app runs the agent in a sidecar process rather than embedding it in the webview because:
-
-1. **Full filesystem access** — Bun sidecar has native fs/shell access, same as TUI
-2. **No server needed** — This is NOT client-server; both processes run locally
-3. **Clean separation** — UI rendering (webview) vs agent logic (sidecar)
-4. **Existing code reuse** — Sidecar reuses agent, tools, hooks, session manager unchanged
-5. **Process isolation** — Webview crash doesn't lose agent state, and vice versa
-
-### IPC Protocol
-
-Communication uses JSON-RPC-style messages over stdio:
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                           IPC Message Types                                │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                            │
-│  Webview → Sidecar (Requests)                                              │
-│  ─────────────────────────────                                             │
-│  { id: 1, method: "init", params: { cwd: "/path" } }                       │
-│  { id: 2, method: "prompt", params: { text: "fix bug" } }                  │
-│  { id: 3, method: "abort", params: {} }                                    │
-│  { id: 4, method: "session.list", params: {} }                             │
-│  { id: 5, method: "model.cycle", params: {} }                              │
-│                                                                            │
-│  Sidecar → Webview (Responses)                                             │
-│  ─────────────────────────────                                             │
-│  { id: 1, result: { configDir: "...", modelId: "...", ... } }              │
-│  { id: 2, result: {} }  // prompt acknowledged                             │
-│  { id: 3, error: { code: -32000, message: "Agent not running" } }          │
-│                                                                            │
-│  Sidecar → Webview (Events, pushed asynchronously)                         │
-│  ────────────────────────────────────────────────                          │
-│  { event: "agent", data: { type: "message_start", ... } }                  │
-│  { event: "agent", data: { type: "tool_execution_end", ... } }             │
-│  { event: "activity", data: { state: "streaming" } }                       │
-│  { event: "heartbeat", data: { timestamp: 1705312200000 } }                │
-│                                                                            │
-└────────────────────────────────────────────────────────────────────────────┘
-```
-
-### IPC Methods
-
-| Method | Purpose |
-|--------|---------|
-| `init` | Initialize sidecar with working directory |
-| `shutdown` | Graceful sidecar shutdown |
-| `prompt` | Send user message to agent |
-| `abort` | Abort current generation |
-| `continue` | Continue from last response |
-| `session.list` | List available sessions |
-| `session.load` | Load a specific session |
-| `session.new` | Start a new session |
-| `session.clear` | Clear current session |
-| `config.get` | Get current configuration |
-| `config.update` | Update configuration |
-| `model.cycle` | Cycle to next model |
-| `thinking.cycle` | Cycle thinking level |
-| `state.get` | Get current agent state |
-| `context.get` | Get context window usage |
-
-### Event Flow (Desktop)
-
-```
-User Input                   Webview                  Sidecar (Bun)          LLM
-    │                          │                          │                   │
-    │  "fix the bug"           │                          │                   │
-    ├─────────────────────────►│                          │                   │
-    │                          │                          │                   │
-    │                          │  {method:"prompt",...}   │                   │
-    │                          ├─────────────────────────►│                   │
-    │                          │                          │                   │
-    │                          │                          │  HTTP stream      │
-    │                          │                          ├──────────────────►│
-    │                          │                          │                   │
-    │                          │  {event:"agent",...}     │◄─ stream events ──│
-    │◄── UI update ────────────│◄─────────────────────────│                   │
-    │                          │                          │                   │
-    │                          │  {event:"agent",...}     │◄─ tool call ──────│
-    │◄── tool block ───────────│◄─────────────────────────│                   │
-    │                          │                          │                   │
-    │                          │                          │  execute tool     │
-    │                          │                          │  (local fs)       │
-    │                          │                          │                   │
-    │                          │  {event:"agent",...}     │─── tool result ──►│
-    │◄── result ───────────────│◄─────────────────────────│                   │
-    │                          │                          │                   │
-    │                          │  {event:"agent",...}     │◄─ response ───────│
-    │◄── done ─────────────────│◄─────────────────────────│                   │
-    │                          │                          │                   │
-```
-
-### Desktop UI Components (desktop-ui package)
-
-The desktop app uses web-native equivalents of open-tui components:
-
-```
-packages/desktop-ui/src/
-├── components/
-│   ├── Markdown.tsx      Markdown via solid-markdown + remark-gfm
-│   ├── CodeBlock.tsx     Syntax highlighting via Shiki (WASM)
-│   ├── Diff.tsx          Diff rendering via diff package
-│   ├── Dialog.tsx        Modal dialogs (Portal-based)
-│   ├── SelectList.tsx    Keyboard-navigable selection
-│   ├── Toast.tsx         Toast notifications
-│   ├── Editor.tsx        Textarea with auto-resize
-│   └── Loader.tsx        Animated spinner
-├── context/
-│   └── theme.tsx         Theme provider (dark/light)
-└── hooks/
-    └── use-keyboard.ts   Global keyboard shortcuts
-```
-
-### Component Mapping (TUI → Desktop)
-
-| TUI (open-tui) | Desktop (desktop-ui) | Notes |
-|----------------|---------------------|-------|
-| `Markdown` | `Markdown` | solid-markdown instead of tree-sitter |
-| `CodeBlock` | `CodeBlock` | Shiki WASM instead of tree-sitter |
-| `Diff` | `Diff` | Same diff package, different rendering |
-| `Dialog` | `Dialog` | Portal-based instead of terminal overlay |
-| `SelectList` | `SelectList` | Same keyboard nav, CSS styling |
-| `Toast` | `Toast` | Same API, CSS animations |
-| `Editor` | `Editor` | HTML textarea vs terminal input |
-| `Image` | Native `<img>` | No Kitty/iTerm2 protocol needed |
-
-### Sidecar Lifecycle
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Tauri App Startup                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  1. Tauri main() starts                                                     │
-│     └─► Load tauri.conf.json                                                │
-│                                                                             │
-│  2. Setup hook spawns sidecar                                               │
-│     └─► Command::new("marvin-sidecar-{target}")                             │
-│         ├─ stdin: piped (for requests)                                      │
-│         ├─ stdout: piped (for responses/events)                             │
-│         └─ stderr: piped (for logs)                                         │
-│                                                                             │
-│  3. Spawn stdout reader thread                                              │
-│     └─► For each line:                                                      │
-│         ├─ Parse JSON                                                       │
-│         ├─ If event → app.emit("sidecar:{event}", data)                     │
-│         └─ If response → app.emit("sidecar:response", data)                 │
-│                                                                             │
-│  4. Webview loads, subscribes to events                                     │
-│     └─► listen("sidecar:agent", handler)                                    │
-│                                                                             │
-│  5. Webview sends init request                                              │
-│     └─► invoke("send_to_sidecar", { method: "init", ... })                  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Tauri App Shutdown                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  1. Window close requested                                                  │
-│                                                                             │
-│  2. Send shutdown to sidecar                                                │
-│     └─► { method: "shutdown", params: {} }                                  │
-│                                                                             │
-│  3. Wait briefly for graceful shutdown                                      │
-│     └─► Sidecar cleans up LSP, saves session                                │
-│                                                                             │
-│  4. Force kill if needed                                                    │
-│     └─► process.kill()                                                      │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Error Handling (Desktop)
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Desktop Error Handling                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Sidecar Crash                                                              │
-│  ─────────────                                                              │
-│  1. stdout reader thread detects EOF                                        │
-│  2. Emit "sidecar:error" event to webview                                   │
-│  3. Webview shows error toast with "Restart" option                         │
-│  4. User clicks restart → invoke("restart_sidecar")                         │
-│  5. Tauri spawns new sidecar, re-initializes                                │
-│                                                                             │
-│  Heartbeat Timeout (30s)                                                    │
-│  ───────────────────────                                                    │
-│  1. Webview tracks last heartbeat timestamp                                 │
-│  2. If >30s without heartbeat, assume sidecar hung                          │
-│  3. Offer restart option                                                    │
-│                                                                             │
-│  IPC Parse Error                                                            │
-│  ───────────────                                                            │
-│  1. Log malformed message to console                                        │
-│  2. Skip message, continue processing                                       │
-│  3. Don't crash on single bad message                                       │
-│                                                                             │
-│  Agent Error (API rate limit, etc.)                                         │
-│  ──────────────────────────────────                                         │
-│  1. Sidecar catches error, emits error event                                │
-│  2. Webview shows error in toast or inline                                  │
-│  3. Retry logic same as TUI (exponential backoff)                           │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
 ## Session Persistence
 
-Sessions are stored as JSONL (JSON Lines) files and shared between TUI and Desktop (both use the same SessionManager in the local process/sidecar):
+Sessions are stored as JSONL (JSON Lines) files by the shared SessionManager:
 
 ```
 ~/.config/marvin/sessions/
