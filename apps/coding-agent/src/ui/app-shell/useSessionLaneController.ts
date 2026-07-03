@@ -1,17 +1,18 @@
-import { batch, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { batch, createMemo, createSignal, onMount } from "solid-js"
 import type { Accessor, Setter } from "solid-js"
+import { randomUUID } from "node:crypto"
 import { createSessionController, renderLoadedSessionView } from "@runtime/session/session-controller.js"
 import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 import {
-	flushWorkspaceLanes,
-	readWorkspaceLanes,
-	scheduleWriteWorkspaceLanes,
-	selectLane,
-	upsertProjectLane,
-	upsertSessionLane,
-	type LaneCursor,
-	type WorkspaceLanes,
-} from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
+	createSessionLaneInput,
+	type InsertPosition,
+	type LaneCursorV2,
+	type LaneId,
+	type SessionLaneInput,
+	type WorkspaceLanePatch,
+	type WorkspaceLaneStore,
+	type WorkspaceLanesV2,
+} from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { LoadedSession, SessionInfo } from "../../session-manager.js"
 import type { EventHandlerContext, ToolMeta } from "../../agent-events.js"
 import type { useRuntime } from "../../runtime/context.js"
@@ -40,15 +41,16 @@ export interface UseSessionLaneControllerDeps {
 	hookRunner: RuntimeContext["hookRunner"]
 	toolMetaByName: Map<string, ToolMeta>
 	store: AppStore
+	laneStore: WorkspaceLaneStore
+	workspaceLanes: Accessor<WorkspaceLanesV2>
 	shellInjectionPrefix: string
 	submitPrompt: (text: string, options?: { mode?: PromptDeliveryMode }) => Promise<void>
 }
 
 export interface SessionLaneController {
 	sessionController: ReturnType<typeof createSessionController>
-	workspaceLanes: Accessor<WorkspaceLanes>
-	setWorkspaceLanes: Setter<WorkspaceLanes>
-	refreshWorkspaceLanes: () => void
+	workspaceLanes: Accessor<WorkspaceLanesV2>
+	laneStore: WorkspaceLaneStore
 	navMode: Accessor<LaneNavMode>
 	setNavMode: Setter<LaneNavMode>
 	laneHeaderState: Accessor<LaneHeaderState>
@@ -67,10 +69,8 @@ export interface SessionLaneController {
 	setActiveDisplayThinking: (value: Thinking) => void
 	setActiveDisplayContextWindow: (value: number) => void
 	activeDisplayContextWindow: () => number
-	cloneWorkspaceLanes: (value: WorkspaceLanes) => WorkspaceLanes
-	persistWorkspaceLanes: (next: WorkspaceLanes) => void
 	getCurrentSessionInfo: () => SessionInfo | null
-	syncCurrentSessionLane: (title?: string, options?: { select?: boolean }) => LaneCursor | null
+	syncCurrentSessionLane: (title?: string, options?: { select?: boolean }) => LaneCursorV2 | null
 	seedCurrentProjectLanes: () => void
 	applyLoadedSessionDisplay: (session: LoadedSession, contextTokens: number) => void
 	applyVisibleSession: (nextVisible: VisibleSession) => void
@@ -79,6 +79,88 @@ export interface SessionLaneController {
 	startFreshSession: (title?: string) => void
 	getPendingSessionTitle: () => string | undefined
 	clearPendingSessionTitle: () => void
+}
+
+export interface SessionLaneSyncPatchInput {
+	readonly lanes: WorkspaceLanesV2
+	readonly cwd: string
+	readonly session: SessionInfo
+	readonly title?: string
+	readonly laneId: LaneId
+	readonly select?: boolean
+}
+
+const projectTitle = (cwd: string): string => {
+	const normalized = cwd.replace(/\/+$/, "")
+	return normalized.split("/").filter(Boolean).at(-1) ?? normalized
+}
+
+export const findSessionLaneId = (
+	lanes: WorkspaceLanesV2,
+	projectId: string,
+	session: SessionInfo,
+): LaneId | undefined => {
+	const order = lanes.sessionOrderByProject[projectId] ?? []
+	for (const laneId of order) {
+		const lane = lanes.sessionsById[laneId]
+		if (!lane) continue
+		if (lane.sessionPath === session.path || lane.sessionId === session.id) return laneId
+	}
+	for (const lane of Object.values(lanes.sessionsById)) {
+		if (lane.projectId !== projectId) continue
+		if (lane.sessionPath === session.path || lane.sessionId === session.id) return lane.laneId
+	}
+	return undefined
+}
+
+const preserveExistingInsert = (
+	lanes: WorkspaceLanesV2,
+	projectId: string,
+	laneId: LaneId,
+): InsertPosition | undefined => {
+	const index = (lanes.sessionOrderByProject[projectId] ?? []).indexOf(laneId)
+	return index >= 0 ? { type: "index", projectId, index } : undefined
+}
+
+export const createSessionLaneSyncPatches = ({
+	lanes,
+	cwd,
+	session,
+	title,
+	laneId,
+	select,
+}: SessionLaneSyncPatchInput): WorkspaceLanePatch[] => {
+	const now = new Date().toISOString()
+	const insert = preserveExistingInsert(lanes, cwd, laneId)
+	const existing = lanes.sessionsById[laneId]
+	const sessionInput: SessionLaneInput = createSessionLaneInput({
+		laneId,
+		projectId: cwd,
+		sessionId: session.id,
+		sessionPath: session.path,
+		title: title ?? existing?.title ?? session.id.slice(0, 8),
+		provider: session.provider,
+		modelId: session.modelId,
+		createdAt: existing?.createdAt ?? new Date(session.timestamp).toISOString(),
+		updatedAt: now,
+	})
+	const patches: WorkspaceLanePatch[] = [
+		{
+			type: "upsertProject",
+			project: {
+				id: cwd,
+				cwd,
+				title: lanes.projectsById[cwd]?.title ?? projectTitle(cwd),
+				createdAt: lanes.projectsById[cwd]?.createdAt ?? now,
+				updatedAt: now,
+			},
+		},
+		insert
+			? { type: "upsertSession", session: sessionInput, insert }
+			: { type: "upsertSession", session: sessionInput },
+	]
+	if (select === true) patches.push({ type: "select", projectId: cwd, laneId })
+	return patches
 }
 
 export const useSessionLaneController = ({
@@ -93,10 +175,11 @@ export const useSessionLaneController = ({
 	hookRunner,
 	toolMetaByName,
 	store,
+	laneStore,
+	workspaceLanes,
 	shellInjectionPrefix,
 	submitPrompt,
 }: UseSessionLaneControllerDeps): SessionLaneController => {
-	const [workspaceLanes, setWorkspaceLanes] = createSignal<WorkspaceLanes>(readWorkspaceLanes(config.configDir))
 	const [navMode, setNavMode] = createSignal<LaneNavMode>(initialNavMode ?? "off")
 	const laneHeaderState = createMemo(() => deriveLaneHeaderState(workspaceLanes(), navMode()))
 
@@ -204,17 +287,6 @@ export const useSessionLaneController = ({
 		submitPrompt,
 	})
 
-	const cloneWorkspaceLanes = (value: WorkspaceLanes): WorkspaceLanes => structuredClone(value)
-
-	const persistWorkspaceLanes = (next: WorkspaceLanes) => {
-		scheduleWriteWorkspaceLanes(config.configDir, next)
-		setWorkspaceLanes(next)
-	}
-
-	const refreshWorkspaceLanes = () => {
-		setWorkspaceLanes(readWorkspaceLanes(config.configDir))
-	}
-
 	const getCurrentSessionInfo = (): SessionInfo | null => {
 		const sessionId = sessionManager.sessionId
 		const sessionPath = sessionManager.sessionPath
@@ -229,27 +301,66 @@ export const useSessionLaneController = ({
 		}
 	}
 
-	const syncCurrentSessionLane = (title?: string, options: { select?: boolean } = {}): LaneCursor | null => {
+	const syncCurrentSessionLane = (title?: string, options: { select?: boolean } = {}): LaneCursorV2 | null => {
 		const session = getCurrentSessionInfo()
 		if (!session) return null
-		const next = cloneWorkspaceLanes(workspaceLanes())
-		const project = upsertProjectLane(next, sessionManager.projectCwd)
-		const lane = upsertSessionLane(next, project, session, title)
+		const lanes = workspaceLanes()
+		const existingLaneId = findSessionLaneId(lanes, sessionManager.projectCwd, session)
+		const laneId = existingLaneId ?? randomUUID()
+		const patches = createSessionLaneSyncPatches({
+			lanes,
+			cwd: sessionManager.projectCwd,
+			session,
+			title,
+			laneId,
+			select: options.select ?? isActiveSessionVisible(),
+		})
+		const next = laneStore.transact(patches)
+		const project = next.projectsById[sessionManager.projectCwd]
+		const lane = next.sessionsById[laneId]
+		if (!project || !lane) return null
 		const shouldSelect = options.select ?? isActiveSessionVisible()
-		const selected = shouldSelect ? selectLane(next, { project, session: lane }) : next
-		persistWorkspaceLanes(selected)
-		return { project, session: lane }
+		const sessionIndex = (next.sessionOrderByProject[project.id] ?? []).indexOf(lane.laneId)
+		const projectIndex = next.projectOrder.indexOf(project.id)
+		if (shouldSelect && next.selection?.laneId !== lane.laneId) {
+			laneStore.dispatch({ type: "select", projectId: project.id, laneId: lane.laneId })
+		}
+		return { project, session: lane, projectIndex: Math.max(0, projectIndex), sessionIndex: Math.max(0, sessionIndex) }
 	}
 
 	const seedCurrentProjectLanes = () => {
-		const next = cloneWorkspaceLanes(workspaceLanes())
-		const project = upsertProjectLane(next, sessionManager.projectCwd)
+		const lanes = workspaceLanes()
+		const now = new Date().toISOString()
+		const patches: WorkspaceLanePatch[] = [{
+			type: "upsertProject",
+			project: {
+				id: sessionManager.projectCwd,
+				cwd: sessionManager.projectCwd,
+				updatedAt: now,
+			},
+		}]
 		for (const session of sessionManager.loadAllSessions()) {
 			if (session.messageCount === 0 || session.firstMessage.startsWith("System context:")) continue
 			const title = session.firstMessage.replace(/\s+/g, " ").trim().slice(0, 80) || session.id.slice(0, 8)
-			upsertSessionLane(next, project, session, title)
+			const existingLaneId = findSessionLaneId(lanes, sessionManager.projectCwd, session)
+			const laneId = existingLaneId ?? randomUUID()
+			const insert = preserveExistingInsert(lanes, sessionManager.projectCwd, laneId)
+			const sessionInput = createSessionLaneInput({
+				laneId,
+				projectId: sessionManager.projectCwd,
+				sessionId: session.id,
+				sessionPath: session.path,
+				title,
+				provider: session.provider,
+				modelId: session.modelId,
+				createdAt: new Date(session.timestamp).toISOString(),
+				updatedAt: now,
+			})
+			patches.push(insert
+				? { type: "upsertSession", session: sessionInput, insert }
+				: { type: "upsertSession", session: sessionInput })
 		}
-		persistWorkspaceLanes(next)
+		laneStore.transact(patches)
 	}
 
 	const applyLoadedSessionDisplay = (session: LoadedSession, contextTokens: number) => {
@@ -358,15 +469,10 @@ export const useSessionLaneController = ({
 		}
 	})
 
-	onCleanup(() => {
-		void flushWorkspaceLanes(config.configDir)
-	})
-
 	return {
 		sessionController,
 		workspaceLanes,
-		setWorkspaceLanes,
-		refreshWorkspaceLanes,
+		laneStore,
 		navMode,
 		setNavMode,
 		laneHeaderState,
@@ -385,8 +491,6 @@ export const useSessionLaneController = ({
 		setActiveDisplayThinking,
 		setActiveDisplayContextWindow,
 		activeDisplayContextWindow,
-		cloneWorkspaceLanes,
-		persistWorkspaceLanes,
 		getCurrentSessionInfo,
 		syncCurrentSessionLane,
 		seedCurrentProjectLanes,

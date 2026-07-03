@@ -1,9 +1,9 @@
 import type { SearchSelectOption } from "../components/modals/search-select-options.js"
 import {
-	activeSessionLanes,
-	type ProjectSessionLane,
-	type WorkspaceLanes,
-} from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
+	activeSessionsForProject,
+	type SessionLaneV2,
+	type WorkspaceLanesV2,
+} from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
 import type { ScratchpadItem } from "@yeshwanthyk/runtime-effect/scratchpads.js"
 
@@ -71,15 +71,15 @@ export const parseCommandPaletteValue = (value: string): CommandPaletteSelection
 	return null
 }
 
-const projectTitleFor = (lanes: WorkspaceLanes, projectId: string): string =>
-	lanes.projects.find((project) => project.id === projectId)?.title ?? projectId
+const projectTitleFor = (lanes: WorkspaceLanesV2, projectId: string): string =>
+	lanes.projectsById[projectId]?.title ?? projectId
 
-export const commandPaletteSessionOption = (lanes: WorkspaceLanes, session: ProjectSessionLane): SearchSelectOption => {
+export const commandPaletteSessionOption = (lanes: WorkspaceLanesV2, session: SessionLaneV2): SearchSelectOption => {
 	const projectTitle = projectTitleFor(lanes, session.projectId)
-	const shortId = session.sessionId.slice(0, 8)
+	const shortId = (session.sessionId ?? session.laneId).slice(0, 8)
 	const model = `${session.provider}/${session.modelId}`
 	return {
-		value: commandSessionValue(session.id),
+		value: commandSessionValue(session.laneId),
 		label: `${projectTitle} / ${session.title || shortId}`,
 		description: `${shortId} | ${model}`,
 		keywords: `${projectTitle} ${session.title} ${session.sessionId} ${session.sessionPath} ${model} switch session jump lane project`,
@@ -101,11 +101,12 @@ export const commandPaletteScratchpadOption = (item: ScratchpadItem): SearchSele
 })
 
 export const createCommandPaletteOptions = (
-	lanes: WorkspaceLanes,
+	lanes: WorkspaceLanesV2,
 	projects: WorkspaceProject[] = [],
 	scratchpads: ScratchpadItem[] = [],
 ): SearchSelectOption[] => {
-	const archivedCount = lanes.sessions.filter((session) => session.archivedAt !== undefined).length
+	const archivedCount = Object.values(lanes.sessionsById).filter((session) => session.archivedAt !== undefined).length
+	const activeSessions = lanes.projectOrder.flatMap((projectId) => activeSessionsForProject(lanes, projectId))
 	return [
 		{
 			value: commandActionValue("settings"),
@@ -161,7 +162,7 @@ export const createCommandPaletteOptions = (
 			description: archivedCount === 0 ? "No archived sessions" : `${archivedCount} archived`,
 			keywords: "unarchive archived session restore recover",
 		},
-		...activeSessionLanes(lanes).map((session) => commandPaletteSessionOption(lanes, session)),
+		...activeSessions.map((session) => commandPaletteSessionOption(lanes, session)),
 		...scratchpads.map(commandPaletteScratchpadOption),
 		...projects.map(commandPaletteProjectOption),
 	]

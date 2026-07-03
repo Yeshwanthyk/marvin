@@ -1,20 +1,22 @@
 import { describe, expect, it } from "bun:test"
-import type { WorkspaceLanes } from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
+import type { WorkspaceLanesV2 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import { deriveLaneHeaderState, laneHeaderDisplay } from "../src/ui/app-shell/lane-header-state.js"
 
-const lanesFixture = (): WorkspaceLanes => ({
-	version: 1,
-	projects: [
-		{
+const lanesFixture = (): WorkspaceLanesV2 => ({
+	version: 2,
+	projectsById: {
+		"/work/nora": {
 			id: "/work/nora",
 			cwd: "/work/nora",
 			title: "nora",
+			createdAt: "2026-06-03T12:00:00.000Z",
 			updatedAt: "2026-06-03T12:00:00.000Z",
 		},
-	],
-	sessions: [
-		{
-			id: "/work/nora:b",
+	},
+	projectOrder: ["/work/nora"],
+	sessionsById: {
+		"lane-b": {
+			laneId: "lane-b",
 			projectId: "/work/nora",
 			sessionId: "bbbbbbbb-0000-0000-0000-000000000000",
 			sessionPath: "/sessions/b.jsonl",
@@ -24,8 +26,8 @@ const lanesFixture = (): WorkspaceLanes => ({
 			createdAt: "2026-06-03T12:00:00.000Z",
 			updatedAt: "2026-06-03T12:02:00.000Z",
 		},
-		{
-			id: "/work/nora:a",
+		"lane-a": {
+			laneId: "lane-a",
 			projectId: "/work/nora",
 			sessionId: "aaaaaaaa-0000-0000-0000-000000000000",
 			sessionPath: "/sessions/a.jsonl",
@@ -35,8 +37,8 @@ const lanesFixture = (): WorkspaceLanes => ({
 			createdAt: "2026-06-03T12:00:00.000Z",
 			updatedAt: "2026-06-03T12:01:00.000Z",
 		},
-		{
-			id: "/work/nora:c",
+		"lane-c": {
+			laneId: "lane-c",
 			projectId: "/work/nora",
 			sessionId: "cccccccc-0000-0000-0000-000000000000",
 			sessionPath: "/sessions/c.jsonl",
@@ -47,11 +49,25 @@ const lanesFixture = (): WorkspaceLanes => ({
 			updatedAt: "2026-06-03T12:03:00.000Z",
 			archivedAt: "2026-06-03T12:04:00.000Z",
 		},
-	],
+	},
+	sessionOrderByProject: {
+		"/work/nora": ["lane-b", "lane-a", "lane-c"],
+	},
+	focusByProject: {
+		"/work/nora": { focusedLaneId: "lane-a", focusedColumn: 1 },
+	},
 	selection: {
 		projectId: "/work/nora",
-		sessionLaneId: "/work/nora:a",
+		laneId: "lane-a",
 	},
+})
+
+const withAllSessionsArchived = (lanes: WorkspaceLanesV2): WorkspaceLanesV2 => ({
+	...lanes,
+	sessionsById: Object.fromEntries(Object.entries(lanes.sessionsById).map(([laneId, session]) => [
+		laneId,
+		{ ...session, archivedAt: session.archivedAt ?? "2026-06-03T12:05:00.000Z" },
+	])),
 })
 
 describe("deriveLaneHeaderState", () => {
@@ -72,8 +88,7 @@ describe("deriveLaneHeaderState", () => {
 	})
 
 	it("returns no current lane when no active session exists", () => {
-		const lanes = lanesFixture()
-		lanes.sessions = lanes.sessions.map((session) => ({ ...session, archivedAt: session.archivedAt ?? "2026-06-03T12:05:00.000Z" }))
+		const lanes = withAllSessionsArchived(lanesFixture())
 
 		expect(deriveLaneHeaderState(lanes, "off")).toEqual({
 			mode: "off",
@@ -101,8 +116,7 @@ describe("deriveLaneHeaderState", () => {
 	})
 
 	it("uses soft copy when lane mode has no selected session", () => {
-		const lanes = lanesFixture()
-		lanes.sessions = lanes.sessions.map((session) => ({ ...session, archivedAt: session.archivedAt ?? "2026-06-03T12:05:00.000Z" }))
+		const lanes = withAllSessionsArchived(lanesFixture())
 
 		expect(laneHeaderDisplay(deriveLaneHeaderState(lanes, "sticky"))).toEqual({
 			active: true,

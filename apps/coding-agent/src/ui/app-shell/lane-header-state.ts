@@ -1,9 +1,9 @@
 import {
 	activeSessionsForProject,
-	findActiveCursor,
-	type LaneCursor,
-	type WorkspaceLanes,
-} from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
+	findActiveCursorV2,
+	type LaneCursorV2,
+	type WorkspaceLanesV2,
+} from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 
 export type LaneHeaderMode = "off" | "sticky" | "oneshot"
 
@@ -28,24 +28,25 @@ export interface LaneHeaderDisplay {
 	hint: string
 }
 
-const toHeaderCurrent = (lanes: WorkspaceLanes, cursor: LaneCursor): LaneHeaderCurrent => {
+const toHeaderCurrent = (lanes: WorkspaceLanesV2, cursor: LaneCursorV2): LaneHeaderCurrent => {
 	const sessions = activeSessionsForProject(lanes, cursor.project.id)
-	const sessionIndex = sessions.findIndex((session) => session.id === cursor.session.id)
+	const sessionIndex = sessions.findIndex((session) => session.laneId === cursor.session.laneId)
+	const shortId = (cursor.session.sessionId ?? cursor.session.laneId).slice(0, 8)
 	return {
 		projectTitle: cursor.project.title,
-		sessionTitle: cursor.session.title || cursor.session.sessionId.slice(0, 8),
-		sessionShortId: cursor.session.sessionId.slice(0, 8),
+		sessionTitle: cursor.session.title || shortId,
+		sessionShortId: shortId,
 		sessionIndex: sessionIndex >= 0 ? sessionIndex + 1 : 1,
 		sessionCount: Math.max(1, sessions.length),
 	}
 }
 
-export const deriveLaneHeaderState = (lanes: WorkspaceLanes, mode: LaneHeaderMode): LaneHeaderState => {
-	const cursor = findActiveCursor(lanes)
+export const deriveLaneHeaderState = (lanes: WorkspaceLanesV2, mode: LaneHeaderMode): LaneHeaderState => {
+	const cursor = findActiveCursorV2(lanes)
 	return {
 		mode,
 		current: cursor ? toHeaderCurrent(lanes, cursor) : null,
-		archivedCount: lanes.sessions.filter((session) => session.archivedAt !== undefined).length,
+		archivedCount: Object.values(lanes.sessionsById).filter((session) => session.archivedAt !== undefined).length,
 	}
 }
 

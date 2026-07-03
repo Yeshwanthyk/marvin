@@ -8,6 +8,12 @@ import { WorkspaceSwitchProvider, type VisibleSession, type WorkspaceSwitchContr
 import { shouldStartFreshWorkspaceSession } from "../../runtime/workspace-switch-state.js"
 import { createSignal, Index, onCleanup } from "solid-js"
 import type { RuntimeContext } from "../../runtime/factory.js"
+import {
+	createWorkspaceLaneStore,
+	loadWorkspaceLanesV2,
+	type WorkspaceLaneStore,
+	type WorkspaceLanesV2,
+} from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 
 interface RunTuiArgs extends RuntimeInitArgs {
 	continueSession?: boolean
@@ -54,6 +60,11 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 	let nextActivationSeq = 1
 	const pendingSlots = new Map<string, Promise<RuntimeSlot>>()
 	const initialCwd = props.initialRuntime.sessionManager.projectCwd
+	const [workspaceLanes, setWorkspaceLanes] = createSignal<WorkspaceLanesV2>(loadWorkspaceLanesV2(props.initialRuntime.config.configDir).lanes)
+	const laneStore: WorkspaceLaneStore = createWorkspaceLaneStore(props.initialRuntime.config.configDir, (lanes) => {
+		setWorkspaceLanes(lanes)
+	})
+	setWorkspaceLanes(laneStore.lanes())
 	const initialActivation: TuiAppActivation = {
 		seq: 0,
 		initialSession: props.initialSession,
@@ -76,6 +87,16 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 	const closeRuntime = (runtime: RuntimeContext) => {
 		if (closed) return
 		void runtime.close()
+	}
+
+	const closeHost = () => {
+		void laneStore.flush().finally(() => {
+			closed = true
+			for (const slot of state().slots) {
+				void slot.runtime.close()
+			}
+			process.exit(0)
+		})
 	}
 
 	const runtimeArgsFor = (cwd: string): RuntimeInitArgs => {
@@ -200,6 +221,7 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 
 	onCleanup(() => {
 		closed = true
+		void laneStore.flush()
 		for (const slot of state().slots) {
 			void slot.runtime.close()
 		}
@@ -218,9 +240,12 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 							initialSessionTitle={slot().activation.initialSessionTitle}
 							startNewSession={slot().activation.startNewSession}
 							initialNavMode={slot().activation.initialNavMode}
+							laneStore={laneStore}
+							workspaceLanes={workspaceLanes}
 							active={() => state().activeCwd === slot().cwd}
 							activation={() => slot().activation}
 							onActivityChange={(activity) => updateSlotActivity(slot().cwd, activity)}
+							onExit={closeHost}
 						/>
 					</RuntimeProvider>
 				)}

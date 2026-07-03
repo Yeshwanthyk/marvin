@@ -1,5 +1,6 @@
 import { ThemeProvider } from "@yeshwanthyk/open-tui"
 import { batch, createEffect, onMount, Show } from "solid-js"
+import type { Accessor } from "solid-js"
 import { useRuntime } from "../../runtime/context.js"
 import type { LoadedSession, SessionTreeNode, SessionNodeEntry } from "../../session-manager.js"
 import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
@@ -20,18 +21,14 @@ import { useModals } from "../hooks/useModals.js"
 import { ModalContainer } from "../components/modals/ModalContainer.js"
 import type { SearchSelectOption } from "../components/modals/search-select-options.js"
 import { useWorkspaceSwitch, type VisibleSession } from "../../runtime/workspace-switch.js"
-import { shouldStartFreshProjectSwitch } from "../../runtime/workspace-switch-state.js"
 import {
-	activeSessionLanes,
-	archiveSessionLane,
-	findActiveCursor,
-	flushWorkspaceLanes,
-	moveLaneCursor,
-	renameSessionLane,
-	restoreSessionLane,
-	selectLane,
-	type LaneCursor,
-} from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
+	activeSessionsForProject,
+	findActiveCursorV2,
+	type LaneCursorV2,
+	type SessionLaneV2,
+	type WorkspaceLaneStore,
+	type WorkspaceLanesV2,
+} from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
 import { createScratchpadStore } from "@yeshwanthyk/runtime-effect/scratchpads.js"
 import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
@@ -43,6 +40,9 @@ import { useScratchpadActions } from "./useScratchpadActions.js"
 import { useWorkspaceProjectDiscovery } from "./useWorkspaceProjectDiscovery.js"
 
 const SHELL_INJECTION_PREFIX = "[Shell output]" as const
+
+const activeSessionLanesV2 = (lanes: WorkspaceLanesV2): SessionLaneV2[] =>
+	lanes.projectOrder.flatMap((projectId) => activeSessionsForProject(lanes, projectId))
 
 const textFromEntry = (entry: SessionNodeEntry): string => {
 	if (entry.type === "custom") return `[custom:${entry.customType}]`
@@ -105,9 +105,12 @@ export interface TuiAppProps {
 	initialSessionTitle?: string
 	startNewSession?: boolean
 	initialNavMode?: LaneNavMode
+	laneStore: WorkspaceLaneStore
+	workspaceLanes: Accessor<WorkspaceLanesV2>
 	active?: () => boolean
 	activation?: () => TuiAppActivation
 	onActivityChange?: (activity: TuiAppActivity) => void
+	onExit?: () => void
 }
 
 export interface TuiAppActivation {
@@ -127,7 +130,7 @@ export interface TuiAppActivity {
 	sessionPath: string | null
 }
 
-export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, active, activation, onActivityChange }: TuiAppProps) => {
+export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, active, activation, onActivityChange, onExit }: TuiAppProps) => {
 	const runtime = useRuntime()
 	const {
 		agent,
@@ -191,13 +194,13 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		hookRunner,
 		toolMetaByName,
 		store,
+		laneStore,
+		workspaceLanes,
 		shellInjectionPrefix: SHELL_INJECTION_PREFIX,
 		submitPrompt: (text, options) => submitPromptImpl(text, options?.mode ?? "followUp"),
 	})
 	const {
 		sessionController,
-		workspaceLanes,
-		refreshWorkspaceLanes,
 		navMode,
 		setNavMode,
 		laneHeaderState,
@@ -212,8 +215,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		setActiveToolBlocks,
 		setActiveContextTokens,
 		activeDisplayContextWindow,
-		cloneWorkspaceLanes,
-		persistWorkspaceLanes,
 		syncCurrentSessionLane,
 		applyVisibleSession,
 		ensureSession,
@@ -322,7 +323,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		void updateAppConfig({ configDir: config.configDir, configPath: config.configPath }, { theme: name })
 	}
 
-	const exitHandlerRef = { current: () => { void flushWorkspaceLanes(config.configDir).finally(() => process.exit(0)) } }
+	const exitHandlerRef = { current: () => { onExit?.() ?? process.exit(0) } }
 	const editorOpenRef = { current: async () => {} }
 	const editFileRef = { current: async (_filePath: string, _line?: number) => {} }
 	const setEditorTextRef = { current: (_text: string) => {} }
@@ -417,7 +418,6 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		const next = activation?.()
 		if (!next || next.seq === lastActivationSeq || !isAppActive()) return
 		lastActivationSeq = next.seq
-		refreshWorkspaceLanes()
 		if (next.initialNavMode) setNavMode(next.initialNavMode)
 		if (next.startNewSession) {
 			if (store.isResponding.value()) {
@@ -680,23 +680,27 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		store.displayThinking.set(next)
 	}
 
-	const switchToLane = async (cursor: LaneCursor, options?: { preserveLaneMode?: boolean }): Promise<boolean> => {
-		const previous = workspaceLanes()
-		const selected = selectLane(cloneWorkspaceLanes(previous), cursor)
-		persistWorkspaceLanes(selected)
+	const switchToLane = async (cursor: LaneCursorV2, options?: { preserveLaneMode?: boolean }): Promise<boolean> => {
+		const sessionPath = cursor.session.sessionPath
+		if (sessionPath === null) {
+			showToastRef.current("Session unavailable", "Lane has no session file yet", "warning")
+			return false
+		}
+		const previousSelection = workspaceLanes().selection
+		laneStore.dispatch({ type: "select", projectId: cursor.project.id, laneId: cursor.session.laneId })
 		if (cursor.project.cwd === sessionManager.projectCwd) {
-			const loaded = sessionManager.loadSession(cursor.session.sessionPath)
+			const loaded = sessionManager.loadSession(sessionPath)
 			applyVisibleSession(loaded
-				? visibleSessionForLoaded(loaded, cursor.session.sessionPath)
-				: { state: "missing", cwd: cursor.project.cwd, sessionPath: cursor.session.sessionPath })
+				? visibleSessionForLoaded(loaded, sessionPath)
+				: { state: "missing", cwd: cursor.project.cwd, sessionPath })
 		} else {
 			const result = await workspaceSwitch.switchTo({
 				cwd: cursor.project.cwd,
-				sessionPath: cursor.session.sessionPath,
+				sessionPath,
 				preserveLaneMode: options?.preserveLaneMode,
 			})
 			if (!result.switched) {
-				persistWorkspaceLanes(previous)
+				if (previousSelection) laneStore.dispatch({ type: "select", projectId: previousSelection.projectId, laneId: previousSelection.laneId })
 				return false
 			}
 		}
@@ -709,21 +713,22 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		void (async () => {
 			const preserveLaneMode = navMode() === "sticky"
 			syncCurrentSessionLane()
-			const cursor = moveLaneCursor(workspaceLanes(), direction)
+			const next = laneStore.dispatch({ type: "focus", direction })
+			const cursor = findActiveCursorV2(next)
 			if (!cursor) return
 			await switchToLane(cursor, { preserveLaneMode })
 		})()
 	}
 
 	const projectTitleFor = (projectId: string): string =>
-		workspaceLanes().projects.find((project) => project.id === projectId)?.title ?? projectId
+		workspaceLanes().projectsById[projectId]?.title ?? projectId
 
-	const laneSearchOption = (session: ReturnType<typeof activeSessionLanes>[number]): SearchSelectOption => {
+	const laneSearchOption = (session: SessionLaneV2): SearchSelectOption => {
 		const projectTitle = projectTitleFor(session.projectId)
-		const shortId = session.sessionId.slice(0, 8)
+		const shortId = (session.sessionId ?? session.laneId).slice(0, 8)
 		const model = `${session.provider}/${session.modelId}`
 		return {
-			value: session.id,
+			value: session.laneId,
 			label: `${projectTitle} / ${session.title || shortId}`,
 			description: `${shortId} | ${model}`,
 			keywords: `${projectTitle} ${session.title} ${session.sessionId} ${session.sessionPath} ${model}`,
@@ -748,7 +753,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	}
 
 	const switchToProject = async (project: WorkspaceProject, options?: { fresh?: boolean; preserveLaneMode?: boolean }): Promise<boolean> => {
-		const fresh = shouldStartFreshProjectSwitch(workspaceLanes(), project.cwd, options?.fresh)
+		const fresh = options?.fresh === true || activeSessionsForProject(workspaceLanes(), project.cwd).length === 0
 		if (project.cwd === sessionManager.projectCwd) {
 			if (fresh) startFreshSession()
 			return true
@@ -777,8 +782,10 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 			if (!current) return
 			const nextTitle = (await modals.showInput("Rename session", "session title", current.session.title))?.trim()
 			if (!nextTitle || nextTitle === current.session.title) return
-			const renamed = renameSessionLane(cloneWorkspaceLanes(workspaceLanes()), current.session.id, nextTitle)
-			persistWorkspaceLanes(selectLane(renamed, { project: current.project, session: { ...current.session, title: nextTitle } }))
+			laneStore.transact([
+				{ type: "renameSession", laneId: current.session.laneId, title: nextTitle },
+				{ type: "select", projectId: current.project.id, laneId: current.session.laneId },
+			])
 			showToastRef.current("Session renamed", nextTitle, "success")
 		})()
 	}
@@ -795,11 +802,13 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 			const parsed = parseCommandPaletteValue(selected)
 			if (!parsed) return
 			if (parsed.type === "session") {
-				const sessions = activeSessionLanes(workspaceLanes())
-				const session = sessions.find((entry) => entry.id === parsed.sessionLaneId)
-				const project = session ? workspaceLanes().projects.find((entry) => entry.id === session.projectId) : undefined
+				const lanes = workspaceLanes()
+				const session = activeSessionLanesV2(lanes).find((entry) => entry.laneId === parsed.sessionLaneId)
+				const project = session ? lanes.projectsById[session.projectId] : undefined
 				if (!session || !project) return
-				await switchToLane({ project, session }, { preserveLaneMode: preserveStickyLaneMode() })
+				const projectIndex = lanes.projectOrder.indexOf(project.id)
+				const sessionIndex = (lanes.sessionOrderByProject[project.id] ?? []).indexOf(session.laneId)
+				await switchToLane({ project, session, projectIndex: Math.max(0, projectIndex), sessionIndex: Math.max(0, sessionIndex) }, { preserveLaneMode: preserveStickyLaneMode() })
 				return
 			}
 			if (parsed.type === "project") {
@@ -851,14 +860,12 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		void (async () => {
 			const current = syncCurrentSessionLane()
 			if (!current) return
-			const archived = archiveSessionLane(cloneWorkspaceLanes(workspaceLanes()), current.session.id)
-			const nextCursor = findActiveCursor(archived)
+			const archived = laneStore.dispatch({ type: "archiveSession", laneId: current.session.laneId })
+			const nextCursor = findActiveCursorV2(archived)
 			if (!nextCursor) {
-				persistWorkspaceLanes(archived)
 				showToastRef.current("Session archived", "No active sessions left", "info")
 				return
 			}
-			persistWorkspaceLanes(selectLane(archived, nextCursor))
 			await switchToLane(nextCursor)
 			showToastRef.current("Session archived", "Moved to next active session", "success")
 		})()
@@ -866,16 +873,28 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const restoreArchivedSession = () => {
 		void (async () => {
-			const archivedSessions = workspaceLanes().sessions.filter((session) => session.archivedAt !== undefined)
+			const archivedSessions = Object.values(workspaceLanes().sessionsById).filter((session) => session.archivedAt !== undefined)
 			if (archivedSessions.length === 0) return
 			const selected = await modals.showSearchSelect("Restore session", archivedSessions.map(laneSearchOption), "project, title, model, id")
 			if (!selected) return
-			const session = archivedSessions.find((entry) => entry.id === selected)
-			const project = session ? workspaceLanes().projects.find((entry) => entry.id === session.projectId) : undefined
+			const session = archivedSessions.find((entry) => entry.laneId === selected)
+			const project = session ? workspaceLanes().projectsById[session.projectId] : undefined
 			if (!session || !project) return
-			const restored = restoreSessionLane(cloneWorkspaceLanes(workspaceLanes()), session.id)
-			persistWorkspaceLanes(selectLane(restored, { project, session: { ...session, archivedAt: undefined } }))
-			await switchToLane({ project, session: { ...session, archivedAt: undefined } })
+			const restored = laneStore.transact([
+				{ type: "restoreSession", laneId: session.laneId },
+				{ type: "select", projectId: project.id, laneId: session.laneId },
+			])
+			const restoredSession = restored.sessionsById[session.laneId]
+			const restoredProject = restored.projectsById[project.id]
+			if (!restoredSession || !restoredProject) return
+			const projectIndex = restored.projectOrder.indexOf(restoredProject.id)
+			const sessionIndex = (restored.sessionOrderByProject[restoredProject.id] ?? []).indexOf(restoredSession.laneId)
+			await switchToLane({
+				project: restoredProject,
+				session: restoredSession,
+				projectIndex: Math.max(0, projectIndex),
+				sessionIndex: Math.max(0, sessionIndex),
+			})
 			showToastRef.current("Session restored", "Returned to active lanes", "success")
 		})()
 	}

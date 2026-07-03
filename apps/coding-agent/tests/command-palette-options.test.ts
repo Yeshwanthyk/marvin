@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import type { WorkspaceLanes } from "@yeshwanthyk/runtime-effect/workspace-lanes.js"
+import type { WorkspaceLanesV2 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import {
 	commandActionValue,
 	commandProjectValue,
@@ -9,19 +9,21 @@ import {
 	parseCommandPaletteValue,
 } from "../src/ui/app-shell/command-palette-options.js"
 
-const lanesFixture = (): WorkspaceLanes => ({
-	version: 1,
-	projects: [
-		{
+const lanesFixture = (): WorkspaceLanesV2 => ({
+	version: 2,
+	projectsById: {
+		"/work/nora": {
 			id: "/work/nora",
 			cwd: "/work/nora",
 			title: "nora",
+			createdAt: "2026-06-03T12:00:00.000Z",
 			updatedAt: "2026-06-03T12:00:00.000Z",
 		},
-	],
-	sessions: [
-		{
-			id: "/work/nora:a",
+	},
+	projectOrder: ["/work/nora"],
+	sessionsById: {
+		"lane-a": {
+			laneId: "lane-a",
 			projectId: "/work/nora",
 			sessionId: "aaaaaaaa-0000-0000-0000-000000000000",
 			sessionPath: "/sessions/a.jsonl",
@@ -31,8 +33,8 @@ const lanesFixture = (): WorkspaceLanes => ({
 			createdAt: "2026-06-03T12:00:00.000Z",
 			updatedAt: "2026-06-03T12:02:00.000Z",
 		},
-		{
-			id: "/work/nora:b",
+		"lane-b": {
+			laneId: "lane-b",
 			projectId: "/work/nora",
 			sessionId: "bbbbbbbb-0000-0000-0000-000000000000",
 			sessionPath: "/sessions/b.jsonl",
@@ -43,10 +45,16 @@ const lanesFixture = (): WorkspaceLanes => ({
 			updatedAt: "2026-06-03T12:01:00.000Z",
 			archivedAt: "2026-06-03T12:03:00.000Z",
 		},
-	],
+	},
+	sessionOrderByProject: {
+		"/work/nora": ["lane-a", "lane-b"],
+	},
+	focusByProject: {
+		"/work/nora": { focusedLaneId: "lane-a", focusedColumn: 0 },
+	},
 	selection: {
 		projectId: "/work/nora",
-		sessionLaneId: "/work/nora:a",
+		laneId: "lane-a",
 	},
 })
 
@@ -78,7 +86,7 @@ describe("command palette options", () => {
 			commandActionValue("detach"),
 			commandActionValue("archive"),
 			commandActionValue("restore"),
-			commandSessionValue("/work/nora:a"),
+			commandSessionValue("lane-a"),
 			commandScratchpadValue("scratch-a"),
 			commandProjectValue("/work/marvin"),
 		])
@@ -86,7 +94,7 @@ describe("command palette options", () => {
 		expect(options[1]?.label).toBe("Rename session")
 		expect(options[8]?.description).toBe("1 archived")
 		expect(options[9]).toEqual({
-			value: commandSessionValue("/work/nora:a"),
+			value: commandSessionValue("lane-a"),
 			label: "nora / first task",
 			description: "aaaaaaaa | codex/gpt-5.5-low",
 			keywords: "nora first task aaaaaaaa-0000-0000-0000-000000000000 /sessions/a.jsonl codex/gpt-5.5-low switch session jump lane project",
