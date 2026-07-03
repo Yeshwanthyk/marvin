@@ -3,6 +3,15 @@
 Self-contained plan for an AI agent. Each phase is one focused work unit: implement,
 verify, commit, then move to the next. Do not batch phases.
 
+## Status ledger (update as phases land)
+
+- DONE (committed): Phase 1 (lane store v2), Phase 2 (host single-writer store),
+  Phase 3 (activity index + notifications), Phase 4 (bundle/actor split + JSONL
+  ownership), Phase 5a (per-actor projections), LSP removal.
+- NOT STARTED: Phase 5b (two agent attempts stalled in analysis with zero edits —
+  follow the execution protocol in its section), 5c, 6, 7, header redesign, 8, 9.
+- After this plan: plans/2026-07-03-agent-cockpit.md (external-agent cockpit).
+
 ## Ground rules (apply to every phase)
 
 - Bun + TypeScript strict. No `any`, no non-null assertions (`!`), no `as Type` casts.
@@ -48,55 +57,153 @@ verify, commit, then move to the next. Do not batch phases.
   `useSessionLaneController`, `usePromptSubmission`, `useHookBridge`,
   `useScratchpadActions`, `useWorkspaceProjectDiscovery`, `hook-message-projection.ts`.
 
-## Phase 5b — shell/view split (IN FLIGHT at time of writing; spec below if re-run needed)
+## Phase 5b — shell/view split (NOT STARTED; two codex attempts stalled — read the protocol)
 
-Objective: split `apps/coding-agent/src/ui/app-shell/TuiApp.tsx` (~950 lines) into:
-- `SessionView.tsx`: per-session UI — MainView (transcript + composer), agent-event
-  context creation, session controller, editor bridge. Explicit props contract (store,
-  runtime services, submission/steer callbacks, display accessors).
-- `TuiApp.tsx` (shell): keymap install, modals, command palette, toasts/notifications,
-  lane store consumption, theme; composes `<SessionView>`.
+EXECUTION PROTOCOL (both prior attempts died in analysis, zero edits): read TuiApp.tsx
+ONCE top to bottom, then start editing immediately. Work the steps below in order; run
+`bun run typecheck` after EVERY step. If 15 minutes pass without a file edit, you are
+stuck — stop and do the smallest possible next move instead of re-planning.
 
-Rules: structural only — zero behavior change; still runs inside the existing cwd-keyed
-`TuiRuntimeHost` slots; do NOT touch `adapters/tui/app.tsx`. Shape SessionView props so
-Phase 5c can re-bind them to a SessionActor projection (leave a seam comment).
-Tests: existing app tests stay green. Verify + commit.
+Objective: split `apps/coding-agent/src/ui/app-shell/TuiApp.tsx` (983 lines) into a shell
+(chrome/commands/lanes) and `SessionView.tsx` (agent-session UI). Structural ONLY — zero
+behavior change; still runs inside the cwd-keyed TuiRuntimeHost; do NOT touch
+`adapters/tui/app.tsx`.
+
+Current internal map of TuiApp.tsx (line numbers as of commit with plans added):
+- 141-190: runtime destructure (`agent, sessionManager, hookRunner, toolByName,
+  customCommands, config, codexTransport, getApiKey, sendRef, cycleModels,
+  validationIssues`), `toolMetaByName` build, `createAppStore`, `useModals`,
+  `useWorkspaceSwitch`, `createScratchpadStore`, `useWorkspaceProjectDiscovery`,
+  `isAppActive`, `showToastRef`, `lastError` signal, `submitPromptImpl` indirection.
+- 193-234: `useSessionLaneController` (lane controller; exposes sessionController,
+  navMode, laneHeaderState, visibleSession helpers, setActive* setters,
+  syncCurrentSessionLane, applyVisibleSession, ensureSession, fresh-session fns).
+- 236-256: `usePromptSubmission` (promptQueue, submitPrompt, steerHelper, followUpHelper,
+  sendUserMessageHelper, enqueueWhileResponding); `submitPromptImpl = submitPrompt`.
+- 258-291: scratchpad trigger, initial-prompt onMount, composerDraft + fresh-session
+  wrappers, cycleIndex init.
+- 293-328: `streamingMessageIdRef`, retryConfig/retryablePattern/retryState,
+  `eventCtx: EventHandlerContext` (setters bound to setActiveMessages/setActiveToolBlocks/
+  store.*), `useAgentEvents({ agent, context: eventCtx })`.
+- 330-340: handleThemeChange; ref objects: exitHandlerRef, editorOpenRef, editFileRef,
+  setEditorTextRef, getEditorTextRef, clearEditorRef.
+- 341-359: `useScratchpadActions` (uses editor refs + toasts + submitPrompt).
+- 360-373: composer-draft restore effect; `handleBeforeExit` (session.shutdown hook).
+- 375-424: `activateVisibleSessionForSubmit`, `revealLiveSession` (lane/session glue used
+  by prompt submission).
+- 425-455: activation effect (consumes `activation()` records: seq/initialNavMode/
+  startNewSession/initialVisibleSession/initialPrompt/initialScratchpadId).
+- 455-472: activity reporting effect (`onActivityChange` with lane lookup).
+- 473-657: `cmdCtx: CommandContext` (slash-command surface: modals, palette, scratchpads,
+  session tree, model/thinking, workspace switch...), `handleSubmit` (slash routing via
+  handleSlashInput + shell-command injection + submitPrompt), `handleAbort` (agent.abort,
+  retryState reset, queue drain-to-script, store resets).
+- 631-656 (inside that range): `useHookBridge` + `sendRef.current = (text) => void
+  handleSubmit(text)`.
+- 658-701: `cycleModel`, `cycleThinking` (agent.setModel/setThinkingLevel + store display).
+- 702-920: lane navigation + palette + project pickers + rename/archive/restore
+  (switchToLane, navigateLane, laneSearchOption, projectSearchOption,
+  pickConfiguredProject, switchToProject, startSessionInProject, renameCurrentSession,
+  openCommandPalette, archiveCurrentSession, restoreArchivedSession).
+- 921-983: JSX: `<Show when={isAppActive()}>` → TuiLaneKeymapRoot → TuiLaneKeyBindings
+  (navigate/jump/archive/restore/detach) → ThemeProvider → `<MainView …35 props…/>` →
+  ModalContainer.
+
+Prescribed boundary (entanglements resolved):
+- SessionView.tsx OWNS: eventCtx + useAgentEvents + streamingMessageIdRef + retry
+  config/state (293-328); handleAbort, cycleModel, cycleThinking (658-701); the
+  `<MainView>` JSX block (939-976). Props in: `store`, `agent`, `sessionManager`,
+  `customCommands`, `config`, `cycleModels`, `validationIssues`, `toolMetaByName`,
+  lane display accessors (`laneHeaderState`, `visibleCwd`), active-session setters from
+  the lane controller (`setActiveMessages/setActiveToolBlocks/setActiveContextTokens`,
+  `activeDisplayContextWindow`), `promptQueue`, `onSubmit` (shell's handleSubmit),
+  host notification accessors, and the SHELL-OWNED ref objects (editor refs,
+  showToastRef, exitHandlerRef) passed through to MainView unchanged.
+- Shell (TuiApp.tsx) KEEPS everything else: lane controller, prompt submission, cmdCtx +
+  handleSubmit (slash routing is command/chrome logic; MainView receives it via
+  SessionView's `onSubmit` prop), hook bridge + sendRef wiring, scratchpads, activation
+  and activity effects, palette/lane functions, keymap JSX, ThemeProvider, ModalContainer.
+- KEY RULE: ref objects (editor/toast/exit) are CREATED in the shell and passed through
+  SessionView → MainView so shell consumers (scratchpads, hook bridge, cmdCtx) keep
+  working unchanged.
+- Add one comment on SessionViewProps: "Phase 5c seam — these accessors will be rebound
+  to a SessionActor projection (apps/coding-agent/src/runtime/actor-projection.ts)".
+
+Steps (typecheck after each):
+1. Create `SessionView.tsx` with the props interface; move blocks 293-328, 658-701, and
+   the MainView JSX into it verbatim (adjust imports); leave a `<SessionView {...}/>`
+   call in TuiApp where MainView was.
+2. Re-thread the moved symbols' inputs as props (they are all already in scope in the
+   shell); delete the moved code from TuiApp.
+3. Run full gate: `bun run typecheck && bun test apps/coding-agent/tests && bun run check`.
+4. Interactive tmux smoke (fresh socket): lane nav, composer typing, `/model`
+   autocomplete, Esc/arrows, abort key. Commit: `refactor: split TuiApp into shell and
+   SessionView`.
+
+Done when: TuiApp ≈ 700 lines of chrome; SessionView ≈ 250-300 lines; zero test changes
+needed (or mechanical import updates only).
 
 ## Phase 5c — FocusController + replace the slot host (L)
 
 Objective: one mounted shell bound to the focused actor; cwd-keyed slots deleted.
+Same execution protocol as 5b: read once, edit immediately, typecheck per step.
 
-Context files: `apps/coding-agent/src/adapters/tui/app.tsx` (TuiRuntimeHost, RuntimeSlot,
-MAX_IDLE_RUNTIMES, activation records), `session-actor-registry.ts`, `actor-projection.ts`,
-`SessionView.tsx` from 5b.
+Current host map (`apps/coding-agent/src/adapters/tui/app.tsx`, ~280 lines):
+- line 33 `activeCwd: string` in `RuntimeHostState`; line 37 `interface RuntimeSlot`
+  { cwd, runtime, activation, isResponding, lastViewedAt, lastActivityAt }.
+- line 46 `MAX_IDLE_RUNTIMES = 4` + 10-min TTL; eviction at ~170-196 (skips hidden
+  responding slots).
+- line 129 `getOrCreateSlot(cwd)` with `pendingSlots` dedupe; `createRuntime(...)` per cwd.
+- ~225-245 workspace-switch request handler: getOrCreateSlot → build `TuiAppActivation`
+  { seq: nextActivationSeq++, initialSession/initialVisibleSession/initialPrompt/
+  startNewSession/initialNavMode/initialSessionTitle/initialScratchpadId } → set
+  activeCwd + slot activation.
+- line 263 `<Index each={state().slots}>` renders one `<TuiApp>` per slot with
+  active={() => state().activeCwd === slot().cwd}; host also owns the Phase 3 activity
+  wiring (`applyTuiActivityTransition` from onActivityChange) and the lane store instance.
 
-Tasks:
+Steps:
 1. `apps/coding-agent/src/ui/app-shell/focus-controller.ts`:
-   `focusedLaneId()/focusedActor()/focusLane(laneId, options)/focusCursor(cursor, options)`.
-   `focusLane`: dispatch lane-store `select`, get-or-create actor from registry
-   (`createActor` option), hydrate (acquires JSONL ownership, `continueSession`), bind
-   projection to the shell, reassign `sendRef.current` exactly once per focus change.
-   `FocusLaneOptions = { createActor?, startNewSession?, initialPrompt?, initialSessionTitle? }`.
-2. Map old `TuiAppActivation` (seq/initialNavMode/startNewSession/initialVisibleSession/
-   initialPrompt/initialScratchpadId) to FocusLaneOptions. CLI flags identical behavior:
-   `--session` → find/create lane for path then focus; `--continue` → latest session lane;
-   fresh prompt → cold lane in current project, focus, submit.
-3. Rewrite `adapters/tui/app.tsx`: delete RuntimeSlot/eviction; host = lane store +
-   registry + activity index + notifications + focus controller + ONE `<TuiApp>` shell.
-   SessionView receives the focused actor's projection accessors.
-4. Hidden-actor hook-UI policy: interactive hook prompts (showSelect/showInput/
-   showConfirm/showEditor) from unfocused actors do NOT render; they enqueue a
-   foreground-request notification (level warning) and resolve when the lane is focused
-   (or reject on timeout if the hook has one). `notify()` from hidden actors routes to
-   host notifications with lane attribution.
-5. Activity index becomes laneId-native from actor status transitions (drop the
-   sessionId/path resolution shim added in Phase 3 where possible).
-6. Keep session-picker, headless, ACP adapters working (they use createRuntime).
+   `FocusLaneOptions = { createActor?: boolean; startNewSession?: boolean;
+   initialPrompt?: string; initialSessionTitle?: string; initialScratchpadId?: string;
+   initialNavMode?: LaneNavMode }`.
+   `focusLane(laneId, opts)`: lane-store `select` patch → registry get-or-create
+   (ProjectRuntimeBundle for the lane's cwd) → `actor.hydrate("focus")` (JSONL ownership +
+   continueSession + projection ready) → set focusedLaneId signal → the shell reacts.
+   `focusCursor(cursor)`: laneId from cursor, then focusLane.
+2. Rewrite the host component: delete RuntimeSlot/pendingSlots/MAX_IDLE_RUNTIMES/eviction
+   and the `<Index>`; keep lane store + activity index + notifications; add
+   SessionActorRegistry + FocusController; render ONE `<TuiApp>` (shell) unconditionally
+   (drop the `active` prop path and the `<Show when={isAppActive()}>` in TuiApp).
+   Workspace-switch requests → focusLane with mapped options (replaces activation seq
+   records entirely; delete TuiAppActivation).
+3. Shell/SessionView rebind: SessionView props switch from the app-local store accessors
+   to `focusedActor().projection` accessors (the 5b seam). The lane controller's
+   setActive* setters move behind the projection (the actor's event handler already
+   writes them — Phase 5a). The shell's `useAgentEvents` direct subscription is DELETED
+   (actors subscribe themselves).
+4. `sendRef.current` reassigned inside a `createEffect` on focusedLaneId — routes to the
+   focused actor's submit; hook bridge stays in the shell.
+5. Hidden-actor hook-UI policy: actor uiPolicy (from Phase 4 createActorServices) for
+   unfocused actors: `notify()` → host NotificationService with lane attribution;
+   showSelect/showInput/showConfirm/showEditor → enqueue foreground-request notification
+   (level warning) and block until focused or hook timeout.
+6. Activity index: patch from actor status transitions keyed by laneId directly; delete
+   the `{projectId, sessionId, sessionPath}` resolution shim in activity-index.ts.
+7. CLI startup mapping (index.ts/adapters/tui entry): `--session <id|path>` → ensure lane
+   for that sessionPath (upsertSession if missing) → focusLane; `--continue` → most
+   recent lane in cwd project; bare prompt → new cold lane + focusLane + submit;
+   scratchpad start → initialPrompt/initialScratchpadId options.
+8. Keep session-picker, headless, and ACP adapters compiling (they use createRuntime,
+   untouched).
 
-Tests: hidden actor streams into its projection while another is focused (synthetic
-events); sendRef routes only to the focused actor after focus changes; hidden interactive
-hook prompt → foreground-request notification, not a modal; focusing a suspended actor
-rehydrates from JSONL; existing tests green. Interactive tmux pass required. Commit.
+Gate: full check + these tests: hidden actor streams into its projection while another
+is focused (synthetic events on two actors); sendRef targets focused actor after two
+focus switches; hidden interactive hook prompt → notification not modal; suspended actor
+rehydrates on focus with deterministic ids; palette/lane switching still passes existing
+tests. Interactive tmux pass: switch projects/sessions rapidly while one session streams
+(use a cheap model or mock), confirm background stream completes + notification appears,
+composer draft survives switches. Commit.
 
 ## Phase 6 — lifecycle hardening (M)
 
