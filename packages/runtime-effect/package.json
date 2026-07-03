@@ -29,6 +29,10 @@
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"
     },
+    "./project-bundle.js": {
+      "types": "./dist/project-bundle.d.ts",
+      "import": "./dist/project-bundle.js"
+    },
     "./session-manager.js": {
       "types": "./dist/session-manager.d.ts",
       "import": "./dist/session-manager.js"
@@ -64,6 +68,10 @@
     "./session/orchestrator.js": {
       "types": "./dist/session/orchestrator.d.ts",
       "import": "./dist/session/orchestrator.js"
+    },
+    "./session/jsonl-ownership.js": {
+      "types": "./dist/session/jsonl-ownership.d.ts",
+      "import": "./dist/session/jsonl-ownership.js"
     },
     "./session/prompt-queue.js": {
       "types": "./dist/session/prompt-queue.d.ts",

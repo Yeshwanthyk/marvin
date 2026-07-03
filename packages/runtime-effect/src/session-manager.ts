@@ -3,6 +3,11 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AppMessage, ThinkingLevel } from "@yeshwanthyk/agent-core";
 import { Context, Effect, Layer } from "effect";
+import {
+  JsonlOwnershipConflictError,
+  type JsonlOwnershipIndex,
+  type LaneId,
+} from "./session/jsonl-ownership.js";
 
 let lastSessionTimestamp = 0;
 const CURRENT_SESSION_VERSION = 3;
@@ -87,6 +92,11 @@ export interface ReadonlySessionManager {
   findSession(identifier: string): SessionInfo | null;
 }
 
+export interface SessionManagerOwnershipOptions {
+  readonly laneId: LaneId;
+  readonly index: JsonlOwnershipIndex;
+}
+
 const safeCwd = (cwd: string): string => `--${cwd.replace(/\//g, "--")}--`;
 
 function isSessionEntry(value: unknown): value is SessionEntry {
@@ -169,10 +179,16 @@ export class SessionManager implements ReadonlySessionManager {
   private currentSessionId: string | null = null;
   private leafId: string | null = null;
   private currentNodeIds: Set<string> | null = null;
+  private ownership: SessionManagerOwnershipOptions | undefined;
 
-  constructor(configDir: string = join(process.env.HOME || "", ".config", "marvin"), cwd: string = process.cwd()) {
+  constructor(
+    configDir: string = join(process.env.HOME || "", ".config", "marvin"),
+    cwd: string = process.cwd(),
+    ownership?: SessionManagerOwnershipOptions,
+  ) {
     this.cwd = cwd;
     this.sessionDir = join(configDir, "sessions", safeCwd(this.cwd));
+    this.ownership = ownership;
   }
 
   get projectCwd(): string {
@@ -208,12 +224,14 @@ export class SessionManager implements ReadonlySessionManager {
     };
 
     writeFileSync(this.currentSessionPath, `${JSON.stringify(metadata)}\n`, "utf8");
+    this.acquireOwnership(this.currentSessionPath);
     this.leafId = null;
     this.currentNodeIds = new Set();
     return id;
   }
 
   continueSession(sessionPath: string, sessionId: string): void {
+    this.acquireOwnership(sessionPath);
     const nodeState = this.readSessionNodeState(sessionPath);
     this.currentSessionPath = sessionPath;
     this.currentSessionId = sessionId;
@@ -263,6 +281,7 @@ export class SessionManager implements ReadonlySessionManager {
 
   updateCompactionState(state: CompactionState): void {
     if (!this.currentSessionPath) return;
+    this.requireOwnership(this.currentSessionPath);
     try {
       const content = readFileSync(this.currentSessionPath, "utf8");
       const lines = content.trim().split("\n");
@@ -575,6 +594,7 @@ export class SessionManager implements ReadonlySessionManager {
       }
 
       if (options?.migrate && ensureTreeFields(entries)) {
+        this.requireOwnership(sessionPath);
         writeFileSync(sessionPath, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`, "utf8");
       }
 
@@ -625,6 +645,22 @@ export class SessionManager implements ReadonlySessionManager {
       if (entry && isNodeEntry(entry)) return entry.id;
     }
     return null;
+  }
+
+  private acquireOwnership(sessionPath: string): void {
+    if (this.ownership === undefined) return;
+    const result = this.ownership.index.acquire(sessionPath, this.ownership.laneId);
+    if (typeof result !== "string") {
+      throw new JsonlOwnershipConflictError(sessionPath, result.conflictLaneId);
+    }
+  }
+
+  private requireOwnership(sessionPath: string): void {
+    if (this.ownership === undefined) return;
+    if (!this.ownership.index.owns(sessionPath, this.ownership.laneId)) {
+      const owner = this.ownership.index.owner(sessionPath);
+      throw new JsonlOwnershipConflictError(sessionPath, owner ?? "unknown");
+    }
   }
 }
 

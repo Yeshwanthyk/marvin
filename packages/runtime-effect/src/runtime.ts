@@ -1,90 +1,31 @@
-import {
+import type {
   Agent,
   CodexTransport,
   ProviderTransport,
   RouterTransport,
-  type ThinkingLevel,
+  ThinkingLevel,
 } from "@yeshwanthyk/agent-core";
-import {
-  getModels,
-  getProviders,
-  resolveProviderAlias,
-  type AgentTool,
-  type Api,
-  type KnownProvider,
-  type Model,
-} from "@yeshwanthyk/ai";
-import { createToolRegistry, type ToolRegistry } from "@yeshwanthyk/base-tools";
-import { Context, Duration, Effect, Layer, Schedule } from "effect";
-import {
-	HookRunner,
-	HookedTransport,
-	getHookTools,
-	wrapToolsWithHooks,
-	HookContextControllerLayer,
-	HookContextControllerTag,
-	type HookContextController,
-} from "./hooks/index.js";
-import { HookEffectsTag, createHookEffects } from "./hooks/effects.js";
-import {
-  CustomCommandLayer,
-  CustomCommandTag,
-  type CustomCommand,
-} from "./extensibility/custom-commands.js";
-import {
-  ExtensibilityLayer,
-  ExtensibilityTag,
-  attachHookErrorLogging,
-} from "./extensibility/index.js";
+import type { Api, KnownProvider, Model } from "@yeshwanthyk/ai";
+import { Context, Effect, Layer } from "effect";
+import type { HookRunner, HookContextController } from "./hooks/index.js";
+import type { CustomCommand } from "./extensibility/custom-commands.js";
 import type { ValidationIssue } from "./extensibility/schema.js";
-import type { LoadedCustomTool, SendRef } from "./extensibility/custom-tools/index.js";
-import { ConfigTag, loadAppConfig, parseThinkingLevels, type LoadConfigOptions, type LoadedAppConfig } from "./config.js";
-import { LazyToolLoader } from "./lazy-tool-loader.js";
+import type { SendRef } from "./extensibility/custom-tools/index.js";
+import type { LoadConfigOptions, LoadedAppConfig } from "./config.js";
+import type { PromptQueueService } from "./session/prompt-queue.js";
+import type { SessionOrchestratorService } from "./session/orchestrator.js";
+import type { SessionManager } from "./session-manager.js";
+import type { AgentFactoryService } from "./agent.js";
+import type { InstrumentationService } from "./instrumentation.js";
+import type { ApiKeyResolver, TransportBundle } from "./transports.js";
 import {
-  PromptQueueLayer,
-  PromptQueueTag,
-  type PromptQueueService,
-} from "./session/prompt-queue.js";
-import {
-  ExecutionPlanBuilderLayer,
-  type PlanModelEntry,
-} from "./session/execution-plan.js";
-import {
-  SessionOrchestratorLayer,
-  SessionOrchestratorTag,
-  type SessionOrchestratorService,
-} from "./session/orchestrator.js";
-import {
-  SessionManager,
-  SessionManagerTag,
-  type SessionManagerService,
-} from "./session-manager.js";
-import {
-  AgentFactoryTag,
-  type AgentFactoryService,
-} from "./agent.js";
-import {
-  InstrumentationTag,
-  NoopInstrumentationLayer,
-  type InstrumentationService,
-} from "./instrumentation.js";
-import {
-  TransportLayer,
-  TransportTag,
-  createApiKeyResolver,
-  type ApiKeyResolver,
-  type TransportBundle,
-} from "./transports.js";
+  createProjectRuntimeBundle,
+  type AdapterKind,
+  type ProjectRuntimeBundleOptions,
+  type ToolRegistryEntry,
+} from "./project-bundle.js";
 
-export type AdapterKind = "tui" | "headless" | "acp";
-
-export interface ToolRegistryEntry {
-  label: string;
-  source: "builtin" | "custom";
-  sourcePath?: string;
-  renderCall?: unknown;
-  renderResult?: unknown;
-}
+export type { AdapterKind, ToolRegistryEntry } from "./project-bundle.js";
 
 export interface RuntimeServices {
   readonly adapter: AdapterKind;
@@ -109,14 +50,6 @@ export interface RuntimeServices {
 
 export const RuntimeServicesTag = Context.GenericTag<RuntimeServices>("runtime-effect/RuntimeServices");
 
-interface ToolRuntimeService {
-  readonly loader: LazyToolLoader;
-  readonly tools: AgentTool[];
-  readonly toolByName: Map<string, ToolRegistryEntry>;
-}
-
-const ToolRuntimeTag = Context.GenericTag<ToolRuntimeService>("runtime-effect/ToolRuntimeService");
-
 export interface RuntimeLayerOptions extends LoadConfigOptions {
   readonly adapter?: AdapterKind;
   readonly cwd?: string;
@@ -132,332 +65,62 @@ export interface RuntimeLayerOptions extends LoadConfigOptions {
   readonly timeout?: number;
 }
 
-interface RuntimeLayerInternalOptions extends RuntimeLayerOptions {
-  adapter: AdapterKind;
-  cwd: string;
-  hasUI: boolean;
-  sendRef: SendRef;
-  instrumentationLayer: Layer.Layer<InstrumentationService, never, never>;
-  timeout?: number;
-}
-
 export const RuntimeLayer = (options?: RuntimeLayerOptions): Layer.Layer<RuntimeServices, unknown, never> => {
   const adapter = options?.adapter ?? "tui";
   const cwd = options?.cwd ?? process.cwd();
   const hasUI = options?.hasUI ?? adapter === "tui";
   const sendRef = options?.sendRef ?? { current: () => {} };
-  const instrumentationLayer =
-    options?.instrumentation !== undefined
-      ? Layer.succeed(InstrumentationTag, options.instrumentation)
-      : NoopInstrumentationLayer;
 
-  const layerOptions: RuntimeLayerInternalOptions = {
-    ...options,
-    adapter,
-    cwd,
-    hasUI,
-    sendRef,
-    instrumentationLayer,
-  };
-
-  const layerEffect: Effect.Effect<Layer.Layer<RuntimeServices, unknown, never>, unknown, never> =
-    Effect.gen(function* () {
-      const config = yield* Effect.tryPromise(() => loadAppConfig(layerOptions));
-      const apiKeyResolver = createApiKeyResolver(config.configDir);
-      const cycleModels = buildCycleModels(layerOptions.model, layerOptions.thinking, config);
-
-      const configLayer = Layer.succeed(ConfigTag, { config });
-      const sessionManagerLayer = Layer.succeed(SessionManagerTag, {
-        sessionManager: new SessionManager(config.configDir, layerOptions.cwd),
-      } satisfies SessionManagerService);
-      const transportLayer =
-        layerOptions.transportFactory
-          ? Layer.succeed(TransportTag, {
-              transport: layerOptions.transportFactory(config, apiKeyResolver),
-            })
-          : TransportLayer(config, apiKeyResolver);
-      const customCommandsLayer = CustomCommandLayer({ configDir: config.configDir });
-      const buildRetryAttempts = (retry: NonNullable<typeof layerOptions.retry>) => {
-        const attempts: { primary?: number; fallback?: number } = {};
-        if (retry.primary !== undefined) attempts.primary = retry.primary;
-        if (retry.fallback !== undefined) attempts.fallback = retry.fallback;
-        return attempts;
-      };
-      const executionPlanLayer = ExecutionPlanBuilderLayer({
-        cycle: cycleModels.map((entry) => ({
-          provider: entry.provider,
-          model: entry.model,
-          ...(entry.thinking !== undefined ? { thinking: entry.thinking } : {}),
-        }) satisfies PlanModelEntry),
-        ...(layerOptions.retry ? {
-          attempts: buildRetryAttempts(layerOptions.retry),
-          ...(layerOptions.retry.initialDelayMs !== undefined ? {
-            schedule: Schedule.exponential(Duration.millis(layerOptions.retry.initialDelayMs), 2),
-          } : {}),
-        } : {}),
-      });
-      const toolRegistry = createToolRegistry(layerOptions.cwd);
-      const extensibilityLayer = ExtensibilityLayer({
-        cwd: layerOptions.cwd,
-        sendRef: layerOptions.sendRef,
-        builtinToolNames: Object.keys(toolRegistry),
-        hasUI: layerOptions.hasUI,
-        extensionPaths: config.extensions,
-        extensionsEnabled: config.extensionsEnabled,
-      });
-      const hookContextLayer = HookContextControllerLayer;
-      const hookEffectsLayer = createHookEffectsLayer();
-      const promptQueueLayer = PromptQueueLayer;
-      const toolRuntimeLayer = createToolRuntimeLayer({
-        cwd: layerOptions.cwd,
-        toolRegistry,
-      });
-      const agentFactoryLayer = createAgentFactoryLayer();
-      const runtimeServicesLayer = createRuntimeServicesLayer({
-        adapter: layerOptions.adapter,
-        sendRef: layerOptions.sendRef,
-        apiKeyResolver,
-        cycleModels,
-      });
-
-      const baseProviders = Layer.merge(configLayer, layerOptions.instrumentationLayer);
-      const withSessionManager = Layer.provideMerge(sessionManagerLayer, baseProviders);
-      const withTransport = Layer.provideMerge(transportLayer, withSessionManager);
-      const withCommands = Layer.provideMerge(customCommandsLayer, withTransport);
-      const withExecutionPlan = Layer.provideMerge(executionPlanLayer, withCommands);
-      const withPromptQueue = Layer.provideMerge(promptQueueLayer, withExecutionPlan);
-      const withExtensibility = Layer.provideMerge(extensibilityLayer, withPromptQueue);
-      const withHookContext = Layer.provideMerge(hookContextLayer, withExtensibility);
-      const withHookEffects = Layer.provideMerge(hookEffectsLayer, withHookContext);
-      const withToolRuntime = Layer.provideMerge(toolRuntimeLayer, withHookEffects);
-      const withAgentFactory = Layer.provideMerge(agentFactoryLayer, withToolRuntime);
-      const withOrchestrator = Layer.provideMerge(
-        SessionOrchestratorLayer(
-          layerOptions.timeout !== undefined ? { timeout: layerOptions.timeout } : undefined,
-        ),
-        withAgentFactory,
-      );
-      return Layer.provide(runtimeServicesLayer, withOrchestrator);
-    });
-
-  return Layer.unwrapEffect(layerEffect);
-};
-
-const createToolRuntimeLayer = (options: { cwd: string; toolRegistry: ToolRegistry }) =>
-  Layer.effect(
-    ToolRuntimeTag,
-    Effect.gen(function* () {
-      const { hookRunner, customTools } = yield* ExtensibilityTag;
-
-      const loader = new LazyToolLoader(
-        options.toolRegistry,
-        customTools.map((entry) => entry.tool),
-        getHookTools(hookRunner),
-      );
-      yield* Effect.promise(() => loader.preloadCoreTools());
-
-      const tools = wrapToolsWithHooks(loader.getToolsProxy().toArray(), hookRunner);
-
-      return {
-        loader,
-        tools,
-        toolByName: buildToolRegistry(options.toolRegistry, customTools),
-      } satisfies ToolRuntimeService;
-    }),
-  );
-
-const createHookEffectsLayer = () =>
-  Layer.scoped(
-    HookEffectsTag,
-    Effect.gen(function* () {
-      const { hookRunner } = yield* ExtensibilityTag;
-      return yield* createHookEffects(hookRunner);
-    }),
-  );
-
-const createAgentFactoryLayer = () =>
-  Layer.effect(
-    AgentFactoryTag,
-    Effect.gen(function* () {
-      const { config } = yield* ConfigTag;
-      const { transport } = yield* TransportTag;
-      const { hookRunner } = yield* ExtensibilityTag;
-      const { tools } = yield* ToolRuntimeTag;
-
-      const hookedTransport = new HookedTransport(transport.router, hookRunner);
-
-      const makeAgent = (options?: { model?: Model<Api>; thinking?: ThinkingLevel }) =>
-        new Agent({
-          transport: hookedTransport,
-          initialState: {
-            systemPrompt: config.systemPrompt,
-            model: options?.model ?? config.model,
-            thinkingLevel: options?.thinking ?? config.thinking,
-            tools,
-          },
-        });
-
-      return {
-        bootstrapAgent: makeAgent(),
-        createAgent: makeAgent,
-        transport: hookedTransport,
-        tools,
-      } satisfies AgentFactoryService;
-    }),
-  );
-
-const createRuntimeServicesLayer = (options: {
-  adapter: AdapterKind;
-  sendRef: SendRef;
-  apiKeyResolver: ApiKeyResolver;
-  cycleModels: Array<{ provider: KnownProvider; model: Model<Api>; thinking?: ThinkingLevel }>;
-}) =>
-  Layer.effect(
+  return Layer.scoped(
     RuntimeServicesTag,
     Effect.gen(function* () {
-      const { config } = yield* ConfigTag;
-      const { sessionManager } = yield* SessionManagerTag;
-      const { hookRunner, validationIssues: extensibilityIssues } = yield* ExtensibilityTag;
-      const { commands, issues: commandIssues } = yield* CustomCommandTag;
-      const toolRuntime = yield* ToolRuntimeTag;
-      const { transport } = yield* TransportTag;
-      const promptQueue = yield* PromptQueueTag;
-      const sessionOrchestrator = yield* SessionOrchestratorTag;
-      const agentFactory = yield* AgentFactoryTag;
-      const hookContext = yield* HookContextControllerTag;
+      const bundleOptions: ProjectRuntimeBundleOptions = {
+        ...options,
+        cwd,
+        hasUI,
+        sendRef,
+      };
+      const bundle = yield* Effect.tryPromise(() => createProjectRuntimeBundle(bundleOptions));
+      const actor = yield* Effect.tryPromise(() =>
+        bundle.createActorServices(
+          {
+            laneId: "runtime-default",
+            projectId: bundle.projectId,
+            cwd,
+            sessionId: null,
+            sessionPath: null,
+          },
+          { adapter, hasUI, sendRef },
+        ),
+      );
 
-      attachHookErrorLogging(hookRunner, (message) => process.stderr.write(`${message}\n`));
-      yield* Effect.promise(() => hookRunner.emit({ type: "app.start" }));
-
-      const validationIssues = [...commandIssues, ...extensibilityIssues];
-      for (const issue of validationIssues) {
-        if (issue.severity === "error") {
-          process.stderr.write(`[${issue.kind}] ${issue.path}: ${issue.message}\n`);
-        }
-      }
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(async () => {
+          await actor.close();
+          await bundle.close();
+        }),
+      );
 
       return {
-        adapter: options.adapter,
-        agent: agentFactory.bootstrapAgent,
-        createAgent: agentFactory.createAgent,
-        sessionManager,
-        hookRunner,
-        hookContext,
-        customCommands: commands,
-        toolByName: toolRuntime.toolByName,
-        sendRef: options.sendRef,
-        config,
-        cycleModels: options.cycleModels,
-        getApiKey: options.apiKeyResolver,
-        transport: transport.router,
-        providerTransport: transport.provider,
-        codexTransport: transport.codex,
-        validationIssues,
-        promptQueue,
-        sessionOrchestrator,
+        adapter,
+        agent: actor.agent,
+        createAgent: actor.createAgent,
+        sessionManager: actor.sessionManager,
+        hookRunner: actor.hookRunner,
+        hookContext: actor.hookContext,
+        customCommands: bundle.customCommands,
+        toolByName: bundle.toolByName,
+        sendRef,
+        config: bundle.config,
+        cycleModels: [...bundle.cycleModels],
+        getApiKey: bundle.getApiKey,
+        transport: bundle.transports.router,
+        providerTransport: bundle.transports.provider,
+        codexTransport: bundle.transports.codex,
+        validationIssues: [...bundle.validationIssues],
+        promptQueue: actor.promptQueue,
+        sessionOrchestrator: actor.sessionOrchestrator,
       } satisfies RuntimeServices;
     }),
   );
-
-const buildToolRegistry = (
-  toolRegistry: ToolRegistry,
-  customTools: LoadedCustomTool[],
-): Map<string, ToolRegistryEntry> => {
-  const registry = new Map<string, ToolRegistryEntry>();
-
-  for (const [name, def] of Object.entries(toolRegistry)) {
-    registry.set(name, { label: def.label, source: "builtin" });
-  }
-
-  for (const entry of customTools) {
-    registry.set(entry.tool.name, {
-      label: entry.tool.label,
-      source: "custom",
-      sourcePath: entry.resolvedPath,
-      renderCall: entry.tool.renderCall,
-      renderResult: entry.tool.renderResult,
-    });
-  }
-
-  return registry;
-};
-
-const buildCycleModels = (
-  modelSpec: string | undefined,
-  thinkingSpec: ThinkingLevel | string | undefined,
-  loaded: LoadedAppConfig,
-): Array<{ provider: KnownProvider; model: Model<Api>; thinking?: ThinkingLevel }> => {
-  const entries: Array<{ provider: KnownProvider; model: Model<Api>; thinking?: ThinkingLevel }> = [];
-  const requested = modelSpec?.split(",").map((value) => value.trim()).filter(Boolean) ?? [loaded.modelId];
-  const requestedThinking = parseThinkingLevels(thinkingSpec);
-  const thinkingFor = (index: number): ThinkingLevel | undefined => {
-    if (requestedThinking.length === 0) return undefined;
-    return requestedThinking[index] ?? requestedThinking[requestedThinking.length - 1];
-  };
-  const addEntry = (provider: KnownProvider, model: Model<Api>) => {
-    const thinking = thinkingFor(entries.length);
-    entries.push({
-      provider,
-      model,
-      ...(thinking !== undefined ? { thinking } : {}),
-    });
-  };
-
-  for (const id of requested) {
-    if (id.includes("/")) {
-      const slashIndex = id.indexOf("/");
-      const providerId = id.slice(0, slashIndex);
-      const modelId = id.slice(slashIndex + 1);
-      const provider = getKnownProvider(providerId);
-      if (!provider) continue;
-      const model = findModel(provider, modelId);
-      if (model) addEntry(provider, model);
-      continue;
-    }
-
-    // First, try the loaded provider (from config or --provider flag)
-    // This ensures --provider codex --model gpt-5.2 uses codex's gpt-5.2, not openai's
-    const loadedProviderModel = findModel(loaded.provider, id);
-    if (loadedProviderModel) {
-      addEntry(loaded.provider, loadedProviderModel);
-      continue;
-    }
-
-    // Fall back to searching all providers
-    let resolved = false;
-    for (const provider of getProviders()) {
-      const known = getKnownProvider(provider);
-      if (!known) continue;
-      const model = findModel(known, id);
-      if (model) {
-        addEntry(known, model);
-        resolved = true;
-        break;
-      }
-    }
-    if (!resolved) {
-      // No model found anywhere - will use default at end if entries empty
-    }
-  }
-
-  if (entries.length === 0) {
-    const thinking = thinkingFor(0);
-    entries.push({
-      provider: loaded.provider,
-      model: loaded.model,
-      ...(thinking !== undefined ? { thinking } : {}),
-    });
-  }
-
-  return entries;
-};
-
-const findModel = (provider: KnownProvider, modelId: string): Model<Api> | undefined => {
-  const models = getModels(provider);
-  return models.find((model) => model.id === modelId) as Model<Api> | undefined;
-};
-
-const getKnownProvider = (value: string): KnownProvider | undefined => {
-  const resolved = resolveProviderAlias(value);
-  return getProviders().find((provider) => provider === resolved) as KnownProvider | undefined;
 };

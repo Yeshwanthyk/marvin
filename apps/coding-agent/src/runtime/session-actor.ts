@@ -1,0 +1,187 @@
+import type { AgentEvent } from "@yeshwanthyk/agent-core";
+import type {
+  ProjectRuntimeBundle,
+  ScopedSessionActorServices,
+  SessionActorDescriptor,
+} from "@yeshwanthyk/runtime-effect/project-bundle.js";
+import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js";
+import { Effect } from "effect";
+
+export type SessionActorStatus =
+  | "cold"
+  | "hydrating"
+  | "warm"
+  | "streaming"
+  | "suspended"
+  | "closing"
+  | "closed"
+  | "errored";
+
+export type SessionActorHydrateReason = "focus" | "background-prompt" | "rehydrate";
+
+export interface SessionActorProjectionStore {
+  subscribe(handler: (event: AgentEvent) => void): () => void;
+  applyEvent(event: AgentEvent): void;
+  readonly lastEventAt: () => number;
+  readonly unread: () => boolean;
+  clearUnread(): void;
+}
+
+export interface SessionViewBinding {
+  readonly isFocused: () => boolean;
+}
+
+export interface SessionActor {
+  readonly laneId: string;
+  readonly projectId: string;
+  readonly cwd: string;
+  readonly descriptor: () => SessionActorDescriptor;
+  readonly status: () => SessionActorStatus;
+  readonly services: () => ScopedSessionActorServices | null;
+  readonly projection: SessionActorProjectionStore;
+  hydrate(reason: SessionActorHydrateReason): Promise<ScopedSessionActorServices>;
+  bindView(view: SessionViewBinding): void;
+  unbindView(): void;
+  submit(text: string, mode: PromptDeliveryMode): Promise<void>;
+  steer(text: string): void;
+  suspend(): Promise<void>;
+  close(): Promise<void>;
+}
+
+export interface SessionActorOptions {
+  readonly descriptor: SessionActorDescriptor;
+  readonly getBundle: (descriptor: SessionActorDescriptor) => Promise<ProjectRuntimeBundle>;
+  readonly onStatusChange?: (actor: SessionActor, status: SessionActorStatus) => void;
+}
+
+class PassthroughProjectionStore implements SessionActorProjectionStore {
+  private readonly listeners = new Set<(event: AgentEvent) => void>();
+  private lastEventAtMs = 0;
+  private hasUnread = false;
+
+  subscribe(handler: (event: AgentEvent) => void): () => void {
+    this.listeners.add(handler);
+    return () => {
+      this.listeners.delete(handler);
+    };
+  }
+
+  applyEvent(event: AgentEvent): void {
+    this.lastEventAtMs = Date.now();
+    this.hasUnread = true;
+    for (const listener of this.listeners) {
+      listener(event);
+    }
+  }
+
+  lastEventAt(): number {
+    return this.lastEventAtMs;
+  }
+
+  unread(): boolean {
+    return this.hasUnread;
+  }
+
+  clearUnread(): void {
+    this.hasUnread = false;
+  }
+}
+
+export const createSessionActor = (options: SessionActorOptions): SessionActor => {
+  let descriptor = options.descriptor;
+  let status: SessionActorStatus = "cold";
+  let services: ScopedSessionActorServices | null = null;
+  let unsubscribeAgent: (() => void) | null = null;
+  let view: SessionViewBinding | null = null;
+  const projection = new PassthroughProjectionStore();
+
+  const setStatus = (next: SessionActorStatus) => {
+    status = next;
+    options.onStatusChange?.(actor, next);
+  };
+
+  const hydrate = async (_reason: SessionActorHydrateReason): Promise<ScopedSessionActorServices> => {
+    if (services !== null) return services;
+    if (status === "hydrating") {
+      throw new Error(`Session actor ${descriptor.laneId} is already hydrating`);
+    }
+    setStatus("hydrating");
+    try {
+      const bundle = await options.getBundle(descriptor);
+      const nextServices = await bundle.createActorServices(descriptor, {
+        hasUI: view?.isFocused() ?? false,
+      });
+      unsubscribeAgent = nextServices.agent.subscribe((event) => {
+        projection.applyEvent(event);
+        if (event.type === "agent_start") setStatus("streaming");
+        if (event.type === "agent_end") setStatus("warm");
+      });
+      services = nextServices;
+      setStatus(nextServices.agent.state.isStreaming ? "streaming" : "warm");
+      return nextServices;
+    } catch (error) {
+      setStatus("errored");
+      throw error;
+    }
+  };
+
+  const suspend = async () => {
+    if (services === null) {
+      if (status !== "closed" && status !== "closing") setStatus("suspended");
+      return;
+    }
+    const agent = services.agent;
+    const snapshot = await Effect.runPromise(services.promptQueue.snapshot);
+    if (agent.state.isStreaming || agent.state.pendingToolCalls.size > 0 || snapshot.pending.length > 0) {
+      return;
+    }
+    unsubscribeAgent?.();
+    unsubscribeAgent = null;
+    await services.close();
+    services = null;
+    setStatus("suspended");
+  };
+
+  const close = async () => {
+    if (status === "closed" || status === "closing") return;
+    setStatus("closing");
+    unsubscribeAgent?.();
+    unsubscribeAgent = null;
+    if (services !== null) {
+      services.agent.abort();
+      await services.close();
+      services = null;
+    }
+    setStatus("closed");
+  };
+
+  const actor: SessionActor = {
+    laneId: descriptor.laneId,
+    projectId: descriptor.projectId,
+    cwd: descriptor.cwd,
+    descriptor: () => descriptor,
+    status: () => status,
+    services: () => services,
+    projection,
+    hydrate,
+    bindView(nextView) {
+      view = nextView;
+      if (view.isFocused()) projection.clearUnread();
+    },
+    unbindView() {
+      view = null;
+    },
+    async submit(text, mode) {
+      const actorServices = await hydrate("background-prompt");
+      await Effect.runPromise(actorServices.sessionOrchestrator.submitPrompt(text, { mode }));
+    },
+    steer(text) {
+      if (services === null) return;
+      void Effect.runPromise(services.sessionOrchestrator.submitPrompt(text, { mode: "steer" }));
+    },
+    suspend,
+    close,
+  };
+
+  return actor;
+};
