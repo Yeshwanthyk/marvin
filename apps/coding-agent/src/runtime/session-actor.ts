@@ -1,4 +1,3 @@
-import type { AgentEvent } from "@yeshwanthyk/agent-core";
 import type {
   ProjectRuntimeBundle,
   ScopedSessionActorServices,
@@ -6,6 +5,10 @@ import type {
 } from "@yeshwanthyk/runtime-effect/project-bundle.js";
 import type { PromptDeliveryMode } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js";
 import { Effect } from "effect";
+import {
+  createActorProjectionStore,
+  type SessionActorProjectionStore,
+} from "./actor-projection.js";
 
 export type SessionActorStatus =
   | "cold"
@@ -18,14 +21,6 @@ export type SessionActorStatus =
   | "errored";
 
 export type SessionActorHydrateReason = "focus" | "background-prompt" | "rehydrate";
-
-export interface SessionActorProjectionStore {
-  subscribe(handler: (event: AgentEvent) => void): () => void;
-  applyEvent(event: AgentEvent): void;
-  readonly lastEventAt: () => number;
-  readonly unread: () => boolean;
-  clearUnread(): void;
-}
 
 export interface SessionViewBinding {
   readonly isFocused: () => boolean;
@@ -54,46 +49,15 @@ export interface SessionActorOptions {
   readonly onStatusChange?: (actor: SessionActor, status: SessionActorStatus) => void;
 }
 
-class PassthroughProjectionStore implements SessionActorProjectionStore {
-  private readonly listeners = new Set<(event: AgentEvent) => void>();
-  private lastEventAtMs = 0;
-  private hasUnread = false;
-
-  subscribe(handler: (event: AgentEvent) => void): () => void {
-    this.listeners.add(handler);
-    return () => {
-      this.listeners.delete(handler);
-    };
-  }
-
-  applyEvent(event: AgentEvent): void {
-    this.lastEventAtMs = Date.now();
-    this.hasUnread = true;
-    for (const listener of this.listeners) {
-      listener(event);
-    }
-  }
-
-  lastEventAt(): number {
-    return this.lastEventAtMs;
-  }
-
-  unread(): boolean {
-    return this.hasUnread;
-  }
-
-  clearUnread(): void {
-    this.hasUnread = false;
-  }
-}
-
 export const createSessionActor = (options: SessionActorOptions): SessionActor => {
   let descriptor = options.descriptor;
   let status: SessionActorStatus = "cold";
   let services: ScopedSessionActorServices | null = null;
   let unsubscribeAgent: (() => void) | null = null;
   let view: SessionViewBinding | null = null;
-  const projection = new PassthroughProjectionStore();
+  const projection = createActorProjectionStore({
+    isFocused: () => view?.isFocused() ?? false,
+  });
 
   const setStatus = (next: SessionActorStatus) => {
     status = next;
@@ -111,6 +75,7 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
       const nextServices = await bundle.createActorServices(descriptor, {
         hasUI: view?.isFocused() ?? false,
       });
+      projection.attach(nextServices);
       unsubscribeAgent = nextServices.agent.subscribe((event) => {
         projection.applyEvent(event);
         if (event.type === "agent_start") setStatus("streaming");
@@ -137,6 +102,7 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
     }
     unsubscribeAgent?.();
     unsubscribeAgent = null;
+    projection.detach();
     await services.close();
     services = null;
     setStatus("suspended");
@@ -147,6 +113,7 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
     setStatus("closing");
     unsubscribeAgent?.();
     unsubscribeAgent = null;
+    projection.detach();
     if (services !== null) {
       services.agent.abort();
       await services.close();

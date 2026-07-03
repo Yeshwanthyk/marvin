@@ -42,6 +42,12 @@ const createFakeActor = (
     status: () => status,
     services: () => null,
     projection: {
+      messages: () => [],
+      toolBlocks: () => [],
+      contextTokens: () => 0,
+      isResponding: () => false,
+      activityState: () => "idle",
+      retryStatus: () => null,
       subscribe: (_handler: (event: AgentEvent) => void) => () => {},
       applyEvent: (_event: AgentEvent) => {},
       lastEventAt: () => 0,

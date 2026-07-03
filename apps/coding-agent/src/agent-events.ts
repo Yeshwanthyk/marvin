@@ -72,6 +72,9 @@ export interface EventHandlerContext {
 
 	// Context window getter for usage calculations
 	getContextWindow?: () => number
+
+	// Optional projection throttle override for hidden/background streams.
+	streamUpdateThrottleMs?: number | (() => number | null | undefined)
 }
 
 export type AgentEventHandler = ((event: AgentEvent) => void) & { dispose: () => void }
@@ -86,6 +89,14 @@ function computeUpdateThrottleMs(textLength: number): number {
 	if (textLength > 12000) return UPDATE_THROTTLE_SLOWEST_MS
 	if (textLength > 6000) return UPDATE_THROTTLE_SLOW_MS
 	return UPDATE_THROTTLE_MS
+}
+
+function resolveUpdateThrottleMs(
+	baseMs: number,
+	override: EventHandlerContext["streamUpdateThrottleMs"],
+): number {
+	const next = typeof override === "function" ? override() : override
+	return typeof next === "number" && Number.isFinite(next) && next >= 0 ? next : baseMs
 }
 
 /** Type guard to check if a message is an AppMessage */
@@ -206,7 +217,7 @@ export function createAgentEventHandler(ctx: EventHandlerContext): AgentEventHan
 			updateTimeout = null
 			if (disposed) return
 			flushPendingUpdate()
-		}, updateThrottleMs)
+		}, resolveUpdateThrottleMs(updateThrottleMs, ctx.streamUpdateThrottleMs))
 	}
 	
 	const flushToolUpdates = () => {
