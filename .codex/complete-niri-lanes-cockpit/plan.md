@@ -118,20 +118,21 @@ Verification
 - [x] Review gate completed locally; narrow-width blocker fixed.
 
 Exit criteria
-- [ ] Phase commit created.
+- [x] Committed as `2d2ed9d feat: redesign lane header context`.
 
 ## Phase 8: Overview Mode
-Status: pending
+Status: complete
 
 Implementation
-- [ ] Add overview metadata grid.
-- [ ] Bind prefix `o` to overview.
+- [x] Add overview metadata grid.
+- [x] Bind prefix `o` to overview.
 
 Verification
-- [ ] Tests for overview model/actions.
-- [ ] `bun run check` passes.
-- [ ] isolated tmux smoke for overview open/navigate/close.
-- [ ] Review gate completed and blockers fixed.
+- [x] Tests for overview model/actions.
+- [x] `bun run check` passes.
+- [x] `git diff --check` passes.
+- [x] isolated tmux smoke for overview open/close passed.
+- [x] Review gate completed locally; no blockers found.
 
 Exit criteria
 - [ ] Phase commit created.

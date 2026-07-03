@@ -33,6 +33,7 @@ import { createScratchpadStore } from "@yeshwanthyk/runtime-effect/scratchpads.j
 import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneMoveDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
 import { createCommandPaletteOptions, parseCommandPaletteValue } from "./command-palette-options.js"
 import { canMoveFocusedSessionAcrossProject } from "./lane-actions.js"
+import { createOverviewOptions, parseOverviewValue } from "./overview-options.js"
 import { useHookBridge } from "./useHookBridge.js"
 import { usePromptSubmission } from "./usePromptSubmission.js"
 import { useSessionLaneController } from "./useSessionLaneController.js"
@@ -719,8 +720,25 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		})()
 	}
 
-	const showOverviewPlaceholder = () => {
-		showToastRef.current("Overview pending", "Prefix o will open overview mode after Phase 8", "info")
+	const openOverview = () => {
+		void (async () => {
+			syncCurrentSessionLane()
+			const lanes = workspaceLanes()
+			const selected = await modals.showSearchSelect(
+				"Overview",
+				createOverviewOptions(lanes, activityEntries?.() ?? []),
+				"project, title, status, model, id",
+			)
+			if (!selected) return
+			const parsed = parseOverviewValue(selected)
+			if (!parsed) return
+			const session = lanes.sessionsById[parsed.laneId]
+			const project = session ? lanes.projectsById[session.projectId] : undefined
+			if (!session || !project || session.archivedAt !== undefined) return
+			const projectIndex = lanes.projectOrder.indexOf(project.id)
+			const sessionIndex = (lanes.sessionOrderByProject[project.id] ?? []).indexOf(session.laneId)
+			await switchToLane({ project, session, projectIndex: Math.max(0, projectIndex), sessionIndex: Math.max(0, sessionIndex) }, { preserveLaneMode: preserveStickyLaneMode() })
+		})()
 	}
 
 	const projectTitleFor = (projectId: string): string =>
@@ -951,7 +969,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				shouldOwnShiftArrows={() => !composerSelectionActiveRef.current()}
 				onNavigate={navigateLane}
 				onMove={moveFocusedLane}
-				onOverview={showOverviewPlaceholder}
+				onOverview={openOverview}
 				onNewSession={startSessionNextToFocus}
 				onRename={renameCurrentSession}
 				onJumpProject={jumpToProjectIndex}
