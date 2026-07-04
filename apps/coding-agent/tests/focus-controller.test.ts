@@ -122,6 +122,69 @@ describe("FocusController", () => {
 		expect(controller.focusedActor()).toBe(actor)
 	})
 
+	it("selects cloud-resident lanes without hydrating local JSONL", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "marvin-focus-"))
+		const [lanes, setLanes] = createSignal<WorkspaceLanesV2>()
+		const store = createWorkspaceLaneStore(dir, setLanes)
+		const laneId = "lane-cloud"
+		store.transact([
+			{
+				type: "upsertProject",
+				project: {
+					id: "/tmp/project",
+					cwd: "/tmp/project",
+					title: "project",
+					createdAt: "2026-07-03T00:00:00.000Z",
+					updatedAt: "2026-07-03T00:00:00.000Z",
+				},
+			},
+			{
+				type: "upsertSession",
+				session: createSessionLaneInput({
+					laneId,
+					projectId: "/tmp/project",
+					sessionId: "session",
+					sessionPath: "/tmp/session.jsonl",
+					title: "session",
+					provider: "anthropic",
+					modelId: "claude",
+					location: { kind: "cloud", beamId: "beam-123", movedAt: 123 },
+					createdAt: "2026-07-03T00:00:00.000Z",
+					updatedAt: "2026-07-03T00:00:00.000Z",
+				}),
+			},
+		])
+		setLanes(store.lanes())
+
+		const actor = fakeActor(laneId)
+		const hydrated: string[] = []
+		const [, setFocusedLaneId] = createSignal<string | null>(null)
+		const controller = createFocusController({
+			laneStore: store,
+			workspaceLanes: () => lanes() ?? store.lanes(),
+			registry: {
+				get: () => actor,
+				canStartStream: () => ({ type: "accepted" }),
+				create: () => actor,
+				getOrCreate: () => actor,
+				hydrate: async (nextLaneId) => {
+					hydrated.push(nextLaneId)
+					return { type: "hydrated", actor }
+				},
+				sweepIdle: async () => {},
+				list: () => [actor],
+				remove: async () => {},
+			},
+			setFocusedLaneId,
+		})
+
+		await controller.focusLane(laneId)
+
+		expect(store.lanes().selection).toEqual({ projectId: "/tmp/project", laneId })
+		expect(hydrated).toEqual([])
+		expect(controller.focusedActor()).toBe(actor)
+	})
+
 	it("downgrades the previously focused actor UI policy", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "marvin-focus-"))
 		const [lanes, setLanes] = createSignal<WorkspaceLanesV2>()

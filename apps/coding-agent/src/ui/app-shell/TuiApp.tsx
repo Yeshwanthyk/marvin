@@ -126,6 +126,7 @@ export interface TuiAppProps {
 	focusedActor?: Accessor<SessionActor | null>
 	canStartPrompt?: () => { ok: true } | { ok: false; maxStreaming: number }
 	removeLaneActor?: (laneId: string) => Promise<void>
+	clearFocusedRuntime?: () => void
 	active?: () => boolean
 	onActivityChange?: (activity: TuiAppActivity) => void
 	onExit?: () => void
@@ -141,7 +142,7 @@ export interface TuiAppActivity {
 	lastObservedAt: number
 }
 
-export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, hostNotifications, activityEntries, acknowledgeHostNotification, focusedActor, canStartPrompt, removeLaneActor, active, onActivityChange, onExit }: TuiAppProps) => {
+export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, initialScratchpadId, initialSessionTitle, startNewSession, initialNavMode, laneStore, workspaceLanes, hostNotifications, activityEntries, acknowledgeHostNotification, focusedActor, canStartPrompt, removeLaneActor, clearFocusedRuntime, active, onActivityChange, onExit }: TuiAppProps) => {
 	const runtime = useRuntime()
 	const {
 		agent,
@@ -804,6 +805,22 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const cockpitMetaForLane = (laneId: string) => loadCockpitSessionIndex(config.configDir)[laneId]
 
+	const cursorForLane = (laneId: string): LaneCursorV2 | null => {
+		const next = workspaceLanes()
+		const session = next.sessionsById[laneId]
+		const project = session ? next.projectsById[session.projectId] : undefined
+		if (!session || !project) return null
+		const projectIndex = next.projectOrder.indexOf(project.id)
+		const sessionIndex = (next.sessionOrderByProject[project.id] ?? []).indexOf(session.laneId)
+		return { project, session, projectIndex: Math.max(0, projectIndex), sessionIndex: Math.max(0, sessionIndex) }
+	}
+
+	const refreshLocalLaneBinding = async (laneId: string): Promise<void> => {
+		const cursor = cursorForLane(laneId)
+		if (!cursor || cursor.session.location?.kind === "cloud") return
+		await switchToLane(cursor, { preserveLaneMode: preserveStickyLaneMode() })
+	}
+
 	const moveCurrentLaneToCloud = () => {
 		void (async () => {
 			const current = syncCurrentSessionLane()
@@ -815,9 +832,11 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				isResponding: store.isResponding.value(),
 			})
 			if (!result.ok) {
+				await refreshLocalLaneBinding(current.session.laneId)
 				showToastRef.current("Move to cloud failed", result.reason, "error")
 				return
 			}
+			clearFocusedRuntime?.()
 			showToastRef.current("Moved to cloud", result.url ?? result.beamId, "success")
 		})()
 	}
@@ -835,13 +854,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				return
 			}
 			showToastRef.current("Pulled back", result.beamId, "success")
-			const next = workspaceLanes()
-			const session = next.sessionsById[current.session.laneId]
-			const project = session ? next.projectsById[session.projectId] : undefined
-			if (!session || !project) return
-			const projectIndex = next.projectOrder.indexOf(project.id)
-			const sessionIndex = (next.sessionOrderByProject[project.id] ?? []).indexOf(session.laneId)
-			await switchToLane({ project, session, projectIndex: Math.max(0, projectIndex), sessionIndex: Math.max(0, sessionIndex) }, { preserveLaneMode: preserveStickyLaneMode() })
+			await refreshLocalLaneBinding(current.session.laneId)
 		})()
 	}
 

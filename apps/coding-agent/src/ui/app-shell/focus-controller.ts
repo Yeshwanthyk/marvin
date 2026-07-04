@@ -53,6 +53,11 @@ export const createFocusController = ({
 		previousActor?.refreshUiPolicy(false)
 		const actor = registry.getOrCreate(descriptor)
 		actor.bindView({ isFocused: () => workspaceLanes().selection?.laneId === laneId })
+		if (descriptor.location?.kind === "cloud") {
+			setFocusedLaneId(laneId)
+			actor.projection.clearUnread()
+			return actor
+		}
 		const result = await registry.hydrate(laneId, "focus")
 		if (result.type === "stream-limit-reached") return result.actor
 		setFocusedLaneId(laneId)

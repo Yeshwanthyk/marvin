@@ -7,6 +7,8 @@ import {
 	type LaneCursorV2,
 	type WorkspaceLaneStore,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
+import type { ScopedSessionActorServices } from "@yeshwanthyk/runtime-effect/project-bundle.js"
+import type { SessionActor, SessionActorStatus } from "../src/runtime/session-actor.js"
 import { moveLaneToCloud, pullLaneBackFromCloud } from "../src/ui/app-shell/lane-actions.js"
 
 const now = "2026-06-03T12:00:00.000Z"
@@ -64,6 +66,53 @@ const withMockBeam = async (
 	}
 }
 
+const fakeSuspendableActor = (events: string[]): SessionActor => {
+	let status: SessionActorStatus = "warm"
+	return {
+		laneId: "lane-a",
+		projectId: "project-a",
+		cwd: "/tmp/project",
+		descriptor: () => ({
+			laneId: "lane-a",
+			projectId: "project-a",
+			cwd: "/tmp/project",
+			sessionId: "session-a",
+			sessionPath: "/sessions/session-a.jsonl",
+		}),
+		status: () => status,
+		services: () => null,
+		projection: {
+			messages: () => [],
+			toolBlocks: () => [],
+			contextTokens: () => 0,
+			isResponding: () => false,
+			activityState: () => "idle",
+			retryStatus: () => null,
+			lastEventAt: () => 0,
+			unread: () => false,
+			subscribe: () => () => {},
+			applyEvent: () => {},
+			restoreLoadedSession: () => {},
+			clearUnread: () => {},
+		},
+		hydrate: async (reason) => {
+			events.push(`hydrate:${reason}`)
+			status = "warm"
+			return undefined as unknown as ScopedSessionActorServices
+		},
+		bindView: () => {},
+		unbindView: () => {},
+		refreshUiPolicy: () => {},
+		submit: async () => {},
+		steer: () => {},
+		suspend: async () => {
+			events.push("suspend")
+			status = "suspended"
+		},
+		close: async () => {},
+	}
+}
+
 describe("lane cloud actions", () => {
 	it("moves a local lane to cloud via beam push argv and marks it cloud", async () => {
 		const dir = await mkdtemp(path.join(tmpdir(), "marvin-lanes-"))
@@ -94,6 +143,43 @@ exit 2
 `, async () => {
 				const result = await moveLaneToCloud({ cursor, laneStore: store, actor: null, isResponding: false })
 				expect(result).toEqual({ ok: false, reason: "nope" })
+				expect(store.lanes().sessionsById["lane-a"]?.location).toBeUndefined()
+			})
+		} finally {
+			await rm(dir, { recursive: true, force: true })
+		}
+	})
+
+	it("rejects malformed beam push json without persisting a cloud marker", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "marvin-lanes-"))
+		try {
+			const { store, cursor } = seedStore(dir)
+			await withMockBeam(`#!/bin/sh
+echo '{"beamId":123}'
+`, async () => {
+				const result = await moveLaneToCloud({ cursor, laneStore: store, actor: null, isResponding: false })
+				expect(result).toEqual({ ok: false, reason: "{\"beamId\":123}" })
+				expect(store.lanes().sessionsById["lane-a"]?.location).toBeUndefined()
+			})
+		} finally {
+			await rm(dir, { recursive: true, force: true })
+		}
+	})
+
+	it("rehydrates the local actor when push fails after suspend", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "marvin-lanes-"))
+		try {
+			const { store, cursor } = seedStore(dir)
+			const events: string[] = []
+			await withMockBeam(`#!/bin/sh
+echo nope >&2
+exit 2
+`, async () => {
+				const actor = fakeSuspendableActor(events)
+				const result = await moveLaneToCloud({ cursor, laneStore: store, actor, isResponding: false })
+				expect(result).toEqual({ ok: false, reason: "nope" })
+				expect(events).toEqual(["suspend", "hydrate:rehydrate"])
+				expect(actor.status()).toBe("warm")
 				expect(store.lanes().sessionsById["lane-a"]?.location).toBeUndefined()
 			})
 		} finally {

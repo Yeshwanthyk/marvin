@@ -42,12 +42,24 @@ export const runBeamCommand: BeamCommandRunner = async (args, cwd) => {
 	return { exitCode, stdout, stderr }
 }
 
+const readJsonString = (value: Record<string, unknown>, key: keyof BeamJsonResponse): string | undefined => {
+	const entry = value[key]
+	return typeof entry === "string" && entry.length > 0 ? entry : undefined
+}
+
 const parseBeamJson = (result: BeamCommandResult): BeamJsonResponse | null => {
 	if (result.exitCode !== 0) return null
 	try {
 		const parsed: unknown = JSON.parse(result.stdout)
 		if (typeof parsed !== "object" || parsed === null) return null
-		return parsed as BeamJsonResponse
+		const record = parsed as Record<string, unknown>
+		return {
+			...(readJsonString(record, "beamId") !== undefined ? { beamId: readJsonString(record, "beamId") } : {}),
+			...(readJsonString(record, "id") !== undefined ? { id: readJsonString(record, "id") } : {}),
+			...(readJsonString(record, "url") !== undefined ? { url: readJsonString(record, "url") } : {}),
+			...(readJsonString(record, "phoneUrl") !== undefined ? { phoneUrl: readJsonString(record, "phoneUrl") } : {}),
+			...(readJsonString(record, "qr") !== undefined ? { qr: readJsonString(record, "qr") } : {}),
+		}
 	} catch {
 		return null
 	}
@@ -60,6 +72,19 @@ const suspendForCloudMove = async (actor: SessionActor | null): Promise<boolean>
 	if (!actor) return true
 	await actor.suspend()
 	return actor.services() === null
+}
+
+const errorMessage = (error: unknown): string =>
+	error instanceof Error ? error.message : String(error)
+
+const rehydrateAfterFailedCloudMove = async (actor: SessionActor | null): Promise<string | null> => {
+	if (!actor) return null
+	try {
+		await actor.hydrate("rehydrate")
+		return null
+	} catch (error) {
+		return errorMessage(error)
+	}
 }
 
 export const moveLaneToCloud = async (
@@ -92,7 +117,9 @@ export const moveLaneToCloud = async (
 	const beamId = parsed?.beamId ?? parsed?.id
 	if (!parsed || !beamId) {
 		laneStore.dispatch({ type: "setSessionLocation", laneId: cursor.session.laneId })
-		return { ok: false, reason: commandFailure(result) }
+		const restoreFailure = await rehydrateAfterFailedCloudMove(actor)
+		const reason = commandFailure(result)
+		return { ok: false, reason: restoreFailure ? `${reason}; local rehydrate failed: ${restoreFailure}` : reason }
 	}
 	laneStore.dispatch({
 		type: "setSessionLocation",

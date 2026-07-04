@@ -267,6 +267,12 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 		watchActorActivity(actor)
 		const descriptor = descriptorForLane(workspaceLanes(), laneId)
 		const services = actor.services()
+		if (descriptor?.location?.kind === "cloud") {
+			setFocusedBinding(null)
+			setFocusedLaneId(laneId)
+			activityIndex.patch(laneId, { unread: false })
+			return actor
+		}
 		if (!descriptor || !services) return null
 		const bundle = await getBundle(descriptor)
 		setFocusedBinding({
@@ -433,6 +439,7 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 								: { ok: false, maxStreaming: admission.maxStreaming }
 						}}
 						removeLaneActor={removeLaneActor}
+						clearFocusedRuntime={() => setFocusedBinding(null)}
 						active={() => true}
 						onExit={closeHost}
 					/>
