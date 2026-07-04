@@ -32,6 +32,7 @@ const descriptorForLane = (
 		cwd: project.cwd,
 		sessionId: session.sessionId,
 		sessionPath: session.sessionPath,
+		...(session.location !== undefined ? { location: session.location } : {}),
 		initialTitle: session.title,
 	}
 }

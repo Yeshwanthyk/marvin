@@ -4,7 +4,7 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { getModels } from "@yeshwanthyk/ai";
 import { Effect } from "effect";
-import { createProjectRuntimeBundle } from "../src/project-bundle.js";
+import { CloudResidentSessionError, createProjectRuntimeBundle } from "../src/project-bundle.js";
 import { createHookUIContext } from "../src/hooks/index.js";
 import { createJsonlOwnershipIndex, JsonlOwnershipConflictError } from "../src/session/jsonl-ownership.js";
 import { SessionManager } from "../src/session-manager.js";
@@ -177,6 +177,46 @@ export default function hook(marvin) {
         .rejects.toBeInstanceOf(JsonlOwnershipConflictError);
 
       await first.close();
+      await bundle.close();
+    } finally {
+      await rm(temp.dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects local actor services for a cloud-resident lane before JSONL ownership", async () => {
+    const temp = await createTempConfig();
+    const cwd = path.join(temp.dir, "project");
+    try {
+      await mkdir(cwd, { recursive: true });
+      const seed = new SessionManager(temp.dir, cwd);
+      const sessionId = seed.startSession("anthropic", temp.model.id, "medium");
+      const sessionPath = seed.sessionPath;
+      if (sessionPath === null) throw new Error("session path fixture unavailable");
+
+      const ownership = createJsonlOwnershipIndex();
+      const bundle = await createProjectRuntimeBundle({
+        configDir: temp.dir,
+        configPath: temp.configPath,
+        cwd,
+        jsonlOwnership: ownership,
+        instrumentation: { record: () => {} },
+      });
+
+      try {
+        await bundle.createActorServices({
+          ...descriptor(cwd, "lane-cloud", sessionId, sessionPath),
+          location: { kind: "cloud", beamId: "beam-123", movedAt: 123 },
+        });
+        throw new Error("expected cloud resident lane to be rejected");
+      } catch (error) {
+        expect(error).toBeInstanceOf(CloudResidentSessionError);
+        if (!(error instanceof CloudResidentSessionError)) throw error;
+        expect(error.beamId).toBe("beam-123");
+      }
+
+      const local = await bundle.createActorServices(descriptor(cwd, "lane-local", sessionId, sessionPath));
+      expect(local.sessionManager.sessionPath).toBe(sessionPath);
+      await local.close();
       await bundle.close();
     } finally {
       await rm(temp.dir, { recursive: true, force: true });

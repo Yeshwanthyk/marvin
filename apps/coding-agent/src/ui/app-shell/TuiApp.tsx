@@ -39,7 +39,7 @@ import {
 } from "../../runtime/cockpit-actions.js"
 import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneMoveDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
 import { createCommandPaletteOptions, parseCommandPaletteValue } from "./command-palette-options.js"
-import { canMoveFocusedSessionAcrossProject } from "./lane-actions.js"
+import { canMoveFocusedSessionAcrossProject, moveLaneToCloud, pullLaneBackFromCloud } from "./lane-actions.js"
 import { createOverviewOptions, parseOverviewValue } from "./overview-options.js"
 import { useHookBridge } from "./useHookBridge.js"
 import { usePromptSubmission } from "./usePromptSubmission.js"
@@ -804,6 +804,47 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const cockpitMetaForLane = (laneId: string) => loadCockpitSessionIndex(config.configDir)[laneId]
 
+	const moveCurrentLaneToCloud = () => {
+		void (async () => {
+			const current = syncCurrentSessionLane()
+			if (!current) return
+			const result = await moveLaneToCloud({
+				cursor: current,
+				laneStore,
+				actor: focusedActor?.() ?? null,
+				isResponding: store.isResponding.value(),
+			})
+			if (!result.ok) {
+				showToastRef.current("Move to cloud failed", result.reason, "error")
+				return
+			}
+			showToastRef.current("Moved to cloud", result.url ?? result.beamId, "success")
+		})()
+	}
+
+	const pullCurrentLaneFromCloud = () => {
+		void (async () => {
+			const current = syncCurrentSessionLane()
+			if (!current) return
+			const result = await pullLaneBackFromCloud({
+				cursor: current,
+				laneStore,
+			})
+			if (!result.ok) {
+				showToastRef.current("Pull back failed", result.reason, "error")
+				return
+			}
+			showToastRef.current("Pulled back", result.beamId, "success")
+			const next = workspaceLanes()
+			const session = next.sessionsById[current.session.laneId]
+			const project = session ? next.projectsById[session.projectId] : undefined
+			if (!session || !project) return
+			const projectIndex = next.projectOrder.indexOf(project.id)
+			const sessionIndex = (next.sessionOrderByProject[project.id] ?? []).indexOf(session.laneId)
+			await switchToLane({ project, session, projectIndex: Math.max(0, projectIndex), sessionIndex: Math.max(0, sessionIndex) }, { preserveLaneMode: preserveStickyLaneMode() })
+		})()
+	}
+
 	const jumpToExternalAgent = () => {
 		void (async () => {
 			const current = syncCurrentSessionLane()
@@ -923,6 +964,12 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 					return
 				case "restore":
 					restoreArchivedSession()
+					return
+				case "moveToCloud":
+					moveCurrentLaneToCloud()
+					return
+				case "pullFromCloud":
+					pullCurrentLaneFromCloud()
 					return
 				case "jumpExternal":
 					jumpToExternalAgent()

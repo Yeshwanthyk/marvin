@@ -86,6 +86,7 @@ describe("command palette options", () => {
 			commandActionValue("detach"),
 			commandActionValue("archive"),
 			commandActionValue("restore"),
+			commandActionValue("moveToCloud"),
 			commandSessionValue("lane-a"),
 			commandScratchpadValue("scratch-a"),
 			commandProjectValue("/work/marvin"),
@@ -94,18 +95,24 @@ describe("command palette options", () => {
 		expect(options[1]?.label).toBe("Rename session")
 		expect(options[8]?.description).toBe("1 archived")
 		expect(options[9]).toEqual({
+			value: commandActionValue("moveToCloud"),
+			label: "Move to cloud",
+			description: "Beam cloud",
+			keywords: "beam cloud move push phone session lane",
+		})
+		expect(options[10]).toEqual({
 			value: commandSessionValue("lane-a"),
 			label: "nora / first task",
 			description: "aaaaaaaa | codex/gpt-5.5-low",
 			keywords: "nora first task aaaaaaaa-0000-0000-0000-000000000000 /sessions/a.jsonl codex/gpt-5.5-low switch session jump lane project",
 		})
-		expect(options[10]).toEqual({
+		expect(options[11]).toEqual({
 			value: commandScratchpadValue("scratch-a"),
 			label: "Scratch / fix search flow",
 			description: "Check fuzzy matching",
 			keywords: "fix search flow /work/nora Check fuzzy matching search scratch scratchpad note open start",
 		})
-		expect(options[11]).toEqual({
+		expect(options[12]).toEqual({
 			value: commandProjectValue("/work/marvin"),
 			label: "Project / marvin",
 			description: "/work/marvin",
@@ -161,6 +168,29 @@ describe("command palette options", () => {
 		expect(parseCommandPaletteValue(commandActionValue("previewExternal"))).toEqual({
 			type: "action",
 			action: "previewExternal",
+		})
+	})
+
+	it("offers pull back for cloud-resident selected lanes", () => {
+		const lanes = lanesFixture()
+		const selected = lanes.sessionsById["lane-a"]
+		if (!selected) throw new Error("fixture missing selected lane")
+		const cloud: WorkspaceLanesV2 = {
+			...lanes,
+			sessionsById: {
+				...lanes.sessionsById,
+				"lane-a": {
+					...selected,
+					location: { kind: "cloud", beamId: "beam-123", movedAt: 123 },
+				},
+			},
+		}
+
+		expect(createCommandPaletteOptions(cloud).map((option) => option.value)).toContain(commandActionValue("pullFromCloud"))
+		expect(createCommandPaletteOptions(cloud).map((option) => option.value)).not.toContain(commandActionValue("moveToCloud"))
+		expect(parseCommandPaletteValue(commandActionValue("pullFromCloud"))).toEqual({
+			type: "action",
+			action: "pullFromCloud",
 		})
 	})
 })

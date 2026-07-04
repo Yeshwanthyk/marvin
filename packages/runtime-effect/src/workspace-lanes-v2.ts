@@ -39,10 +39,15 @@ export interface SessionLaneV2 {
   readonly title: string;
   readonly provider: string;
   readonly modelId: string;
+  readonly location?: SessionLaneLocationV2;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly archivedAt?: string;
 }
+
+export type SessionLaneLocationV2 =
+  | { readonly kind: "local" }
+  | { readonly kind: "cloud"; readonly beamId: string; readonly movedAt: number };
 
 export interface ProjectFocusV2 {
   readonly focusedLaneId?: LaneId;
@@ -78,6 +83,7 @@ export interface SessionLaneInput {
   readonly title: string;
   readonly provider: string;
   readonly modelId: string;
+  readonly location?: SessionLaneLocationV2;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly archivedAt?: string;
@@ -98,6 +104,7 @@ export type WorkspaceLanePatch =
   | { readonly type: "archiveSession"; readonly laneId: LaneId }
   | { readonly type: "restoreSession"; readonly laneId: LaneId; readonly projectId?: ProjectId; readonly insert?: InsertPosition }
   | { readonly type: "renameSession"; readonly laneId: LaneId; readonly title: string }
+  | { readonly type: "setSessionLocation"; readonly laneId: LaneId; readonly location?: SessionLaneLocationV2 }
   | { readonly type: "touchSession"; readonly laneId: LaneId; readonly updatedAt: string };
 
 export interface WorkspaceLaneStore {
@@ -199,6 +206,8 @@ const parseSession = (value: unknown): SessionLaneV2 | undefined => {
   const modelId = readString(value, "modelId");
   const createdAt = readString(value, "createdAt");
   const updatedAt = readString(value, "updatedAt");
+  const location = parseSessionLocation(value.location);
+  if (value.location !== undefined && location === undefined) return undefined;
   if (
     !laneId ||
     !projectId ||
@@ -213,8 +222,20 @@ const parseSession = (value: unknown): SessionLaneV2 | undefined => {
     return undefined;
   }
   const archivedAt = readString(value, "archivedAt");
-  if (archivedAt) return { laneId, projectId, sessionId, sessionPath, title, provider, modelId, createdAt, updatedAt, archivedAt };
-  return { laneId, projectId, sessionId, sessionPath, title, provider, modelId, createdAt, updatedAt };
+  const parsed = {
+    laneId,
+    projectId,
+    sessionId,
+    sessionPath,
+    title,
+    provider,
+    modelId,
+    ...(location !== undefined ? { location } : {}),
+    createdAt,
+    updatedAt,
+  };
+  if (archivedAt) return { ...parsed, archivedAt };
+  return parsed;
 };
 
 const parseFocus = (value: unknown): ProjectFocusV2 | undefined => {
@@ -231,6 +252,19 @@ const parseSelection = (value: unknown): WorkspaceSelectionV2 | undefined => {
   const projectId = readString(value, "projectId");
   const laneId = readString(value, "laneId");
   return projectId && laneId ? { projectId, laneId } : undefined;
+};
+
+const parseSessionLocation = (value: unknown): SessionLaneLocationV2 | undefined => {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) return undefined;
+  if (value.kind === "local") return { kind: "local" };
+  if (value.kind === "cloud") {
+    const beamId = readString(value, "beamId");
+    const movedAt = readNumber(value, "movedAt");
+    if (!beamId || movedAt === undefined) return undefined;
+    return { kind: "cloud", beamId, movedAt };
+  }
+  return undefined;
 };
 
 const parseRecordValues = <T>(
@@ -711,6 +745,7 @@ export const reduceWorkspaceLanePatch = (lanes: WorkspaceLanesV2, patch: Workspa
     }
     case "upsertSession": {
       if (lanes.projectsById[patch.session.projectId] === undefined) return lanes;
+      const location = patch.session.location ?? lanes.sessionsById[patch.session.laneId]?.location;
       const session = maybeWithArchivedAt(
         {
           laneId: patch.session.laneId,
@@ -720,6 +755,7 @@ export const reduceWorkspaceLanePatch = (lanes: WorkspaceLanesV2, patch: Workspa
           title: patch.session.title,
           provider: patch.session.provider,
           modelId: patch.session.modelId,
+          ...(location !== undefined ? { location } : {}),
           createdAt: patch.session.createdAt,
           updatedAt: patch.session.updatedAt,
         },
@@ -767,6 +803,7 @@ export const reduceWorkspaceLanePatch = (lanes: WorkspaceLanesV2, patch: Workspa
         title: session.title,
         provider: session.provider,
         modelId: session.modelId,
+        ...(session.location !== undefined ? { location: session.location } : {}),
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
       };
@@ -788,6 +825,16 @@ export const reduceWorkspaceLanePatch = (lanes: WorkspaceLanesV2, patch: Workspa
       return {
         ...lanes,
         sessionsById: { ...lanes.sessionsById, [patch.laneId]: { ...session, title } },
+      };
+    }
+    case "setSessionLocation": {
+      const session = lanes.sessionsById[patch.laneId];
+      if (!session) return lanes;
+      const { location: _location, ...rest } = session;
+      const nextSession = patch.location === undefined ? rest : { ...rest, location: patch.location };
+      return {
+        ...lanes,
+        sessionsById: { ...lanes.sessionsById, [patch.laneId]: nextSession },
       };
     }
     case "touchSession": {
@@ -860,6 +907,7 @@ export const createSessionLaneInput = (
   title: input.title,
   provider: input.provider,
   modelId: input.modelId,
+  ...(input.location !== undefined ? { location: input.location } : {}),
   createdAt: input.createdAt,
   updatedAt: input.updatedAt,
   ...withoutUndefined(input.archivedAt ? { archivedAt: input.archivedAt } : {}),

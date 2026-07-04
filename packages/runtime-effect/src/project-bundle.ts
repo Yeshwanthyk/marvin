@@ -83,6 +83,7 @@ import {
   type TransportBundle,
 } from "./transports.js";
 import type { JsonlOwnershipIndex, LaneId } from "./session/jsonl-ownership.js";
+import type { SessionLaneLocationV2 } from "./workspace-lanes-v2.js";
 
 export type AdapterKind = "tui" | "headless" | "acp";
 export type ProjectId = string;
@@ -101,7 +102,20 @@ export interface SessionActorDescriptor {
   readonly cwd: string;
   readonly sessionId: string | null;
   readonly sessionPath: string | null;
+  readonly location?: SessionLaneLocationV2;
   readonly initialTitle?: string;
+}
+
+export class CloudResidentSessionError extends Error {
+  override readonly name = "CloudResidentSessionError";
+  readonly laneId: LaneId;
+  readonly beamId: string;
+
+  constructor(input: { readonly laneId: LaneId; readonly beamId: string }) {
+    super(`Session lane ${input.laneId} is resident in Beam cloud ${input.beamId}; pull it back before opening local JSONL`);
+    this.laneId = input.laneId;
+    this.beamId = input.beamId;
+  }
 }
 
 export interface LoadedHookDefinitions {
@@ -268,6 +282,13 @@ interface CreateActorServicesOptions {
 const createActorServices = async (
   options: CreateActorServicesOptions,
 ): Promise<ScopedSessionActorServices> => {
+  if (options.descriptor.location?.kind === "cloud") {
+    throw new CloudResidentSessionError({
+      laneId: options.descriptor.laneId,
+      beamId: options.descriptor.location.beamId,
+    });
+  }
+
   const scope = await Effect.runPromise(Scope.make());
   const sessionManager = new SessionManager(
     options.bundle.config.configDir,

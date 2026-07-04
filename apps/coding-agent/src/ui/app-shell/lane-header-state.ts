@@ -22,6 +22,7 @@ export interface LaneHeaderCurrent {
 	previousProjectTitle?: string
 	nextProjectTitle?: string
 	external: boolean
+	cloudBeamId?: string
 }
 
 export interface LaneHeaderState {
@@ -73,6 +74,7 @@ const toHeaderCurrent = (lanes: WorkspaceLanesV2, cursor: LaneCursorV2): LaneHea
 		...(previousProjectId ? { previousProjectTitle: lanes.projectsById[previousProjectId]?.title ?? previousProjectId } : {}),
 		...(nextProjectId ? { nextProjectTitle: lanes.projectsById[nextProjectId]?.title ?? nextProjectId } : {}),
 		external: isExternalLaneId(cursor.session.laneId),
+		...(cursor.session.location?.kind === "cloud" ? { cloudBeamId: cursor.session.location.beamId } : {}),
 	}
 }
 
@@ -165,6 +167,7 @@ export const laneHeaderDisplay = (state: LaneHeaderState): LaneHeaderDisplay => 
 		}
 	}
 	const projectTitle = current.external ? `ext ${current.projectTitle}` : current.projectTitle
+	const sessionTitle = current.cloudBeamId ? `☁ ${current.sessionTitle}` : current.sessionTitle
 	const position = `${projectTitle} ${current.projectIndex}/${current.projectCount} · ${current.sessionIndex}/${current.sessionCount}`
 	const adjacentParts = [
 		current.previousSessionTitle ? `←${current.previousSessionTitle}` : "",
@@ -175,7 +178,7 @@ export const laneHeaderDisplay = (state: LaneHeaderState): LaneHeaderDisplay => 
 	return {
 		active,
 		badge,
-		summary: `${position} · ${current.sessionTitle}`,
+		summary: `${position} · ${sessionTitle}`,
 		position,
 		adjacent: adjacentParts.join(" "),
 		activityBadges: activityBadges(state.activity),

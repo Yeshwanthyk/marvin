@@ -126,6 +126,29 @@ describe("overview options", () => {
 		}))
 	})
 
+	it("labels cloud sessions from lane metadata", () => {
+		const lanes = lanesFixture()
+		const selected = lanes.sessionsById["kiri-a"]
+		if (!selected) throw new Error("fixture missing selected lane")
+		const cloud: WorkspaceLanesV2 = {
+			...lanes,
+			sessionsById: {
+				...lanes.sessionsById,
+				"kiri-a": {
+					...selected,
+					location: { kind: "cloud", beamId: "beam-123", movedAt: 123 },
+				},
+			},
+		}
+
+		const option = createOverviewOptions(cloud).find((entry) => entry.value === "overview:session:kiri-a")
+		expect(option).toEqual(expect.objectContaining({
+			value: "overview:session:kiri-a",
+			label: "☁ kiri 1/2 1/1  kiri warm",
+			description: "cloud beam-123 | codex/gpt-5.5 | aaaaaaaa",
+		}))
+	})
+
 	it("parses overview selections", () => {
 		expect(parseOverviewValue("overview:session:nora-a")).toEqual({ type: "session", laneId: "nora-a" })
 		expect(parseOverviewValue("overview:session:")).toBeNull()

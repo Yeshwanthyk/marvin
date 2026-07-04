@@ -18,6 +18,8 @@ export type CommandPaletteAction =
 	| "detach"
 	| "archive"
 	| "restore"
+	| "moveToCloud"
+	| "pullFromCloud"
 	| "jumpExternal"
 	| "previewExternal"
 
@@ -41,6 +43,8 @@ const ACTIONS: CommandPaletteAction[] = [
 	"detach",
 	"archive",
 	"restore",
+	"moveToCloud",
+	"pullFromCloud",
 	"jumpExternal",
 	"previewExternal",
 ]
@@ -114,6 +118,8 @@ export const createCommandPaletteOptions = (
 	const activeSessions = lanes.projectOrder.flatMap((projectId) => activeSessionsForProject(lanes, projectId))
 	const currentLaneId = lanes.selection?.laneId
 	const externalSelected = currentLaneId ? isExternalLaneId(currentLaneId) : false
+	const currentLane = currentLaneId ? lanes.sessionsById[currentLaneId] : undefined
+	const cloudSelected = currentLane?.location?.kind === "cloud"
 	return [
 		{
 			value: commandActionValue("settings"),
@@ -169,6 +175,21 @@ export const createCommandPaletteOptions = (
 			description: archivedCount === 0 ? "No archived sessions" : `${archivedCount} archived`,
 			keywords: "unarchive archived session restore recover",
 		},
+		...(currentLane && !externalSelected ? [
+			cloudSelected
+				? {
+					value: commandActionValue("pullFromCloud"),
+					label: "Pull back",
+					description: currentLane.location?.kind === "cloud" ? currentLane.location.beamId : "Beam cloud",
+					keywords: "beam cloud pull back local session lane",
+				}
+				: {
+					value: commandActionValue("moveToCloud"),
+					label: "Move to cloud",
+					description: "Beam cloud",
+					keywords: "beam cloud move push phone session lane",
+				},
+		] satisfies SearchSelectOption[] : []),
 		...(externalSelected ? [
 			{
 				value: commandActionValue("jumpExternal"),

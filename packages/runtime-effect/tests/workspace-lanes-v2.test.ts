@@ -142,6 +142,44 @@ describe("workspace lanes v2", () => {
     expect(activeSessionIdsForProject(moved, "/work/b")).toEqual(["a2", "b1", "b2"]);
   });
 
+  it("loads v2 lanes with absent location as local and preserves explicit cloud markers", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "workspace-lanes-v2-"));
+    try {
+      const lanes = withProject(emptyWorkspaceLanesV2(), "/work/a");
+      const local = reduceWorkspaceLanePatch(lanes, { type: "upsertSession", session: sessionInput("a1", "/work/a") });
+      const cloud = reduceWorkspaceLanePatch(local, {
+        type: "setSessionLocation",
+        laneId: "a1",
+        location: { kind: "cloud", beamId: "beam-123", movedAt: 123 },
+      });
+
+      await writeFile(workspaceLanesV2Path(dir), `${JSON.stringify(local)}\n`, "utf8");
+      expect(loadWorkspaceLanesV2(dir).lanes.sessionsById.a1?.location).toBeUndefined();
+
+      await writeFile(workspaceLanesV2Path(dir), `${JSON.stringify(cloud)}\n`, "utf8");
+      expect(loadWorkspaceLanesV2(dir).lanes.sessionsById.a1?.location).toEqual({
+        kind: "cloud",
+        beamId: "beam-123",
+        movedAt: 123,
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves cloud location through ordinary session upserts and clears it explicitly", () => {
+    const lanes = reduceWorkspaceLanePatches(withProject(emptyWorkspaceLanesV2(), "/work/a"), [
+      { type: "upsertSession", session: sessionInput("a1", "/work/a") },
+      { type: "setSessionLocation", laneId: "a1", location: { kind: "cloud", beamId: "beam-123", movedAt: 123 } },
+    ]);
+
+    const synced = reduceWorkspaceLanePatch(lanes, { type: "upsertSession", session: { ...sessionInput("a1", "/work/a"), title: "renamed" } });
+    expect(synced.sessionsById.a1?.location).toEqual({ kind: "cloud", beamId: "beam-123", movedAt: 123 });
+
+    const local = reduceWorkspaceLanePatch(synced, { type: "setSessionLocation", laneId: "a1" });
+    expect(local.sessionsById.a1?.location).toBeUndefined();
+  });
+
   it("reorders a session within its project without changing updatedAt-driven layout", () => {
     const lanes = fixture();
     const reordered = reorderSession(lanes, "a1", "right");

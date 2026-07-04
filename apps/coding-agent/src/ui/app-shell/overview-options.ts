@@ -91,12 +91,13 @@ export const createOverviewOptions = (
 			const title = session.title || shortId
 			const model = `${session.provider}/${session.modelId}`
 			const external = isExternalLaneId(session.laneId)
+			const cloud = session.location?.kind === "cloud"
 			const position = `${projectIndex}/${projectCount} ${sessionIndex}/${sessionCount}`
-			const status = activityLabel(activity)
-			const keywords = `${projectTitle} ${title} ${position} ${status} ${session.sessionId} ${session.sessionPath} ${model} overview lane project session ${external ? "external cockpit agent" : ""}`.trim()
+			const status = cloud ? `cloud ${session.location.beamId}` : activityLabel(activity)
+			const keywords = `${projectTitle} ${title} ${position} ${status} ${session.sessionId} ${session.sessionPath} ${model} overview lane project session ${external ? "external cockpit agent" : ""} ${cloud ? "beam cloud" : ""}`.trim()
 			return {
 				value: overviewSessionValue(session.laneId),
-				label: `${activityGlyph(activity)} ${external ? "ext " : ""}${projectTitle} ${position}  ${title}`.trimStart(),
+				label: `${cloud ? "☁" : activityGlyph(activity)} ${external ? "ext " : ""}${projectTitle} ${position}  ${title}`.trimStart(),
 				description: `${status} | ${external ? "external " : ""}${model} | ${shortId}`,
 				keywords,
 			}
