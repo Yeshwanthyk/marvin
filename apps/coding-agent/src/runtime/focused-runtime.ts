@@ -3,6 +3,7 @@ import type { SendRef } from "@yeshwanthyk/runtime-effect/extensibility/custom-t
 import type { RuntimeContext } from "./factory.js"
 
 export interface FocusedRuntimeBinding {
+	readonly laneId: string
 	readonly bundle: ProjectRuntimeBundle
 	readonly services: ScopedSessionActorServices
 	readonly sendRef: SendRef

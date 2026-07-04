@@ -16,6 +16,7 @@ export interface FocusControllerOptions {
 	readonly workspaceLanes: Accessor<WorkspaceLanesV2>
 	readonly registry: SessionActorRegistry
 	readonly setFocusedLaneId: Setter<LaneId | null>
+	readonly protectedLaneIds?: Accessor<readonly LaneId[]>
 }
 
 const descriptorForLane = (
@@ -42,27 +43,45 @@ export const createFocusController = ({
 	workspaceLanes,
 	registry,
 	setFocusedLaneId,
+	protectedLaneIds,
 }: FocusControllerOptions): FocusController => {
 	const focusLane = async (laneId: LaneId): Promise<SessionActor | null> => {
-		const lanes = workspaceLanes()
-		const descriptor = descriptorForLane(lanes, laneId)
-		if (!descriptor) return null
-		const previousLaneId = lanes.selection?.laneId
-		const previousActor = previousLaneId && previousLaneId !== laneId ? registry.get(previousLaneId) : null
-		laneStore.dispatch({ type: "select", projectId: descriptor.projectId, laneId })
-		previousActor?.refreshUiPolicy(false)
-		const actor = registry.getOrCreate(descriptor)
+			const lanes = workspaceLanes()
+			const descriptor = descriptorForLane(lanes, laneId)
+			if (!descriptor) return null
+			const previousSelection = lanes.selection
+			const previousLaneId = previousSelection?.laneId
+			const previousActor = previousLaneId && previousLaneId !== laneId ? registry.get(previousLaneId) : null
+			laneStore.dispatch({ type: "select", projectId: descriptor.projectId, laneId })
+			previousActor?.refreshUiPolicy(false)
+			const actor = registry.getOrCreate(descriptor)
 		actor.bindView({ isFocused: () => workspaceLanes().selection?.laneId === laneId })
 		if (descriptor.location?.kind === "cloud") {
 			setFocusedLaneId(laneId)
 			actor.projection.clearUnread()
 			return actor
 		}
-		const result = await registry.hydrate(laneId, "focus")
-		if (result.type === "stream-limit-reached") return result.actor
-		setFocusedLaneId(laneId)
-		actor.projection.clearUnread()
-		return actor
+		const excludeLaneIds = Array.from(new Set([
+			...(protectedLaneIds?.() ?? []),
+			previousLaneId,
+				laneId,
+			].filter((entry): entry is LaneId => entry !== undefined)))
+			let result: Awaited<ReturnType<SessionActorRegistry["hydrate"]>>
+			try {
+				result = await registry.hydrate(laneId, "focus", { excludeLaneIds })
+			} catch (error) {
+				if (previousSelection && previousSelection.laneId !== laneId) {
+					laneStore.dispatch({ type: "select", projectId: previousSelection.projectId, laneId: previousSelection.laneId })
+					actor.refreshUiPolicy(false)
+					previousActor?.refreshUiPolicy(true)
+					setFocusedLaneId(previousSelection.laneId)
+				}
+				throw error
+			}
+			if (result.type === "stream-limit-reached") return result.actor
+			setFocusedLaneId(laneId)
+			actor.projection.clearUnread()
+			return actor
 	}
 
 	return {

@@ -36,13 +36,18 @@ export type RegistryStreamAdmission =
   | { readonly type: "accepted" }
   | { readonly type: "stream-limit-reached"; readonly maxStreaming: number };
 
+export interface SweepIdleOptions {
+  readonly excludeLaneId?: string | null;
+  readonly excludeLaneIds?: readonly string[];
+}
+
 export interface SessionActorRegistry {
   get(laneId: string): SessionActor | null;
   canStartStream(laneId: string): RegistryStreamAdmission;
   create(descriptor: SessionActorDescriptor): SessionActor;
   getOrCreate(descriptor: SessionActorDescriptor): SessionActor;
-  hydrate(laneId: string, reason: SessionActorHydrateReason): Promise<RegistryHydrateResult>;
-  sweepIdle(): Promise<void>;
+  hydrate(laneId: string, reason: SessionActorHydrateReason, options?: SweepIdleOptions): Promise<RegistryHydrateResult>;
+  sweepIdle(options?: SweepIdleOptions): Promise<void>;
   list(): ReadonlyArray<SessionActor>;
   remove(laneId: string): Promise<void>;
 }
@@ -107,17 +112,20 @@ export const createSessionActorRegistry = (
       lastViewedAt: timestamp,
       lastActivityAt: timestamp,
     });
-    void enforceWarmLimit();
     return actor;
   };
 
-  const streamingCount = (): number =>
-    Array.from(actors.values()).filter((meta) => meta.actor.status() === "streaming").length;
+  const streamAdmissionCount = (): number =>
+    Array.from(actors.values()).filter((meta) => {
+      const status = meta.actor.status();
+      return status === "streaming" || status === "hydrating";
+    }).length;
 
   const canStartStream = (laneId: string): RegistryStreamAdmission => {
     const actor = actors.get(laneId)?.actor;
-    if (actor?.status() === "streaming") return { type: "accepted" };
-    if (streamingCount() >= policy.maxStreaming) {
+    const status = actor?.status();
+    if (status === "streaming" || status === "hydrating") return { type: "accepted" };
+    if (streamAdmissionCount() >= policy.maxStreaming) {
       return { type: "stream-limit-reached", maxStreaming: policy.maxStreaming };
     }
     return { type: "accepted" };
@@ -126,9 +134,13 @@ export const createSessionActorRegistry = (
   const isIdleExpired = (meta: ActorMeta): boolean =>
     now() - meta.lastViewedAt >= policy.idleTtlMs;
 
-  const warmCandidates = (): ActorMeta[] =>
+  const isExcluded = (laneId: string, options?: SweepIdleOptions): boolean =>
+    laneId === options?.excludeLaneId || options?.excludeLaneIds?.includes(laneId) === true;
+
+  const warmCandidates = (options?: SweepIdleOptions): ActorMeta[] =>
     Array.from(actors.values())
       .filter((meta) => {
+        if (isExcluded(meta.actor.laneId, options)) return false;
         const status = meta.actor.status();
         if (status !== "warm") return false;
         return isIdleExpired(meta) || warmCount() > policy.maxWarm;
@@ -145,8 +157,8 @@ export const createSessionActorRegistry = (
       return status === "warm" || status === "streaming";
     }).length;
 
-  const enforceWarmLimit = async () => {
-    for (const meta of warmCandidates()) {
+  const enforceWarmLimit = async (options?: SweepIdleOptions) => {
+    for (const meta of warmCandidates(options)) {
       if (!isIdleExpired(meta) && warmCount() <= policy.maxWarm) return;
       await meta.actor.suspend();
     }
@@ -159,9 +171,14 @@ export const createSessionActorRegistry = (
     canStartStream,
     create,
     getOrCreate(descriptor) {
-      return actors.get(descriptor.laneId)?.actor ?? create(descriptor);
+      const existing = actors.get(descriptor.laneId)?.actor;
+      if (existing !== undefined) {
+        existing.updateDescriptor(descriptor);
+        return existing;
+      }
+      return create(descriptor);
     },
-    async hydrate(laneId, reason) {
+    async hydrate(laneId, reason, options) {
       const meta = actors.get(laneId);
       if (meta === undefined) {
         throw new Error(`Unknown session actor lane: ${laneId}`);
@@ -177,11 +194,11 @@ export const createSessionActorRegistry = (
         };
       }
       await actor.hydrate(reason);
-      await enforceWarmLimit();
+      await enforceWarmLimit(options);
       return { type: "hydrated", actor };
     },
-    async sweepIdle() {
-      await enforceWarmLimit();
+    async sweepIdle(options) {
+      await enforceWarmLimit(options);
     },
     list() {
       return Array.from(actors.values()).map((meta) => meta.actor);

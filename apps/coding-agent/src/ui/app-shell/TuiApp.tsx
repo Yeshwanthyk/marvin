@@ -1,5 +1,5 @@
 import { ThemeProvider } from "@yeshwanthyk/open-tui"
-import { createEffect, createSignal, onMount, Show } from "solid-js"
+import { batch, createEffect, createSignal, onMount, Show } from "solid-js"
 import type { Accessor } from "solid-js"
 import { useRuntime } from "../../runtime/context.js"
 import type { SessionActor } from "../../runtime/session-actor.js"
@@ -233,7 +233,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		setActiveToolBlocks,
 		setActiveContextTokens,
 		activeDisplayContextWindow,
-		syncCurrentSessionLane,
+		syncCurrentSessionLane: syncCurrentSessionLaneBase,
 		applyVisibleSession,
 		ensureSession,
 		prepareFreshSession: prepareFreshSessionBase,
@@ -242,12 +242,38 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		clearPendingSessionTitle,
 	} = laneController
 	const preserveStickyLaneMode = () => navMode() === "sticky"
+	const refreshFocusedActorDescriptor = (cursor: LaneCursorV2 | null) => {
+		const actor = focusedActor?.()
+		if (!actor || !cursor || actor.laneId !== cursor.session.laneId) return
+		actor.updateDescriptor({
+			laneId: cursor.session.laneId,
+			projectId: cursor.project.id,
+			cwd: cursor.project.cwd,
+			sessionId: cursor.session.sessionId,
+			sessionPath: cursor.session.sessionPath,
+			...(cursor.session.location !== undefined ? { location: cursor.session.location } : {}),
+			initialTitle: cursor.session.title,
+		})
+	}
+	const syncCurrentSessionLane = (title?: string, options: { select?: boolean } = {}): LaneCursorV2 | null => {
+		const cursor = syncCurrentSessionLaneBase(title, options)
+		refreshFocusedActorDescriptor(cursor)
+		return cursor
+	}
 
 	createEffect(() => {
 		const actor = focusedActor?.()
 		refreshToolMeta()
 		const projection = actor?.projection
-		if (!projection) return
+		if (!projection) {
+			batch(() => {
+				store.isResponding.set(false)
+				store.activityState.set("idle")
+				store.queueCounts.set({ steer: 0, followUp: 0 })
+				store.retryStatus.set(null)
+			})
+			return
+		}
 		store.messages.set(() => projection.messages())
 		store.toolBlocks.set(() => projection.toolBlocks())
 		store.contextTokens.set(projection.contextTokens())
@@ -305,6 +331,29 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	})
 
 	let composerDraft = ""
+	let pendingLaneSwitch: Promise<boolean> | null = null
+	let submitInFlight = false
+	const runPendingLaneSwitch = (
+		operation: () => Promise<boolean>,
+		onError?: (error: unknown) => void,
+	): Promise<boolean> => {
+		if (pendingLaneSwitch) return Promise.resolve(false)
+		const pending = operation().catch((error: unknown) => {
+			onError?.(error)
+			return false
+		}).finally(() => {
+			if (pendingLaneSwitch === pending) pendingLaneSwitch = null
+		})
+		pendingLaneSwitch = pending
+		return pending
+	}
+	const waitForPendingLaneSwitch = async (): Promise<boolean> => {
+		const pending = pendingLaneSwitch
+		return pending ? pending : true
+	}
+	const restoreSelection = (selection: WorkspaceLanesV2["selection"] | undefined) => {
+		if (selection) laneStore.dispatch({ type: "select", projectId: selection.projectId, laneId: selection.laneId })
+	}
 	const prepareFreshSession = (title?: string) => {
 		composerDraft = ""
 		prepareFreshSessionBase(title)
@@ -340,22 +389,36 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		setEditorText: (text) => setEditorTextRef.current(text),
 		showToast: (title, message, variant) => showToastRef.current(title, message, variant),
 		switchToFreshWorkspace: async (cwd, options) => {
-			const result = await workspaceSwitch.switchTo({
-				cwd,
-				fresh: true,
-				initialSessionTitle: options.title,
-				initialPrompt: options.prompt,
-				initialScratchpadId: options.scratchpadId,
-				preserveLaneMode: preserveStickyLaneMode(),
+			return runPendingLaneSwitch(async () => {
+				const previousSelection = workspaceLanes().selection
+				let result: Awaited<ReturnType<typeof workspaceSwitch.switchTo>>
+				try {
+					result = await workspaceSwitch.switchTo({
+						cwd,
+						fresh: true,
+						initialSessionTitle: options.title,
+						initialPrompt: options.prompt,
+						initialScratchpadId: options.scratchpadId,
+						preserveLaneMode: preserveStickyLaneMode(),
+					})
+				} catch (error) {
+					restoreSelection(previousSelection)
+					throw error
+				}
+				if (!result.switched) {
+					restoreSelection(previousSelection)
+					return false
+				}
+				applyVisibleSession(result.visibleSession)
+				prepareFreshSession(options.title)
+				if (options.prompt) {
+					await submitPrompt(options.prompt, "followUp")
+					setTimeout(() => markScratchpadTriggered(options.scratchpadId), 250)
+				}
+				return true
+			}, (error) => {
+				showToastRef.current("Workspace switch failed", error instanceof Error ? error.message : String(error), "error")
 			})
-			if (!result.switched) return false
-			applyVisibleSession(result.visibleSession)
-			prepareFreshSession(options.title)
-			if (options.prompt) {
-				await submitPrompt(options.prompt, "followUp")
-				setTimeout(() => markScratchpadTriggered(options.scratchpadId), 250)
-			}
-			return true
 		},
 	})
 	let wasAppActive = isAppActive()
@@ -515,97 +578,107 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const builtInCommandNames = new Set(slashCommands.map((c) => c.name))
 
-	const handleSubmit = async (text: string, editorClearFn?: () => void) => {
+	const handleSubmit = async (text: string, editorClearFn?: () => void, options: { skipSubmitLock?: boolean } = {}) => {
 		if (!text.trim()) return
-		const clearSubmittedEditor = () => {
-			editorClearFn?.()
-			composerDraft = ""
+		const ownsSubmitLock = options.skipSubmitLock !== true
+		if (ownsSubmitLock) {
+			if (submitInFlight) return
+			submitInFlight = true
 		}
-
-		if (text.startsWith("!")) {
-			const shouldInject = text.startsWith("!!")
-			const command = text.slice(shouldInject ? 2 : 1).trim()
-			if (!command) return
-			clearSubmittedEditor()
-			ensureSession()
-
-			const shellMsgId = crypto.randomUUID()
-			const pendingMsg: UIShellMessage = {
-				id: shellMsgId,
-				role: "shell",
-				command,
-				output: "",
-				exitCode: null,
-				truncated: false,
-				timestamp: Date.now(),
+		try {
+			if (!(await waitForPendingLaneSwitch())) return
+			const clearSubmittedEditor = () => {
+				editorClearFn?.()
+				composerDraft = ""
 			}
-			store.messages.set((prev) => appendWithCap(prev, pendingMsg))
 
-			const result = await runShellCommand(command, { timeout: 30000, cwd: currentCwd() })
-			const finalMsg: UIShellMessage = {
-				id: shellMsgId,
-				role: "shell",
-				command,
-				output: result.output,
-				exitCode: result.exitCode,
-				truncated: result.truncated,
-				tempFilePath: result.tempFilePath,
-				timestamp: Date.now(),
-			}
-			store.messages.set((prev) => prev.map((m) => (m.id === shellMsgId ? finalMsg : m)))
+			if (text.startsWith("!")) {
+				const shouldInject = text.startsWith("!!")
+				const command = text.slice(shouldInject ? 2 : 1).trim()
+				if (!command) return
+				clearSubmittedEditor()
+				ensureSession()
 
-			sessionManager.appendMessage({
-				role: "shell",
-				command,
-				output: result.output,
-				exitCode: result.exitCode,
-				truncated: result.truncated,
-				tempFilePath: result.tempFilePath,
-				timestamp: Date.now(),
-			})
-
-			if (shouldInject) {
-				const injectionLines = [`${SHELL_INJECTION_PREFIX}`, `$ ${command}`, result.output]
-				if (result.exitCode !== null && result.exitCode !== 0) injectionLines.push(`[exit ${result.exitCode}]`)
-				if (result.truncated && result.tempFilePath) injectionLines.push(`[truncated, full output: ${result.tempFilePath}]`)
-				const injectedText = injectionLines.filter((line) => line.length > 0).join("\n")
-				const injectionMessage: AppMessage = {
-					role: "user",
-					content: [{ type: "text", text: injectedText }],
+				const shellMsgId = crypto.randomUUID()
+				const pendingMsg: UIShellMessage = {
+					id: shellMsgId,
+					role: "shell",
+					command,
+					output: "",
+					exitCode: null,
+					truncated: false,
 					timestamp: Date.now(),
 				}
-				agent.appendMessage(injectionMessage)
-				sessionManager.appendMessage(injectionMessage)
-			}
-			return
-		}
+				store.messages.set((prev) => appendWithCap(prev, pendingMsg))
 
-		if (text.startsWith("/")) {
-			const trimmed = text.trim()
-			const handled = await handleSlashInput(trimmed, {
-				commandContext: cmdCtx,
-				customCommands,
-				builtInCommandNames,
-				onExpand: async (expanded) => handleSubmit(expanded),
-			})
-			if (handled) {
-				// Commands that need to clear input do so explicitly via ctx.clearEditor()
+				const result = await runShellCommand(command, { timeout: 30000, cwd: currentCwd() })
+				const finalMsg: UIShellMessage = {
+					id: shellMsgId,
+					role: "shell",
+					command,
+					output: result.output,
+					exitCode: result.exitCode,
+					truncated: result.truncated,
+					tempFilePath: result.tempFilePath,
+					timestamp: Date.now(),
+				}
+				store.messages.set((prev) => prev.map((m) => (m.id === shellMsgId ? finalMsg : m)))
+
+				sessionManager.appendMessage({
+					role: "shell",
+					command,
+					output: result.output,
+					exitCode: result.exitCode,
+					truncated: result.truncated,
+					tempFilePath: result.tempFilePath,
+					timestamp: Date.now(),
+				})
+
+				if (shouldInject) {
+					const injectionLines = [`${SHELL_INJECTION_PREFIX}`, `$ ${command}`, result.output]
+					if (result.exitCode !== null && result.exitCode !== 0) injectionLines.push(`[exit ${result.exitCode}]`)
+					if (result.truncated && result.tempFilePath) injectionLines.push(`[truncated, full output: ${result.tempFilePath}]`)
+					const injectedText = injectionLines.filter((line) => line.length > 0).join("\n")
+					const injectionMessage: AppMessage = {
+						role: "user",
+						content: [{ type: "text", text: injectedText }],
+						timestamp: Date.now(),
+					}
+					agent.appendMessage(injectionMessage)
+					sessionManager.appendMessage(injectionMessage)
+				}
 				return
 			}
-		}
 
-		if (store.isResponding.value()) {
-			if (!revealLiveSession()) {
-				showToastRef.current("Session still running", "Switch back to the live session before steering", "warning")
+			if (text.startsWith("/")) {
+				const trimmed = text.trim()
+				const handled = await handleSlashInput(trimmed, {
+					commandContext: cmdCtx,
+					customCommands,
+					builtInCommandNames,
+					onExpand: async (expanded) => handleSubmit(expanded, undefined, { skipSubmitLock: true }),
+				})
+				if (handled) {
+					// Commands that need to clear input do so explicitly via ctx.clearEditor()
+					return
+				}
+			}
+
+			if (store.isResponding.value()) {
+				if (!revealLiveSession()) {
+					showToastRef.current("Session still running", "Switch back to the live session before steering", "warning")
+					return
+				}
+				enqueueWhileResponding(text, "steer")
+				clearSubmittedEditor()
 				return
 			}
-			enqueueWhileResponding(text, "steer")
+
 			clearSubmittedEditor()
-			return
+			await submitPrompt(text, "followUp")
+		} finally {
+			if (ownsSubmitLock) submitInFlight = false
 		}
-
-		clearSubmittedEditor()
-		await submitPrompt(text, "followUp")
 	}
 
 	useHookBridge({
@@ -636,22 +709,28 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	sendRef.current = (text) => void handleSubmit(text)
 
-	const switchToLane = async (cursor: LaneCursorV2, options?: { preserveLaneMode?: boolean }): Promise<boolean> => {
+	const switchToLaneInner = async (cursor: LaneCursorV2, options?: { preserveLaneMode?: boolean; rollbackSelection?: WorkspaceLanesV2["selection"] }): Promise<boolean> => {
 		const sessionPath = cursor.session.sessionPath
 		if (sessionPath === null) {
 			showToastRef.current("Session unavailable", "Lane has no session file yet", "warning")
 			return false
 		}
-		const previousSelection = workspaceLanes().selection
+		const previousSelection = options?.rollbackSelection ?? workspaceLanes().selection
 		laneStore.dispatch({ type: "select", projectId: cursor.project.id, laneId: cursor.session.laneId })
-		const result = await workspaceSwitch.switchTo({
-			cwd: cursor.project.cwd,
-			laneId: cursor.session.laneId,
-			sessionPath,
-			preserveLaneMode: options?.preserveLaneMode,
-		})
+		let result: Awaited<ReturnType<typeof workspaceSwitch.switchTo>>
+		try {
+			result = await workspaceSwitch.switchTo({
+				cwd: cursor.project.cwd,
+				laneId: cursor.session.laneId,
+				sessionPath,
+				preserveLaneMode: options?.preserveLaneMode,
+			})
+		} catch (error) {
+			restoreSelection(previousSelection)
+			throw error
+		}
 		if (!result.switched) {
-			if (previousSelection) laneStore.dispatch({ type: "select", projectId: previousSelection.projectId, laneId: previousSelection.laneId })
+			restoreSelection(previousSelection)
 			return false
 		}
 		applyVisibleSession(result.visibleSession)
@@ -660,72 +739,133 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		return true
 	}
 
+	const switchToLane = async (cursor: LaneCursorV2, options?: { preserveLaneMode?: boolean; rollbackSelection?: WorkspaceLanesV2["selection"] }): Promise<boolean> => {
+		return runPendingLaneSwitch(() => switchToLaneInner(cursor, options))
+	}
+
 	const navigateLane = (direction: LaneKeymapDirection) => {
-		void (async () => {
+		void runPendingLaneSwitch(async () => {
 			const preserveLaneMode = navMode() === "sticky"
 			syncCurrentSessionLane()
+			const rollbackSelection = workspaceLanes().selection
 			const next = laneStore.dispatch({ type: "focus", direction })
 			const cursor = findActiveCursorV2(next)
-			if (!cursor) return
-			await switchToLane(cursor, { preserveLaneMode })
-		})()
+			if (!cursor) return false
+			return switchToLaneInner(cursor, { preserveLaneMode, rollbackSelection })
+		})
 	}
 
 	const moveFocusedLane = (direction: LaneMoveDirection) => {
-		void (async () => {
+		void runPendingLaneSwitch(async () => {
 			const current = syncCurrentSessionLane()
-			if (!current) return
+			if (!current) return false
 			if ((direction === "up" || direction === "down") && !canMoveFocusedSessionAcrossProject(focusedActor?.()?.status(), store.isResponding.value())) {
 				showToastRef.current("Session still running", "Wait for the stream before moving it to another project", "warning")
-				return
+				return false
 			}
+			const rollbackSelection = workspaceLanes().selection
 			const patch = direction === "left" || direction === "right"
 				? { type: "reorderSession" as const, laneId: current.session.laneId, direction }
 				: { type: "moveSessionToProject" as const, laneId: current.session.laneId, direction }
-			const next = laneStore.dispatch(patch)
-			if (direction === "up" || direction === "down") await removeLaneActor?.(current.session.laneId)
-			const cursor = findActiveCursorV2(next, next.selection)
-			if (!cursor) return
-			await switchToLane(cursor)
-		})()
+				const inversePatch = direction === "left" || direction === "right"
+					? { type: "reorderSession" as const, laneId: current.session.laneId, direction: direction === "left" ? "right" as const : "left" as const }
+					: { type: "moveSessionToProject" as const, laneId: current.session.laneId, direction: direction === "up" ? "down" as const : "up" as const }
+				const next = laneStore.dispatch(patch)
+				const cursor = findActiveCursorV2(next, next.selection)
+				if (!cursor) {
+					laneStore.dispatch(inversePatch)
+					restoreSelection(rollbackSelection)
+					return false
+				}
+				let switched = false
+				try {
+					if (direction === "up" || direction === "down") await removeLaneActor?.(current.session.laneId)
+					switched = await switchToLaneInner(cursor, { rollbackSelection })
+				} catch (error) {
+					laneStore.dispatch(inversePatch)
+					restoreSelection(rollbackSelection)
+					if (direction === "up" || direction === "down") {
+						try {
+							await switchToLaneInner(current, { rollbackSelection })
+						} catch {
+							// Preserve the original move failure; selection/order has already been restored.
+						}
+					}
+					throw error
+				}
+				if (!switched) {
+					laneStore.dispatch(inversePatch)
+					restoreSelection(rollbackSelection)
+					if (direction === "up" || direction === "down") {
+						try {
+							await switchToLaneInner(current, { rollbackSelection })
+						} catch {
+							// Preserve the false switch result; selection/order has already been restored.
+						}
+					}
+					return false
+				}
+				return true
+			})
 	}
 
 	const startSessionNextToFocus = () => {
-		void (async () => {
+		void runPendingLaneSwitch(async () => {
 			const previous = syncCurrentSessionLane()
-			startFreshSession("new session")
-			const current = syncCurrentSessionLane(undefined, { select: true })
-			if (!previous || !current || previous.session.laneId === current.session.laneId) return
+			const previousSelection = workspaceLanes().selection
+			let result: Awaited<ReturnType<typeof workspaceSwitch.switchTo>>
+			try {
+				result = await workspaceSwitch.switchTo({
+					cwd: currentCwd(),
+					fresh: true,
+					initialSessionTitle: "new session",
+					preserveLaneMode: preserveStickyLaneMode(),
+				})
+			} catch (error) {
+				restoreSelection(previousSelection)
+				throw error
+			}
+			if (!result.switched) {
+				restoreSelection(previousSelection)
+				return false
+			}
+			applyVisibleSession(result.visibleSession)
+			prepareFreshSession("new session")
+			const current = selectedLaneCursor(workspaceLanes())
+			if (!previous || !current || previous.session.laneId === current.session.laneId) return true
 			laneStore.transact([
 				{ type: "upsertSession", session: current.session, insert: { type: "after", laneId: previous.session.laneId } },
 				{ type: "select", projectId: current.project.id, laneId: current.session.laneId },
 			])
-		})()
+			return true
+		}, (error) => {
+			showToastRef.current("New session failed", error instanceof Error ? error.message : String(error), "error")
+		})
 	}
 
 	const jumpToProjectIndex = (index: number) => {
-		void (async () => {
+		void runPendingLaneSwitch(async () => {
 			syncCurrentSessionLane()
 			const lanes = workspaceLanes()
 			const projectId = activeProjectIdsV2(lanes)[index]
 			const project = projectId ? lanes.projectsById[projectId] : undefined
-			if (!project) return
+			if (!project) return false
 			const activeSessions = activeSessionsForProject(lanes, project.id)
 			if (activeSessions.length === 0) {
-				await switchToProject({ cwd: project.cwd, title: project.title, root: project.cwd }, { fresh: true })
-				return
+				return switchToProjectInner({ cwd: project.cwd, title: project.title, root: project.cwd }, { fresh: true })
 			}
 			const remembered = lanes.focusByProject[project.id]
 			const rememberedLaneId = remembered?.focusedLaneId && activeSessions.some((session) => session.laneId === remembered.focusedLaneId)
 				? remembered.focusedLaneId
 				: activeSessions[Math.min(Math.max(remembered?.focusedColumn ?? 0, 0), activeSessions.length - 1)]?.laneId
 			const laneId = rememberedLaneId ?? activeSessions[0]?.laneId
-			if (!laneId) return
+			if (!laneId) return false
+			const rollbackSelection = workspaceLanes().selection
 			const selected = laneStore.dispatch({ type: "select", projectId: project.id, laneId })
 			const cursor = findActiveCursorV2(selected, { projectId: project.id, laneId })
-			if (!cursor) return
-			await switchToLane(cursor, { preserveLaneMode: preserveStickyLaneMode() })
-		})()
+			if (!cursor) return false
+			return switchToLaneInner(cursor, { preserveLaneMode: preserveStickyLaneMode(), rollbackSelection })
+		})
 	}
 
 	const openOverview = () => {
@@ -781,18 +921,32 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		return selected ? projects.find((project) => project.cwd === selected) ?? null : null
 	}
 
-	const switchToProject = async (project: WorkspaceProject, options?: { fresh?: boolean; preserveLaneMode?: boolean }): Promise<boolean> => {
+	const switchToProjectInner = async (project: WorkspaceProject, options?: { fresh?: boolean; preserveLaneMode?: boolean }): Promise<boolean> => {
 		const fresh = options?.fresh === true || activeSessionsForProject(workspaceLanes(), project.cwd).length === 0
-		const result = await workspaceSwitch.switchTo({
-			cwd: project.cwd,
-			fresh,
-			initialSessionTitle: fresh ? "new session" : undefined,
-			preserveLaneMode: options?.preserveLaneMode,
-		})
-		if (!result.switched) return false
+		const previousSelection = workspaceLanes().selection
+		let result: Awaited<ReturnType<typeof workspaceSwitch.switchTo>>
+		try {
+			result = await workspaceSwitch.switchTo({
+				cwd: project.cwd,
+				fresh,
+				initialSessionTitle: fresh ? "new session" : undefined,
+				preserveLaneMode: options?.preserveLaneMode,
+			})
+		} catch (error) {
+			restoreSelection(previousSelection)
+			throw error
+		}
+		if (!result.switched) {
+			restoreSelection(previousSelection)
+			return false
+		}
 		applyVisibleSession(result.visibleSession)
 		if (fresh) prepareFreshSession()
 		return true
+	}
+
+	const switchToProject = async (project: WorkspaceProject, options?: { fresh?: boolean; preserveLaneMode?: boolean }): Promise<boolean> => {
+		return runPendingLaneSwitch(() => switchToProjectInner(project, options))
 	}
 
 	const startSessionInProject = () => {
@@ -989,18 +1143,32 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	}
 
 	const archiveCurrentSession = () => {
-		void (async () => {
+		void runPendingLaneSwitch(async () => {
 			const current = syncCurrentSessionLane()
-			if (!current) return
+			if (!current) return false
+			const rollbackSelection = workspaceLanes().selection
 			const archived = laneStore.dispatch({ type: "archiveSession", laneId: current.session.laneId })
 			const nextCursor = findActiveCursorV2(archived)
 			if (!nextCursor) {
 				showToastRef.current("Session archived", "No active sessions left", "info")
-				return
+				return true
 			}
-			await switchToLane(nextCursor)
-			showToastRef.current("Session archived", "Moved to next active session", "success")
-		})()
+			let switched = false
+			try {
+				switched = await switchToLaneInner(nextCursor, { rollbackSelection })
+			} catch (error) {
+				laneStore.dispatch({ type: "restoreSession", laneId: current.session.laneId, projectId: current.project.id })
+				restoreSelection(rollbackSelection)
+				throw error
+			}
+			if (!switched) {
+				laneStore.dispatch({ type: "restoreSession", laneId: current.session.laneId, projectId: current.project.id })
+				restoreSelection(rollbackSelection)
+				return false
+			}
+			if (switched) showToastRef.current("Session archived", "Moved to next active session", "success")
+			return switched
+		})
 	}
 
 	const restoreArchivedSession = () => {
@@ -1012,22 +1180,38 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 			const session = archivedSessions.find((entry) => entry.laneId === selected)
 			const project = session ? workspaceLanes().projectsById[session.projectId] : undefined
 			if (!session || !project) return
-			const restored = laneStore.transact([
-				{ type: "restoreSession", laneId: session.laneId },
-				{ type: "select", projectId: project.id, laneId: session.laneId },
-			])
-			const restoredSession = restored.sessionsById[session.laneId]
-			const restoredProject = restored.projectsById[project.id]
-			if (!restoredSession || !restoredProject) return
-			const projectIndex = restored.projectOrder.indexOf(restoredProject.id)
-			const sessionIndex = (restored.sessionOrderByProject[restoredProject.id] ?? []).indexOf(restoredSession.laneId)
-			await switchToLane({
-				project: restoredProject,
-				session: restoredSession,
-				projectIndex: Math.max(0, projectIndex),
-				sessionIndex: Math.max(0, sessionIndex),
+			const switched = await runPendingLaneSwitch(async () => {
+				const rollbackSelection = workspaceLanes().selection
+				const restored = laneStore.transact([
+					{ type: "restoreSession", laneId: session.laneId },
+					{ type: "select", projectId: project.id, laneId: session.laneId },
+				])
+				const restoredSession = restored.sessionsById[session.laneId]
+				const restoredProject = restored.projectsById[project.id]
+				if (!restoredSession || !restoredProject) return false
+				const projectIndex = restored.projectOrder.indexOf(restoredProject.id)
+				const sessionIndex = (restored.sessionOrderByProject[restoredProject.id] ?? []).indexOf(restoredSession.laneId)
+				let switched = false
+				try {
+					switched = await switchToLaneInner({
+						project: restoredProject,
+						session: restoredSession,
+						projectIndex: Math.max(0, projectIndex),
+						sessionIndex: Math.max(0, sessionIndex),
+					}, { rollbackSelection })
+				} catch (error) {
+					laneStore.dispatch({ type: "archiveSession", laneId: session.laneId })
+					restoreSelection(rollbackSelection)
+					throw error
+				}
+				if (!switched) {
+					laneStore.dispatch({ type: "archiveSession", laneId: session.laneId })
+					restoreSelection(rollbackSelection)
+					return false
+				}
+				return true
 			})
-			showToastRef.current("Session restored", "Returned to active lanes", "success")
+			if (switched) showToastRef.current("Session restored", "Returned to active lanes", "success")
 		})()
 	}
 

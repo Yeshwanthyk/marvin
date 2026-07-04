@@ -29,6 +29,7 @@ const createFakeActor = (
   onStatusChange: (actor: SessionActor, status: SessionActorStatus) => void,
   initialStatus: SessionActorStatus = "cold",
 ): SessionActor => {
+  let currentDescriptor = input;
   let status = initialStatus;
   const setStatus = (next: SessionActorStatus, actor: SessionActor) => {
     status = next;
@@ -38,7 +39,7 @@ const createFakeActor = (
     laneId: input.laneId,
     projectId: input.projectId,
     cwd: input.cwd,
-    descriptor: () => input,
+    descriptor: () => currentDescriptor,
     status: () => status,
     services: () => null,
     projection: {
@@ -58,6 +59,9 @@ const createFakeActor = (
     hydrate: async () => {
       if (status !== "streaming") setStatus("warm", actor);
       return createFakeServices();
+    },
+    updateDescriptor: (descriptor) => {
+      currentDescriptor = descriptor;
     },
     bindView: () => {},
     unbindView: () => {},
@@ -172,6 +176,75 @@ describe("SessionActorRegistry", () => {
     expect(actor.status()).toBe("suspended");
   });
 
+  it("does not suspend the excluded lane during an explicit TTL sweep", async () => {
+    let clock = 0;
+    const registry = createSessionActorRegistry({
+      getBundle: unusedBundle,
+      now: () => clock,
+      policy: { maxWarm: 8, idleTtlMs: 10 },
+      createActor: (input, onStatusChange) => createFakeActor(input, onStatusChange),
+    });
+
+    const focused = registry.create(descriptor("focused"));
+    const idle = registry.create(descriptor("idle"));
+    await focused.hydrate("focus");
+    await idle.hydrate("focus");
+    clock = 11;
+    await registry.sweepIdle({ excludeLaneId: "focused" });
+
+    expect(focused.status()).toBe("warm");
+    expect(idle.status()).toBe("suspended");
+  });
+
+  it("does not suspend any excluded lanes during a focus switch sweep", async () => {
+    let clock = 0;
+    const registry = createSessionActorRegistry({
+      getBundle: unusedBundle,
+      now: () => clock,
+      policy: { maxWarm: 8, idleTtlMs: 10 },
+      createActor: (input, onStatusChange) => createFakeActor(input, onStatusChange),
+    });
+
+    const bound = registry.create(descriptor("old-bound"));
+    const selected = registry.create(descriptor("new-selected"));
+    const idle = registry.create(descriptor("idle"));
+    await bound.hydrate("focus");
+    await selected.hydrate("focus");
+    await idle.hydrate("focus");
+    clock = 11;
+    await registry.sweepIdle({ excludeLaneIds: ["old-bound", "new-selected"] });
+
+    expect(bound.status()).toBe("warm");
+    expect(selected.status()).toBe("warm");
+    expect(idle.status()).toBe("suspended");
+  });
+
+  it("does not suspend focus-switch lanes during hydrate warm-limit enforcement", async () => {
+    let clock = 0;
+    const registry = createSessionActorRegistry({
+      getBundle: unusedBundle,
+      now: () => clock,
+      policy: { maxWarm: 1, idleTtlMs: 60_000 },
+      createActor: (input, onStatusChange) => createFakeActor(input, onStatusChange),
+    });
+
+    const bound = registry.create(descriptor("old-bound"));
+    const selected = registry.create(descriptor("new-selected"));
+    const idle = registry.create(descriptor("idle"));
+    clock = 1;
+    await bound.hydrate("focus");
+    clock = 2;
+    await selected.hydrate("focus");
+    clock = 3;
+    await idle.hydrate("focus");
+
+    await registry.hydrate("new-selected", "focus", { excludeLaneIds: ["old-bound", "new-selected"] });
+
+    expect(bound.status()).toBe("warm");
+    expect(selected.status()).toBe("warm");
+    expect(idle.status()).toBe("suspended");
+  });
+
   it("never suspends streaming actors and rejects new background streams over maxStreaming", async () => {
     const registry = createSessionActorRegistry({
       getBundle: unusedBundle,
@@ -210,6 +283,43 @@ describe("SessionActorRegistry", () => {
 
     expect(registry.canStartStream("streaming")).toEqual({ type: "accepted" });
     expect(registry.canStartStream("pending")).toEqual({ type: "stream-limit-reached", maxStreaming: 1 });
+  });
+
+  it("counts hydrating actors against stream admission", () => {
+    const registry = createSessionActorRegistry({
+      getBundle: unusedBundle,
+      policy: { maxStreaming: 1 },
+      createActor: (input, onStatusChange) =>
+        createFakeActor(
+          input,
+          onStatusChange,
+          input.laneId === "hydrating" ? "hydrating" : "warm",
+        ),
+    });
+
+    registry.create(descriptor("hydrating"));
+    registry.create(descriptor("pending"));
+
+    expect(registry.canStartStream("hydrating")).toEqual({ type: "accepted" });
+    expect(registry.canStartStream("pending")).toEqual({ type: "stream-limit-reached", maxStreaming: 1 });
+  });
+
+  it("refreshes an existing actor descriptor on getOrCreate", () => {
+    const registry = createSessionActorRegistry({
+      getBundle: unusedBundle,
+      createActor: (input, onStatusChange) => createFakeActor(input, onStatusChange),
+    });
+
+    const actor = registry.getOrCreate(descriptor("lane-a"));
+    const updated = {
+      ...descriptor("lane-a"),
+      sessionId: "session-a",
+      sessionPath: "/tmp/session-a.jsonl",
+      initialTitle: "filled lane",
+    };
+
+    expect(registry.getOrCreate(updated)).toBe(actor);
+    expect(actor.descriptor()).toEqual(updated);
   });
 
   it("rehydrates suspended actors when they are focused again", async () => {

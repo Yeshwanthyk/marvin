@@ -131,6 +131,10 @@ export const usePromptSubmission = ({
 			return
 		}
 		if (!activateVisibleSessionForSubmit()) return
+		if (sessionManager.sessionId) {
+			syncCurrentSessionLane(getPendingSessionTitle())
+			clearPendingSessionTitle()
+		}
 
 		let beforeStartResult: Awaited<ReturnType<typeof hookRunner.emitBeforeAgentStart>> | undefined
 		try {

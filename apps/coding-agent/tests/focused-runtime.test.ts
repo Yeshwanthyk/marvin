@@ -3,6 +3,7 @@ import { createSignal } from "solid-js"
 import { createFocusedRuntimeFacade, type FocusedRuntimeBinding } from "../src/runtime/focused-runtime.js"
 
 const binding = (label: string): FocusedRuntimeBinding => ({
+	laneId: label,
 	bundle: {
 		projectId: label,
 		cwd: `/tmp/${label}`,

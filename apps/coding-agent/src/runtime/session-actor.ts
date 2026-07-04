@@ -36,6 +36,7 @@ export interface SessionActor {
   readonly status: () => SessionActorStatus;
   readonly services: () => ScopedSessionActorServices | null;
   readonly projection: SessionActorProjectionStore;
+  updateDescriptor(descriptor: SessionActorDescriptor): void;
   hydrate(reason: SessionActorHydrateReason): Promise<ScopedSessionActorServices>;
   bindView(view: SessionViewBinding): void;
   unbindView(): void;
@@ -53,10 +54,20 @@ export interface SessionActorOptions {
   readonly onStatusChange?: (actor: SessionActor, status: SessionActorStatus) => void;
 }
 
+class SessionActorHydrationCancelledError extends Error {
+  constructor(laneId: string) {
+    super(`Session actor hydration cancelled for lane ${laneId}`);
+    this.name = "SessionActorHydrationCancelledError";
+  }
+}
+
 export const createSessionActor = (options: SessionActorOptions): SessionActor => {
   let descriptor = options.descriptor;
   let status: SessionActorStatus = "cold";
   let services: ScopedSessionActorServices | null = null;
+  let hydratePromise: Promise<ScopedSessionActorServices> | null = null;
+  let lifecycleTransition: Promise<void> | null = null;
+  let lifecycleGeneration = 0;
   let unsubscribeAgent: (() => void) | null = null;
   let view: SessionViewBinding | null = null;
   const projection = createActorProjectionStore({
@@ -66,6 +77,58 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
   const setStatus = (next: SessionActorStatus) => {
     status = next;
     options.onStatusChange?.(actor, next);
+  };
+
+  const cancelHydration = (): Promise<ScopedSessionActorServices> | null => {
+    const pending = hydratePromise;
+    lifecycleGeneration += 1;
+    hydratePromise = null;
+    return pending;
+  };
+
+  const awaitCancelledHydration = async (pending: Promise<ScopedSessionActorServices> | null) => {
+    if (pending === null) return;
+    try {
+      await pending;
+    } catch {
+      // The lifecycle caller only needs hydration cleanup to settle.
+    }
+  };
+
+  const waitForLifecycleTransition = async () => {
+    while (lifecycleTransition !== null) {
+      const transition = lifecycleTransition;
+      try {
+        await transition;
+      } catch {
+        // The next hydrate will observe the actor's resulting status below.
+      }
+      await Promise.resolve();
+    }
+  };
+
+  const runLifecycleTransition = (operation: () => Promise<void>): Promise<void> => {
+    const previous = lifecycleTransition;
+    const transition = (async () => {
+      if (previous !== null) {
+        try {
+          await previous;
+        } catch {
+          // Later lifecycle operations should still get a chance to run.
+        }
+      }
+      await operation();
+    })();
+    lifecycleTransition = transition;
+    void transition.then(
+      () => {
+        if (lifecycleTransition === transition) lifecycleTransition = null;
+      },
+      () => {
+        if (lifecycleTransition === transition) lifecycleTransition = null;
+      },
+    );
+    return transition;
   };
 
   const projectionToolMeta = (bundle: ProjectRuntimeBundle): Map<string, ToolProjectionMeta> => {
@@ -81,18 +144,28 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
   };
 
   const hydrate = async (_reason: SessionActorHydrateReason): Promise<ScopedSessionActorServices> => {
+    if (lifecycleTransition !== null) await waitForLifecycleTransition();
     if (services !== null) return services;
-    if (status === "hydrating") {
-      throw new Error(`Session actor ${descriptor.laneId} is already hydrating`);
+    if (hydratePromise !== null) return hydratePromise;
+    if (status === "closing" || status === "closed") {
+      throw new Error(`Cannot hydrate ${status} session actor ${descriptor.laneId}`);
     }
-    setStatus("hydrating");
-    try {
+    const generation = lifecycleGeneration;
+    const isCurrent = () =>
+      lifecycleGeneration === generation && status !== "closing" && status !== "closed" && status !== "suspended";
+    const running = (async () => {
+      setStatus("hydrating");
       const bundle = await options.getBundle(descriptor);
+      if (!isCurrent()) throw new SessionActorHydrationCancelledError(descriptor.laneId);
       const focused = view?.isFocused() ?? false;
       const nextServices = await bundle.createActorServices(descriptor, {
         ...(options.getUiPolicy?.(descriptor, focused) ?? {}),
         hasUI: focused,
       });
+      if (!isCurrent()) {
+        await nextServices.close();
+        throw new SessionActorHydrationCancelledError(descriptor.laneId);
+      }
       projection.attach(nextServices);
       if (descriptor.sessionPath !== null) {
         const loaded = nextServices.sessionManager.loadSession(descriptor.sessionPath);
@@ -109,9 +182,17 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
       services = nextServices;
       setStatus(nextServices.agent.state.isStreaming ? "streaming" : "warm");
       return nextServices;
+    })();
+    hydratePromise = running;
+    try {
+      return await running;
     } catch (error) {
-      setStatus("errored");
+      if (isCurrent() && !(error instanceof SessionActorHydrationCancelledError)) {
+        setStatus("errored");
+      }
       throw error;
+    } finally {
+      if (hydratePromise === running) hydratePromise = null;
     }
   };
 
@@ -140,35 +221,49 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
   };
 
   const suspend = async () => {
-    if (services === null) {
-      if (status !== "closed" && status !== "closing") setStatus("suspended");
-      return;
-    }
-    const agent = services.agent;
-    const snapshot = await Effect.runPromise(services.promptQueue.snapshot);
-    if (agent.state.isStreaming || agent.state.pendingToolCalls.size > 0 || snapshot.pending.length > 0) {
-      return;
-    }
-    unsubscribeAgent?.();
-    unsubscribeAgent = null;
-    projection.detach();
-    await services.close();
-    services = null;
-    setStatus("suspended");
+    await runLifecycleTransition(async () => {
+      if (services === null) {
+        if (status !== "closed" && status !== "closing") {
+          const pendingHydration = cancelHydration();
+          setStatus("suspended");
+          await awaitCancelledHydration(pendingHydration);
+        }
+        return;
+      }
+      const actorServices = services;
+      const agent = actorServices.agent;
+      const snapshot = await Effect.runPromise(actorServices.promptQueue.snapshot);
+      if (agent.state.isStreaming || agent.state.pendingToolCalls.size > 0 || snapshot.pending.length > 0) {
+        return;
+      }
+      const pendingHydration = cancelHydration();
+      unsubscribeAgent?.();
+      unsubscribeAgent = null;
+      projection.detach();
+      services = null;
+      await actorServices.close();
+      await awaitCancelledHydration(pendingHydration);
+      setStatus("suspended");
+    });
   };
 
   const close = async () => {
-    if (status === "closed" || status === "closing") return;
-    setStatus("closing");
-    unsubscribeAgent?.();
-    unsubscribeAgent = null;
-    projection.detach();
-    if (services !== null) {
-      services.agent.abort();
-      await services.close();
+    await runLifecycleTransition(async () => {
+      if (status === "closed" || status === "closing") return;
+      const pendingHydration = cancelHydration();
+      setStatus("closing");
+      unsubscribeAgent?.();
+      unsubscribeAgent = null;
+      projection.detach();
+      const actorServices = services;
       services = null;
-    }
-    setStatus("closed");
+      if (actorServices !== null) {
+        actorServices.agent.abort();
+        await actorServices.close();
+      }
+      await awaitCancelledHydration(pendingHydration);
+      setStatus("closed");
+    });
   };
 
   const actor: SessionActor = {
@@ -179,6 +274,12 @@ export const createSessionActor = (options: SessionActorOptions): SessionActor =
     status: () => status,
     services: () => services,
     projection,
+    updateDescriptor(nextDescriptor) {
+      if (nextDescriptor.laneId !== descriptor.laneId) {
+        throw new Error(`Cannot update session actor ${descriptor.laneId} with descriptor for ${nextDescriptor.laneId}`);
+      }
+      descriptor = nextDescriptor;
+    },
     hydrate,
     bindView(nextView) {
       view = nextView;

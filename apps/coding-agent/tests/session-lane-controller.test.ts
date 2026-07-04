@@ -4,10 +4,13 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import type { SessionInfo } from "../src/session-manager.js"
 import {
+	createSessionLaneInput,
 	createWorkspaceLaneStore,
 	emptyWorkspaceLanesV2,
 	loadWorkspaceLanesV2,
+	reduceWorkspaceLanePatch,
 	type LaneId,
+	type WorkspaceLanePatch,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import { createSessionLaneSyncPatches } from "../src/ui/app-shell/useSessionLaneController.js"
 
@@ -88,5 +91,56 @@ describe("session lane controller v2 patches", () => {
 				modelId: "gpt-5.3-codex",
 			})
 		}
+	})
+
+	it("fills the selected empty lane when the first session JSONL is created", () => {
+		const emptyLaneId: LaneId = "empty-lane"
+		const now = "2026-06-03T12:00:00.000Z"
+		const seedPatches: WorkspaceLanePatch[] = [
+			{
+				type: "upsertProject",
+				project: {
+					id: "/work/nora",
+					cwd: "/work/nora",
+					title: "nora",
+					createdAt: now,
+					updatedAt: now,
+				},
+			},
+			{
+				type: "upsertSession",
+				session: createSessionLaneInput({
+					laneId: emptyLaneId,
+					projectId: "/work/nora",
+					sessionId: null,
+					sessionPath: null,
+					title: "new session",
+					provider: "codex",
+					modelId: "gpt-5.3-codex",
+					createdAt: now,
+					updatedAt: now,
+				}),
+			},
+			{ type: "select", projectId: "/work/nora", laneId: emptyLaneId },
+		]
+		const seeded = seedPatches.reduce(reduceWorkspaceLanePatch, emptyWorkspaceLanesV2())
+		const patches = createSessionLaneSyncPatches({
+			lanes: seeded,
+			cwd: "/work/nora",
+			session: sessionInfo("session-a", "/work/nora"),
+			title: "new session",
+			laneId: emptyLaneId,
+			select: true,
+		})
+		const filled = patches.reduce(reduceWorkspaceLanePatch, seeded)
+
+		expect(filled.selection).toEqual({ projectId: "/work/nora", laneId: emptyLaneId })
+		expect(filled.sessionOrderByProject["/work/nora"]).toEqual([emptyLaneId])
+		expect(filled.sessionsById[emptyLaneId]).toMatchObject({
+			laneId: emptyLaneId,
+			sessionId: "session-a",
+			sessionPath: "/sessions/session-a.jsonl",
+			title: "new session",
+		})
 	})
 })

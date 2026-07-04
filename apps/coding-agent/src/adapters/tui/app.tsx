@@ -233,11 +233,20 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 		workspaceLanes,
 		registry,
 		setFocusedLaneId,
+		protectedLaneIds: () => {
+			const laneId = focusedBinding()?.laneId
+			return laneId ? [laneId] : []
+		},
 	})
 
 	const focusedRuntime = createFocusedRuntimeFacade(() => focusedBinding(), sendRef)
 	const idleSweepTimer = setInterval(() => {
-		void registry.sweepIdle()
+		void registry.sweepIdle({
+			excludeLaneIds: [
+				focusedBinding()?.laneId,
+				workspaceLanes().selection?.laneId,
+			].filter((laneId): laneId is LaneId => laneId !== undefined),
+		})
 	}, 60_000)
 
 	const loadForRequest = async (request: WorkspaceSwitchRequest): Promise<{ loaded: LoadedSession | null; sessionPath: string | null }> => {
@@ -276,6 +285,7 @@ function TuiRuntimeHost(props: { args?: RunTuiArgs; initialRuntime: RuntimeConte
 		if (!descriptor || !services) return null
 		const bundle = await getBundle(descriptor)
 		setFocusedBinding({
+			laneId,
 			bundle,
 			services,
 			sendRef,
