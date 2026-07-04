@@ -10,7 +10,7 @@
 import { transformAsync } from "@babel/core";
 // @ts-expect-error - No types
 import babelSolid from "babel-preset-solid";
-import { readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { chmod, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Glob } from "bun";
@@ -89,5 +89,13 @@ if (aliasResult.exitCode !== 0) {
 	console.error("tsc-alias failed");
 	process.exit(1);
 }
+
+// Step 5: Restore the executable bit on the CLI entrypoint.
+// tsc/writeFile emit 0644, which strips +x — breaking `command marvin` when a
+// dev symlink (npm link) points straight at dist/cli.js instead of an
+// npm-installed bin shim.
+const cliEntry = join(distDir, "cli.js");
+await chmod(cliEntry, 0o755);
+console.log("Marked dist/cli.js executable");
 
 console.log("Build complete!");
