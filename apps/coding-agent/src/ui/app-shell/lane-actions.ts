@@ -3,12 +3,27 @@ import type { SessionActor } from "../../runtime/session-actor.js"
 import type {
 	LaneCursorV2,
 	WorkspaceLaneStore,
+	WorkspaceLanesV2,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 
 export const canMoveFocusedSessionAcrossProject = (
 	status: SessionActorStatus | undefined,
 	isResponding: boolean,
 ): boolean => status !== "streaming" && !isResponding
+
+export const cursorForLaneId = (lanes: WorkspaceLanesV2, laneId: string): LaneCursorV2 | null => {
+	const session = lanes.sessionsById[laneId]
+	const project = session ? lanes.projectsById[session.projectId] : undefined
+	if (!session || !project) return null
+	const projectIndex = lanes.projectOrder.indexOf(project.id)
+	const sessionIndex = (lanes.sessionOrderByProject[project.id] ?? []).indexOf(session.laneId)
+	return { project, session, projectIndex: Math.max(0, projectIndex), sessionIndex: Math.max(0, sessionIndex) }
+}
+
+export const selectedLaneCursor = (lanes: WorkspaceLanesV2): LaneCursorV2 | null => {
+	const laneId = lanes.selection?.laneId
+	return laneId ? cursorForLaneId(lanes, laneId) : null
+}
 
 export interface BeamCommandResult {
 	readonly exitCode: number

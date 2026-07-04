@@ -9,7 +9,7 @@ import {
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { ScopedSessionActorServices } from "@yeshwanthyk/runtime-effect/project-bundle.js"
 import type { SessionActor, SessionActorStatus } from "../src/runtime/session-actor.js"
-import { moveLaneToCloud, pullLaneBackFromCloud } from "../src/ui/app-shell/lane-actions.js"
+import { moveLaneToCloud, pullLaneBackFromCloud, selectedLaneCursor } from "../src/ui/app-shell/lane-actions.js"
 
 const now = "2026-06-03T12:00:00.000Z"
 
@@ -114,6 +114,19 @@ const fakeSuspendableActor = (events: string[]): SessionActor => {
 }
 
 describe("lane cloud actions", () => {
+	it("derives a selected cloud lane cursor without focused runtime state", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "marvin-lanes-"))
+		try {
+			const { store } = seedStore(dir, true)
+			const cursor = selectedLaneCursor(store.lanes())
+			expect(cursor?.project.cwd).toBe(dir)
+			expect(cursor?.session.laneId).toBe("lane-a")
+			expect(cursor?.session.location).toEqual({ kind: "cloud", beamId: "beam-123", movedAt: 123 })
+		} finally {
+			await rm(dir, { recursive: true, force: true })
+		}
+	})
+
 	it("moves a local lane to cloud via beam push argv and marks it cloud", async () => {
 		const dir = await mkdtemp(path.join(tmpdir(), "marvin-lanes-"))
 		try {

@@ -39,7 +39,7 @@ import {
 } from "../../runtime/cockpit-actions.js"
 import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneMoveDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
 import { createCommandPaletteOptions, parseCommandPaletteValue } from "./command-palette-options.js"
-import { canMoveFocusedSessionAcrossProject, moveLaneToCloud, pullLaneBackFromCloud } from "./lane-actions.js"
+import { canMoveFocusedSessionAcrossProject, cursorForLaneId, moveLaneToCloud, pullLaneBackFromCloud, selectedLaneCursor } from "./lane-actions.js"
 import { createOverviewOptions, parseOverviewValue } from "./overview-options.js"
 import { useHookBridge } from "./useHookBridge.js"
 import { usePromptSubmission } from "./usePromptSubmission.js"
@@ -806,13 +806,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	const cockpitMetaForLane = (laneId: string) => loadCockpitSessionIndex(config.configDir)[laneId]
 
 	const cursorForLane = (laneId: string): LaneCursorV2 | null => {
-		const next = workspaceLanes()
-		const session = next.sessionsById[laneId]
-		const project = session ? next.projectsById[session.projectId] : undefined
-		if (!session || !project) return null
-		const projectIndex = next.projectOrder.indexOf(project.id)
-		const sessionIndex = (next.sessionOrderByProject[project.id] ?? []).indexOf(session.laneId)
-		return { project, session, projectIndex: Math.max(0, projectIndex), sessionIndex: Math.max(0, sessionIndex) }
+		return cursorForLaneId(workspaceLanes(), laneId)
 	}
 
 	const refreshLocalLaneBinding = async (laneId: string): Promise<void> => {
@@ -843,7 +837,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const pullCurrentLaneFromCloud = () => {
 		void (async () => {
-			const current = syncCurrentSessionLane()
+			const current = selectedLaneCursor(workspaceLanes())
 			if (!current) return
 			const result = await pullLaneBackFromCloud({
 				cursor: current,
