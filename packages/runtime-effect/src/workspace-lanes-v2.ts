@@ -102,7 +102,9 @@ export type WorkspaceLanePatch =
   | { readonly type: "reorderSession"; readonly laneId: LaneId; readonly direction: "left" | "right" }
   | { readonly type: "moveSessionToProject"; readonly laneId: LaneId; readonly direction: "up" | "down" }
   | { readonly type: "archiveSession"; readonly laneId: LaneId }
+  | { readonly type: "discardSession"; readonly laneId: LaneId }
   | { readonly type: "restoreSession"; readonly laneId: LaneId; readonly projectId?: ProjectId; readonly insert?: InsertPosition }
+  | { readonly type: "restoreProjectSnapshot"; readonly projectId: ProjectId; readonly project?: ProjectLaneV2; readonly order?: readonly LaneId[]; readonly focus?: ProjectFocusV2 }
   | { readonly type: "renameSession"; readonly laneId: LaneId; readonly title: string }
   | { readonly type: "setSessionLocation"; readonly laneId: LaneId; readonly location?: SessionLaneLocationV2 }
   | { readonly type: "touchSession"; readonly laneId: LaneId; readonly updatedAt: string };
@@ -790,6 +792,27 @@ export const reduceWorkspaceLanePatch = (lanes: WorkspaceLanesV2, patch: Workspa
         sessionsById: { ...lanes.sessionsById, [patch.laneId]: { ...session, archivedAt: session.updatedAt } },
       };
     }
+    case "discardSession": {
+      const session = lanes.sessionsById[patch.laneId];
+      if (!session || session.sessionId !== null || session.sessionPath !== null) return lanes;
+      const { [patch.laneId]: _discarded, ...sessionsById } = lanes.sessionsById;
+      const nextOrders = removeLaneIdFromAllOrders(lanes.sessionOrderByProject, patch.laneId);
+      const nextFocusByProject: Record<ProjectId, ProjectFocusV2> = Object.fromEntries(Object.entries(lanes.focusByProject).map(([projectId, focus]) => [
+        projectId,
+        focus.focusedLaneId === patch.laneId ? { focusedColumn: focus.focusedColumn } : focus,
+      ]));
+      const nextLanes = {
+        ...lanes,
+        sessionsById,
+        sessionOrderByProject: nextOrders,
+        focusByProject: nextFocusByProject,
+      };
+      if (lanes.selection?.laneId !== patch.laneId) return nextLanes;
+      const cursor = findActiveCursorV2(nextLanes);
+      if (cursor) return selectCursor(nextLanes, cursor);
+      const { selection: _selection, ...withoutSelection } = nextLanes;
+      return withoutSelection;
+    }
     case "restoreSession": {
       const session = lanes.sessionsById[patch.laneId];
       if (!session) return lanes;
@@ -817,6 +840,44 @@ export const reduceWorkspaceLanePatch = (lanes: WorkspaceLanesV2, patch: Workspa
         sessionsById: { ...lanes.sessionsById, [patch.laneId]: restored },
         sessionOrderByProject: nextOrders,
       };
+    }
+    case "restoreProjectSnapshot": {
+      const projectsById = { ...lanes.projectsById };
+      const sessionOrderByProject = { ...lanes.sessionOrderByProject };
+      const focusByProject = { ...lanes.focusByProject };
+      let projectOrder = lanes.projectOrder;
+      if (patch.project) {
+        projectsById[patch.projectId] = patch.project;
+        if (!projectOrder.includes(patch.projectId)) projectOrder = [...projectOrder, patch.projectId];
+      } else {
+        delete projectsById[patch.projectId];
+        projectOrder = projectOrder.filter((projectId) => projectId !== patch.projectId);
+      }
+      if (patch.order !== undefined) {
+        sessionOrderByProject[patch.projectId] = [...patch.order];
+      } else {
+        delete sessionOrderByProject[patch.projectId];
+      }
+      if (patch.focus !== undefined) {
+        focusByProject[patch.projectId] = patch.focus;
+      } else {
+        delete focusByProject[patch.projectId];
+      }
+      const nextLanes = {
+        ...lanes,
+        projectsById,
+        projectOrder,
+        sessionOrderByProject,
+        focusByProject,
+      };
+      if (!nextLanes.selection) return nextLanes;
+      const selectedProject = nextLanes.projectsById[nextLanes.selection.projectId];
+      const selectedSession = nextLanes.sessionsById[nextLanes.selection.laneId];
+      if (selectedProject && selectedSession) return nextLanes;
+      const cursor = findActiveCursorV2(nextLanes);
+      if (cursor) return selectCursor(nextLanes, cursor);
+      const { selection: _selection, ...withoutSelection } = nextLanes;
+      return withoutSelection;
     }
     case "renameSession": {
       const session = lanes.sessionsById[patch.laneId];

@@ -26,6 +26,7 @@ import {
 	type LaneCursorV2,
 	type SessionLaneV2,
 	type WorkspaceLaneStore,
+	type WorkspaceLanePatch,
 	type WorkspaceLanesV2,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
 import type { WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
@@ -61,6 +62,9 @@ const activeProjectIdsV2 = (lanes: WorkspaceLanesV2): string[] =>
 const firstKey = (keys: readonly string[]): string => keys[0] ?? ""
 
 const shortcutValue = (action: string): string => `shortcut:${action}`
+
+const isEmptySessionLane = (session: SessionLaneV2): boolean =>
+	session.sessionId === null && session.sessionPath === null
 
 const textFromEntry = (entry: SessionNodeEntry): string => {
 	if (entry.type === "custom") return `[custom:${entry.customType}]`
@@ -265,6 +269,8 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		refreshFocusedActorDescriptor(cursor)
 		return cursor
 	}
+	const currentLaneCursor = (): LaneCursorV2 | null =>
+		syncCurrentSessionLane() ?? selectedLaneCursor(workspaceLanes())
 
 	createEffect(() => {
 		const actor = focusedActor?.()
@@ -358,6 +364,28 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 	}
 	const restoreSelection = (selection: WorkspaceLanesV2["selection"] | undefined) => {
 		if (selection) laneStore.dispatch({ type: "select", projectId: selection.projectId, laneId: selection.laneId })
+	}
+	const restoreLaneCursor = (cursor: LaneCursorV2, selection: WorkspaceLanesV2["selection"] | undefined): void => {
+		const project = {
+			id: cursor.project.id,
+			cwd: cursor.project.cwd,
+			title: cursor.project.title,
+			createdAt: cursor.project.createdAt,
+			updatedAt: cursor.project.updatedAt,
+			...(cursor.project.archivedAt !== undefined ? { archivedAt: cursor.project.archivedAt } : {}),
+		}
+		const patches: WorkspaceLanePatch[] = [
+			{ type: "upsertProject", project },
+			{
+				type: "upsertSession",
+				session: cursor.session,
+				insert: { type: "index", projectId: cursor.project.id, index: cursor.sessionIndex },
+			},
+			selection
+				? { type: "select", projectId: selection.projectId, laneId: selection.laneId }
+				: { type: "select", projectId: cursor.project.id, laneId: cursor.session.laneId },
+		]
+		laneStore.transact(patches)
 	}
 	const prepareFreshSession = (title?: string) => {
 		composerDraft = ""
@@ -716,20 +744,36 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const switchToLaneInner = async (cursor: LaneCursorV2, options?: { preserveLaneMode?: boolean; rollbackSelection?: WorkspaceLanesV2["selection"] }): Promise<boolean> => {
 		const sessionPath = cursor.session.sessionPath
-		if (sessionPath === null) {
+		const emptyLane = isEmptySessionLane(cursor.session)
+		if (!emptyLane && sessionPath === null) {
 			showToastRef.current("Session unavailable", "Lane has no session file yet", "warning")
 			return false
 		}
+		const freshTitle = cursor.session.title || "new session"
 		const previousSelection = options?.rollbackSelection ?? workspaceLanes().selection
 		laneStore.dispatch({ type: "select", projectId: cursor.project.id, laneId: cursor.session.laneId })
 		let result: Awaited<ReturnType<typeof workspaceSwitch.switchTo>>
 		try {
-			result = await workspaceSwitch.switchTo({
-				cwd: cursor.project.cwd,
-				laneId: cursor.session.laneId,
-				sessionPath,
-				preserveLaneMode: options?.preserveLaneMode,
-			})
+			if (emptyLane) {
+				result = await workspaceSwitch.switchTo({
+					cwd: cursor.project.cwd,
+					laneId: cursor.session.laneId,
+					fresh: true,
+					initialSessionTitle: freshTitle,
+					preserveLaneMode: options?.preserveLaneMode,
+				})
+			} else {
+				if (sessionPath === null) {
+					restoreSelection(previousSelection)
+					return false
+				}
+				result = await workspaceSwitch.switchTo({
+					cwd: cursor.project.cwd,
+					laneId: cursor.session.laneId,
+					sessionPath,
+					preserveLaneMode: options?.preserveLaneMode,
+				})
+			}
 		} catch (error) {
 			restoreSelection(previousSelection)
 			throw error
@@ -739,6 +783,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 			return false
 		}
 		applyVisibleSession(result.visibleSession)
+		if (emptyLane) prepareFreshSession(freshTitle)
 
 		if (!options?.preserveLaneMode) setNavMode("off")
 		return true
@@ -762,8 +807,12 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const moveFocusedLane = (direction: LaneMoveDirection) => {
 		void runPendingLaneSwitch(async () => {
-			const current = syncCurrentSessionLane()
+			const current = currentLaneCursor()
 			if (!current) return false
+			if ((direction === "up" || direction === "down") && !isEmptySessionLane(current.session) && current.session.sessionPath === null) {
+				showToastRef.current("Session unavailable", "Lane has no session file yet", "warning")
+				return false
+			}
 			if ((direction === "up" || direction === "down") && !canMoveFocusedSessionAcrossProject(focusedActor?.()?.status(), store.isResponding.value())) {
 				showToastRef.current("Session still running", "Wait for the stream before moving it to another project", "warning")
 				return false
@@ -848,26 +897,54 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		})
 	}
 
+	const projectChoices = (): WorkspaceProject[] => {
+		const lanes = workspaceLanes()
+		const configured = configuredProjects()
+		const configuredByCwd = new Map(configured.map((project) => [project.cwd, project]))
+		const seen = new Set<string>()
+		const laneProjects = activeProjectIdsV2(lanes).flatMap((projectId) => {
+			const laneProject = lanes.projectsById[projectId]
+			if (!laneProject) return []
+			seen.add(laneProject.cwd)
+			const configuredProject = configuredByCwd.get(laneProject.cwd)
+			return [{
+				cwd: laneProject.cwd,
+				title: configuredProject?.title ?? laneProject.title,
+				root: configuredProject?.root ?? laneProject.cwd,
+			}]
+		})
+		return [...laneProjects, ...configured.filter((project) => !seen.has(project.cwd))]
+	}
+
+	const projectForCwd = (cwd: string): WorkspaceProject =>
+		projectChoices().find((project) => project.cwd === cwd) ?? {
+			cwd,
+			title: cwd.split("/").filter(Boolean).at(-1) ?? cwd,
+			root: cwd,
+		}
+
 	const jumpToProjectIndex = (index: number) => {
 		void runPendingLaneSwitch(async () => {
 			syncCurrentSessionLane()
 			const lanes = workspaceLanes()
-			const projectId = activeProjectIdsV2(lanes)[index]
-			const project = projectId ? lanes.projectsById[projectId] : undefined
+			const project = projectChoices()[index]
 			if (!project) return false
-			const activeSessions = activeSessionsForProject(lanes, project.id)
+			const laneProject = Object.values(lanes.projectsById).find((entry) => entry.cwd === project.cwd && entry.archivedAt === undefined)
+			const projectId = laneProject?.id ?? project.cwd
+			const activeSessions = activeSessionsForProject(lanes, projectId)
 			if (activeSessions.length === 0) {
-				return switchToProjectInner({ cwd: project.cwd, title: project.title, root: project.cwd }, { fresh: true })
+				return switchToProjectInner(project, { fresh: true, preserveLaneMode: preserveStickyLaneMode() })
 			}
-			const remembered = lanes.focusByProject[project.id]
+			if (!laneProject) return false
+			const remembered = lanes.focusByProject[projectId]
 			const rememberedLaneId = remembered?.focusedLaneId && activeSessions.some((session) => session.laneId === remembered.focusedLaneId)
 				? remembered.focusedLaneId
 				: activeSessions[Math.min(Math.max(remembered?.focusedColumn ?? 0, 0), activeSessions.length - 1)]?.laneId
 			const laneId = rememberedLaneId ?? activeSessions[0]?.laneId
 			if (!laneId) return false
 			const rollbackSelection = workspaceLanes().selection
-			const selected = laneStore.dispatch({ type: "select", projectId: project.id, laneId })
-			const cursor = findActiveCursorV2(selected, { projectId: project.id, laneId })
+			const selected = laneStore.dispatch({ type: "select", projectId, laneId })
+			const cursor = findActiveCursorV2(selected, { projectId, laneId })
 			if (!cursor) return false
 			return switchToLaneInner(cursor, { preserveLaneMode: preserveStickyLaneMode(), rollbackSelection })
 		})
@@ -879,12 +956,17 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 			const lanes = workspaceLanes()
 			const selected = await modals.showSearchSelect(
 				"Overview",
-				createOverviewOptions(lanes, activityEntries?.() ?? []),
+				createOverviewOptions(lanes, activityEntries?.() ?? [], configuredProjects()),
 				"project, title, status, model, id",
 			)
 			if (!selected) return
 			const parsed = parseOverviewValue(selected)
 			if (!parsed) return
+			if (parsed.type === "project") {
+				const project = projectForCwd(parsed.cwd)
+				await switchToProject(project, { preserveLaneMode: preserveStickyLaneMode() })
+				return
+			}
 			const session = lanes.sessionsById[parsed.laneId]
 			const project = session ? lanes.projectsById[session.projectId] : undefined
 			if (!session || !project || session.archivedAt !== undefined) return
@@ -974,9 +1056,102 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		await switchToLane(cursor, { preserveLaneMode: preserveStickyLaneMode() })
 	}
 
+	const moveCurrentLaneToProject = () => {
+		void (async () => {
+			const initial = currentLaneCursor()
+			if (!initial) return
+			if (!isEmptySessionLane(initial.session) && initial.session.sessionPath === null) {
+				showToastRef.current("Session unavailable", "Lane has no session file yet", "warning")
+				return
+			}
+			const project = await pickConfiguredProject("Move agent to project")
+			if (!project) return
+			await runPendingLaneSwitch(async () => {
+				const current = currentLaneCursor()
+				if (!current) return false
+				if (project.cwd === current.project.cwd) return false
+				if (!isEmptySessionLane(current.session) && current.session.sessionPath === null) {
+					showToastRef.current("Session unavailable", "Lane has no session file yet", "warning")
+					return false
+				}
+				if (!canMoveFocusedSessionAcrossProject(focusedActor?.()?.status(), store.isResponding.value())) {
+					showToastRef.current("Session still running", "Wait for the stream before moving it to another project", "warning")
+					return false
+				}
+				const lanes = workspaceLanes()
+				const rollbackSelection = lanes.selection
+				const now = new Date().toISOString()
+				const existingProject = lanes.projectsById[project.cwd]
+				const destinationOrderSnapshot = lanes.sessionOrderByProject[project.cwd]?.slice()
+				const destinationFocusSnapshot = lanes.focusByProject[project.cwd]
+				const restoreMove = () => {
+					restoreLaneCursor(current, rollbackSelection)
+					laneStore.dispatch({
+						type: "restoreProjectSnapshot",
+						projectId: project.cwd,
+						...(existingProject !== undefined ? { project: existingProject } : {}),
+						...(destinationOrderSnapshot !== undefined ? { order: destinationOrderSnapshot } : {}),
+						...(destinationFocusSnapshot !== undefined ? { focus: destinationFocusSnapshot } : {}),
+					})
+					restoreSelection(rollbackSelection)
+				}
+				const destinationOrder = lanes.sessionOrderByProject[project.cwd] ?? []
+				const destinationColumn = lanes.focusByProject[project.cwd]?.focusedColumn ?? destinationOrder.length
+				const destinationIndex = Math.min(Math.max(destinationColumn, 0), destinationOrder.length)
+				const moved = laneStore.transact([
+					{
+						type: "upsertProject",
+						project: {
+							id: project.cwd,
+							cwd: project.cwd,
+							title: project.title,
+							createdAt: existingProject?.createdAt ?? now,
+							updatedAt: now,
+						},
+					},
+					{
+						type: "upsertSession",
+						session: { ...current.session, projectId: project.cwd, updatedAt: now },
+						insert: { type: "index", projectId: project.cwd, index: destinationIndex },
+					},
+					{ type: "select", projectId: project.cwd, laneId: current.session.laneId },
+				])
+				const cursor = findActiveCursorV2(moved, { projectId: project.cwd, laneId: current.session.laneId })
+				if (!cursor) {
+					restoreMove()
+					return false
+				}
+				let switched = false
+				try {
+					await removeLaneActor?.(current.session.laneId)
+					switched = await switchToLaneInner(cursor, { rollbackSelection })
+				} catch (error) {
+					restoreMove()
+					try {
+						await switchToLaneInner(current, { rollbackSelection })
+					} catch {
+						// Preserve the original move failure; selection/order has already been restored.
+					}
+					throw error
+				}
+				if (!switched) {
+					restoreMove()
+					try {
+						await switchToLaneInner(current, { rollbackSelection })
+					} catch {
+						// Preserve the false switch result; selection/order has already been restored.
+					}
+					return false
+				}
+				showToastRef.current("Agent moved", project.title, "success")
+				return true
+			})
+		})()
+	}
+
 	const moveCurrentLaneToCloud = () => {
 		void (async () => {
-			const current = syncCurrentSessionLane()
+			const current = currentLaneCursor()
 			if (!current) return
 			const result = await moveLaneToCloud({
 				cursor: current,
@@ -1047,7 +1222,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const renameCurrentSession = () => {
 		void (async () => {
-			const current = syncCurrentSessionLane()
+			const current = currentLaneCursor()
 			if (!current) return
 			const nextTitle = (await modals.showInput("Rename session", "session title", current.session.title))?.trim()
 			if (!nextTitle || nextTitle === current.session.title) return
@@ -1174,11 +1349,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				return
 			}
 			if (parsed.type === "project") {
-				const project = configuredProjects().find((entry) => entry.cwd === parsed.cwd) ?? {
-					cwd: parsed.cwd,
-					title: parsed.cwd.split("/").filter(Boolean).at(-1) ?? parsed.cwd,
-					root: parsed.cwd,
-				}
+				const project = projectForCwd(parsed.cwd)
 				await switchToProject(project, { preserveLaneMode: preserveStickyLaneMode() })
 				return
 			}
@@ -1214,6 +1385,9 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				case "restore":
 					restoreArchivedSession()
 					return
+				case "moveToProject":
+					moveCurrentLaneToProject()
+					return
 				case "moveToCloud":
 					moveCurrentLaneToCloud()
 					return
@@ -1232,9 +1406,51 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 
 	const archiveCurrentSession = () => {
 		void runPendingLaneSwitch(async () => {
-			const current = syncCurrentSessionLane()
+			const current = currentLaneCursor()
 			if (!current) return false
 			const rollbackSelection = workspaceLanes().selection
+			if (isEmptySessionLane(current.session)) {
+				const discarded = laneStore.dispatch({ type: "discardSession", laneId: current.session.laneId })
+				const nextCursor = findActiveCursorV2(discarded)
+				if (!nextCursor) {
+					try {
+						await removeLaneActor?.(current.session.laneId)
+					} catch (error) {
+						restoreLaneCursor(current, rollbackSelection)
+						restoreSelection(rollbackSelection)
+						throw error
+					}
+					clearFocusedRuntime?.()
+					showToastRef.current("Empty lane discarded", "No active sessions left", "info")
+					return true
+				}
+				let switched = false
+				try {
+					await removeLaneActor?.(current.session.laneId)
+					switched = await switchToLaneInner(nextCursor, { rollbackSelection })
+				} catch (error) {
+					restoreLaneCursor(current, rollbackSelection)
+					restoreSelection(rollbackSelection)
+					try {
+						await switchToLaneInner(current, { rollbackSelection })
+					} catch {
+						// Preserve the original discard failure; selection/order has already been restored.
+					}
+					throw error
+				}
+				if (!switched) {
+					restoreLaneCursor(current, rollbackSelection)
+					restoreSelection(rollbackSelection)
+					try {
+						await switchToLaneInner(current, { rollbackSelection })
+					} catch {
+						// Preserve the false switch result; selection/order has already been restored.
+					}
+					return false
+				}
+				showToastRef.current("Empty lane discarded", "Moved to next active session", "success")
+				return true
+			}
 			const archived = laneStore.dispatch({ type: "archiveSession", laneId: current.session.laneId })
 			const nextCursor = findActiveCursorV2(archived)
 			if (!nextCursor) {

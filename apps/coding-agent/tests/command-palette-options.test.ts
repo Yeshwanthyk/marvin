@@ -86,6 +86,7 @@ describe("command palette options", () => {
 			commandActionValue("detach"),
 			commandActionValue("archive"),
 			commandActionValue("restore"),
+			commandActionValue("moveToProject"),
 			commandActionValue("moveToCloud"),
 			commandSessionValue("lane-a"),
 			commandScratchpadValue("scratch-a"),
@@ -95,24 +96,30 @@ describe("command palette options", () => {
 		expect(options[1]?.label).toBe("Rename session")
 		expect(options[8]?.description).toBe("1 archived")
 		expect(options[9]).toEqual({
+			value: commandActionValue("moveToProject"),
+			label: "Move agent to project...",
+			description: "Pick a configured project",
+			keywords: "move agent session lane project workspace folder",
+		})
+		expect(options[10]).toEqual({
 			value: commandActionValue("moveToCloud"),
 			label: "Move to cloud",
 			description: "Beam cloud",
 			keywords: "beam cloud move push phone session lane",
 		})
-		expect(options[10]).toEqual({
+		expect(options[11]).toEqual({
 			value: commandSessionValue("lane-a"),
 			label: "nora / first task",
 			description: "aaaaaaaa | codex/gpt-5.5-low",
 			keywords: "nora first task aaaaaaaa-0000-0000-0000-000000000000 /sessions/a.jsonl codex/gpt-5.5-low switch session jump lane project",
 		})
-		expect(options[11]).toEqual({
+		expect(options[12]).toEqual({
 			value: commandScratchpadValue("scratch-a"),
 			label: "Scratch / fix search flow",
 			description: "Check fuzzy matching",
 			keywords: "fix search flow /work/nora Check fuzzy matching search scratch scratchpad note open start",
 		})
-		expect(options[12]).toEqual({
+		expect(options[13]).toEqual({
 			value: commandProjectValue("/work/marvin"),
 			label: "Project / marvin",
 			description: "/work/marvin",
@@ -124,6 +131,10 @@ describe("command palette options", () => {
 		expect(parseCommandPaletteValue(commandActionValue("rename"))).toEqual({
 			type: "action",
 			action: "rename",
+		})
+		expect(parseCommandPaletteValue(commandActionValue("moveToProject"))).toEqual({
+			type: "action",
+			action: "moveToProject",
 		})
 		expect(parseCommandPaletteValue(commandSessionValue("/work/nora:a"))).toEqual({
 			type: "session",

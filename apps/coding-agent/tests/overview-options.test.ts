@@ -149,9 +149,58 @@ describe("overview options", () => {
 		}))
 	})
 
+	it("adds configured projects that do not have lanes yet", () => {
+		const options = createOverviewOptions(lanesFixture(), [], [
+			{ cwd: "/work/kiri", title: "kiri", root: "/work" },
+			{ cwd: "/work/marvin", title: "marvin", root: "/work" },
+		])
+
+		expect(options.at(-1)).toEqual({
+			value: "overview:project:/work/marvin",
+			label: "Project / marvin",
+			description: "open project | /work/marvin",
+			keywords: "marvin /work/marvin /work overview open project workspace folder configured",
+		})
+		expect(options.map((entry) => entry.value)).not.toContain("overview:project:/work/kiri")
+	})
+
+	it("keeps configured projects visible when lane metadata has no active sessions", () => {
+		const lanes = lanesFixture()
+		const withEmptyProject: WorkspaceLanesV2 = {
+			...lanes,
+			projectsById: {
+				...lanes.projectsById,
+				"/work/marvin": {
+					id: "/work/marvin",
+					cwd: "/work/marvin",
+					title: "marvin",
+					createdAt: "2026-06-03T12:00:00.000Z",
+					updatedAt: "2026-06-03T12:00:00.000Z",
+				},
+			},
+			projectOrder: [...lanes.projectOrder, "/work/marvin"],
+			sessionOrderByProject: {
+				...lanes.sessionOrderByProject,
+				"/work/marvin": [],
+			},
+			focusByProject: {
+				...lanes.focusByProject,
+				"/work/marvin": { focusedColumn: 0 },
+			},
+		}
+
+		const options = createOverviewOptions(withEmptyProject, [], [
+			{ cwd: "/work/marvin", title: "marvin", root: "/work" },
+		])
+
+		expect(options.map((entry) => entry.value)).toContain("overview:project:/work/marvin")
+	})
+
 	it("parses overview selections", () => {
 		expect(parseOverviewValue("overview:session:nora-a")).toEqual({ type: "session", laneId: "nora-a" })
+		expect(parseOverviewValue("overview:project:/work/marvin")).toEqual({ type: "project", cwd: "/work/marvin" })
 		expect(parseOverviewValue("overview:session:")).toBeNull()
+		expect(parseOverviewValue("overview:project:")).toBeNull()
 		expect(parseOverviewValue("session:nora-a")).toBeNull()
 	})
 })

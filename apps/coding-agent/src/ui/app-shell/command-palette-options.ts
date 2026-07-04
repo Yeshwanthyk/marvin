@@ -18,6 +18,7 @@ export type CommandPaletteAction =
 	| "detach"
 	| "archive"
 	| "restore"
+	| "moveToProject"
 	| "moveToCloud"
 	| "pullFromCloud"
 	| "jumpExternal"
@@ -43,6 +44,7 @@ const ACTIONS: CommandPaletteAction[] = [
 	"detach",
 	"archive",
 	"restore",
+	"moveToProject",
 	"moveToCloud",
 	"pullFromCloud",
 	"jumpExternal",
@@ -176,6 +178,12 @@ export const createCommandPaletteOptions = (
 			keywords: "unarchive archived session restore recover",
 		},
 		...(currentLane && !externalSelected ? [
+			{
+				value: commandActionValue("moveToProject"),
+				label: "Move agent to project...",
+				description: "Pick a configured project",
+				keywords: "move agent session lane project workspace folder",
+			},
 			cloudSelected
 				? {
 					value: commandActionValue("pullFromCloud"),

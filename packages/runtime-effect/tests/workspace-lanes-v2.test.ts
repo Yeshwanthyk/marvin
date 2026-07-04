@@ -253,6 +253,122 @@ describe("workspace lanes v2", () => {
     expect(restored.sessionOrderByProject["/work/a"]).toEqual(["a1", "a2"]);
   });
 
+  it("discards empty sessions instead of archiving dead lanes", () => {
+    const lanes = reduceWorkspaceLanePatches(fixture(), [
+      {
+        type: "upsertSession",
+        session: {
+          ...sessionInput("empty", "/work/a"),
+          sessionId: null,
+          sessionPath: null,
+          title: "new session",
+        },
+        insert: { type: "after", laneId: "a1" },
+      },
+      { type: "select", projectId: "/work/a", laneId: "empty" },
+    ]);
+
+    const discarded = reduceWorkspaceLanePatch(lanes, { type: "discardSession", laneId: "empty" });
+
+    expect(discarded.sessionsById.empty).toBeUndefined();
+    expect(activeSessionIdsForProject(discarded, "/work/a")).toEqual(["a1", "a2"]);
+    expect(discarded.sessionOrderByProject["/work/a"]).toEqual(["a1", "a2"]);
+    expect(discarded.selection).toEqual({ projectId: "/work/a", laneId: "a1" });
+    expect(discarded.focusByProject["/work/a"]).toEqual({ focusedLaneId: "a1", focusedColumn: 0 });
+  });
+
+  it("does not discard sessions that already have JSONL identity", () => {
+    const lanes = fixture();
+    const discarded = reduceWorkspaceLanePatch(lanes, { type: "discardSession", laneId: "a1" });
+
+    expect(discarded).toEqual(lanes);
+  });
+
+  it("restores project order and focus after a failed cross-project move", () => {
+    const lanes = fixture();
+    const destinationProject = lanes.projectsById["/work/b"];
+    const destinationOrder = lanes.sessionOrderByProject["/work/b"];
+    const destinationFocus = lanes.focusByProject["/work/b"];
+    if (!destinationProject || !destinationOrder || !destinationFocus) throw new Error("fixture missing destination");
+    const moved = reduceWorkspaceLanePatches(lanes, [
+      {
+        type: "upsertSession",
+        session: { ...sessionInput("a1", "/work/a"), projectId: "/work/b" },
+        insert: { type: "index", projectId: "/work/b", index: 1 },
+      },
+      { type: "select", projectId: "/work/b", laneId: "a1" },
+    ]);
+    const sourceRestored = reduceWorkspaceLanePatch(moved, {
+      type: "upsertSession",
+      session: sessionInput("a1", "/work/a"),
+      insert: { type: "index", projectId: "/work/a", index: 0 },
+    });
+
+    const restored = reduceWorkspaceLanePatch(sourceRestored, {
+      type: "restoreProjectSnapshot",
+      projectId: "/work/b",
+      project: destinationProject,
+      order: destinationOrder,
+      focus: destinationFocus,
+    });
+
+    expect(activeSessionIdsForProject(restored, "/work/a")).toEqual(["a1", "a2"]);
+    expect(activeSessionIdsForProject(restored, "/work/b")).toEqual(["b1", "b2"]);
+    expect(restored.sessionOrderByProject["/work/b"]).toEqual(destinationOrder);
+    expect(restored.focusByProject["/work/b"]).toEqual(destinationFocus);
+  });
+
+  it("removes a newly created project snapshot on failed move rollback", () => {
+    const lanes = fixture();
+    const moved = reduceWorkspaceLanePatches(lanes, [
+      { type: "upsertProject", project: { id: "/work/new", cwd: "/work/new", title: "new", createdAt: now, updatedAt: now } },
+      {
+        type: "upsertSession",
+        session: { ...sessionInput("a1", "/work/a"), projectId: "/work/new" },
+        insert: { type: "index", projectId: "/work/new", index: 0 },
+      },
+      { type: "select", projectId: "/work/new", laneId: "a1" },
+    ]);
+    const sourceRestored = reduceWorkspaceLanePatch(moved, {
+      type: "upsertSession",
+      session: sessionInput("a1", "/work/a"),
+      insert: { type: "index", projectId: "/work/a", index: 0 },
+    });
+
+    const restored = reduceWorkspaceLanePatch(sourceRestored, {
+      type: "restoreProjectSnapshot",
+      projectId: "/work/new",
+    });
+
+    expect(restored.projectsById["/work/new"]).toBeUndefined();
+    expect(restored.projectOrder).not.toContain("/work/new");
+    expect(restored.sessionOrderByProject["/work/new"]).toBeUndefined();
+    expect(restored.focusByProject["/work/new"]).toBeUndefined();
+    expect(activeSessionIdsForProject(restored, "/work/a")).toEqual(["a1", "a2"]);
+  });
+
+  it("clears selection when discarding the final empty session", () => {
+    const lanes = reduceWorkspaceLanePatches(withProject(emptyWorkspaceLanesV2(), "/work/a"), [
+      {
+        type: "upsertSession",
+        session: {
+          ...sessionInput("empty", "/work/a"),
+          sessionId: null,
+          sessionPath: null,
+          title: "new session",
+        },
+      },
+      { type: "select", projectId: "/work/a", laneId: "empty" },
+    ]);
+
+    const discarded = reduceWorkspaceLanePatch(lanes, { type: "discardSession", laneId: "empty" });
+
+    expect(discarded.sessionsById.empty).toBeUndefined();
+    expect(activeSessionIdsForProject(discarded, "/work/a")).toEqual([]);
+    expect(discarded.selection).toBeUndefined();
+    expect(discarded.focusByProject["/work/a"]).toEqual({ focusedColumn: 0 });
+  });
+
   it("handles empty and corrupt files without persisting replacement data", async () => {
     const missingDir = await mkdtemp(path.join(tmpdir(), "workspace-lanes-v2-"));
     const corruptDir = await mkdtemp(path.join(tmpdir(), "workspace-lanes-v2-"));

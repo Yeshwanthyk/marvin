@@ -30,6 +30,9 @@ type Provider = RuntimeContext["config"]["provider"]
 type Thinking = RuntimeContext["config"]["thinking"]
 type LaneHeaderState = ReturnType<typeof deriveLaneHeaderState>
 
+const isEmptySelectedLane = (lane: { readonly sessionId: string | null; readonly sessionPath: string | null } | undefined): boolean =>
+	lane?.sessionId === null && lane.sessionPath === null
+
 export interface UseSessionLaneControllerDeps {
 	initialSession: LoadedSession | null
 	initialVisibleSession?: VisibleSession
@@ -310,7 +313,7 @@ export const useSessionLaneController = ({
 		const lanes = workspaceLanes()
 		const selectedLaneId = lanes.selection?.projectId === sessionManager.projectCwd ? lanes.selection.laneId : undefined
 		const selectedLane = selectedLaneId ? lanes.sessionsById[selectedLaneId] : undefined
-		const emptySelectedLaneId = selectedLane?.sessionPath === null ? selectedLane.laneId : undefined
+		const emptySelectedLaneId = isEmptySelectedLane(selectedLane) ? selectedLane?.laneId : undefined
 		const existingLaneId = findSessionLaneId(lanes, sessionManager.projectCwd, session)
 		const laneId = existingLaneId ?? emptySelectedLaneId ?? randomUUID()
 		const patches = createSessionLaneSyncPatches({

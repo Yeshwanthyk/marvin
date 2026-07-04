@@ -87,6 +87,9 @@ const descriptorForLane = (
 	}
 }
 
+const isEmptySessionLane = (session: { readonly sessionId: string | null; readonly sessionPath: string | null } | undefined): boolean =>
+	session?.sessionId === null && session.sessionPath === null
+
 const ensureLaneForSession = (
 	laneStore: WorkspaceLaneStore,
 	lanes: WorkspaceLanesV2,
@@ -103,7 +106,8 @@ const ensureLaneForSession = (
 			(session !== null && entry.sessionId === session.metadata.id))
 	)
 	const selectedEmptyLane = options.laneId ? lanes.sessionsById[options.laneId] : undefined
-	const laneId = existing?.laneId ?? (selectedEmptyLane?.sessionPath === null ? selectedEmptyLane.laneId : undefined) ?? options.laneId ?? randomUUID()
+	const unusedRequestedLaneId = options.laneId && selectedEmptyLane === undefined ? options.laneId : undefined
+	const laneId = existing?.laneId ?? (isEmptySessionLane(selectedEmptyLane) ? selectedEmptyLane?.laneId : undefined) ?? unusedRequestedLaneId ?? randomUUID()
 	const createdAt = session ? new Date(session.metadata.timestamp).toISOString() : now
 	const title = options.title ?? existing?.title ?? session?.metadata.id.slice(0, 8) ?? "new session"
 	const provider = session?.metadata.provider ?? config.provider

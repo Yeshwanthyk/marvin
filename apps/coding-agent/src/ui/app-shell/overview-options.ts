@@ -5,15 +5,16 @@ import {
 	type SessionLaneV2,
 	type WorkspaceLanesV2,
 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
+import type { WorkspaceProject } from "@yeshwanthyk/runtime-effect/workspace-projects.js"
 import type { SessionActivity } from "./activity-index.js"
 import { isExternalLaneId } from "../../runtime/cockpit-actions.js"
 
-export interface OverviewSelection {
-	type: "session"
-	laneId: LaneId
-}
+export type OverviewSelection =
+	| { readonly type: "session"; readonly laneId: LaneId }
+	| { readonly type: "project"; readonly cwd: string }
 
 const SESSION_PREFIX = "overview:session:" as const
+const PROJECT_PREFIX = "overview:project:" as const
 
 const activityRank = (activity?: SessionActivity): number => {
 	if (!activity) return 5
@@ -45,19 +46,31 @@ const activityGlyph = (activity?: SessionActivity): string => {
 }
 
 const overviewSessionValue = (laneId: LaneId): string => `${SESSION_PREFIX}${laneId}`
+const overviewProjectValue = (cwd: string): string => `${PROJECT_PREFIX}${cwd}`
 
 export const parseOverviewValue = (value: string): OverviewSelection | null => {
-	if (!value.startsWith(SESSION_PREFIX)) return null
-	const laneId = value.slice(SESSION_PREFIX.length)
-	return laneId.length > 0 ? { type: "session", laneId } : null
+	if (value.startsWith(SESSION_PREFIX)) {
+		const laneId = value.slice(SESSION_PREFIX.length)
+		return laneId.length > 0 ? { type: "session", laneId } : null
+	}
+	if (value.startsWith(PROJECT_PREFIX)) {
+		const cwd = value.slice(PROJECT_PREFIX.length)
+		return cwd.length > 0 ? { type: "project", cwd } : null
+	}
+	return null
 }
 
 export const createOverviewOptions = (
 	lanes: WorkspaceLanesV2,
 	activities: readonly SessionActivity[] = [],
+	projects: readonly WorkspaceProject[] = [],
 ): SearchSelectOption[] => {
 	const activityByLaneId = new Map(activities.map((activity) => [activity.laneId, activity]))
 	const projectIds = lanes.projectOrder.filter((projectId) => lanes.projectsById[projectId]?.archivedAt === undefined)
+	const activeLaneProjectCwds = new Set(projectIds.flatMap((projectId) => {
+		const project = lanes.projectsById[projectId]
+		return project && activeSessionsForProject(lanes, projectId).length > 0 ? [project.cwd] : []
+	}))
 	const rows: Array<{
 		readonly session: SessionLaneV2
 		readonly projectIndex: number
@@ -79,7 +92,7 @@ export const createOverviewOptions = (
 		})
 	})
 
-	return rows
+	const sessionRows = rows
 		.sort((a, b) => activityRank(a.activity) - activityRank(b.activity)
 			|| a.projectIndex - b.projectIndex
 			|| a.sessionIndex - b.sessionIndex)
@@ -102,4 +115,13 @@ export const createOverviewOptions = (
 				keywords,
 			}
 		})
+	const projectRows = projects
+		.filter((project) => !activeLaneProjectCwds.has(project.cwd))
+		.map((project) => ({
+			value: overviewProjectValue(project.cwd),
+			label: `Project / ${project.title}`,
+			description: `open project | ${project.cwd}`,
+			keywords: `${project.title} ${project.cwd} ${project.root} overview open project workspace folder configured`,
+		}))
+	return [...sessionRows, ...projectRows]
 }
