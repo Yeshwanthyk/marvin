@@ -291,6 +291,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		store.isResponding.set(projection.isResponding())
 		store.activityState.set(projection.activityState())
 		store.retryStatus.set(projection.retryStatus())
+		store.queueCounts.set(projection.queueCounts())
 		store.currentProvider.set(config.provider)
 		store.displayModelId.set(config.modelId)
 		store.displayThinking.set(config.thinking)

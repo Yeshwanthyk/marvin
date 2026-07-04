@@ -1,6 +1,13 @@
 # Cockpit Manual Test
 
-Before installer support exists, append one normalized event to the spool:
+Install the cockpit hook for the agent you want to surface in Marvin:
+
+```bash
+marvin cockpit install --agent codex
+marvin cockpit status --agent codex
+```
+
+To smoke-test ingestion without an external agent, append one normalized event to the spool:
 
 ```bash
 mkdir -p ~/.config/marvin/cockpit

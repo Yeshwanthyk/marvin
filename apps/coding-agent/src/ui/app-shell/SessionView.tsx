@@ -102,6 +102,7 @@ export function SessionView(props: SessionViewProps) {
 	const activityState = () => props.projection?.()?.activityState() ?? props.store.activityState.value()
 	const contextTokens = () => props.projection?.()?.contextTokens() ?? props.store.contextTokens.value()
 	const retryStatus = () => props.projection?.()?.retryStatus() ?? props.store.retryStatus.value()
+	const queueCounts = () => props.projection?.()?.queueCounts() ?? props.store.queueCounts.value()
 
 	const handleAbort = (): string | null => {
 		if (retryState.abortController) {
@@ -161,7 +162,7 @@ export function SessionView(props: SessionViewProps) {
 			provider={props.store.currentProvider.value()}
 			contextTokens={contextTokens()}
 			contextWindow={props.store.displayContextWindow.value()}
-			queueCounts={props.store.queueCounts.value()}
+			queueCounts={queueCounts()}
 			retryStatus={retryStatus()}
 			turnCount={props.store.turnCount.value()}
 			lane={props.laneHeaderState()}

@@ -5,7 +5,12 @@ import type {
   ScopedSessionActorServices,
   SessionActorDescriptor,
 } from "@yeshwanthyk/runtime-effect/project-bundle.js";
-import { Effect } from "effect";
+import type {
+  PromptQueueItem,
+  PromptQueueService,
+  PromptQueueSnapshot,
+} from "@yeshwanthyk/runtime-effect/session/prompt-queue.js";
+import { Effect, Stream } from "effect";
 import { createSessionActor } from "../src/runtime/session-actor.js";
 
 interface FakeAgent {
@@ -54,9 +59,86 @@ const createFakeAgent = (): FakeAgent => {
   };
 };
 
+const queueCounts = (items: ReadonlyArray<PromptQueueItem>): PromptQueueSnapshot["counts"] => {
+  let steer = 0;
+  let followUp = 0;
+  for (const item of items) {
+    if (item.mode === "steer") steer += 1;
+    else followUp += 1;
+  }
+  return { steer, followUp };
+};
+
+const createFakePromptQueue = (): PromptQueueService => {
+  let pending: PromptQueueItem[] = [];
+  const listeners = new Set<(snapshot: PromptQueueSnapshot) => void>();
+  const snapshot = (): PromptQueueSnapshot => ({ pending: pending.slice(), counts: queueCounts(pending) });
+  const publish = () => {
+    const next = snapshot();
+    for (const listener of listeners) listener(next);
+  };
+  const removeHead = (item?: PromptQueueItem) => {
+    if (pending.length === 0) return;
+    if (item === undefined || (pending[0]?.text === item.text && pending[0]?.mode === item.mode)) {
+      pending = pending.slice(1);
+    }
+  };
+
+  return {
+    enqueue: (item) => Effect.sync(() => {
+      pending = [...pending, item];
+      publish();
+    }),
+    enqueueMany: (items) => Effect.sync(() => {
+      pending = [...pending, ...Array.from(items)];
+      publish();
+    }),
+    trackImmediate: (item) => Effect.sync(() => {
+      pending = [...pending, item];
+      publish();
+    }),
+    take: Effect.never,
+    takeForProcessing: Effect.never,
+    takeAll: Effect.sync(() => {
+      const items = pending;
+      pending = [];
+      publish();
+      return items;
+    }),
+    acknowledgeHead: (item) => Effect.sync(() => {
+      removeHead(item);
+      publish();
+    }),
+    drainToScript: Effect.succeed(null),
+    clear: Effect.sync(() => {
+      pending = [];
+      publish();
+    }),
+    pendingSnapshot: Effect.sync(() => pending.slice()),
+    countsSnapshot: Effect.sync(() => queueCounts(pending)),
+    snapshot: Effect.sync(snapshot),
+    stateStream: Stream.async<PromptQueueSnapshot>((emit) => {
+      const listener = (next: PromptQueueSnapshot) => {
+        emit.single(next);
+      };
+      listeners.add(listener);
+      listener(snapshot());
+      return Effect.sync(() => {
+        listeners.delete(listener);
+      });
+    }),
+    restore: (items) => Effect.sync(() => {
+      pending = Array.from(items);
+      publish();
+    }),
+    restoreFromScript: () => Effect.void,
+  };
+};
+
 const createFakeServices = () => {
   const agent = createFakeAgent();
   const appended: AppMessage[] = [];
+  const promptQueue = createFakePromptQueue();
   let closeCount = 0;
   const services = {
     agent,
@@ -66,11 +148,11 @@ const createFakeServices = () => {
         appended.push(message);
       },
     },
-    promptQueue: {
-      snapshot: Effect.succeed({ pending: [], counts: { steer: 0, followUp: 0, total: 0 } }),
-    },
+    promptQueue,
     sessionOrchestrator: {
+      queue: promptQueue,
       submitPrompt: () => Effect.void,
+      drainToScript: Effect.succeed(null),
     },
     hookRunner: undefined,
     close: async () => {
@@ -81,6 +163,7 @@ const createFakeServices = () => {
   return {
     agent,
     appended,
+    promptQueue,
     services,
     closeCount: () => closeCount,
   };
@@ -119,6 +202,15 @@ const assistantLifecycle = (text: string): AgentEvent[] => [
   } as unknown as AgentEvent,
   { type: "agent_end", messages: [] } as unknown as AgentEvent,
 ];
+
+const waitFor = async (condition: () => boolean) => {
+  const deadline = Date.now() + 500;
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  expect(condition()).toBe(true);
+};
 
 describe("SessionActor projection", () => {
   it("keeps actor event projections independent", async () => {
@@ -165,6 +257,26 @@ describe("SessionActor projection", () => {
     fake.agent.emit({ type: "agent_end", messages: [] } as unknown as AgentEvent);
     expect(actor.projection.unread()).toBe(false);
     expect(actor.projection.isResponding()).toBe(false);
+  });
+
+  it("mirrors runtime prompt queue counts and acknowledges matching user starts", async () => {
+    const fake = createFakeServices();
+    const bundle = createBundle(new Map([["lane-queue", fake]]));
+    const actor = createSessionActor({ descriptor: descriptor("lane-queue"), getBundle: async () => bundle });
+
+    await actor.hydrate("background-prompt");
+    await Effect.runPromise(fake.promptQueue.enqueue({ text: "queued followup", mode: "followUp" }));
+    await waitFor(() => actor.projection.queueCounts().followUp === 1);
+
+    fake.agent.emit({
+      type: "message_start",
+      message: { role: "user", content: "queued followup" },
+    } as unknown as AgentEvent);
+
+    await waitFor(() => actor.projection.queueCounts().followUp === 0);
+    const snapshot = await Effect.runPromise(fake.promptQueue.snapshot);
+    expect(snapshot).toEqual({ pending: [], counts: { steer: 0, followUp: 0 } });
+    expect(actor.projection.messages()[0]).toMatchObject({ role: "user", content: "queued followup" });
   });
 
   it("unsubscribes on suspend", async () => {
