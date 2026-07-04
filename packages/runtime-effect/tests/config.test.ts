@@ -144,7 +144,7 @@ describe("loadAppConfig", () => {
 
       expect(config.keymap.lanes.activation).toEqual({
         behavior: "sticky",
-        enter: ["escape", "ctrl+["],
+        enter: [],
         exit: ["return"],
       });
       expect(config.keymap.lanes.prefixKey).toEqual(["ctrl+b"]);
@@ -152,6 +152,7 @@ describe("loadAppConfig", () => {
       expect(config.keymap.lanes.bindings.projectNext).toEqual(["shift+down"]);
       expect(config.keymap.lanes.bindings.moveSessionPrev).toEqual(["shift+left", "shift+h"]);
       expect(config.keymap.lanes.bindings.newSession).toEqual(["n"]);
+      expect(config.keymap.lanes.bindings.help).toEqual(["?"]);
       expect(config.keymap.lanes.bindings.jumpProject9).toEqual(["9"]);
       expect(config.keymap.lanes.bindings.restore).toEqual(["mod+shift+r", "super+shift+r", "ctrl+shift+r"]);
     } finally {
@@ -310,6 +311,7 @@ describe("loadAppConfig", () => {
                   overview: "O",
                   newSession: "N",
                   rename: "$",
+                  help: "?",
                   jump: ["Cmd+K"],
                   jumpProject3: "3",
                   archive: ["Cmd+Shift+A"],
@@ -348,6 +350,7 @@ describe("loadAppConfig", () => {
         overview: ["o"],
         newSession: ["n"],
         rename: ["$"],
+        help: ["?"],
         jump: ["mod+k"],
         jumpProject1: ["1"],
         jumpProject2: ["2"],

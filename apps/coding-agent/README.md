@@ -154,6 +154,11 @@ Options:
 | `Ctrl+L` | Clear screen |
 | `Ctrl+N/P` | Autocomplete navigation |
 | `Tab` | Accept autocomplete |
+| `Shift+Arrow` | Focus session/project lanes |
+| `Ctrl+B` then `Arrow`/`hjkl` | Focus lane once |
+| `Ctrl+B` then `Shift+Arrow` | Move session |
+| `Ctrl+B` then `n`/`$`/`o`/`1..9`/`?` | New, rename, overview, jump project, help |
+| `Cmd+K` | Command palette |
 
 ### Shell Mode
 

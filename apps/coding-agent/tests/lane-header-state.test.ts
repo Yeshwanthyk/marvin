@@ -266,6 +266,7 @@ describe("deriveLaneHeaderState", () => {
 		keymap.bindings.jump = ["meta+p"]
 		keymap.bindings.newSession = ["m"]
 		keymap.bindings.overview = ["v"]
+		keymap.bindings.help = ["?"]
 
 		const idle = laneHeaderDisplay(deriveLaneHeaderState(lanesFixture(), "off"), keymap)
 		expect(idle.hint).toBe("⌃x lanes · ⌘p commands")
@@ -273,6 +274,7 @@ describe("deriveLaneHeaderState", () => {
 		const prefix = laneHeaderDisplay(deriveLaneHeaderState(lanesFixture(), "prefix"), keymap)
 		expect(prefix.navHelp).toContain("m new")
 		expect(prefix.navHelp).toContain("v overview")
+		expect(prefix.navHelp).toContain("? help")
 	})
 
 	it("budgets primary lane header text across terminal widths", () => {
@@ -295,10 +297,19 @@ describe("deriveLaneHeaderState", () => {
 
 		expect(laneHeaderVisibleWidth(line.navHelp)).toBeLessThanOrEqual(100 - 4)
 		expect(line.navHelp).toContain("arrows focus")
-		expect(line.navHelp).toContain("⇧arrows move")
+		expect(line.navHelp).toContain("⇧arrows focus/move")
 		expect(line.navHelp).toContain("n new")
 		expect(line.navHelp).toContain("$ rename")
 		expect(line.navHelp).toContain("o overview")
 		expect(line.navHelp).toContain("1-9 project")
+		expect(line.navHelp).toContain("? help")
+
+		const narrow = laneHeaderLine(state, { width: 80, leftWidth: 32 })
+		expect(laneHeaderVisibleWidth(narrow.navHelp)).toBeLessThanOrEqual(80 - 4)
+		expect(narrow.navHelp).toContain("arrows focus")
+		expect(narrow.navHelp).toContain("⇧ focus/move")
+		expect(narrow.navHelp).toContain("o view")
+		expect(narrow.navHelp).toContain("1-9 proj")
+		expect(narrow.navHelp).toContain("? help")
 	})
 })

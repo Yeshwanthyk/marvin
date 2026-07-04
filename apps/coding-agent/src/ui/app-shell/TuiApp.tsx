@@ -39,6 +39,7 @@ import {
 } from "../../runtime/cockpit-actions.js"
 import { TuiLaneKeyBindings, TuiLaneKeymapRoot, type LaneKeymapDirection, type LaneMoveDirection, type LaneNavMode } from "./TuiLaneKeymap.js"
 import { createCommandPaletteOptions, parseCommandPaletteValue } from "./command-palette-options.js"
+import { formatChord } from "./lane-header-state.js"
 import { canMoveFocusedSessionAcrossProject, cursorForLaneId, moveLaneToCloud, pullLaneBackFromCloud, selectedLaneCursor } from "./lane-actions.js"
 import { createOverviewOptions, parseOverviewValue } from "./overview-options.js"
 import { useHookBridge } from "./useHookBridge.js"
@@ -56,6 +57,10 @@ const activeSessionLanesV2 = (lanes: WorkspaceLanesV2): SessionLaneV2[] =>
 
 const activeProjectIdsV2 = (lanes: WorkspaceLanesV2): string[] =>
 	lanes.projectOrder.filter((projectId) => lanes.projectsById[projectId]?.archivedAt === undefined)
+
+const firstKey = (keys: readonly string[]): string => keys[0] ?? ""
+
+const shortcutValue = (action: string): string => `shortcut:${action}`
 
 const textFromEntry = (entry: SessionNodeEntry): string => {
 	if (entry.type === "custom") return `[custom:${entry.customType}]`
@@ -1064,6 +1069,89 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 		})()
 	}
 
+	const laneShortcutOptions = (): SearchSelectOption[] => {
+		const lanesKeymap = config.keymap.lanes
+		const prefix = formatChord(firstKey(lanesKeymap.prefixKey))
+		const prefixed = (keys: readonly string[]) => [prefix, formatChord(firstKey(keys))].filter(Boolean).join(" ")
+		const command = formatChord(firstKey(lanesKeymap.bindings.jump))
+		return [
+			{
+				value: shortcutValue("focus"),
+				label: "Focus lane",
+				description: `${prefix} then arrows/hjkl`,
+				keywords: "lane focus arrows hjkl",
+			},
+			{
+				value: shortcutValue("focusGlobal"),
+				label: "Focus lane globally",
+				description: "Shift+arrows",
+				keywords: "lane focus global shift arrows",
+			},
+			{
+				value: shortcutValue("move"),
+				label: "Move agent",
+				description: `${prefix} then Shift+arrows`,
+				keywords: "lane move agent session shift arrows",
+			},
+			{
+				value: shortcutValue("newAgent"),
+				label: "New agent",
+				description: prefixed(lanesKeymap.bindings.newSession),
+				keywords: "new agent session lane",
+			},
+			{
+				value: shortcutValue("rename"),
+				label: "Rename agent",
+				description: prefixed(lanesKeymap.bindings.rename),
+				keywords: "rename agent session title",
+			},
+			{
+				value: shortcutValue("overview"),
+				label: "Overview",
+				description: prefixed(lanesKeymap.bindings.overview),
+				keywords: "overview lanes projects sessions agents",
+			},
+			{
+				value: shortcutValue("project"),
+				label: "Open project",
+				description: `${prefix} then 1-9`,
+				keywords: "project jump open workspace 1 2 3 4 5 6 7 8 9",
+			},
+			{
+				value: shortcutValue("newAgentProject"),
+				label: "New agent in project...",
+				description: command,
+				keywords: "new agent session project workspace folder",
+			},
+			{
+				value: shortcutValue("shortcuts"),
+				label: "Shortcuts",
+				description: prefixed(lanesKeymap.bindings.help),
+				keywords: "shortcuts keybinds help keyboard",
+			},
+		]
+	}
+
+	const openLaneShortcuts = () => {
+		void (async () => {
+			const selected = await modals.showSearchSelect("Shortcuts", laneShortcutOptions(), "new agent, project, shortcuts")
+			switch (selected) {
+				case shortcutValue("newAgent"):
+					startSessionNextToFocus()
+					return
+				case shortcutValue("newAgentProject"):
+					startSessionInProject()
+					return
+				case shortcutValue("rename"):
+					renameCurrentSession()
+					return
+				case shortcutValue("overview"):
+					openOverview()
+					return
+			}
+		})()
+	}
+
 	const openCommandPalette = () => {
 		void (async () => {
 			syncCurrentSessionLane()
@@ -1268,6 +1356,7 @@ export const TuiApp = ({ initialSession, initialVisibleSession, initialPrompt, i
 				onOverview={openOverview}
 				onNewSession={startSessionNextToFocus}
 				onRename={renameCurrentSession}
+				onHelp={openLaneShortcuts}
 				onJumpProject={jumpToProjectIndex}
 				onJump={openCommandPalette}
 				onArchive={archiveCurrentSession}

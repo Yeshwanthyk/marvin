@@ -94,6 +94,7 @@ export interface LaneKeyBindingsConfig {
   overview: KeyChord[];
   newSession: KeyChord[];
   rename: KeyChord[];
+  help: KeyChord[];
   jump: KeyChord[];
   jumpProject1: KeyChord[];
   jumpProject2: KeyChord[];
@@ -317,6 +318,7 @@ const DEFAULT_LANE_BINDINGS: LaneKeyBindingsConfig = {
   overview: ["o"],
   newSession: ["n"],
   rename: ["$"],
+  help: ["?"],
   jump: ["mod+k", "super+k", "meta+k"],
   jumpProject1: ["1"],
   jumpProject2: ["2"],
@@ -335,7 +337,7 @@ const DEFAULT_LANE_PREFIX_KEY: KeyChord[] = ["ctrl+b"];
 
 const defaultLaneActivation = (): Extract<LaneNavActivationConfig, { behavior: "sticky" }> => ({
   behavior: "sticky",
-  enter: ["escape", "ctrl+["],
+  enter: [],
   exit: ["return"],
 });
 
@@ -351,6 +353,7 @@ const cloneLaneBindings = (bindings: LaneKeyBindingsConfig): LaneKeyBindingsConf
   overview: [...bindings.overview],
   newSession: [...bindings.newSession],
   rename: [...bindings.rename],
+  help: [...bindings.help],
   jump: [...bindings.jump],
   jumpProject1: [...bindings.jumpProject1],
   jumpProject2: [...bindings.jumpProject2],
@@ -414,6 +417,7 @@ const resolveLaneBindingsConfig = (raw: unknown): LaneKeyBindingsConfig => {
     overview: readKeyChords(obj.overview) ?? [...DEFAULT_LANE_BINDINGS.overview],
     newSession: readKeyChords(obj.newSession) ?? [...DEFAULT_LANE_BINDINGS.newSession],
     rename: readKeyChords(obj.rename) ?? [...DEFAULT_LANE_BINDINGS.rename],
+    help: readKeyChords(obj.help) ?? [...DEFAULT_LANE_BINDINGS.help],
     jump: readKeyChords(obj.jump) ?? [...DEFAULT_LANE_BINDINGS.jump],
     jumpProject1: readKeyChords(obj.jumpProject1) ?? [...DEFAULT_LANE_BINDINGS.jumpProject1],
     jumpProject2: readKeyChords(obj.jumpProject2) ?? [...DEFAULT_LANE_BINDINGS.jumpProject2],

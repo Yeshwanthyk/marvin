@@ -48,6 +48,7 @@ export interface TuiLaneKeyBindingsProps {
 	onOverview: () => void
 	onNewSession: () => void
 	onRename: () => void
+	onHelp: () => void
 	onJumpProject: (index: number) => void
 	onJump: () => void
 	onArchive: () => void
@@ -337,6 +338,14 @@ export function TuiLaneKeyBindings(props: TuiLaneKeyBindingsProps): JSX.Element 
 				key,
 				cmd: () => {
 					props.onRename()
+					props.setNavMode("off")
+					return true
+				},
+			})),
+			...props.keymap.bindings.help.map((key) => ({
+				key,
+				cmd: () => {
+					props.onHelp()
 					props.setNavMode("off")
 					return true
 				},

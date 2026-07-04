@@ -243,13 +243,20 @@ const projectJumpSummary = (keymap: LaneKeymapConfig): string => {
 	return jumps.filter((key): key is string => key !== undefined).map(formatChord).join("/")
 }
 
-const prefixHelp = (keymap: LaneKeymapConfig): string => [
+const focusMoveSummary = (keymap: LaneKeymapConfig, compact: boolean): string => {
+	const moveSummary = moveChordSummary(keymap)
+	if (moveSummary === "⇧arrows") return compact ? "⇧ focus/move" : "⇧arrows focus/move"
+	return `${moveSummary} move`.trim()
+}
+
+const prefixHelp = (keymap: LaneKeymapConfig, compact = false): string => [
 	"arrows focus",
-	`${moveChordSummary(keymap)} move`.trim(),
+	focusMoveSummary(keymap, compact),
 	`${firstChord(keymap.bindings.newSession)} new`.trim(),
 	`${firstChord(keymap.bindings.rename)} rename`.trim(),
-	`${firstChord(keymap.bindings.overview)} overview`.trim(),
-	`${projectJumpSummary(keymap)} project`.trim(),
+	compact ? `${firstChord(keymap.bindings.overview)} view`.trim() : `${firstChord(keymap.bindings.overview)} overview`.trim(),
+	compact ? `${projectJumpSummary(keymap)} proj`.trim() : `${projectJumpSummary(keymap)} project`.trim(),
+	`${firstChord(keymap.bindings.help)} help`.trim(),
 ].filter((part) => part.length > 0).join(" · ")
 
 const idleHint = (keymap: LaneKeymapConfig): string => [
@@ -331,7 +338,11 @@ export const laneHeaderLine = (
 	const display = laneHeaderDisplay(state, options.keymap)
 	const maxWidth = Math.max(0, options.width - options.leftWidth - HEADER_PRIMARY_CHROME_WIDTH)
 	const navHelpWidth = Math.max(0, options.width - HEADER_NAV_CHROME_WIDTH)
-	if (maxWidth <= 0) return { primary: "", navHelp: truncateHeaderText(display.navHelp, navHelpWidth, "…") }
+	const keymap = options.keymap ?? DEFAULT_KEYMAP_CONFIG.lanes
+	const navHelpSource = state.mode === "prefix" && laneHeaderVisibleWidth(display.navHelp) > navHelpWidth
+		? prefixHelp(keymap, true)
+		: display.navHelp
+	if (maxWidth <= 0) return { primary: "", navHelp: truncateHeaderText(navHelpSource, navHelpWidth, "…") }
 
 	const badge = display.badge ? `${display.badge} ` : ""
 	const base = display.position ? `${badge}${display.position}` : `${badge}${display.summary}`.trim()
@@ -339,7 +350,7 @@ export const laneHeaderLine = (
 	if (base.length === 0) {
 		return {
 			primary: truncateHeaderText(suffix, maxWidth, "…"),
-			navHelp: truncateHeaderText(display.navHelp, navHelpWidth, "…"),
+			navHelp: truncateHeaderText(navHelpSource, navHelpWidth, "…"),
 		}
 	}
 
@@ -370,6 +381,6 @@ export const laneHeaderLine = (
 
 	return {
 		primary,
-		navHelp: truncateHeaderText(display.navHelp, navHelpWidth, "…"),
+		navHelp: truncateHeaderText(navHelpSource, navHelpWidth, "…"),
 	}
 }

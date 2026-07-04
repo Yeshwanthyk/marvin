@@ -14,6 +14,7 @@ interface LaneKeymapHarness extends HumanTuiHarness {
 	overviews: () => number
 	newSessions: () => number
 	renames: () => number
+	helps: () => number
 	projectJumps: () => number[]
 	navMode: () => LaneNavMode
 }
@@ -21,7 +22,7 @@ interface LaneKeymapHarness extends HumanTuiHarness {
 const cloneDefaultLaneKeymap = (): LaneKeymapConfig => ({
 	activation: {
 		behavior: "sticky",
-		enter: ["escape", "ctrl+["],
+		enter: [],
 		exit: ["return"],
 	},
 	prefixKey: ["ctrl+b"],
@@ -37,6 +38,7 @@ const cloneDefaultLaneKeymap = (): LaneKeymapConfig => ({
 		overview: ["o"],
 		newSession: ["n"],
 		rename: ["$"],
+		help: ["?"],
 		jump: ["mod+k", "super+k", "meta+k"],
 		jumpProject1: ["1"],
 		jumpProject2: ["2"],
@@ -75,6 +77,7 @@ async function renderLaneKeymap(
 	let overviews = 0
 	let newSessions = 0
 	let renames = 0
+	let helps = 0
 	const projectJumps: number[] = []
 	const [navMode, setNavMode] = createSignal<LaneNavMode>("off")
 
@@ -102,6 +105,9 @@ async function renderLaneKeymap(
 					},
 					onRename: () => {
 						renames += 1
+					},
+					onHelp: () => {
+						helps += 1
 					},
 					onJumpProject: (index) => {
 						projectJumps.push(index)
@@ -134,6 +140,7 @@ async function renderLaneKeymap(
 		overviews: () => overviews,
 		newSessions: () => newSessions,
 		renames: () => renames,
+		helps: () => helps,
 		projectJumps: () => [...projectJumps],
 		navMode,
 	}
@@ -238,6 +245,7 @@ describe("TuiLaneKeyBindings", () => {
 
 	it("does not treat legacy plain arrow bindings as global no-prefix navigation", async () => {
 		const keymap = cloneDefaultLaneKeymap()
+		keymap.activation = { behavior: "sticky", enter: ["ctrl+[", "escape"], exit: ["return"] }
 		keymap.bindings.sessionNext = ["right"]
 		const harness = await renderLaneKeymap({ kittyKeyboard: true }, keymap)
 		try {
@@ -249,6 +257,20 @@ describe("TuiLaneKeyBindings", () => {
 			harness.keys.pressArrow("right")
 			await harness.flush()
 			expect(harness.directions()).toEqual(["right"])
+		} finally {
+			harness.renderer.destroy()
+		}
+	})
+
+	it("does not start sticky lane mode from Escape or Ctrl-[ by default", async () => {
+		const harness = await renderLaneKeymap({ kittyKeyboard: true })
+		try {
+			harness.keys.pressEscape()
+			await harness.flush()
+			expect(harness.navMode()).toBe("off")
+
+			await harness.pressShortcut("[", { ctrl: true })
+			expect(harness.navMode()).toBe("off")
 		} finally {
 			harness.renderer.destroy()
 		}
@@ -339,9 +361,12 @@ describe("TuiLaneKeyBindings", () => {
 			await harness.pressShortcut("o", {})
 			await harness.pressShortcut("b", { ctrl: true })
 			await harness.pressShortcut("3", {})
+			await harness.pressShortcut("b", { ctrl: true })
+			await harness.pressShortcut("?", {})
 			expect(harness.newSessions()).toBe(1)
 			expect(harness.renames()).toBe(1)
 			expect(harness.overviews()).toBe(1)
+			expect(harness.helps()).toBe(1)
 			expect(harness.projectJumps()).toEqual([2])
 		} finally {
 			harness.renderer.destroy()
