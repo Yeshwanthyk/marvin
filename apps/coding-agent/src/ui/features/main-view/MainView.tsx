@@ -24,6 +24,7 @@ import { useEditorBridge } from "../../../hooks/useEditorBridge.js"
 import { MessagePane } from "../message-pane/MessagePane.js"
 import { Composer } from "../composer/Composer.js"
 import { createKeyboardHandler } from "../../../keyboard-handler.js"
+import type { LaneKeymapConfig } from "@yeshwanthyk/runtime-effect/config.js"
 import type { ValidationIssue } from "@yeshwanthyk/runtime-effect/extensibility/schema.js"
 import type { LaneHeaderState } from "../../app-shell/lane-header-state.js"
 import type { HostNotification } from "../../app-shell/activity-index.js"
@@ -44,6 +45,7 @@ export interface MainViewProps {
 	retryStatus: string | null
 	turnCount: number
 	lane: LaneHeaderState
+	laneKeymap: LaneKeymapConfig
 	hostNotifications?: readonly HostNotification[]
 	onAcknowledgeHostNotification?: (id: string) => void
 	diffWrapMode: "word" | "none"
@@ -362,6 +364,7 @@ export function MainView(props: MainViewProps) {
 				activityState={props.activityState}
 				retryStatus={props.retryStatus}
 				lane={props.lane}
+				laneKeymap={props.laneKeymap}
 				spinnerFrame={spinnerFrame()}
 				width={terminalWidth()}
 			/>

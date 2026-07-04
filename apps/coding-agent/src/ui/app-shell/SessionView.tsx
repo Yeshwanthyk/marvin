@@ -165,6 +165,7 @@ export function SessionView(props: SessionViewProps) {
 			retryStatus={retryStatus()}
 			turnCount={props.store.turnCount.value()}
 			lane={props.laneHeaderState()}
+			laneKeymap={props.config.keymap.lanes}
 			hostNotifications={props.hostNotifications?.() ?? []}
 			onAcknowledgeHostNotification={props.acknowledgeHostNotification}
 			diffWrapMode={props.store.diffWrapMode.value()}

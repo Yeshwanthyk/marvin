@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import type { WorkspaceLanesV2 } from "@yeshwanthyk/runtime-effect/workspace-lanes-v2.js"
-import { deriveLaneHeaderState, laneHeaderDisplay } from "../src/ui/app-shell/lane-header-state.js"
+import { DEFAULT_KEYMAP_CONFIG } from "@yeshwanthyk/runtime-effect/config.js"
+import { deriveLaneHeaderState, formatChord, laneHeaderDisplay, laneHeaderLine, laneHeaderVisibleWidth } from "../src/ui/app-shell/lane-header-state.js"
 
 const lanesFixture = (): WorkspaceLanesV2 => ({
 	version: 2,
@@ -164,9 +165,11 @@ describe("deriveLaneHeaderState", () => {
 			badge: "lane",
 			summary: "nora 2/3 · 2/2 · first task",
 			position: "nora 2/3 · 2/2",
+			sessionTitle: "first task",
 			adjacent: "←second task ↑kiri ↓marvin",
 			activityBadges: "",
-			hint: "enter exits",
+			hint: "↵ exits",
+			navHelp: "arrows focus",
 		})
 
 		const idle = laneHeaderDisplay(deriveLaneHeaderState(lanesFixture(), "off"))
@@ -175,9 +178,11 @@ describe("deriveLaneHeaderState", () => {
 			badge: "",
 			summary: "nora 2/3 · 2/2 · first task",
 			position: "nora 2/3 · 2/2",
-			adjacent: "←second task ↑kiri ↓marvin",
+			sessionTitle: "first task",
+			adjacent: "",
 			activityBadges: "",
-			hint: "",
+			hint: "⌃b lanes · ⌘k commands",
+			navHelp: "",
 		})
 	})
 
@@ -207,9 +212,11 @@ describe("deriveLaneHeaderState", () => {
 			badge: "lane",
 			summary: "no session selected",
 			position: "",
+			sessionTitle: "",
 			adjacent: "",
 			activityBadges: "",
-			hint: "enter exits",
+			hint: "↵ exits",
+			navHelp: "arrows focus",
 		})
 	})
 
@@ -244,5 +251,54 @@ describe("deriveLaneHeaderState", () => {
 		const state = deriveLaneHeaderState(lanes, "off")
 		expect(state.current?.external).toBe(true)
 		expect(laneHeaderDisplay(state).summary).toBe("ext nora 2/3 · 1/1 · pi task")
+	})
+
+	it("formats compact chords for configured hints", () => {
+		expect(formatChord("ctrl+b")).toBe("⌃b")
+		expect(formatChord("shift+left")).toBe("⇧←")
+		expect(formatChord("meta+k")).toBe("⌘k")
+		expect(formatChord("return")).toBe("↵")
+	})
+
+	it("derives hints from lane keymap config", () => {
+		const keymap = structuredClone(DEFAULT_KEYMAP_CONFIG.lanes)
+		keymap.prefixKey = ["ctrl+x"]
+		keymap.bindings.jump = ["meta+p"]
+		keymap.bindings.newSession = ["m"]
+		keymap.bindings.overview = ["v"]
+
+		const idle = laneHeaderDisplay(deriveLaneHeaderState(lanesFixture(), "off"), keymap)
+		expect(idle.hint).toBe("⌃x lanes · ⌘p commands")
+
+		const prefix = laneHeaderDisplay(deriveLaneHeaderState(lanesFixture(), "prefix"), keymap)
+		expect(prefix.navHelp).toContain("m new")
+		expect(prefix.navHelp).toContain("v overview")
+	})
+
+	it("budgets primary lane header text across terminal widths", () => {
+		const state = deriveLaneHeaderState(lanesFixture(), "off")
+		for (const width of [80, 100, 120]) {
+			const line = laneHeaderLine(state, { width, leftWidth: 32 })
+			expect(laneHeaderVisibleWidth(line.primary)).toBeLessThanOrEqual(width - 32 - 8)
+			expect(line.primary).toContain("nora 2/3 · 2/2")
+			expect(line.primary).not.toContain("second task")
+		}
+
+		const wide = laneHeaderLine(state, { width: 120, leftWidth: 32 })
+		expect(wide.primary).toContain("first task")
+		expect(wide.primary).toContain("⌃b lanes")
+	})
+
+	it("shows the prefix map as a width-budgeted second line", () => {
+		const state = deriveLaneHeaderState(lanesFixture(), "prefix")
+		const line = laneHeaderLine(state, { width: 100, leftWidth: 32 })
+
+		expect(laneHeaderVisibleWidth(line.navHelp)).toBeLessThanOrEqual(100 - 4)
+		expect(line.navHelp).toContain("arrows focus")
+		expect(line.navHelp).toContain("⇧arrows move")
+		expect(line.navHelp).toContain("n new")
+		expect(line.navHelp).toContain("$ rename")
+		expect(line.navHelp).toContain("o overview")
+		expect(line.navHelp).toContain("1-9 project")
 	})
 })

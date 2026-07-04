@@ -5,10 +5,11 @@
  */
 
 import { Show, createMemo } from "solid-js"
-import { truncateToWidth, useTheme } from "@yeshwanthyk/open-tui"
+import { truncateToWidth, useTheme, visibleWidth } from "@yeshwanthyk/open-tui"
 import type { ThinkingLevel } from "@yeshwanthyk/agent-core"
 import type { ActivityState } from "../types.js"
-import { laneHeaderDisplay, type LaneHeaderState } from "../ui/app-shell/lane-header-state.js"
+import { laneHeaderLine, type LaneHeaderState } from "../ui/app-shell/lane-header-state.js"
+import type { LaneKeymapConfig } from "@yeshwanthyk/runtime-effect/config.js"
 
 /** Robot face icons for each activity state */
 const ACTIVITY_FACES: Record<ActivityState, { face: string; label: string }> = {
@@ -34,8 +35,6 @@ const ACTIVITY_WIDTH = 13
 const PROGRESS_FILLED = "━"
 const PROGRESS_EMPTY = "┄"
 const PROGRESS_BAR_LENGTH = 8
-const LANE_SESSION_MAX_WIDTH = 26
-const LANE_ADJACENT_MAX_WIDTH = 30
 
 import type { QueueCounts } from "@yeshwanthyk/runtime-effect/session/prompt-queue.js"
 
@@ -48,6 +47,7 @@ export interface HeaderProps {
   activityState: ActivityState
   retryStatus: string | null
   lane: LaneHeaderState
+  laneKeymap: LaneKeymapConfig
   spinnerFrame: number
   width: number
 }
@@ -118,37 +118,46 @@ export function Header(props: HeaderProps) {
     return parts.join(" ")
   })
 
-
-  const laneDisplay = createMemo(() => laneHeaderDisplay(props.lane))
-  const laneActive = createMemo(() => laneDisplay().active)
+  const activityText = createMemo(() => `${activity().face} ${activity().label}`)
+  const activityPadding = createMemo(() => " ".repeat(Math.max(0, ACTIVITY_WIDTH - visibleWidth(activityText()))))
+  const progressText = createMemo(() => {
+    const prog = progressBar()
+    return prog ? `${prog.bar}  ${prog.pct}%` : ""
+  })
+  const laneActive = createMemo(() => props.lane.mode !== "off")
   const laneColor = createMemo(() => {
     if (props.lane.mode === "oneshot") return theme.warning
     if (props.lane.mode === "sticky") return theme.secondary
     if (props.lane.mode === "prefix") return theme.accent
     return theme.textMuted
   })
-  const showSessionTitle = createMemo(() => props.width >= 84)
-  const showAdjacent = createMemo(() => props.width >= 96 && props.lane.mode !== "prefix")
-  const showHint = createMemo(() => props.width >= 110 || props.lane.mode === "prefix")
-  const laneBadge = createMemo(() => laneDisplay().badge)
-  const lanePosition = createMemo(() => laneDisplay().position)
-  const laneSessionTitle = createMemo(() => {
-    const title = props.lane.current?.sessionTitle ?? ""
-    return title.length > 0 ? truncateToWidth(title, LANE_SESSION_MAX_WIDTH, "…") : ""
+  const leftWidth = createMemo(() => {
+    const parts = [ACTIVITY_WIDTH, visibleWidth(modelThinking())]
+    const progress = progressText()
+    if (progress) parts.push(visibleWidth(progress))
+    const queue = queueIndicator()
+    if (queue) parts.push(visibleWidth(queue))
+    return parts.reduce((sum, part) => sum + part, 0) + Math.max(0, parts.length - 1)
   })
-  const laneAdjacent = createMemo(() => truncateToWidth(laneDisplay().adjacent, LANE_ADJACENT_MAX_WIDTH, "…"))
-  const laneActivityBadges = createMemo(() => laneDisplay().activityBadges)
-  const laneHint = createMemo(() => laneDisplay().hint)
-  const laneSummary = createMemo(() => {
-    const position = lanePosition()
-    if (!position) return laneDisplay().summary
-    if (!showSessionTitle() || laneSessionTitle().length === 0) return position
-    return `${position} · ${laneSessionTitle()}`
+  const laneLine = createMemo(() => laneHeaderLine(props.lane, {
+    width: props.width,
+    leftWidth: leftWidth(),
+    keymap: props.laneKeymap,
+  }))
+  const contentWidth = createMemo(() => Math.max(0, props.width - 6))
+  const lanePrimary = createMemo(() => {
+    const rightWidth = Math.max(0, contentWidth() - leftWidth() - 1)
+    return truncateToWidth(laneLine().primary, rightWidth, "…")
+  })
+  const rowSpacer = createMemo(() => {
+    const used = leftWidth() + visibleWidth(lanePrimary())
+    if (lanePrimary().length === 0) return ""
+    return " ".repeat(Math.max(1, contentWidth() - used))
   })
 
   return (
 <box
-      flexDirection="row"
+      flexDirection="column"
       flexShrink={0}
       paddingLeft={1}
       paddingRight={1}
@@ -156,59 +165,28 @@ export function Header(props: HeaderProps) {
       borderStyle="rounded"
       borderColor={laneActive() ? theme.borderActive : theme.border}
     >
-      {/* Left section: Activity + Model·Thinking + Progress + Queue */}
-      <box flexDirection="row" flexShrink={0} gap={1}>
-        {/* Activity (fixed width) */}
-        <box minWidth={ACTIVITY_WIDTH}>
-          <text>
-            <span style={{ fg: activity().color }}>{activity().face}</span>
-            <span style={{ fg: theme.textMuted }}> {activity().label}</span>
-          </text>
-        </box>
-
-        {/* Model·Thinking */}
-        <text fg={theme.text}>{modelThinking()}</text>
-
-        {/* Progress bar */}
+      <text>
+        <span style={{ fg: activity().color }}>{activity().face}</span>
+        <span style={{ fg: theme.textMuted }}> {activity().label}{activityPadding()}</span>
+        <span> </span>
+        <span style={{ fg: theme.text }}>{modelThinking()}</span>
         <Show when={progressBar()} keyed>
           {(prog) => (
-            <text>
-              <span style={{ fg: prog.color }}>{prog.bar}</span>
-              <span style={{ fg: theme.textMuted }}>  {prog.pct}%</span>
-            </text>
+            <span style={{ fg: prog.color }}> {prog.bar}  {prog.pct}%</span>
           )}
         </Show>
-
-        {/* Queue */}
         <Show when={queueIndicator()}>
-          <text fg={theme.warning}>{queueIndicator()}</text>
+          <span style={{ fg: theme.warning }}> {queueIndicator()}</span>
         </Show>
-      </box>
-
-      {/* Spacer */}
-      <box flexGrow={1} />
-
-      {/* Right section: lane context */}
-      <box flexDirection="row" flexShrink={1} paddingLeft={1} gap={1}>
-        <Show when={laneSummary().length > 0}>
-          <text>
-            <Show when={laneBadge()}>
-              <span style={{ fg: laneColor() }}>{laneBadge()}</span>
-              <span style={{ fg: theme.textMuted }}>  </span>
-            </Show>
-            <span style={{ fg: laneActive() ? theme.text : theme.textMuted }}>{laneSummary()}</span>
-            <Show when={laneActivityBadges()}>
-              <span style={{ fg: theme.warning }}>  {laneActivityBadges()}</span>
-            </Show>
-            <Show when={showAdjacent() && laneAdjacent()}>
-              <span style={{ fg: theme.textMuted }}>  {laneAdjacent()}</span>
-            </Show>
-            <Show when={showHint() && laneHint()}>
-              <span style={{ fg: theme.textMuted }}>  {laneHint()}</span>
-            </Show>
-          </text>
+        <span>{rowSpacer()}</span>
+        <Show when={lanePrimary().length > 0}>
+          <span style={{ fg: laneActive() ? laneColor() : theme.textMuted }}>{lanePrimary()}</span>
         </Show>
-      </box>
+      </text>
+
+      <Show when={laneLine().navHelp.length > 0}>
+        <text fg={theme.textMuted}>{laneLine().navHelp}</text>
+      </Show>
     </box>
   )
 }
